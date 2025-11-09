@@ -2,6 +2,8 @@ import httpx
 from typing import List, Dict, Optional
 from loguru import logger
 from app.config import settings
+from app.utils import cached_api_call
+
 import asyncio
 
 
@@ -67,6 +69,7 @@ class StremioService:
             logger.error(f"Error authenticating with Stremio: {e}", exc_info=True)
             raise
 
+    @cached_api_call
     async def is_loved(self, auth_key: str, imdb_id: str, media_type: str) -> bool:
         """Check if user has loved a movie or series."""
         if not imdb_id.startswith("tt"):
@@ -91,6 +94,7 @@ class StremioService:
             logger.error(f"Error checking if user has loved a movie or series: {e}", exc_info=True)
             return False
 
+    @cached_api_call
     async def get_library_items(self) -> Dict[str, List[Dict]]:
         """
         Fetch library items from Stremio once and return both watched and loved items.

@@ -69,9 +69,9 @@ class RecommendationService:
             logger.warning(f"No loved {content_type} items found in library")
             return []
 
-        # Limit seeds (already sorted by modification time)
+        # Get last 10 items (most recent, already sorted by modification time descending)
         seeds = loved_items[:seed_limit]
-        logger.info(f"Using {len(seeds)} loved {content_type} items as seeds")
+        logger.info(f"Using {len(seeds)} most recent loved {content_type} items as seeds")
 
         # Build library IMDB ID set to exclude (all watched items, regardless of type)
         # Parse identifiers (synchronous operation, but fast)
@@ -186,15 +186,15 @@ class RecommendationService:
             return None
 
     async def _get_recommendations_for_seed(self, tmdb_id: int, media_type: str, limit: int) -> List[Dict]:
-        """Get recommendations for a single seed."""
+        """Get first N recommendations for a single seed from TMDB."""
         try:
-            # Get recommendations
+            # Get recommendations from TMDB (returns first page of results)
             rec_data = await self.tmdb_service.get_recommendations(tmdb_id, media_type)
             all_results = rec_data.get("results", [])
 
             # Get IMDB IDs in parallel (need to fetch basic details to get IMDB ID)
-            # Optimize: fetch only what we need, but fetch more to account for missing IMDB IDs
-            items_to_process = all_results[: limit * 2]  # Reduced from 3x to 2x for better performance
+            # Fetch more items to account for missing IMDB IDs, but limit to first results
+            items_to_process = all_results[: limit * 2]  # Process 2x limit to account for missing IMDB IDs
             detail_tasks = []
             item_scores = {}
 

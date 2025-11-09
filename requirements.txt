@@ -4,4 +4,5 @@ httpx==0.25.2
 pydantic==2.5.0
 pydantic-settings==2.1.0
 loguru==0.7.2
+cachetools==5.3.3
 

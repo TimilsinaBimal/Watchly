@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
+
 from loguru import logger
 from app.services.tmdb_service import TMDBService
 from app.services.recommendation_service import RecommendationService
@@ -21,8 +22,10 @@ recommendation_service = RecommendationService()
 
 
 @app.get("/manifest.json")
-async def manifest():
+async def manifest(response: Response):
     """Stremio manifest endpoint."""
+    # Cache manifest for 1 day (86400 seconds)
+    response.headers["Cache-Control"] = "public, max-age=86400"
     return {
         "id": "com.watchly",
         "version": "1.0.0",
@@ -39,14 +42,14 @@ async def manifest():
 
 
 @app.get("/catalog/{type}/{id}.json")
-async def get_catalog(type: str, id: str):
-    """`
+async def get_catalog(type: str, id: str, response: Response):
+    """
     Stremio catalog endpoint for movies and series.
     Returns recommendations based on user's Stremio library.
 
     Args:
-        content_type: 'movie' or 'series'
-        id: Catalog ID (e.g., 'watchly-movies' or 'watchly-series')
+        type: 'movie' or 'series'
+        id: Catalog ID (e.g., 'watchly.rec')
     """
     logger.info(f"Fetching catalog for {type} with id {id}")
 
@@ -60,8 +63,9 @@ async def get_catalog(type: str, id: str):
 
     try:
         # Get recommendations based on library
+        # Use last 10 items from library, get 5 recommendations per item
         recommendations = await recommendation_service.get_recommendations(
-            content_type=type, seed_limit=2, per_seed_limit=5, max_results=50
+            content_type=type, seed_limit=10, per_seed_limit=5, max_results=50
         )
         logger.info(f"Found {len(recommendations)} recommendations for {type}")
 
@@ -74,6 +78,8 @@ async def get_catalog(type: str, id: str):
                 metas.append(rec["meta"])
 
         logger.info(f"Returning {len(metas)} items for {type}")
+        # Cache catalog responses for 1 day (86400 seconds)
+        response.headers["Cache-Control"] = "public, max-age=86400"
         return {"metas": metas}
 
     except HTTPException:
