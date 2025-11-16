@@ -12,10 +12,12 @@ BASE_CATALOGS = [
 class StremioService:
     """Service for interacting with Stremio API to fetch user library."""
 
-    def __init__(self):
+    def __init__(self, username: str = "", password: str = ""):
         self.base_url = "https://api.strem.io"
-        self.username = settings.STREMIO_USERNAME
-        self.password = settings.STREMIO_PASSWORD
+        self.username = username
+        self.password = password
+        if not self.username or not self.password:
+            raise ValueError("Username and password are required")
         # Reuse HTTP client for connection pooling and better performance
         self._client: Optional[httpx.AsyncClient] = None
         self._likes_client: Optional[httpx.AsyncClient] = None

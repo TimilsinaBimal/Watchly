@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watchly - Stremio Addon Configuration</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <img src="/static/logo.png" alt="Watchly Logo" class="logo">
+                <h1>Watchly</h1>
+                <p class="subtitle">Stremio Addon Configuration</p>
+            </div>
+
+            <form id="configForm" class="form">
+                <div class="form-group">
+                    <label for="username">Stremio Username (Email)</label>
+                    <input type="email" id="username" name="username" placeholder="your-email@example.com" required
+                        autocomplete="email">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Stremio Password</label>
+                    <input type="password" id="password" name="password" placeholder="Enter your password" required
+                        autocomplete="current-password">
+                </div>
+
+                <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+                <button type="submit" class="btn-primary" id="submitBtn">
+                    <span class="btn-text">Generate Addon URL</span>
+                    <span class="btn-loader" style="display: none;">⏳</span>
+                </button>
+            </form>
+
+            <div id="successMessage" class="success-section" style="display: none;">
+                <div class="success-header">
+                    <h2>Configuration Complete!</h2>
+                    <p>Your addon URL has been generated. Choose an installation method:</p>
+                </div>
+
+                <div class="url-container">
+                    <input type="text" id="addonUrl" readonly class="url-input">
+                </div>
+
+                <div class="warning-box">
+                    <div class="warning-icon">⚠️</div>
+                    <div class="warning-content">
+                        <strong>SECURITY WARNING</strong>
+                        <p>Your Stremio credentials are encoded in this URL. <strong>NEVER share this URL</strong> with
+                            anyone, as it contains your login information. Keep it private and secure.</p>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn-install" id="installDesktopBtn" title="Install on Stremio Desktop/Mobile">
+                        Install on Stremio
+                    </button>
+                    <button class="btn-install" id="installWebBtn" title="Install on Stremio Web">
+                        Install on Stremio Web
+                    </button>
+                    <button class="btn-install btn-copy" id="copyBtn" title="Copy URL to clipboard">
+                        Copy URL
+                    </button>
+                </div>
+
+                <div class="instructions">
+                    <h3>How to use:</h3>
+                    <ol>
+                        <li>Click one of the install buttons above, or copy the URL manually</li>
+                        <li>For desktop/mobile: The Stremio app will open automatically</li>
+                        <li>For web: You'll be redirected to Stremio web to install the addon</li>
+                    </ol>
+                </div>
+
+                <button class="btn-secondary" id="resetBtn">
+                    Configure Again
+                </button>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Your credentials are encoded in the URL and never stored on our servers.</p>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>

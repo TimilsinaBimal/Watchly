@@ -1,11 +1,13 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.main import api_router
 from app.config import settings
 import logging
 from loguru import logger
-
+import os
 
 class InterceptHandler(logging.Handler):
     def emit(self, record):
@@ -33,6 +35,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+
+# Serve index.html at /configure and /{encoded}/configure
+@app.get("/")
+@app.get("/configure")
+@app.get("/{encoded}/configure")
+async def configure_page(encoded: str = None):
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Watchly API is running. Static files not found."}
 
 
 app.include_router(api_router)

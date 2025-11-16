@@ -1,11 +1,14 @@
 """Utility functions for caching and other helpers."""
 
+import base64
+import binascii
 import hashlib
 import json
 from functools import wraps
-from typing import Callable
+from typing import Callable, Dict, Optional
 from cachetools import TTLCache
 from loguru import logger
+from fastapi import HTTPException
 
 # Cache with 1 day TTL (86400 seconds)
 CACHE_TTL = 86400
@@ -90,3 +93,37 @@ def clear_cache():
     _api_cache.clear()
     _function_cache.clear()
     logger.info("All caches cleared")
+
+
+def decode_credentials(encoded: str) -> Dict[str, str]:
+    """
+    Decode base64 encoded credentials.
+
+    Args:
+        encoded: Base64 encoded JSON string containing username and password
+
+    Returns:
+        Dictionary with 'username' and 'password' keys
+
+    Raises:
+        HTTPException: If decoding fails
+    """
+    try:
+        decoded_bytes = base64.b64decode(encoded)
+        credentials = json.loads(decoded_bytes.decode('utf-8'))
+
+        if not isinstance(credentials, dict):
+            raise ValueError("Credentials must be a dictionary")
+
+        username = credentials.get('username')
+        password = credentials.get('password')
+
+        if not username or not password:
+            raise ValueError("Username and password are required")
+
+        return {'username': username, 'password': password}
+    except (binascii.Error, json.JSONDecodeError, ValueError) as e:
+        logger.error(f"Failed to decode credentials: {e}")
+        raise HTTPException(
+            status_code=400, detail="Invalid credentials encoding. Please reconfigure your addon."
+        )

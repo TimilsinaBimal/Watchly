@@ -1,12 +1,12 @@
 from fastapi import APIRouter
-from app.services.stremio_service import StremioService
-from loguru import logger
 
-router = APIRouter(prefix="/stream")
+router = APIRouter()
 
 
-@router.get("/{type}/{id}.json")
+@router.get("/stream/{type}/{id}.json")
+@router.get("/{encoded}/stream/{type}/{id}.json")
 async def get_stream(
+    encoded: str,
     type: str,
     id: str,
 ):
@@ -19,7 +19,7 @@ async def get_stream(
             {
                 "name": "Update Catalogs",
                 "description": "Update the catalogs for the addon.",
-                "url": "https://watchly-eta.vercel.app/catalog/update/",
+                "url": f"https://watchly-eta.vercel.app/{encoded}/catalog/update/",
             }
         ]
     }

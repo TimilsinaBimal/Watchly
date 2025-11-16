@@ -1,13 +1,14 @@
 from fastapi.routing import APIRouter
-from fastapi import Response
+
 from app.config import settings
 
 router = APIRouter()
 
 
 @router.get("/manifest.json")
-async def manifest(response: Response):
-    """Stremio manifest endpoint."""
+@router.get("/{encoded}/manifest.json")
+async def manifest(encoded: str):
+    """Stremio manifest endpoint with encoded credentials in path."""
     # Cache manifest for 1 day (86400 seconds)
     # response.headers["Cache-Control"] = "public, max-age=86400"
     return {
@@ -25,4 +26,5 @@ async def manifest(response: Response):
             {"type": "movie", "id": "watchly.rec", "name": "Recommended", "extra": []},
             {"type": "series", "id": "watchly.rec", "name": "Recommended", "extra": []},
         ],
+        "behaviorHints": {"configurable": True, "configurationRequired": True},
     }

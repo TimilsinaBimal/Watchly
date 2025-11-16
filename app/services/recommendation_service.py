@@ -35,9 +35,9 @@ def _parse_identifier(identifier: str) -> Tuple[Optional[str], Optional[int]]:
 class RecommendationService:
     """Service for generating recommendations based on user's Stremio library."""
 
-    def __init__(self):
+    def __init__(self, stremio_service: Optional[StremioService] = None):
         self.tmdb_service = TMDBService()
-        self.stremio_service = StremioService()
+        self.stremio_service = stremio_service or StremioService()
         self.per_item_limit = 20
 
     async def get_recommendations_for_item(self, item_id: str) -> List[Dict]:

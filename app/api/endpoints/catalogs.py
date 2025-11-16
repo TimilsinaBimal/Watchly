@@ -2,14 +2,15 @@ from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 from app.services.recommendation_service import RecommendationService
 from app.services.stremio_service import StremioService
+from app.utils import decode_credentials
 
-router = APIRouter(prefix="/catalog")
-
-recommendation_service = RecommendationService()
+router = APIRouter()
 
 
-@router.get("/{type}/{id}.json")
+@router.get("/catalog/{type}/{id}.json")
+@router.get("/{encoded}/catalog/{type}/{id}.json")
 async def get_catalog(
+    encoded: str,
     type: str,
     id: str,
     response: Response,
@@ -19,10 +20,14 @@ async def get_catalog(
     Returns recommendations based on user's Stremio library.
 
     Args:
+        encoded: Base64 encoded credentials
         type: 'movie' or 'series'
         id: Catalog ID (e.g., 'watchly.rec')
     """
     logger.info(f"Fetching catalog for {type} with id {id}")
+
+    # Decode credentials from path
+    credentials = decode_credentials(encoded)
 
     if type not in ["movie", "series"]:
         logger.warning(f"Invalid type: {type}")
@@ -34,6 +39,10 @@ async def get_catalog(
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(status_code=400, detail="Invalid id. Use 'watchly.rec'")
     try:
+        # Create services with credentials
+        stremio_service = StremioService(username=credentials['username'], password=credentials['password'])
+        recommendation_service = RecommendationService(stremio_service=stremio_service)
+
         # if id starts with tt, then return recommendations for that particular item
         if id.startswith("tt"):
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
@@ -66,12 +75,14 @@ async def get_catalog(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/update")
-async def update_catalogs():
+@router.get("/{encoded}/catalog/update")
+async def update_catalogs(encoded: str):
     """
     Update the catalogs for the addon. This is a manual endpoint to update the catalogs.
     """
-    stremio_service = StremioService()
+    # Decode credentials from path
+    credentials = decode_credentials(encoded)
+    stremio_service = StremioService(username=credentials['username'], password=credentials['password'])
     library_items = await stremio_service.get_library_items()
     seen_items = set()
     catalogs = []
