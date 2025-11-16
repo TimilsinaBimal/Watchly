@@ -33,20 +33,18 @@ async def get_catalog(
     if id not in ["watchly.rec"] and not id.startswith("tt"):
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(status_code=400, detail="Invalid id. Use 'watchly.rec'")
-
-    # if id starts with tt, then return recommendations for that particular item
-    if id.startswith("tt"):
-        recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
-        logger.info(f"Found {len(recommendations)} recommendations for {id}")
-        # response.headers["Cache-Control"] = "public, max-age=86400"
-        return {"metas": recommendations}
     try:
-        # Get recommendations based on library
-        # Use last 10 items from library, get 5 recommendations per item
-        recommendations = await recommendation_service.get_recommendations(
-            content_type=type, seed_limit=10, per_seed_limit=5, max_results=50
-        )
-        logger.info(f"Found {len(recommendations)} recommendations for {type}")
+        # if id starts with tt, then return recommendations for that particular item
+        if id.startswith("tt"):
+            recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
+            logger.info(f"Found {len(recommendations)} recommendations for {id}")
+        else:
+            # Get recommendations based on library
+            # Use last 10 items from library, get 5 recommendations per item
+            recommendations = await recommendation_service.get_recommendations(
+                content_type=type, seed_limit=10, per_seed_limit=5, max_results=50
+            )
+            logger.info(f"Found {len(recommendations)} recommendations for {type}")
 
         # Recommendations already contain full metadata in Stremio format
         # Extract meta from each recommendation
