@@ -51,6 +51,7 @@ class RecommendationService:
 
     async def _fetch_catlogs_from_tmdb_addon(self, items: list[dict], media_type: str):
         final_results = []
+        media_type = "movie" if media_type == "movie" else "series"
         # now fetch addon meta for each recommendation
         fetch_meta_tasks = [
             self.tmdb_service.get_addon_meta(media_type, f"tmdb:{item.get('id')}") for item in items
@@ -61,6 +62,8 @@ class RecommendationService:
                 logger.warning(f"Error processing source item: {addon_meta}")
                 continue
             meta_data = addon_meta.get("meta", {})
+            if not hasattr(meta_data, "id"):
+                meta_data["id"] = meta_data.get("imdb_id")
             final_results.append(meta_data)
         return final_results
 
