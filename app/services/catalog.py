@@ -68,60 +68,57 @@ class DynamicCatalogService:
         loved_series = loved_series[:5]
 
         # fetch details:: genre details from tmdb addon
-        movie_tasks = [self.tmdb_service.get_addon_meta("movie", {item.get('_id')}) for item in loved_movies]
-        series_tasks = [self.tmdb_service.get_addon_meta("series", {item.get('_id')}) for item in loved_series]
+        movie_tasks = [
+            self.tmdb_service.get_addon_meta("movie", item.get('_id').strip()) for item in loved_movies
+        ]
+        series_tasks = [
+            self.tmdb_service.get_addon_meta("series", item.get('_id').strip()) for item in loved_series
+        ]
         movie_details = await asyncio.gather(*movie_tasks)
         series_details = await asyncio.gather(*series_tasks)
 
         # now fetch all genres for moviees and series and sort them by their occurance
-        movie_genres = [detail.get("genres", []) for detail in movie_details]
-        series_genres = [detail.get("genres", []) for detail in series_details]
+        movie_genres = [detail.get("meta", {}).get("genres", []) for detail in movie_details]
+        series_genres = [detail.get("meta", {}).get("genres", []) for detail in series_details]
 
         # now flatten list and count the occurance of each genre for both movies and series separately
-        movie_genre_counts = Counter([genre for sublist in movie_genres for genre in sublist])
-        series_genre_counts = Counter([genre for sublist in series_genres for genre in sublist])
+        movie_genre_counts = Counter(
+            [genre for sublist in movie_genres for genre in sublist if genre in MOVIE_GENRE_TO_ID_MAP]
+        )
+        series_genre_counts = Counter(
+            [genre for sublist in series_genres for genre in sublist if genre in SERIES_GENRE_TO_ID_MAP]
+        )
         sorted_movie_genres = sorted(movie_genre_counts.items(), key=lambda x: x[1], reverse=True)
         sorted_series_genres = sorted(series_genre_counts.items(), key=lambda x: x[1], reverse=True)
 
-        # now get the top 5 genres for movies and series
-        top_5_movie_genres = sorted_movie_genres[:5]
-        top_5_series_genres = sorted_series_genres[:5]
+        # now get the top 2 genres for movies and series
+        top_2_movie_genre_names = [genre for genre, _ in sorted_movie_genres[:2]]
+        top_2_series_genre_names = [genre for genre, _ in sorted_series_genres[:2]]
 
         # convert id to name
-        top_5_movie_genres_names = [MOVIE_GENRE_TO_ID_MAP[genre_id] for genre_id, _ in top_5_movie_genres]
-        top_5_series_genres_names = [SERIES_GENRE_TO_ID_MAP[genre_id] for genre_id, _ in top_5_series_genres]
+        top_2_movie_genres = [str(MOVIE_GENRE_TO_ID_MAP[genre_name]) for genre_name in top_2_movie_genre_names]
+        top_2_series_genres = [
+            str(SERIES_GENRE_TO_ID_MAP[genre_name]) for genre_name in top_2_series_genre_names
+        ]
+        catalogs = []
 
-        # prepare name for combined genre for first two and then last three
-        if len(top_5_movie_genres) >= 2:
-            catalogs1 = {
-                "type": "movie",
-                "id": f"watchly.genre.{top_5_movie_genres[0]}-{top_5_movie_genres[1]}",
-                "name": f"{top_5_movie_genres_names[0]}-{top_5_movie_genres_names[1]}",
-                "extra": [],
-            }
+        for idx, genre in enumerate(top_2_movie_genres):
+            catalogs.append(
+                {
+                    "type": "movie",
+                    "id": f"watchly.genre.{genre}",
+                    "name": top_2_movie_genre_names[idx],
+                    "extra": [],
+                }
+            )
+        for idx, genre in enumerate(top_2_series_genres):
+            catalogs.append(
+                {
+                    "type": "series",
+                    "id": f"watchly.genre.{genre}",
+                    "name": top_2_series_genre_names[idx],
+                    "extra": [],
+                }
+            )
 
-        if len(top_5_movie_genres) >= 3:
-            catalogs2 = {
-                "type": "movie",
-                "id": f"watchly.genre.{'_'.join(top_5_movie_genres[2:])}",
-                "name": f"{'-'.join(top_5_movie_genres_names[2:])}",
-                "extra": [],
-            }
-
-        if len(top_5_series_genres) >= 2:
-            catalogs3 = {
-                "type": "series",
-                "id": f"watchly.genre.{top_5_series_genres[0]}-{top_5_series_genres[1]}",
-                "name": f"{top_5_series_genres_names[0]}-{top_5_series_genres_names[1]}",
-                "extra": [],
-            }
-
-        if len(top_5_series_genres) >= 3:
-            catalogs4 = {
-                "type": "series",
-                "id": f"watchly.genre.{'_'.join(top_5_series_genres[2:])}",
-                "name": f"{'-'.join(top_5_series_genres_names[2:])}",
-                "extra": [],
-            }
-
-        return [catalogs1, catalogs2, catalogs3, catalogs4]
+        return catalogs

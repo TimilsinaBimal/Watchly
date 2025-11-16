@@ -160,5 +160,6 @@ class TMDBService:
     @cached_api_call
     async def get_discover(self, media_type: str, params: dict[str, str]) -> Dict:
         """Get discover content based on params."""
+        media_type = "movie" if media_type == "movie" else "tv"
         endpoint = f"/discover/{media_type}"
         return await self._make_request(endpoint, params=params)
