@@ -12,8 +12,8 @@ class StremioService:
 
     def __init__(self):
         self.base_url = "https://api.strem.io"
-        self.username = settings.stremio_username
-        self.password = settings.stremio_password
+        self.username = settings.STREMIO_USERNAME
+        self.password = settings.STREMIO_PASSWORD
         # Reuse HTTP client for connection pooling and better performance
         self._client: Optional[httpx.AsyncClient] = None
         self._likes_client: Optional[httpx.AsyncClient] = None
@@ -91,7 +91,10 @@ class StremioService:
             else:
                 return False
         except Exception as e:
-            logger.error(f"Error checking if user has loved a movie or series: {e}", exc_info=True)
+            logger.error(
+                f"Error checking if user has loved a movie or series: {e}",
+                exc_info=True,
+            )
             return False
 
     @cached_api_call
@@ -126,16 +129,25 @@ class StremioService:
             logger.info(f"Fetched {len(items)} library items from Stremio")
 
             # Filter only items that user has watched
-            watched_items = [item for item in items if item.get("state", {}).get("timesWatched", 0) > 0]
+            watched_items = [
+                item
+                for item in items
+                if item.get("state", {}).get("timesWatched", 0) > 0
+            ]
             logger.info(f"Filtered {len(watched_items)} watched library items")
 
             # Check if user has loved the movie or series in parallel
             loved_statuses = await asyncio.gather(
-                *[self.is_loved(auth_key, item.get("_id"), item.get("type")) for item in watched_items]
+                *[
+                    self.is_loved(auth_key, item.get("_id"), item.get("type"))
+                    for item in watched_items
+                ]
             )
 
             # Separate loved and watched items
-            loved_items = [item for item, loved in zip(watched_items, loved_statuses) if loved]
+            loved_items = [
+                item for item, loved in zip(watched_items, loved_statuses) if loved
+            ]
             logger.info(f"Found {len(loved_items)} loved library items")
 
             # Format watched items

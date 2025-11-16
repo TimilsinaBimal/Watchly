@@ -4,11 +4,12 @@ from loguru import logger
 from app.config import settings
 from app.utils import cached_api_call
 
+
 class TMDBService:
     """Service for interacting with The Movie Database (TMDB) API."""
 
     def __init__(self):
-        self.api_key = settings.tmdb_api_key
+        self.api_key = settings.TMDB_API_KEY
         self.base_url = "https://api.themoviedb.org/3"
         self.addon_url = "https://94c8cb9f702d-tmdb-addon.baby-beamup.club/N4IgTgDgJgRg1gUwJ4gFwgC4AYC0AzMBBHSWEAGhAjAHsA3ASygQEkBbWFqNTMAVwQVwCDHzAA7dp27oM-QZQA2AQ3EBzPsrWD0CcTgCqAZSEBnOQmVsG6tAG0AupQDGyjMsU01p+05CnLMGcACwBRcWUYRQQZEDwPAKFXcwBhGj5xDDQAVkpTYJoAdwBBbQAlNxs1FnEAcT1CH1l5IT1I6NKECowqnjkBMwKS8sr1AHUGDGCpGG7e9HjFRIBfIA"  # noqa
         # Reuse HTTP client for connection pooling and better performance
@@ -77,14 +78,18 @@ class TMDBService:
                 )
                 return {}
         except httpx.HTTPStatusError as e:
-            logger.error(f"TMDB API error for {endpoint}: {e.response.status_code} - {e.response.text[:200]}")
+            logger.error(
+                f"TMDB API error for {endpoint}: {e.response.status_code} - {e.response.text[:200]}"
+            )
             raise
         except httpx.RequestError as e:
             logger.error(f"TMDB API request error for {endpoint}: {e}")
             raise
 
     @cached_api_call
-    async def find_by_imdb_id(self, imdb_id: str) -> Tuple[Optional[int], Optional[str]]:
+    async def find_by_imdb_id(
+        self, imdb_id: str
+    ) -> Tuple[Optional[int], Optional[str]]:
         """Find TMDB ID and type by IMDB ID."""
         try:
             endpoint = f"/find/{imdb_id}"
@@ -137,7 +142,9 @@ class TMDBService:
         return await self._make_request(f"/tv/{tv_id}", params=params)
 
     @cached_api_call
-    async def get_recommendations(self, tmdb_id: int, media_type: str, page: int = 1) -> Dict:
+    async def get_recommendations(
+        self, tmdb_id: int, media_type: str, page: int = 1
+    ) -> Dict:
         """Get recommendations based on TMDB ID and media type."""
         params = {"page": page}
         endpoint = f"/{media_type}/{tmdb_id}/recommendations"

@@ -59,7 +59,9 @@ class RecommendationService:
         watched_items = library_data.get("watched", [])
 
         if not loved_items:
-            logger.warning("No loved library items found, returning empty recommendations")
+            logger.warning(
+                "No loved library items found, returning empty recommendations"
+            )
             return []
 
         # Filter by content type - only use items matching the requested type
@@ -71,7 +73,9 @@ class RecommendationService:
 
         # Get last 10 items (most recent, already sorted by modification time descending)
         seeds = loved_items[:seed_limit]
-        logger.info(f"Using {len(seeds)} most recent loved {content_type} items as seeds")
+        logger.info(
+            f"Using {len(seeds)} most recent loved {content_type} items as seeds"
+        )
 
         # Build library IMDB ID set to exclude (all watched items, regardless of type)
         # Parse identifiers (synchronous operation, but fast)
@@ -88,7 +92,8 @@ class RecommendationService:
 
         # Process seeds in parallel for better performance
         seed_tasks = [
-            self._process_seed(seed, content_type, per_seed_limit, library_imdb_ids) for seed in seeds
+            self._process_seed(seed, content_type, per_seed_limit, library_imdb_ids)
+            for seed in seeds
         ]
         seed_results = await asyncio.gather(*seed_tasks, return_exceptions=True)
 
@@ -109,7 +114,9 @@ class RecommendationService:
                         # Update score if this recommendation appears from multiple seeds
                         existing = all_recommendations[rec_imdb_id]
                         existing_meta = existing.get("meta", {})
-                        existing_meta["_score"] = existing_meta.get("_score", 0) + meta_data.get("_score", 0)
+                        existing_meta["_score"] = existing_meta.get(
+                            "_score", 0
+                        ) + meta_data.get("_score", 0)
 
             # Limit total results
             if len(all_recommendations) >= max_results:
@@ -127,7 +134,11 @@ class RecommendationService:
         return result
 
     async def _process_seed(
-        self, seed: Dict, content_type: str, per_seed_limit: int, library_imdb_ids: Set[str]
+        self,
+        seed: Dict,
+        content_type: str,
+        per_seed_limit: int,
+        library_imdb_ids: Set[str],
     ) -> List[Dict]:
         """Process a single seed and return recommendations."""
         imdb_id, tmdb_id = _parse_identifier(seed.get("_id", ""))
@@ -157,14 +168,20 @@ class RecommendationService:
         # Double-check: only process if media_type matches requested content_type
         expected_media_type = "movie" if content_type == "movie" else "tv"
         if media_type != expected_media_type:
-            logger.info(f"Skipping seed {imdb_id}: media_type {media_type} doesn't match {content_type}")
+            logger.info(
+                f"Skipping seed {imdb_id}: media_type {media_type} doesn't match {content_type}"
+            )
             return []
 
         # Get recommendations for this seed
-        recommendations = await self._get_recommendations_for_seed(tmdb_id, media_type, per_seed_limit)
+        recommendations = await self._get_recommendations_for_seed(
+            tmdb_id, media_type, per_seed_limit
+        )
         return recommendations
 
-    async def _get_details_by_tmdb(self, tmdb_id: int, content_type: str) -> Optional[Dict]:
+    async def _get_details_by_tmdb(
+        self, tmdb_id: int, content_type: str
+    ) -> Optional[Dict]:
         """Get details by TMDB ID and extract IMDB ID."""
         try:
             if content_type == "movie":
@@ -182,10 +199,14 @@ class RecommendationService:
                 return details
             return None
         except Exception as e:
-            logger.info(f"Error getting details for TMDB {tmdb_id} ({content_type}): {e}")
+            logger.info(
+                f"Error getting details for TMDB {tmdb_id} ({content_type}): {e}"
+            )
             return None
 
-    async def _get_recommendations_for_seed(self, tmdb_id: int, media_type: str, limit: int) -> List[Dict]:
+    async def _get_recommendations_for_seed(
+        self, tmdb_id: int, media_type: str, limit: int
+    ) -> List[Dict]:
         """Get first N recommendations for a single seed from TMDB."""
         try:
             # Get recommendations from TMDB (returns first page of results)
@@ -194,7 +215,9 @@ class RecommendationService:
 
             # Get IMDB IDs in parallel (need to fetch basic details to get IMDB ID)
             # Fetch more items to account for missing IMDB IDs, but limit to first results
-            items_to_process = all_results[: limit * 2]  # Process 2x limit to account for missing IMDB IDs
+            items_to_process = all_results[
+                : limit * 2
+            ]  # Process 2x limit to account for missing IMDB IDs
             detail_tasks = []
             item_scores = {}
 
@@ -206,7 +229,9 @@ class RecommendationService:
 
                 # Fetch details in parallel
                 if media_type == "movie":
-                    detail_tasks.append(self.tmdb_service.get_movie_details(item_tmdb_id))
+                    detail_tasks.append(
+                        self.tmdb_service.get_movie_details(item_tmdb_id)
+                    )
                 else:
                     detail_tasks.append(self.tmdb_service.get_tv_details(item_tmdb_id))
 
@@ -244,7 +269,8 @@ class RecommendationService:
             # Fetch addon metadata in parallel
             stremio_type = "movie" if media_type == "movie" else "series"
             meta_tasks = [
-                self.tmdb_service.get_addon_meta(stremio_type, imdb_id) for imdb_id, _ in imdb_ids_to_fetch
+                self.tmdb_service.get_addon_meta(stremio_type, imdb_id)
+                for imdb_id, _ in imdb_ids_to_fetch
             ]
 
             meta_results = await asyncio.gather(*meta_tasks, return_exceptions=True)
@@ -253,7 +279,9 @@ class RecommendationService:
             results = []
             for (imdb_id, _), meta_result in zip(imdb_ids_to_fetch, meta_results):
                 if isinstance(meta_result, Exception):
-                    logger.info(f"Error fetching addon meta for {imdb_id}: {meta_result}")
+                    logger.info(
+                        f"Error fetching addon meta for {imdb_id}: {meta_result}"
+                    )
                     continue
 
                 if meta_result and meta_result.get("meta"):
@@ -269,8 +297,12 @@ class RecommendationService:
                 if len(results) >= limit:
                     break
 
-            logger.info(f"Found {len(results)} recommendations for seed {tmdb_id} ({media_type})")
+            logger.info(
+                f"Found {len(results)} recommendations for seed {tmdb_id} ({media_type})"
+            )
             return results
         except Exception as e:
-            logger.warning(f"Error getting recommendations for seed {tmdb_id} ({media_type}): {e}")
+            logger.warning(
+                f"Error getting recommendations for seed {tmdb_id} ({media_type}): {e}"
+            )
             return []
