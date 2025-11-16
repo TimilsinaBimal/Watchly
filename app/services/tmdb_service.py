@@ -156,3 +156,9 @@ class TMDBService:
         params = {"page": page}
         endpoint = f"/{media_type}/{tmdb_id}/similar"
         return await self._make_request(endpoint, params=params)
+
+    @cached_api_call
+    async def get_discover(self, media_type: str, params: dict[str, str]) -> Dict:
+        """Get discover content based on params."""
+        endpoint = f"/discover/{media_type}"
+        return await self._make_request(endpoint, params=params)

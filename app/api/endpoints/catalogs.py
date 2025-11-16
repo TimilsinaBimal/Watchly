@@ -3,6 +3,7 @@ from loguru import logger
 from app.services.recommendation_service import RecommendationService
 from app.services.stremio_service import StremioService
 from app.utils import decode_credentials
+from app.services.catalog import DynamicCatalogService
 
 router = APIRouter()
 
@@ -35,9 +36,11 @@ async def get_catalog(
             status_code=400, detail="Invalid type. Use 'movie' or 'series'"
         )
 
-    if id not in ["watchly.rec"] and not id.startswith("tt"):
+    if id not in ["watchly.rec"] and not id.startswith("tt") and not id.startswith("watchly.genre."):
         logger.warning(f"Invalid id: {id}")
-        raise HTTPException(status_code=400, detail="Invalid id. Use 'watchly.rec'")
+        raise HTTPException(
+            status_code=400, detail="Invalid id. Use 'watchly.rec' or 'watchly.genre.<genre_id>'"
+        )
     try:
         # Create services with credentials
         stremio_service = StremioService(username=credentials['username'], password=credentials['password'])
@@ -46,6 +49,11 @@ async def get_catalog(
         # if id starts with tt, then return recommendations for that particular item
         if id.startswith("tt"):
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
+            logger.info(f"Found {len(recommendations)} recommendations for {id}")
+        elif id.startswith("watchly.genre."):
+            recommendations = await recommendation_service.get_recommendations_for_genre(
+                genre_id=id, media_type=type
+            )
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
         else:
             # Get recommendations based on library
@@ -74,57 +82,13 @@ async def update_catalogs(encoded: str):
     """
     # Decode credentials from path
     credentials = decode_credentials(encoded)
+
     stremio_service = StremioService(username=credentials['username'], password=credentials['password'])
     library_items = await stremio_service.get_library_items()
-    seen_items = set()
-    catalogs = []
-    seed = {
-        "watched": {
-            "movie": False,
-            "series": False,
-        },
-        "loved": {
-            "movie": False,
-            "series": False,
-        },
-    }
-    # checked loved items
-    loved_items = library_items.get("loved", [])
-    watched_items = library_items.get("watched", [])
-    # now find first few items
-    for l_item in loved_items:
-        type_ = l_item.get("type")
-        if type_ in ["tv"]:
-            type_ = "series"
-        if l_item.get("_id") in seen_items or seed["loved"][type_]:
-            continue
-        seen_items.add(l_item.get("_id"))
-        seed["loved"][type_] = True
-        catalogs.append(
-            {
-                "type": type_,
-                "id": l_item.get("_id"),
-                "name": f"Because you Loved {l_item.get('name')}",
-                "extra": [],
-            }
-        )
-    for w_item in watched_items:
-        type_ = w_item.get("type")
-        if type_ in ["tv"]:
-            type_ = "series"
-
-        if w_item.get("_id") in seen_items or seed["watched"][type_]:
-            continue
-        seen_items.add(w_item.get("_id"))
-        seed["watched"][type_] = True
-        catalogs.append(
-            {
-                "type": type_,
-                "id": w_item.get("_id"),
-                "name": f"Because you Watched {w_item.get('name')}",
-                "extra": [],
-            }
-        )
+    dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
+    catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(library_items=library_items)
+    genre_based_catalogs = await dynamic_catalog_service.get_genre_based_catalogs(library_items=library_items)
+    catalogs += genre_based_catalogs
     # update catalogs
     auth_key = await stremio_service._get_auth_token()
     updated = await stremio_service.update_catalogs(catalogs, auth_key)

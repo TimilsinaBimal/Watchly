@@ -229,3 +229,39 @@ class RecommendationService:
 
         logger.info(f"Generated {len(sorted_recommendations)} unique recommendations")
         return sorted_recommendations
+
+    async def get_recommendations_for_genre(self, genre_id: str, media_type: str) -> List[Dict]:
+        """
+        Get recommendations for a specific genre.
+        """
+        # parse genre ids first
+        # remove watchly.genre. prefix
+        genre_id = genre_id.replace("watchly.genre.", "")
+
+        # genre_id params, replace - with , and _ with |
+        genre_id_params = genre_id.replace("-", ",").replace("_", "|")
+        # build payloads
+        params = {
+            "sort_by": "popularity.desc",
+            "with_genres": genre_id_params,
+        }
+
+        # now call discover api
+        # get recommendations from tmdb api
+        recommendations = await self.tmdb_service.get_discover(media_type=media_type, params=params)
+        recommendations = recommendations.get("results", [])
+
+        final_recommendations = []
+        # now fetch addon meta for each recommendation
+        fetch_meta_tasks = [
+            self.tmdb_service.get_addon_meta(media_type, f"tmdb:{recommendation.get('id')}")
+            for recommendation in recommendations
+        ]
+        addon_meta_results = await asyncio.gather(*fetch_meta_tasks, return_exceptions=True)
+        for addon_meta in addon_meta_results:
+            if isinstance(addon_meta, Exception):
+                logger.warning(f"Error processing source item: {addon_meta}")
+                continue
+            meta_data = addon_meta.get("meta", {})
+            final_recommendations.append(meta_data)
+        return final_recommendations
