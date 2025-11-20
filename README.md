@@ -47,7 +47,7 @@ Watchly is a FastAPI-based Stremio addon that:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/Watchly.git
+   git clone https://github.com/TimilsinaBimal/Watchly.git
    cd Watchly
    ```
 
@@ -96,7 +96,7 @@ Watchly is a FastAPI-based Stremio addon that:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/Watchly.git
+   git clone https://github.com/TimilsinaBimal/Watchly.git
    cd Watchly
    ```
 
