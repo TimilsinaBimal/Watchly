@@ -57,11 +57,17 @@ async def get_catalog(
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
         else:
             # Get recommendations based on library
-            # Use last 10 loved items as sources, get 5 recommendations per source item
+            # Use config to determine if we should include watched items
+            include_watched = credentials.get('includeWatched', False)
+            # Use last 10 items as sources, get 5 recommendations per source item
             recommendations = await recommendation_service.get_recommendations(
-                content_type=type, source_items_limit=10, recommendations_per_source=5, max_results=50
+                content_type=type,
+                source_items_limit=10,
+                recommendations_per_source=5,
+                max_results=50,
+                include_watched=include_watched
             )
-            logger.info(f"Found {len(recommendations)} recommendations for {type}")
+            logger.info(f"Found {len(recommendations)} recommendations for {type} (includeWatched: {include_watched})")
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
         # Cache catalog responses for 4 hours (14400 seconds)

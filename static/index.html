@@ -31,6 +31,21 @@
                         autocomplete="current-password">
                 </div>
 
+                <div class="form-group">
+                    <label>Recommendation Source</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="recommendationSource" value="loved" checked>
+                            <span>Only loved items</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="recommendationSource" value="watched">
+                            <span>Include watched items</span>
+                        </label>
+                    </div>
+                    <p class="form-help">Choose whether to base recommendations only on items you've loved, or also include items you've watched.</p>
+                </div>
+
                 <div id="errorMessage" class="error-message" style="display: none;"></div>
 
                 <button type="submit" class="btn-primary" id="submitBtn">

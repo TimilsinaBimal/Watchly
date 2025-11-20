@@ -43,14 +43,22 @@ document.addEventListener('DOMContentLoaded', function () {
         if (match && match[1]) {
             const encoded = match[1];
             try {
-                // Decode the credentials
+                // Decode the credentials and config
                 const decoded = atob(encoded);
-                const credentials = JSON.parse(decoded);
+                const config = JSON.parse(decoded);
 
-                if (credentials.username && credentials.password) {
+                if (config.username && config.password) {
                     // Populate the form fields
-                    usernameInput.value = credentials.username;
-                    passwordInput.value = credentials.password;
+                    usernameInput.value = config.username;
+                    passwordInput.value = config.password;
+                    // Set recommendation source if available
+                    if (config.includeWatched !== undefined) {
+                        const sourceValue = config.includeWatched ? 'watched' : 'loved';
+                        const radio = document.querySelector(`input[name="recommendationSource"][value="${sourceValue}"]`);
+                        if (radio) {
+                            radio.checked = true;
+                        }
+                    }
                     // Optionally show a message that fields were pre-filled
                     console.log('Credentials loaded from URL');
                 }
@@ -70,6 +78,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const username = usernameInput.value.trim();
         const password = passwordInput.value;
+        const recommendationSource = document.querySelector('input[name="recommendationSource"]:checked').value;
 
         if (!username || !password) {
             showError('Please fill in all fields');
@@ -81,13 +90,14 @@ document.addEventListener('DOMContentLoaded', function () {
         setLoading(true);
 
         try {
-            // Encode credentials
-            const credentials = {
+            // Encode credentials and config
+            const config = {
                 username: username,
-                password: password
+                password: password,
+                includeWatched: recommendationSource === 'watched'
             };
 
-            const encoded = btoa(JSON.stringify(credentials));
+            const encoded = btoa(JSON.stringify(config));
 
             // Get current origin
             const baseUrl = window.location.origin;

@@ -95,33 +95,40 @@ def clear_cache():
     logger.info("All caches cleared")
 
 
-def decode_credentials(encoded: str) -> Dict[str, str]:
+def decode_credentials(encoded: str) -> Dict[str, any]:
     """
-    Decode base64 encoded credentials.
+    Decode base64 encoded credentials and configuration.
 
     Args:
-        encoded: Base64 encoded JSON string containing username and password
+        encoded: Base64 encoded JSON string containing username, password, and optional config
 
     Returns:
-        Dictionary with 'username' and 'password' keys
+        Dictionary with 'username', 'password', and 'includeWatched' keys
 
     Raises:
         HTTPException: If decoding fails
     """
     try:
         decoded_bytes = base64.b64decode(encoded)
-        credentials = json.loads(decoded_bytes.decode('utf-8'))
+        config = json.loads(decoded_bytes.decode('utf-8'))
 
-        if not isinstance(credentials, dict):
-            raise ValueError("Credentials must be a dictionary")
+        if not isinstance(config, dict):
+            raise ValueError("Config must be a dictionary")
 
-        username = credentials.get('username')
-        password = credentials.get('password')
+        username = config.get('username')
+        password = config.get('password')
 
         if not username or not password:
             raise ValueError("Username and password are required")
 
-        return {'username': username, 'password': password}
+        # Get includeWatched config, default to False (only loved items)
+        include_watched = config.get('includeWatched', False)
+
+        return {
+            'username': username,
+            'password': password,
+            'includeWatched': include_watched
+        }
     except (binascii.Error, json.JSONDecodeError, ValueError) as e:
         logger.error(f"Failed to decode credentials: {e}")
         raise HTTPException(

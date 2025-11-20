@@ -126,52 +126,67 @@ class RecommendationService:
         source_items_limit: int = 2,
         recommendations_per_source: int = 5,
         max_results: int = 50,
+        include_watched: bool = False,
     ) -> List[Dict]:
         """
         Get recommendations based on user's Stremio library.
 
         Process:
         1. Get user's loved items from library (these are "source items" we use to find similar content)
-        2. Get user's watched items (these will be excluded from recommendations)
-        3. For each loved item, fetch recommendations from TMDB
-        4. Filter out items already watched
-        5. Aggregate and deduplicate recommendations
-        6. Sort by relevance score
+        2. If include_watched is True, also include watched items as source items
+        3. Get user's watched items (these will be excluded from recommendations)
+        4. For each source item, fetch recommendations from TMDB
+        5. Filter out items already watched
+        6. Aggregate and deduplicate recommendations
+        7. Sort by relevance score
 
         Args:
             content_type: "movie" or "series"
-            source_items_limit: How many loved items to use as sources (default: 2)
+            source_items_limit: How many items to use as sources (default: 2)
             recommendations_per_source: How many recommendations per source item (default: 5)
             max_results: Maximum total recommendations to return (default: 50)
+            include_watched: If True, include watched items as source items in addition to loved items (default: False)
         """
         if not content_type:
             logger.warning("content_type must be specified (movie or series)")
             return []
 
-        logger.info(f"Getting recommendations for {content_type}")
+        logger.info(f"Getting recommendations for {content_type} (include_watched: {include_watched})")
 
         # Step 1: Fetch user's library items (both watched and loved)
         library_data = await self.stremio_service.get_library_items()
         loved_items = library_data.get("loved", [])
         watched_items = library_data.get("watched", [])
 
-        if not loved_items:
+        # Step 2: Build source items list based on config
+        if include_watched:
+            all_source_items = watched_items
+            logger.info(f"Using watched items ({len(watched_items)}) as sources")
+        else:
+            # Only use loved items
+            all_source_items = loved_items
+            logger.info(f"Using only loved items ({len(loved_items)}) as sources")
+
+        if not all_source_items:
             logger.warning(
-                "No loved library items found, returning empty recommendations"
+                f"No {'loved or watched' if include_watched else 'loved'} library items found, returning empty"
+                " recommendations"
             )
             return []
 
-        # Step 2: Filter loved items by content type (only use movies for movie recommendations)
-        loved_items_of_type = [item for item in loved_items if item.get("type") == content_type]
+        # Step 3: Filter source items by content type (only use movies for movie recommendations)
+        source_items_of_type = [item for item in all_source_items if item.get("type") == content_type]
 
-        if not loved_items_of_type:
-            logger.warning(f"No loved {content_type} items found in library")
+        if not source_items_of_type:
+            logger.warning(f"No {content_type} items found in library")
             return []
 
-        # Step 3: Select most recent loved items as "source items" for finding recommendations
+        # Step 4: Select most recent items as "source items" for finding recommendations
         # (These are the items we'll use to find similar content)
-        source_items = loved_items_of_type[:source_items_limit]
-        logger.info(f"Using {len(source_items)} most recent loved {content_type} items as sources")
+        # Sort by modification time (most recent first) if available
+        source_items_of_type.sort(key=lambda x: x.get("_mtime", ""), reverse=True)
+        source_items = source_items_of_type[:source_items_limit]
+        logger.info(f"Using {len(source_items)} most recent {content_type} items as sources")
 
         # Step 4: Build exclusion sets (IMDB IDs and TMDB IDs) for watched items
         # We don't want to recommend things the user has already watched
