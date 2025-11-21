@@ -131,7 +131,7 @@ class StremioService:
         Fetch library items from Stremio once and return both watched and loved items.
         Returns a dict with 'watched' and 'loved' keys.
         """
-        if not self.username or not self.password:
+        if not self._auth_key and (not self.username or not self.password):
             logger.warning("Stremio credentials not configured")
             return {"watched": [], "loved": []}
 
