@@ -15,6 +15,10 @@ class TMDBService:
         # Reuse HTTP client for connection pooling and better performance
         self._client: Optional[httpx.AsyncClient] = None
         self._addon_client: Optional[httpx.AsyncClient] = None
+        if not self.api_key:
+            logger.warning(
+                "TMDB_API_KEY is not configured. Catalog endpoints will fail until the key is provided."
+            )
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the main TMDB API client."""
@@ -54,6 +58,10 @@ class TMDBService:
 
     async def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         """Make a request to the TMDB API."""
+        if not self.api_key:
+            raise RuntimeError(
+                "TMDB_API_KEY is not configured. Set the environment variable to enable TMDB requests."
+            )
         url = f"{self.base_url}{endpoint}"
         default_params = {"api_key": self.api_key, "language": "en-US"}
 

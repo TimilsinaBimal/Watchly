@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -51,7 +52,14 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         "includeWatched": payload.includeWatched,
     }
 
-    token = await token_store.store_payload(payload_to_store)
+    try:
+        token = await token_store.store_payload(payload_to_store)
+    except RuntimeError as exc:
+        logger.error("Token storage failed: {}", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Server configuration error: TOKEN_SALT must be set to a secure value.",
+        ) from exc
     base_url = str(request.base_url).rstrip("/")
     manifest_url = f"{base_url}/{token}/manifest.json"
 

@@ -163,7 +163,7 @@ Watchly is a FastAPI-based Stremio addon that:
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `TMDB_API_KEY` | Your TMDB API key | Yes | - |
+| `TMDB_API_KEY` | Your TMDB API key | Required for catalog features (optional for `/health`) | *(empty)* |
 | `PORT` | Server port | No | 8000 |
 | `ADDON_ID` | Stremio addon identifier | No | com.bimal.watchly |
 | `ADDON_NAME` | Human-friendly addon name shown in the manifest/UI | No | Watchly |
@@ -236,6 +236,10 @@ Watchly/
 ```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+### Health Check Endpoint
+
+The `/health` endpoint responds with `{ "status": "ok" }` without touching external services. This keeps container builds and probes green even when secrets like `TMDB_API_KEY` aren't supplied yet.
 
 ### Testing
 

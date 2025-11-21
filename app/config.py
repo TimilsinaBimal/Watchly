@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         extra="allow",
     )
 
-    TMDB_API_KEY: str
+    TMDB_API_KEY: str | None = None
     PORT: int = 8000
     ADDON_ID: str = "com.bimal.watchly"
     ADDON_NAME: str = "Watchly"

@@ -14,6 +14,23 @@ class TokenStore:
 
     def __init__(self) -> None:
         self._client: Optional[redis.Redis] = None
+        if not settings.REDIS_URL:
+            logger.warning(
+                "REDIS_URL is not set. Token storage will fail until a Redis instance is configured."
+            )
+        if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
+            logger.warning(
+                "TOKEN_SALT is missing or using the default placeholder. Set a strong value to secure tokens."
+            )
+
+    def _ensure_secure_salt(self) -> None:
+        if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
+            logger.error(
+                "Refusing to store credentials because TOKEN_SALT is unset or using the insecure default."
+            )
+            raise RuntimeError(
+                "Server misconfiguration: TOKEN_SALT must be set to a non-default value before storing credentials."
+            )
 
     async def _get_client(self) -> redis.Redis:
         if self._client is None:
@@ -49,6 +66,7 @@ class TokenStore:
         return hmac.new(secret, serialized.encode("utf-8"), hashlib.sha256).hexdigest()
 
     async def store_payload(self, payload: Dict[str, Any]) -> str:
+        self._ensure_secure_salt()
         normalized = self._normalize_payload(payload)
         token = self._derive_token_value(normalized)
         hashed = self._hash_token(token)
