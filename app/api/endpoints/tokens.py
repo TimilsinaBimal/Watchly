@@ -26,6 +26,31 @@ class TokenResponse(BaseModel):
         description="Number of seconds before the token expires (None means it does not expire)",
     )
 
+def _preferred_base_url(request: Request) -> str:
+    headers = request.headers
+
+    def _first_header_value(name: str) -> str | None:
+        raw = headers.get(name)
+        if not raw:
+            return None
+        # Some proxies send comma-separated lists for chained hops
+        return raw.split(",")[0].strip()
+
+    scheme = _first_header_value("x-forwarded-proto") or request.url.scheme
+    host = _first_header_value("x-forwarded-host") or headers.get("host") or request.url.netloc
+    prefix = _first_header_value("x-forwarded-prefix") or ""
+    root_path = request.scope.get("root_path", "")
+
+    base_path = f"{prefix}{root_path}".rstrip("/")
+    if base_path and not base_path.startswith("/"):
+        base_path = f"/{base_path}"
+
+    base_url = f"{scheme}://{host}"
+    if base_path:
+        base_url = f"{base_url}{base_path}"
+
+    return base_url.rstrip("/")
+
 
 @router.post("/", response_model=TokenResponse)
 async def create_token(payload: TokenRequest, request: Request) -> TokenResponse:
@@ -60,7 +85,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
             status_code=500,
             detail="Server configuration error: TOKEN_SALT must be set to a secure value.",
         ) from exc
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _preferred_base_url(request)
     manifest_url = f"{base_url}/{token}/manifest.json"
 
     expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
