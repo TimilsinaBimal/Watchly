@@ -43,8 +43,13 @@
 
                     <div class="form-group">
                         <label for="password">Stremio Password</label>
-                        <input type="password" id="password" name="password" placeholder="Enter your password"
-                            autocomplete="current-password">
+                        <div class="input-with-toggle">
+                            <input type="password" id="password" name="password" placeholder="Enter your password"
+                                autocomplete="current-password">
+                            <button type="button" class="toggle-visibility" data-toggle-target="password" aria-label="Show password">
+                                Show
+                            </button>
+                        </div>
                         <p class="form-help">Required when supplying a username/email.</p>
                     </div>
                 </div>
@@ -52,8 +57,13 @@
                 <div id="authKeyField" class="method-fields" style="display: none;">
                     <div class="form-group">
                         <label for="authKey">Stremio Auth Key</label>
-                        <input type="text" id="authKey" name="authKey" placeholder="Paste your auth key"
-                            autocomplete="off">
+                        <div class="input-with-toggle">
+                            <input type="password" id="authKey" name="authKey" placeholder="Paste your auth key"
+                                autocomplete="off">
+                            <button type="button" class="toggle-visibility" data-toggle-target="authKey" aria-label="Show auth key">
+                                Show
+                            </button>
+                        </div>
                         <details class="info-card">
                             <summary>
                                 <span>How to find your authKey</span>

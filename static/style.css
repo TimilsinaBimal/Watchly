@@ -122,6 +122,33 @@ a:visited {
     transition: all 0.3s ease;
 }
 
+.input-with-toggle {
+    position: relative;
+}
+
+.input-with-toggle input {
+    padding-right: 90px;
+}
+
+.toggle-visibility {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--primary-color);
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 4px 0;
+    transition: color 0.2s ease;
+}
+
+.toggle-visibility:hover {
+    color: var(--secondary-color);
+}
+
 .form-group select {
     width: 100%;
     padding: 12px 16px;

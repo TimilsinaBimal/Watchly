@@ -84,7 +84,7 @@ class StremioService:
                 elif isinstance(error_obj, str):
                     error_message = error_obj or error_message
                 logger.warning(error_obj)
-                raise ValueError(error_message)
+                raise ValueError(f"Stremio: {error_message}")
             return auth_key
         except Exception as e:
             logger.error(f"Error authenticating with Stremio: {e}", exc_info=True)
@@ -225,8 +225,22 @@ class StremioService:
         client = await self._get_client()
         result = await client.post(url, json=payload)
         result.raise_for_status()
-        logger.info(f"Found {len(result.json().get('result', {}).get('addons', []))} addons")
-        return result.json().get("result", {}).get("addons", [])
+        data = result.json()
+        error_payload = data.get("error")
+        if not error_payload and (data.get("code") and data.get("message")):
+            error_payload = data
+
+        if error_payload:
+            message = "Invalid Stremio auth key."
+            if isinstance(error_payload, dict):
+                message = error_payload.get("message") or message
+            elif isinstance(error_payload, str):
+                message = error_payload or message
+            logger.warning("Addon collection request failed: {}", error_payload)
+            raise ValueError(f"Stremio: {message}")
+        addons = data.get("result", {}).get("addons", [])
+        logger.info(f"Found {len(addons)} addons")
+        return addons
 
     async def update_addon(self, addons: list[dict], auth_key: str | None = None):
         """Update an addon in Stremio."""

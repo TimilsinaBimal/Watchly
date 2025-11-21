@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const resetBtn = document.getElementById('resetBtn');
     const btnText = submitBtn.querySelector('.btn-text');
     const btnLoader = submitBtn.querySelector('.btn-loader');
+    const toggleButtons = document.querySelectorAll('.toggle-visibility');
 
     const methodFieldMap = {
         credentials: credentialsFields,
@@ -81,6 +82,34 @@ document.addEventListener('DOMContentLoaded', function () {
         if (radio.checked) {
             radio.closest('.radio-label')?.classList.add('checked');
         }
+    });
+
+    function synchronizeToggle(button, input) {
+        if (!button || !input) {
+            return;
+        }
+        const isHidden = input.getAttribute('type') === 'password';
+        button.textContent = isHidden ? 'Show' : 'Hide';
+        button.setAttribute('aria-pressed', (!isHidden).toString());
+        button.setAttribute('aria-label', isHidden ? 'Show value' : 'Hide value');
+        button.dataset.visible = (!isHidden).toString();
+    }
+
+    toggleButtons.forEach(button => {
+        const targetId = button.dataset.toggleTarget;
+        const targetInput = document.getElementById(targetId);
+        synchronizeToggle(button, targetInput);
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!targetInput) {
+                return;
+            }
+            const isHidden = targetInput.getAttribute('type') === 'password';
+            targetInput.setAttribute('type', isHidden ? 'text' : 'password');
+            synchronizeToggle(button, targetInput);
+            targetInput.focus();
+        });
     });
 
     form.addEventListener('submit', async function (e) {

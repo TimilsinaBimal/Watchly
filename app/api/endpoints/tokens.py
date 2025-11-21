@@ -1,4 +1,5 @@
 import httpx
+from redis import exceptions as redis_exceptions
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -101,6 +102,8 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     username = payload.username.strip() if payload.username else None
     password = payload.password
     auth_key = payload.authKey.strip() if payload.authKey else None
+    if auth_key and auth_key.startswith("\"") and auth_key.endswith("\""):
+        auth_key = auth_key[1:-1].strip()
 
     if username and not password:
         raise HTTPException(status_code=400, detail="Password is required when a username is provided.")
@@ -130,6 +133,12 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         raise HTTPException(
             status_code=500,
             detail="Server configuration error: TOKEN_SALT must be set to a secure value.",
+        ) from exc
+    except (redis_exceptions.RedisError, OSError) as exc:
+        logger.error("Token storage unavailable: {}", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Token storage is temporarily unavailable. Please try again once Redis is reachable.",
         ) from exc
 
     if created:
