@@ -11,7 +11,7 @@ class TMDBService:
     def __init__(self):
         self.api_key = settings.TMDB_API_KEY
         self.base_url = "https://api.themoviedb.org/3"
-        self.addon_url = "https://94c8cb9f702d-tmdb-addon.baby-beamup.club/N4IgTgDgJgRg1gUwJ4gFwgC4AYC0AzMBBHSWEAGhAjAHsA3ASygQEkBbWFqNTMAVwQVwCDHzAA7dp27oM-QZQA2AQ3EBzPsrWD0CcTgCqAZSEBnOQmVsG6tAG0AupQDGyjMsU01p+05CnLMGcACwBRcWUYRQQZEDwPAKFXcwBhGj5xDDQAVkpTYJoAdwBBbQAlNxs1FnEAcT1CH1l5IT1I6NKECowqnjkBMwKS8sr1AHUGDGCpGG7e9HjFRIBfIA"  # noqa
+    self.addon_url = settings.TMDB_ADDON_URL
         # Reuse HTTP client for connection pooling and better performance
         self._client: Optional[httpx.AsyncClient] = None
         self._addon_client: Optional[httpx.AsyncClient] = None

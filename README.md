@@ -70,6 +70,7 @@ Watchly is a FastAPI-based Stremio addon that:
    TOKEN_SALT=replace-with-long-random-string
    # 0 means tokens never expire
    TOKEN_TTL_SECONDS=0
+   TMDB_ADDON_URL=https://94c8cb9f702d-tmdb-addon.baby-beamup.club/N4IgTgDgJgRg1gUwJ4gFwgC4AYC0AzMBBHSWEAGhAjAHsA3ASygQEkBbWFqNTMAVwQVwCDHzAA7dp27oM-QZQA2AQ3EBzPsrWD0CcTgCqAZSEBnOQmVsG6tAG0AupQDGyjMsU01p+05CnLMGcACwBRcWUYRQQZEDwPAKFXcwBhGj5xDDQAVkpTYJoAdwBBbQAlNxs1FnEAcT1CH1l5IT1I6NKECowqnjkBMwKS8sr1AHUGDGCpGG7e9HjFRIBfIA
    # Optional HTML for configuration banner announcements
    ANNOUNCEMENT_HTML=
    ```
@@ -132,6 +133,7 @@ Watchly is a FastAPI-based Stremio addon that:
    REDIS_URL=redis://localhost:6379/0
    TOKEN_SALT=replace-with-long-random-string
    TOKEN_TTL_SECONDS=0
+   TMDB_ADDON_URL=https://94c8cb9f702d-tmdb-addon.baby-beamup.club/N4IgTgDgJgRg1gUwJ4gFwgC4AYC0AzMBBHSWEAGhAjAHsA3ASygQEkBbWFqNTMAVwQVwCDHzAA7dp27oM-QZQA2AQ3EBzPsrWD0CcTgCqAZSEBnOQmVsG6tAG0AupQDGyjMsU01p+05CnLMGcACwBRcWUYRQQZEDwPAKFXcwBhGj5xDDQAVkpTYJoAdwBBbQAlNxs1FnEAcT1CH1l5IT1I6NKECowqnjkBMwKS8sr1AHUGDGCpGG7e9HjFRIBfIA
    ANNOUNCEMENT_HTML=
    ```
    
@@ -173,6 +175,7 @@ Watchly is a FastAPI-based Stremio addon that:
 | `TOKEN_SALT` | Secret salt for hashing token IDs | Yes | - (must be set in production) |
 | `TOKEN_TTL_SECONDS` | Token lifetime in seconds (`0` = no expiry) | No | 0 |
 | `ANNOUNCEMENT_HTML` | Optional HTML snippet rendered in the configurator banner | No | *(empty)* |
+| `TMDB_ADDON_URL` | Base URL for the TMDB addon metadata proxy | No | `https://94c8cb9f702d-tmdb-addon.baby-beamup.club/...` |
 | `AUTO_UPDATE_CATALOGS` | Enable periodic background catalog refreshes | No | `true` |
 | `CATALOG_REFRESH_INTERVAL_SECONDS` | Interval between automatic refreshes (seconds) | No | `21600` (6h) |
 
