@@ -71,12 +71,20 @@ class StremioService:
             client = await self._get_client()
             result = await client.post(url, json=payload)
             result.raise_for_status()
-            auth_key = result.json().get("result", {}).get("authKey", "")
+            data = result.json()
+            auth_key = data.get("result", {}).get("authKey", "")
             if auth_key:
                 logger.info("Successfully authenticated with Stremio")
                 self._auth_key = auth_key
             else:
-                logger.warning("Stremio authentication returned empty auth key")
+                error_obj = data.get("error") or data
+                error_message = "Invalid Stremio username/password."
+                if isinstance(error_obj, dict):
+                    error_message = error_obj.get("message") or error_message
+                elif isinstance(error_obj, str):
+                    error_message = error_obj or error_message
+                logger.warning(error_obj)
+                raise ValueError(error_message)
             return auth_key
         except Exception as e:
             logger.error(f"Error authenticating with Stremio: {e}", exc_info=True)

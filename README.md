@@ -33,6 +33,8 @@ Watchly is a FastAPI-based Stremio addon that:
 - ✅ **Caching** - optimized performance with intelligent caching
 - ✅ **Secure Tokenized Access** - credentials/auth keys never travel in URLs
 - ✅ **Docker Support** - easy deployment with Docker and Docker Compose
+- ✅ **Background Catalog Refresh** - automatically keeps Stremio catalogs in sync
+- ✅ **Credential Validation** - verifies access details and primes catalogs before issuing tokens
 
 ## Installation
 
@@ -171,6 +173,8 @@ Watchly is a FastAPI-based Stremio addon that:
 | `TOKEN_SALT` | Secret salt for hashing token IDs | Yes | - (must be set in production) |
 | `TOKEN_TTL_SECONDS` | Token lifetime in seconds (`0` = no expiry) | No | 0 |
 | `ANNOUNCEMENT_HTML` | Optional HTML snippet rendered in the configurator banner | No | *(empty)* |
+| `AUTO_UPDATE_CATALOGS` | Enable periodic background catalog refreshes | No | `true` |
+| `CATALOG_REFRESH_INTERVAL_SECONDS` | Interval between automatic refreshes (seconds) | No | `21600` (6h) |
 
 ### User Configuration
 
@@ -178,7 +182,7 @@ Use the web interface at `/configure` to provision a secure access token:
 
 1. Provide either your **Stremio username/password** *or* an **existing `authKey`** (copy from `localStorage.authKey` in `web.strem.io`).
 2. Choose whether to base recommendations on loved items only or include everything you've watched.
-3. Watchly stores the supplied credentials/auth key inside Redis and returns a salted token deterministically derived from your inputs.
+3. Watchly verifies the credentials/auth key with Stremio, performs the first catalog refresh in the background, and only then stores the payload inside Redis.
 4. Your manifest URL becomes `https://<host>/<token>/manifest.json`. Only this token ever appears in URLs.
 5. Re-running the setup with the same credentials/configuration returns the exact same token.
 
@@ -240,6 +244,10 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ### Health Check Endpoint
 
 The `/health` endpoint responds with `{ "status": "ok" }` without touching external services. This keeps container builds and probes green even when secrets like `TMDB_API_KEY` aren't supplied yet.
+
+### Background Catalog Updates
+
+Watchly now refreshes catalogs automatically using the credentials stored in Redis. By default the background worker runs every 6 hours and updates each token's catalogs directly via the Stremio API. To disable the behavior, set `AUTO_UPDATE_CATALOGS=false` (or choose a custom cadence with `CATALOG_REFRESH_INTERVAL_SECONDS`). Manual refreshes through `/{token}/catalog/update` continue to work and reuse the same logic.
 
 ### Testing
 

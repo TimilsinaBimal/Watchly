@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     TOKEN_SALT: str = "change-me"
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire
     ANNOUNCEMENT_HTML: str = ""
+    AUTO_UPDATE_CATALOGS: bool = True
+    CATALOG_REFRESH_INTERVAL_SECONDS: int = 21600  # 6 hours
 
 
 settings = Settings()

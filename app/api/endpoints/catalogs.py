@@ -2,8 +2,8 @@ from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 from app.services.recommendation_service import RecommendationService
 from app.services.stremio_service import StremioService
+from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.utils import resolve_user_credentials
-from app.services.catalog import DynamicCatalogService
 
 router = APIRouter()
 
@@ -98,20 +98,7 @@ async def update_catalogs(token: str):
     # Decode credentials from path
     credentials = await resolve_user_credentials(token)
 
-    stremio_service = StremioService(
-        username=credentials.get('username') or "",
-        password=credentials.get('password') or "",
-        auth_key=credentials.get('authKey'),
-    )
-    library_items = await stremio_service.get_library_items()
-    dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
-    catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(library_items=library_items)
-    genre_based_catalogs = await dynamic_catalog_service.get_genre_based_catalogs(library_items=library_items)
-    catalogs += genre_based_catalogs
-    # update catalogs
-
-    logger.info(f"Updating Catalogs: {catalogs}")
-    auth_key = await stremio_service._get_auth_token()
-    updated = await stremio_service.update_catalogs(catalogs, auth_key)
-    logger.info(f"Updated catalogs: {updated}")
+    logger.info("Updating catalogs in response to manual request")
+    updated = await refresh_catalogs_for_credentials(credentials)
+    logger.info(f"Manual catalog update completed: {updated}")
     return {"success": updated}
