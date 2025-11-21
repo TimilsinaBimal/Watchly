@@ -45,8 +45,10 @@ class RecommendationService:
     """
 
     def __init__(self, stremio_service: Optional[StremioService] = None):
+        if stremio_service is None:
+            raise ValueError("StremioService instance is required for personalized recommendations")
         self.tmdb_service = TMDBService()
-        self.stremio_service = stremio_service or StremioService()
+        self.stremio_service = stremio_service
         self.per_item_limit = 20
 
     async def _fetch_catlogs_from_tmdb_addon(self, items: list[dict], media_type: str):

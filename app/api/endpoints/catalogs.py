@@ -2,16 +2,16 @@ from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 from app.services.recommendation_service import RecommendationService
 from app.services.stremio_service import StremioService
-from app.utils import decode_credentials
+from app.utils import resolve_user_credentials
 from app.services.catalog import DynamicCatalogService
 
 router = APIRouter()
 
 
 @router.get("/catalog/{type}/{id}.json")
-@router.get("/{encoded}/catalog/{type}/{id}.json")
+@router.get("/{token}/catalog/{type}/{id}.json")
 async def get_catalog(
-    encoded: str,
+    token: str | None,
     type: str,
     id: str,
     response: Response,
@@ -21,14 +21,19 @@ async def get_catalog(
     Returns recommendations based on user's Stremio library.
 
     Args:
-        encoded: Base64 encoded credentials
+    token: Redis-backed credential token
         type: 'movie' or 'series'
         id: Catalog ID (e.g., 'watchly.rec')
     """
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing credentials token. Please open Watchly from a configured manifest URL.",
+        )
+
     logger.info(f"Fetching catalog for {type} with id {id}")
 
-    # Decode credentials from path
-    credentials = decode_credentials(encoded)
+    credentials = await resolve_user_credentials(token)
 
     if type not in ["movie", "series"]:
         logger.warning(f"Invalid type: {type}")
@@ -43,7 +48,11 @@ async def get_catalog(
         )
     try:
         # Create services with credentials
-        stremio_service = StremioService(username=credentials['username'], password=credentials['password'])
+        stremio_service = StremioService(
+            username=credentials.get('username') or "",
+            password=credentials.get('password') or "",
+            auth_key=credentials.get('authKey'),
+        )
         recommendation_service = RecommendationService(stremio_service=stremio_service)
 
         # if id starts with tt, then return recommendations for that particular item
@@ -81,15 +90,19 @@ async def get_catalog(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{encoded}/catalog/update")
-async def update_catalogs(encoded: str):
+@router.get("/{token}/catalog/update")
+async def update_catalogs(token: str):
     """
     Update the catalogs for the addon. This is a manual endpoint to update the catalogs.
     """
     # Decode credentials from path
-    credentials = decode_credentials(encoded)
+    credentials = await resolve_user_credentials(token)
 
-    stremio_service = StremioService(username=credentials['username'], password=credentials['password'])
+    stremio_service = StremioService(
+        username=credentials.get('username') or "",
+        password=credentials.get('password') or "",
+        auth_key=credentials.get('authKey'),
+    )
     library_items = await stremio_service.get_library_items()
     dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
     catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(library_items=library_items)

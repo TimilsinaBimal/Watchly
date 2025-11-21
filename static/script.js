@@ -2,6 +2,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('configForm');
     const usernameInput = document.getElementById('username');
     const passwordInput = document.getElementById('password');
+    const authKeyInput = document.getElementById('authKey');
+    const authMethodSelect = document.getElementById('authMethod');
+    const credentialsFields = document.getElementById('credentialsFields');
+    const authKeyFieldWrapper = document.getElementById('authKeyField');
     const submitBtn = document.getElementById('submitBtn');
     const errorMessage = document.getElementById('errorMessage');
     const successMessage = document.getElementById('successMessage');
@@ -13,7 +17,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnText = submitBtn.querySelector('.btn-text');
     const btnLoader = submitBtn.querySelector('.btn-loader');
 
-    // Helper functions
+    const methodFieldMap = {
+        credentials: credentialsFields,
+        authkey: authKeyFieldWrapper
+    };
+
     function showError(message) {
         errorMessage.textContent = message;
         errorMessage.style.display = 'block';
@@ -35,60 +43,41 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Check if there's an encoded value in the URL path
-    function checkForEncodedCredentials() {
-        const path = window.location.pathname;
-        // Check if path matches /{encoded}/configure
-        const match = path.match(/^\/(.+)\/configure$/);
-        if (match && match[1]) {
-            const encoded = match[1];
-            try {
-                // Decode the credentials and config
-                const decoded = atob(encoded);
-                const config = JSON.parse(decoded);
-
-                if (config.username && config.password) {
-                    // Populate the form fields
-                    usernameInput.value = config.username;
-                    passwordInput.value = config.password;
-                    // Set recommendation source if available
-                    if (config.includeWatched !== undefined) {
-                        const sourceValue = config.includeWatched ? 'watched' : 'loved';
-                        const radio = document.querySelector(`input[name="recommendationSource"][value="${sourceValue}"]`);
-                        if (radio) {
-                            radio.checked = true;
-                            // Update visual state for browsers without :has() support
-                            radio.closest('.radio-label')?.classList.add('checked');
-                        }
-                    }
-                    // Optionally show a message that fields were pre-filled
-                    console.log('Credentials loaded from URL');
-                }
-            } catch (error) {
-                // Invalid encoding, ignore and show error
-                console.error('Failed to decode credentials from URL:', error);
-                showError('Invalid credentials in URL. Please enter your credentials manually.');
+    function updateMethodFields() {
+        const method = authMethodSelect.value;
+        Object.entries(methodFieldMap).forEach(([key, element]) => {
+            if (!element) {
+                return;
             }
-        }
+            const isActive = key === method;
+            element.style.display = isActive ? 'block' : 'none';
+            element.style.opacity = isActive ? '1' : '0';
+            element.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+        });
+
+        const requiresCredentials = method === 'credentials';
+        usernameInput.required = requiresCredentials;
+        passwordInput.required = requiresCredentials;
+        authKeyInput.required = !requiresCredentials;
     }
 
-    // Check for encoded credentials on page load
-    checkForEncodedCredentials();
+    authMethodSelect.addEventListener('change', () => {
+        updateMethodFields();
+        hideError();
+    });
 
-    // Add visual feedback for radio buttons
+    updateMethodFields();
+
     const radioInputs = document.querySelectorAll('input[name="recommendationSource"]');
     radioInputs.forEach(radio => {
-        radio.addEventListener('change', function() {
-            // Remove checked class from all labels
+        radio.addEventListener('change', function () {
             document.querySelectorAll('.radio-label').forEach(label => {
                 label.classList.remove('checked');
             });
-            // Add checked class to selected label
             if (this.checked) {
                 this.closest('.radio-label')?.classList.add('checked');
             }
         });
-        // Set initial state
         if (radio.checked) {
             radio.closest('.radio-label')?.classList.add('checked');
         }
@@ -97,95 +86,116 @@ document.addEventListener('DOMContentLoaded', function () {
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
 
+        const method = authMethodSelect.value;
         const username = usernameInput.value.trim();
         const password = passwordInput.value;
-        const recommendationSource = document.querySelector('input[name="recommendationSource"]:checked').value;
+        const authKey = authKeyInput.value.trim();
+        const includeWatched = document.querySelector('input[name="recommendationSource"]:checked').value === 'watched';
 
-        if (!username || !password) {
-            showError('Please fill in all fields');
+        if (method === 'credentials') {
+            if (!username || !password) {
+                showError('Enter both your Stremio username/email and password to continue.');
+                return;
+            }
+        } else if (method === 'authkey') {
+            if (!authKey) {
+                showError('Provide your Stremio auth key to continue.');
+                return;
+            }
+        } else if ((!username || !password) && !authKey) {
+            showError('Provide either a username/password pair or a Stremio auth key.');
             return;
         }
 
-        // Hide error, show loading
         hideError();
         setLoading(true);
 
         try {
-            // Encode credentials and config
-            const config = {
-                username: username,
-                password: password,
-                includeWatched: recommendationSource === 'watched'
-            };
+            const response = await fetch('/tokens/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: method === 'credentials' ? username : null,
+                    password: method === 'credentials' ? password : null,
+                    authKey: method === 'authkey' ? authKey : null,
+                    includeWatched
+                })
+            });
 
-            const encoded = btoa(JSON.stringify(config));
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: 'Failed to create token.' }));
+                throw new Error(errorData.detail || 'Failed to create token.');
+            }
 
-            // Get current origin
-            const baseUrl = window.location.origin;
-            const addonUrl = `${baseUrl}/${encoded}/manifest.json`;
-
-            // Show success
-            addonUrlInput.value = addonUrl;
+            const data = await response.json();
+            addonUrlInput.value = data.manifestUrl;
             form.style.display = 'none';
             successMessage.style.display = 'block';
-
         } catch (error) {
-            showError('An error occurred. Please try again.');
-            console.error('Error:', error);
+            console.error('Error creating token', error);
+            showError(error.message || 'An unexpected error occurred.');
         } finally {
             setLoading(false);
         }
     });
 
-    // Install on Stremio Desktop/Mobile
     installDesktopBtn.addEventListener('click', function () {
         const addonUrl = addonUrlInput.value;
+        if (!addonUrl) {
+            return;
+        }
         const stremioUrl = `stremio://${addonUrl.replace(/^https?:\/\//, '')}`;
         window.location.href = stremioUrl;
     });
 
-    // Install on Stremio Web
     installWebBtn.addEventListener('click', function () {
-        const addonUrl = encodeURIComponent(addonUrlInput.value);
-        // Open Stremio web app with addon installation
-        const stremioWebUrl = `https://web.stremio.com/#/addons?addon=${addonUrl}`;
-        window.open(stremioWebUrl, '_blank');
+        const addonUrl = addonUrlInput.value;
+        if (!addonUrl) {
+            return;
+        }
+        const stremioUrl = `https://web.stremio.com/#/addons?addon=${encodeURIComponent(addonUrl)}`;
+        window.open(stremioUrl, '_blank');
     });
 
-    // Copy URL to clipboard
     copyBtn.addEventListener('click', function () {
+        if (!addonUrlInput.value) {
+            return;
+        }
         addonUrlInput.select();
-        addonUrlInput.setSelectionRange(0, 99999); // For mobile devices
+        addonUrlInput.setSelectionRange(0, 99999);
 
-        try {
-            navigator.clipboard.writeText(addonUrlInput.value).then(function () {
-                copyBtn.textContent = '✓ Copied!';
-                copyBtn.classList.add('copied');
-
-                setTimeout(function () {
-                    copyBtn.textContent = '📋 Copy URL';
-                    copyBtn.classList.remove('copied');
-                }, 2000);
-            });
-        } catch (err) {
-            // Fallback for older browsers
-            document.execCommand('copy');
+        const handleCopied = () => {
             copyBtn.textContent = '✓ Copied!';
             copyBtn.classList.add('copied');
-
             setTimeout(function () {
                 copyBtn.textContent = '📋 Copy URL';
                 copyBtn.classList.remove('copied');
             }, 2000);
+        };
+
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(addonUrlInput.value).then(handleCopied);
+        } else {
+            document.execCommand('copy');
+            handleCopied();
         }
     });
 
     resetBtn.addEventListener('click', function () {
         form.reset();
+        authMethodSelect.value = 'credentials';
+        updateMethodFields();
         form.style.display = 'block';
         successMessage.style.display = 'none';
         hideError();
         usernameInput.focus();
+        document.querySelectorAll('.radio-label').forEach(label => {
+            label.classList.remove('checked');
+        });
+        document.querySelector('input[name="recommendationSource"][value="loved"]').closest('.radio-label').classList.add('checked');
     });
+
 });
 

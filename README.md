@@ -31,6 +31,7 @@ Watchly is a FastAPI-based Stremio addon that:
 - ✅ **Similar Content Discovery** - find content similar to specific titles
 - ✅ **Web Configuration Interface** - easy setup through a web UI
 - ✅ **Caching** - optimized performance with intelligent caching
+- ✅ **Secure Tokenized Access** - credentials/auth keys never travel in URLs
 - ✅ **Docker Support** - easy deployment with Docker and Docker Compose
 
 ## Installation
@@ -62,6 +63,13 @@ Watchly is a FastAPI-based Stremio addon that:
    TMDB_API_KEY=your_tmdb_api_key_here
    PORT=8000
    ADDON_ID=com.bimal.watchly
+   ADDON_NAME=Watchly
+   REDIS_URL=redis://redis:6379/0
+   TOKEN_SALT=replace-with-long-random-string
+   # 0 means tokens never expire
+   TOKEN_TTL_SECONDS=0
+   # Optional HTML for configuration banner announcements
+   ANNOUNCEMENT_HTML=
    ```
 
 4. **Start the application:**
@@ -118,6 +126,11 @@ Watchly is a FastAPI-based Stremio addon that:
    TMDB_API_KEY=your_tmdb_api_key_here
    PORT=8000
    ADDON_ID=com.bimal.watchly
+   ADDON_NAME=Watchly
+   REDIS_URL=redis://localhost:6379/0
+   TOKEN_SALT=replace-with-long-random-string
+   TOKEN_TTL_SECONDS=0
+   ANNOUNCEMENT_HTML=
    ```
    
    Or export them in your shell:
@@ -125,6 +138,8 @@ Watchly is a FastAPI-based Stremio addon that:
    export TMDB_API_KEY=your_tmdb_api_key_here
    export PORT=8000
    export ADDON_ID=com.bimal.watchly
+   export ADDON_NAME=Watchly
+   export ANNOUNCEMENT_HTML=""
    ```
 
 5. **Run the application:**
@@ -151,19 +166,29 @@ Watchly is a FastAPI-based Stremio addon that:
 | `TMDB_API_KEY` | Your TMDB API key | Yes | - |
 | `PORT` | Server port | No | 8000 |
 | `ADDON_ID` | Stremio addon identifier | No | com.bimal.watchly |
+| `ADDON_NAME` | Human-friendly addon name shown in the manifest/UI | No | Watchly |
+| `REDIS_URL` | Redis connection string for credential tokens | No | `redis://localhost:6379/0` |
+| `TOKEN_SALT` | Secret salt for hashing token IDs | Yes | - (must be set in production) |
+| `TOKEN_TTL_SECONDS` | Token lifetime in seconds (`0` = no expiry) | No | 0 |
+| `ANNOUNCEMENT_HTML` | Optional HTML snippet rendered in the configurator banner | No | *(empty)* |
 
 ### User Configuration
 
-Users configure their Stremio credentials through the web interface at `/configure`. Credentials are:
-- Encoded in the addon URL (base64)
-- Never stored on the server
-- Used only for API requests to Stremio
+Use the web interface at `/configure` to provision a secure access token:
+
+1. Provide either your **Stremio username/password** *or* an **existing `authKey`** (copy from `localStorage.authKey` in `web.strem.io`).
+2. Choose whether to base recommendations on loved items only or include everything you've watched.
+3. Watchly stores the supplied credentials/auth key inside Redis and returns a salted token deterministically derived from your inputs.
+4. Your manifest URL becomes `https://<host>/<token>/manifest.json`. Only this token ever appears in URLs.
+5. Re-running the setup with the same credentials/configuration returns the exact same token.
+
+By default (`TOKEN_TTL_SECONDS=0`), tokens never expire. Set a positive TTL if you want automatic rotation.
 
 ## How It Works
 
-1. **User Configuration**: User enters Stremio credentials via web interface
-2. **Credential Encoding**: Credentials are base64 encoded and included in the addon URL
-3. **Library Fetching**: When catalog is requested, service authenticates with Stremio and fetches user's library
+1. **User Configuration**: User submits Stremio credentials or auth key via the web interface
+2. **Secure Tokenization**: Credentials/auth keys are stored server-side in Redis; the user only receives a salted token
+3. **Library Fetching**: When catalog is requested, service resolves the token, authenticates with Stremio, and fetches the library
 4. **Seed Selection**: Uses most recent "loved" items (default: 10) as seed content
 5. **Recommendation Generation**: For each seed, fetches recommendations from TMDB
 6. **Filtering**: Removes items already in user's watched library
@@ -218,14 +243,16 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 # Test manifest endpoint
 curl http://localhost:8000/manifest.json
 
-# Test catalog endpoint (requires encoded credentials)
-curl http://localhost:8000/{encoded}/catalog/movie/watchly.rec.json
+# Test catalog endpoint (requires a credential token)
+curl http://localhost:8000/{token}/catalog/movie/watchly.rec.json
 ```
 
 ## Security Notes
 
-- **Credentials in URL**: User credentials are base64 encoded in the addon URL. While encoded, they are not encrypted. Users should be aware of this.
-- **HTTPS Recommended**: Always use HTTPS in production to protect credentials in transit.
+- **Tokenized URLs**: Manifest/catalog URLs now contain only salted tokens. Credentials/auth keys never leave the server once submitted.
+- **Rotate `TOKEN_SALT`**: Treat the salt like any other secret; rotate if you suspect compromise. Changing the salt invalidates all tokens.
+- **Redis Security**: Ensure your Redis instance is not exposed publicly and enable authentication if hosted remotely.
+- **HTTPS Recommended**: Always use HTTPS in production to protect tokens in transit.
 - **Environment Variables**: Never commit `.env` files or expose API keys in code.
 
 ## Troubleshooting

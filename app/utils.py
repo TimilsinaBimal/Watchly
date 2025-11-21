@@ -1,14 +1,14 @@
 """Utility functions for caching and other helpers."""
 
-import base64
-import binascii
 import hashlib
 import json
 from functools import wraps
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 from cachetools import TTLCache
 from loguru import logger
 from fastapi import HTTPException
+
+from app.services.token_store import token_store
 
 # Cache with 1 day TTL (86400 seconds)
 CACHE_TTL = 86400
@@ -95,42 +95,26 @@ def clear_cache():
     logger.info("All caches cleared")
 
 
-def decode_credentials(encoded: str) -> Dict[str, any]:
-    """
-    Decode base64 encoded credentials and configuration.
+async def resolve_user_credentials(token: str) -> Dict[str, Any]:
+    """Resolve credentials from Redis token."""
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing credentials token. Please reinstall the addon.")
 
-    Args:
-        encoded: Base64 encoded JSON string containing username, password, and optional config
+    payload = await token_store.get_payload(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
-    Returns:
-        Dictionary with 'username', 'password', and 'includeWatched' keys
+    include_watched = payload.get("includeWatched", False)
+    username = payload.get("username")
+    password = payload.get("password")
+    auth_key = payload.get("authKey")
 
-    Raises:
-        HTTPException: If decoding fails
-    """
-    try:
-        decoded_bytes = base64.b64decode(encoded)
-        config = json.loads(decoded_bytes.decode('utf-8'))
+    if not auth_key and (not username or not password):
+        raise HTTPException(status_code=400, detail="Stored token is missing credentials. Please reconfigure the addon.")
 
-        if not isinstance(config, dict):
-            raise ValueError("Config must be a dictionary")
-
-        username = config.get('username')
-        password = config.get('password')
-
-        if not username or not password:
-            raise ValueError("Username and password are required")
-
-        # Get includeWatched config, default to False (only loved items)
-        include_watched = config.get('includeWatched', False)
-
-        return {
-            'username': username,
-            'password': password,
-            'includeWatched': include_watched
-        }
-    except (binascii.Error, json.JSONDecodeError, ValueError) as e:
-        logger.error(f"Failed to decode credentials: {e}")
-        raise HTTPException(
-            status_code=400, detail="Invalid credentials encoding. Please reconfigure your addon."
-        )
+    return {
+        "username": username,
+        "password": password,
+        "authKey": auth_key,
+        "includeWatched": include_watched,
+    }

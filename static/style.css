@@ -32,6 +32,10 @@ body {
     line-height: 1.6;
 }
 
+a:visited {
+    color: var(--text-primary);
+}
+
 .container {
     width: 100%;
     max-width: 500px;
@@ -80,6 +84,25 @@ body {
     margin-bottom: 24px;
 }
 
+.method-note {
+    margin-bottom: 24px;
+    padding: 16px;
+    border-radius: 10px;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.method-note strong {
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
 .form-group label {
     display: block;
     margin-bottom: 8px;
@@ -96,6 +119,23 @@ body {
     border-radius: 8px;
     color: var(--text-primary);
     font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-group select {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--background);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--primary-color) 50%),
+        linear-gradient(135deg, var(--primary-color) 50%, transparent 50%);
+    background-position: calc(100% - 20px) calc(50% - 3px), calc(100% - 15px) calc(50% - 3px);
+    background-size: 7px 7px;
+    background-repeat: no-repeat;
     transition: all 0.3s ease;
 }
 
@@ -133,6 +173,10 @@ body {
 .radio-label:hover {
     border-color: var(--primary-color);
     background: rgba(59, 130, 246, 0.05);
+}
+
+.method-fields {
+    transition: opacity 0.2s ease;
 }
 
 .radio-label input[type="radio"] {
@@ -173,6 +217,101 @@ body {
         font-style: italic;
 }
 
+.info-card {
+    margin-top: 16px;
+    border-radius: 10px;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: var(--text-primary);
+    overflow: hidden;
+}
+
+.info-card summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.info-card summary::-webkit-details-marker {
+    display: none;
+}
+
+.info-card .chevron {
+    width: 12px;
+    height: 12px;
+    border-right: 2px solid var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+}
+
+.info-card[open] .chevron {
+    transform: rotate(-135deg);
+}
+
+.info-card .info-body {
+    padding: 0 18px 18px 18px;
+}
+
+.info-card ol {
+    margin-left: 20px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.info-card li {
+    margin-bottom: 8px;
+}
+
+.announcement {
+    margin-bottom: 24px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.announcement a,
+.announcement a:visited {
+    color: var(--primary-color);
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.announcement a:hover {
+    color: var(--secondary-color);
+}
+
+.info-card pre {
+    margin-top: 10px;
+    background: rgba(15, 23, 42, 0.9);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 0.85rem;
+    overflow-x: auto;
+}
+
+.info-card kbd {
+    background: rgba(148, 163, 184, 0.2);
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.8rem;
+}
+
+.info-card a {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
 .btn-primary {
     width: 100%;
     padding: 14px 24px;
@@ -188,6 +327,29 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
+}
+
+.tech-summary {
+    margin-top: 32px;
+    padding: 20px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.tech-summary h3 {
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.tech-summary ul {
+    margin-left: 20px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.tech-summary li {
+    margin-bottom: 8px;
 }
 
 .btn-primary:hover:not(:disabled) {

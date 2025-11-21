@@ -6,15 +6,15 @@ router = APIRouter()
 
 
 @router.get("/manifest.json")
-@router.get("/{encoded}/manifest.json")
-async def manifest(encoded: str):
-    """Stremio manifest endpoint with encoded credentials in path."""
+@router.get("/{token}/manifest.json")
+async def manifest(token: str | None = None):
+    """Stremio manifest endpoint with optional credential token in the path."""
     # Cache manifest for 1 day (86400 seconds)
     # response.headers["Cache-Control"] = "public, max-age=86400"
     return {
         "id": settings.ADDON_ID,
         "version": "0.1.0",
-        "name": "Watchly",
+    "name": settings.ADDON_NAME,
         "description": "Movie and series recommendations based on your Stremio library",
         "logo": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/static/logo.png",
         "resources": [

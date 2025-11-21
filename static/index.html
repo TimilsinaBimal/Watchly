@@ -15,20 +15,62 @@
             <div class="header">
                 <img src="/static/logo.png" alt="Watchly Logo" class="logo">
                 <h1>Watchly</h1>
+                <!-- ANNOUNCEMENT_HTML -->
                 <p class="subtitle">Stremio Addon Configuration</p>
             </div>
 
             <form id="configForm" class="form">
-                <div class="form-group">
-                    <label for="username">Stremio Username (Email)</label>
-                    <input type="email" id="username" name="username" placeholder="your-email@example.com" required
-                        autocomplete="email">
+                <div class="method-note">
+                    <strong>Authentication Method</strong>
+                    <span>Select how you'd like to authenticate—only the required fields for that method will be shown.</span>
                 </div>
 
                 <div class="form-group">
-                    <label for="password">Stremio Password</label>
-                    <input type="password" id="password" name="password" placeholder="Enter your password" required
-                        autocomplete="current-password">
+                    <label for="authMethod">Choose a method</label>
+                    <select id="authMethod" name="authMethod">
+                        <option value="credentials">Username &amp; Password</option>
+                        <option value="authkey">Stremio Auth Key</option>
+                    </select>
+                </div>
+
+                <div id="credentialsFields" class="method-fields">
+                    <div class="form-group">
+                        <label for="username">Stremio Username (Email)</label>
+                        <input type="email" id="username" name="username" placeholder="your-email@example.com"
+                            autocomplete="email">
+                        <p class="form-help">Provide the email you use for Stremio.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Stremio Password</label>
+                        <input type="password" id="password" name="password" placeholder="Enter your password"
+                            autocomplete="current-password">
+                        <p class="form-help">Required when supplying a username/email.</p>
+                    </div>
+                </div>
+
+                <div id="authKeyField" class="method-fields" style="display: none;">
+                    <div class="form-group">
+                        <label for="authKey">Stremio Auth Key</label>
+                        <input type="text" id="authKey" name="authKey" placeholder="Paste your auth key"
+                            autocomplete="off">
+                        <details class="info-card">
+                            <summary>
+                                <span>How to find your authKey</span>
+                                <span class="chevron" aria-hidden="true"></span>
+                            </summary>
+                            <div class="info-body">
+                                <ol>
+                                    <li>Log in to <a href="https://web.strem.io/" target="_blank" rel="noopener">web.strem.io</a> (Chrome preferred).</li>
+                                    <li>Open developer tools (<kbd>F12</kbd> or right-click → <em>Inspect</em>) and switch to the <strong>Console</strong> tab.</li>
+                                    <li>Paste this snippet and press Enter:
+                                        <pre><code>JSON.parse(localStorage.getItem("profile")).auth.key</code></pre>
+                                    </li>
+                                    <li>Copy the printed key (without quotation marks) and paste it into the field above.</li>
+                                </ol>
+                            </div>
+                        </details>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -49,7 +91,7 @@
                 <div id="errorMessage" class="error-message" style="display: none;"></div>
 
                 <button type="submit" class="btn-primary" id="submitBtn">
-                    <span class="btn-text">Generate Addon URL</span>
+                    <span class="btn-text">Save</span>
                     <span class="btn-loader" style="display: none;">⏳</span>
                 </button>
             </form>
@@ -57,7 +99,7 @@
             <div id="successMessage" class="success-section" style="display: none;">
                 <div class="success-header">
                     <h2>Configuration Complete!</h2>
-                    <p>Your addon URL has been generated. Choose an installation method:</p>
+                    <p>Your secure addon URL has been generated. Choose an installation method:</p>
                 </div>
 
                 <div class="url-container">
@@ -67,9 +109,9 @@
                 <div class="warning-box">
                     <div class="warning-icon">⚠️</div>
                     <div class="warning-content">
-                        <strong>SECURITY WARNING</strong>
-                        <p>Your Stremio credentials are encoded in this URL. <strong>NEVER share this URL</strong> with
-                            anyone, as it contains your login information. Keep it private and secure.</p>
+                        <strong>SECURITY NOTICE</strong>
+                        <p>This URL only carries a server-side token derived from your credentials. It stays valid until you reset or regenerate it, so <strong>keep it private</strong>
+                            to prevent anyone else from using your personalized catalogs.</p>
                     </div>
                 </div>
 
@@ -98,10 +140,19 @@
                     Configure Again
                 </button>
             </div>
+
+            <div class="tech-summary">
+                <h3>How we protect your credentials</h3>
+                <ul>
+                    <li>Your username/password or auth key is sent over HTTPS directly to Watchly.</li>
+                    <li>Credentials are stored only inside Redis behind a salted, deterministic token; the token is all that ever appears in manifest URLs.</li>
+                    <li>Tokens never expire by default; rotate your Stremio password or auth key if you ever need a new token.</li>
+                </ul>
+            </div>
         </div>
 
         <div class="footer">
-            <p>Your credentials are encoded in the URL and never stored on our servers.</p>
+            <p>Need to rotate your access? Re-run this configurator with updated credentials or auth key to instantly refresh your private token.</p>
         </div>
     </div>
 

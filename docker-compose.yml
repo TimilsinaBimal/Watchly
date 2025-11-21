@@ -11,10 +11,24 @@ services:
       - TMDB_API_KEY=${TMDB_API_KEY}
       - PORT=${PORT:-8000}
       - ADDON_ID=${ADDON_ID:-com.bimal.watchly}
+      - ADDON_NAME=${ADDON_NAME:-Watchly}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - TOKEN_SALT=${TOKEN_SALT:-change-me}
+      - TOKEN_TTL_SECONDS=${TOKEN_TTL_SECONDS:-0}
+      - ANNOUNCEMENT_HTML=${ANNOUNCEMENT_HTML:-}
     env_file:
       - .env
     volumes:
       - ./static:/app/static:ro
+    networks:
+      - watchly-network
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: watchly-redis
+    restart: unless-stopped
     networks:
       - watchly-network
 
