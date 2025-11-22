@@ -1,8 +1,9 @@
+from functools import lru_cache
+
 import httpx
 from loguru import logger
 
 from app.core.config import settings
-from app.utils import cached_api_call
 
 
 class TMDBService:
@@ -45,7 +46,7 @@ class TMDBService:
             await self._addon_client.aclose()
             self._addon_client = None
 
-    @cached_api_call
+    @lru_cache(maxsize=1000)
     async def get_addon_meta(self, type: str, id: str) -> dict:
         """Get addon metadata for a specific type and ID."""
         url = f"{self.addon_url}/meta/{type}/{id}.json"
@@ -86,7 +87,7 @@ class TMDBService:
             logger.error(f"TMDB API request error for {endpoint}: {e}")
             raise
 
-    @cached_api_call
+    @lru_cache(maxsize=1000)
     async def find_by_imdb_id(self, imdb_id: str) -> tuple[int | None, str | None]:
         """Find TMDB ID and type by IMDB ID."""
         try:
@@ -127,33 +128,33 @@ class TMDBService:
             logger.warning(f"Unexpected error finding TMDB ID for IMDB {imdb_id}: {e}")
             return None, None
 
-    @cached_api_call
+    @lru_cache(maxsize=1000)
     async def get_movie_details(self, movie_id: int) -> dict:
         """Get details of a specific movie with credits and external IDs."""
         params = {"append_to_response": "credits,external_ids"}
         return await self._make_request(f"/movie/{movie_id}", params=params)
 
-    @cached_api_call
+    @lru_cache(maxsize=1000)
     async def get_tv_details(self, tv_id: int) -> dict:
         """Get details of a specific TV series with credits and external IDs."""
         params = {"append_to_response": "credits,external_ids"}
         return await self._make_request(f"/tv/{tv_id}", params=params)
 
-    @cached_api_call
+    @lru_cache(maxsize=1000)
     async def get_recommendations(self, tmdb_id: int, media_type: str, page: int = 1) -> dict:
         """Get recommendations based on TMDB ID and media type."""
         params = {"page": page}
         endpoint = f"/{media_type}/{tmdb_id}/recommendations"
         return await self._make_request(endpoint, params=params)
 
-    @cached_api_call
+    @lru_cache(maxsize=1000)
     async def get_similar(self, tmdb_id: int, media_type: str, page: int = 1) -> dict:
         """Get similar content based on TMDB ID and media type."""
         params = {"page": page}
         endpoint = f"/{media_type}/{tmdb_id}/similar"
         return await self._make_request(endpoint, params=params)
 
-    @cached_api_call
+    @lru_cache(maxsize=1000)
     async def get_discover(self, media_type: str, params: dict[str, str]) -> dict:
         """Get discover content based on params."""
         media_type = "movie" if media_type == "movie" else "tv"
