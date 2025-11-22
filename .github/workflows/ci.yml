@@ -1,0 +1,42 @@
+name: Build and Push Docker Image
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.CR_TOKEN }}
+
+      - name: Set Docker image tag
+        id: set-tag
+        run: |
+          echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Build and Push Docker image
+        working-directory: "./"
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}:${{ steps.set-tag.outputs.IMAGE_TAG }} .
+          docker push ghcr.io/${{ github.repository }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
