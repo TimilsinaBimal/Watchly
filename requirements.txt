@@ -7,4 +7,5 @@ loguru>=0.7.2
 cachetools>=6.2.2
 redis>=5.0.1
 cryptography>=41.0.0
-async-lru>=2.0.4
+async-lru>=2.0.5
+apscheduler>=3.11.1

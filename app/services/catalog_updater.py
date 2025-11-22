@@ -1,6 +1,8 @@
 import asyncio
 from typing import Any
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
 from app.services.catalog import DynamicCatalogService
@@ -38,21 +40,28 @@ class BackgroundCatalogUpdater:
 
     def __init__(self, interval_seconds: int) -> None:
         self.interval_seconds = max(60, interval_seconds)
-        self._task: asyncio.Task | None = None
-        self._stop_event = asyncio.Event()
+        self.scheduler = AsyncIOScheduler()
 
     def start(self) -> None:
-        if self._task is not None:
+        if self.scheduler.running:
             return
-        self._stop_event.clear()
-        self._task = asyncio.create_task(self._run())
+
+        logger.info(f"Starting background catalog updater. Interval: {self.interval_seconds}s")
+        self.scheduler.add_job(
+            self.refresh_all_tokens,
+            trigger=IntervalTrigger(seconds=self.interval_seconds),
+            id="catalog_refresh",
+            replace_existing=True,
+            max_instances=1,  # Prevent new job from starting if previous one is still running
+            coalesce=True,  # If multiple runs are missed, only run once
+        )
+        self.scheduler.start()
 
     async def stop(self) -> None:
-        if self._task is None:
-            return
-        self._stop_event.set()
-        await self._task
-        self._task = None
+        if self.scheduler.running:
+            logger.info("Stopping background catalog updater...")
+            self.scheduler.shutdown(wait=True)  # Wait for running jobs to complete
+            logger.info("Background catalog updater stopped.")
 
     async def refresh_all_tokens(self) -> None:
         """Refresh catalogs for all tokens concurrently with a semaphore."""
@@ -88,18 +97,6 @@ class BackgroundCatalogUpdater:
 
         except Exception as exc:
             logger.error(f"Catalog refresh scan failed: {exc}", exc_info=True)
-
-    async def _run(self) -> None:
-        logger.info(f"Background catalog updater started. Interval: {self.interval_seconds}s")
-        try:
-            while not self._stop_event.is_set():
-                await self.refresh_all_tokens()
-                try:
-                    await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval_seconds)
-                except TimeoutError:
-                    continue
-        finally:
-            logger.info("Background catalog updater stopped.")
 
     @staticmethod
     def _has_credentials(payload: dict[str, Any]) -> bool:
