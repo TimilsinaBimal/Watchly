@@ -4,7 +4,7 @@ from app.services.tmdb_service import TMDBService
 import asyncio
 from .tmdb.genre import MOVIE_GENRE_TO_ID_MAP, SERIES_GENRE_TO_ID_MAP
 from collections import Counter
-from loguru import logger
+
 
 class DynamicCatalogService:
 
@@ -102,23 +102,22 @@ class DynamicCatalogService:
         ]
         catalogs = []
 
-        for idx, genre in enumerate(top_2_movie_genres):
-            catalogs.append(
-                {
-                    "type": "movie",
-                    "id": f"watchly.genre.{genre}",
-                    "name": top_2_movie_genre_names[idx],
-                    "extra": [],
-                }
-            )
-        for idx, genre in enumerate(top_2_series_genres):
-            catalogs.append(
-                {
-                    "type": "series",
-                    "id": f"watchly.genre.{genre}",
-                    "name": top_2_series_genre_names[idx],
-                    "extra": [],
-                }
-            )
+        catalogs.append(
+            {
+                "type": "movie",
+                "id": f"watchly.genre.{'_'.join(top_2_movie_genres)}",
+                "name": "You might also Like",
+                "extra": [],
+            }
+        )
+
+        catalogs.append(
+            {
+                "type": "series",
+                "id": f"watchly.genre.{'_'.join(top_2_series_genres)}",
+                "name": "You might also Like",
+                "extra": [],
+            }
+        )
 
         return catalogs
