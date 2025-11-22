@@ -1,8 +1,8 @@
-import json
-import hmac
 import hashlib
+import hmac
+import json
 from collections.abc import AsyncIterator
-from typing import Any, Dict, Optional
+from typing import Any
 
 import redis.asyncio as redis
 from loguru import logger
@@ -16,11 +16,9 @@ class TokenStore:
     KEY_PREFIX = "watchly:token:"
 
     def __init__(self) -> None:
-        self._client: Optional[redis.Redis] = None
+        self._client: redis.Redis | None = None
         if not settings.REDIS_URL:
-            logger.warning(
-                "REDIS_URL is not set. Token storage will fail until a Redis instance is configured."
-            )
+            logger.warning("REDIS_URL is not set. Token storage will fail until a Redis instance is configured.")
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
             logger.warning(
                 "TOKEN_SALT is missing or using the default placeholder. Set a strong value to secure tokens."
@@ -28,18 +26,14 @@ class TokenStore:
 
     def _ensure_secure_salt(self) -> None:
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
-            logger.error(
-                "Refusing to store credentials because TOKEN_SALT is unset or using the insecure default."
-            )
+            logger.error("Refusing to store credentials because TOKEN_SALT is unset or using the insecure default.")
             raise RuntimeError(
                 "Server misconfiguration: TOKEN_SALT must be set to a non-default value before storing credentials."
             )
 
     async def _get_client(self) -> redis.Redis:
         if self._client is None:
-            self._client = redis.from_url(
-                settings.REDIS_URL, decode_responses=True, encoding="utf-8"
-            )
+            self._client = redis.from_url(settings.REDIS_URL, decode_responses=True, encoding="utf-8")
         return self._client
 
     def _hash_token(self, token: str) -> str:
@@ -49,7 +43,7 @@ class TokenStore:
     def _format_key(self, hashed_token: str) -> str:
         return f"{self.KEY_PREFIX}{hashed_token}"
 
-    def _normalize_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "username": (payload.get("username") or "").strip() or None,
             "password": payload.get("password") or None,
@@ -57,7 +51,7 @@ class TokenStore:
             "includeWatched": bool(payload.get("includeWatched", False)),
         }
 
-    def _derive_token_value(self, payload: Dict[str, Any]) -> str:
+    def _derive_token_value(self, payload: dict[str, Any]) -> str:
         canonical = {
             "username": payload.get("username") or "",
             "password": payload.get("password") or "",
@@ -68,7 +62,7 @@ class TokenStore:
         secret = settings.TOKEN_SALT.encode("utf-8")
         return hmac.new(secret, serialized.encode("utf-8"), hashlib.sha256).hexdigest()
 
-    async def store_payload(self, payload: Dict[str, Any]) -> tuple[str, bool]:
+    async def store_payload(self, payload: dict[str, Any]) -> tuple[str, bool]:
         self._ensure_secure_salt()
         normalized = self._normalize_payload(payload)
         token = self._derive_token_value(normalized)
@@ -80,14 +74,15 @@ class TokenStore:
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
             await client.setex(key, settings.TOKEN_TTL_SECONDS, value)
             logger.info(
-                "Stored credential payload with TTL %s seconds", settings.TOKEN_TTL_SECONDS
+                "Stored credential payload with TTL %s seconds",
+                settings.TOKEN_TTL_SECONDS,
             )
         else:
             await client.set(key, value)
             logger.info("Stored credential payload without expiration")
         return token, not bool(existing)
 
-    async def get_payload(self, token: str) -> Optional[Dict[str, Any]]:
+    async def get_payload(self, token: str) -> dict[str, Any] | None:
         hashed = self._hash_token(token)
         key = self._format_key(hashed)
         client = await self._get_client()
@@ -106,7 +101,7 @@ class TokenStore:
         client = await self._get_client()
         await client.delete(key)
 
-    async def iter_payloads(self) -> AsyncIterator[tuple[str, Dict[str, Any]]]:
+    async def iter_payloads(self) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         """Iterate over all stored payloads, yielding key and payload."""
         try:
             client = await self._get_client()

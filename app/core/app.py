@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.api.main import api_router
 from app.services.catalog_updater import BackgroundCatalogUpdater
+
 from .config import settings
 
 
@@ -36,20 +37,18 @@ async def lifespan(app: FastAPI):
     Manage application lifespan events (startup/shutdown).
     """
     global catalog_updater
-    
+
     # Startup
     if settings.AUTO_UPDATE_CATALOGS and settings.CATALOG_REFRESH_INTERVAL_SECONDS > 0:
-        catalog_updater = BackgroundCatalogUpdater(
-            interval_seconds=settings.CATALOG_REFRESH_INTERVAL_SECONDS
-        )
+        catalog_updater = BackgroundCatalogUpdater(interval_seconds=settings.CATALOG_REFRESH_INTERVAL_SECONDS)
         catalog_updater.start()
         logger.info(
             "Background catalog updates enabled (interval=%ss)",
             settings.CATALOG_REFRESH_INTERVAL_SECONDS,
         )
-    
+
     yield
-    
+
     # Shutdown
     if catalog_updater:
         await catalog_updater.stop()
@@ -96,11 +95,7 @@ async def configure_page(token: str | None = None):
         announcement_html = (dynamic_announcement or "").strip()
         snippet = ""
         if announcement_html:
-            snippet = (
-                "\n                <div class=\"announcement\">"
-                f"{announcement_html}"
-                "</div>"
-            )
+            snippet = '\n                <div class="announcement">' f"{announcement_html}" "</div>"
         html_content = html_content.replace("<!-- ANNOUNCEMENT_HTML -->", snippet, 1)
         return HTMLResponse(content=html_content, media_type="text/html")
     return HTMLResponse(

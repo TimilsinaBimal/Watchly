@@ -1,9 +1,10 @@
+import asyncio
+from collections import Counter
+
 from app.services.stremio_service import StremioService
 from app.services.tmdb_service import TMDBService
 
-import asyncio
 from .tmdb.genre import MOVIE_GENRE_TO_ID_MAP, SERIES_GENRE_TO_ID_MAP
-from collections import Counter
 
 
 class DynamicCatalogService:
@@ -68,12 +69,8 @@ class DynamicCatalogService:
         loved_series = loved_series[:5]
 
         # fetch details:: genre details from tmdb addon
-        movie_tasks = [
-            self.tmdb_service.get_addon_meta("movie", item.get('_id').strip()) for item in loved_movies
-        ]
-        series_tasks = [
-            self.tmdb_service.get_addon_meta("series", item.get('_id').strip()) for item in loved_series
-        ]
+        movie_tasks = [self.tmdb_service.get_addon_meta("movie", item.get("_id").strip()) for item in loved_movies]
+        series_tasks = [self.tmdb_service.get_addon_meta("series", item.get("_id").strip()) for item in loved_series]
         movie_details = await asyncio.gather(*movie_tasks)
         series_details = await asyncio.gather(*series_tasks)
 
@@ -97,9 +94,7 @@ class DynamicCatalogService:
 
         # convert id to name
         top_2_movie_genres = [str(MOVIE_GENRE_TO_ID_MAP[genre_name]) for genre_name in top_2_movie_genre_names]
-        top_2_series_genres = [
-            str(SERIES_GENRE_TO_ID_MAP[genre_name]) for genre_name in top_2_series_genre_names
-        ]
+        top_2_series_genres = [str(SERIES_GENRE_TO_ID_MAP[genre_name]) for genre_name in top_2_series_genre_names]
         catalogs = []
 
         catalogs.append(

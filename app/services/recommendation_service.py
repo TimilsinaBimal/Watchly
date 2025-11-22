@@ -1,19 +1,20 @@
 import asyncio
-from typing import List, Dict, Optional, Set, Tuple
 from urllib.parse import unquote
+
 from loguru import logger
-from app.services.tmdb_service import TMDBService
+
 from app.services.stremio_service import StremioService
+from app.services.tmdb_service import TMDBService
 
 
-def _parse_identifier(identifier: str) -> Tuple[Optional[str], Optional[int]]:
+def _parse_identifier(identifier: str) -> tuple[str | None, int | None]:
     """Parse Stremio identifier to extract IMDB ID and TMDB ID."""
     if not identifier:
         return None, None
 
     decoded = unquote(identifier)
-    imdb_id: Optional[str] = None
-    tmdb_id: Optional[int] = None
+    imdb_id: str | None = None
+    tmdb_id: int | None = None
 
     for token in decoded.split(","):
         token = token.strip()
@@ -44,7 +45,7 @@ class RecommendationService:
     5. Return formatted recommendations
     """
 
-    def __init__(self, stremio_service: Optional[StremioService] = None):
+    def __init__(self, stremio_service: StremioService | None = None):
         if stremio_service is None:
             raise ValueError("StremioService instance is required for personalized recommendations")
         self.tmdb_service = TMDBService()
@@ -55,9 +56,7 @@ class RecommendationService:
         final_results = []
         media_type = "movie" if media_type == "movie" else "series"
         # now fetch addon meta for each recommendation
-        fetch_meta_tasks = [
-            self.tmdb_service.get_addon_meta(media_type, f"tmdb:{item.get('id')}") for item in items
-        ]
+        fetch_meta_tasks = [self.tmdb_service.get_addon_meta(media_type, f"tmdb:{item.get('id')}") for item in items]
         addon_meta_results = await asyncio.gather(*fetch_meta_tasks, return_exceptions=True)
         for addon_meta in addon_meta_results:
             if isinstance(addon_meta, Exception):
@@ -69,7 +68,7 @@ class RecommendationService:
             final_results.append(meta_data)
         return final_results
 
-    async def get_recommendations_for_item(self, item_id: str) -> List[Dict]:
+    async def get_recommendations_for_item(self, item_id: str) -> list[dict]:
         """
         Get recommendations for a specific item by IMDB ID.
 
@@ -97,7 +96,7 @@ class RecommendationService:
         logger.info(f"Found {len(recommendations)} recommendations for {item_id}")
         return await self._fetch_catlogs_from_tmdb_addon(recommendations, media_type)
 
-    async def _fetch_recommendations_from_tmdb(self, item_id: str, media_type: str, limit: int) -> List[Dict]:
+    async def _fetch_recommendations_from_tmdb(self, item_id: str, media_type: str, limit: int) -> list[dict]:
         """
         Fetch recommendations from TMDB for a given TMDB ID.
         """
@@ -124,12 +123,12 @@ class RecommendationService:
 
     async def get_recommendations(
         self,
-        content_type: Optional[str] = None,
+        content_type: str | None = None,
         source_items_limit: int = 2,
         recommendations_per_source: int = 5,
         max_results: int = 50,
         include_watched: bool = False,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Get recommendations based on user's Stremio library.
 
@@ -192,8 +191,8 @@ class RecommendationService:
 
         # Step 4: Build exclusion sets (IMDB IDs and TMDB IDs) for watched items
         # We don't want to recommend things the user has already watched
-        watched_imdb_ids: Set[str] = set()
-        watched_tmdb_ids: Set[int] = set()
+        watched_imdb_ids: set[str] = set()
+        watched_tmdb_ids: set[int] = set()
         for item in watched_items:
             imdb_id, tmdb_id = _parse_identifier(item.get("_id", ""))
             if imdb_id:
@@ -207,7 +206,9 @@ class RecommendationService:
         # Each source item will generate its own set of recommendations
         recommendation_tasks = [
             self._fetch_recommendations_from_tmdb(
-                source_item.get("_id"), source_item.get("type"), recommendations_per_source
+                source_item.get("_id"),
+                source_item.get("type"),
+                recommendations_per_source,
             )
             for source_item in source_items
         ]
@@ -215,7 +216,7 @@ class RecommendationService:
 
         # Step 6: Aggregate recommendations from all source items
         # Use dictionary to deduplicate by IMDB ID and combine scores
-        unique_recommendations: Dict[str, Dict] = {}  # Key: IMDB ID, Value: Full recommendation data
+        unique_recommendations: dict[str, dict] = {}  # Key: IMDB ID, Value: Full recommendation data
 
         flat_recommendations = []
         for recommendation_batch in all_recommendation_results:
@@ -259,7 +260,7 @@ class RecommendationService:
         logger.info(f"Generated {len(sorted_recommendations)} unique recommendations")
         return sorted_recommendations
 
-    async def get_recommendations_for_genre(self, genre_id: str, media_type: str) -> List[Dict]:
+    async def get_recommendations_for_genre(self, genre_id: str, media_type: str) -> list[dict]:
         """
         Get recommendations for a specific genre.
         """

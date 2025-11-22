@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
+
+from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.recommendation_service import RecommendationService
 from app.services.stremio_service import StremioService
-from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.utils import resolve_user_credentials
 
 router = APIRouter()
@@ -37,21 +38,20 @@ async def get_catalog(
 
     if type not in ["movie", "series"]:
         logger.warning(f"Invalid type: {type}")
-        raise HTTPException(
-            status_code=400, detail="Invalid type. Use 'movie' or 'series'"
-        )
+        raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
 
     if id not in ["watchly.rec"] and not id.startswith("tt") and not id.startswith("watchly.genre."):
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(
-            status_code=400, detail="Invalid id. Use 'watchly.rec' or 'watchly.genre.<genre_id>'"
+            status_code=400,
+            detail="Invalid id. Use 'watchly.rec' or 'watchly.genre.<genre_id>'",
         )
     try:
         # Create services with credentials
         stremio_service = StremioService(
-            username=credentials.get('username') or "",
-            password=credentials.get('password') or "",
-            auth_key=credentials.get('authKey'),
+            username=credentials.get("username") or "",
+            password=credentials.get("password") or "",
+            auth_key=credentials.get("authKey"),
         )
         recommendation_service = RecommendationService(stremio_service=stremio_service)
 
@@ -60,21 +60,19 @@ async def get_catalog(
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
         elif id.startswith("watchly.genre."):
-            recommendations = await recommendation_service.get_recommendations_for_genre(
-                genre_id=id, media_type=type
-            )
+            recommendations = await recommendation_service.get_recommendations_for_genre(genre_id=id, media_type=type)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
         else:
             # Get recommendations based on library
             # Use config to determine if we should include watched items
-            include_watched = credentials.get('includeWatched', False)
+            include_watched = credentials.get("includeWatched", False)
             # Use last 10 items as sources, get 5 recommendations per source item
             recommendations = await recommendation_service.get_recommendations(
                 content_type=type,
                 source_items_limit=10,
                 recommendations_per_source=5,
                 max_results=50,
-                include_watched=include_watched
+                include_watched=include_watched,
             )
             logger.info(f"Found {len(recommendations)} recommendations for {type} (includeWatched: {include_watched})")
 

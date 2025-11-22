@@ -1,8 +1,8 @@
 import httpx
-from redis import exceptions as redis_exceptions
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, Field
+from redis import exceptions as redis_exceptions
 
 from app.core.config import settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
@@ -48,7 +48,7 @@ async def _verify_credentials_or_raise(payload: dict) -> str:
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=str(exc) or "Invalid Stremio credentials or auth key."
+            detail=str(exc) or "Invalid Stremio credentials or auth key.",
         ) from exc
     except httpx.HTTPStatusError as exc:  # pragma: no cover - depends on remote API
         status_code = exc.response.status_code
@@ -70,6 +70,7 @@ async def _verify_credentials_or_raise(payload: dict) -> str:
         ) from exc
     finally:
         await stremio_service.close()
+
 
 def _preferred_base_url(request: Request) -> str:
     headers = request.headers
@@ -102,14 +103,17 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     username = payload.username.strip() if payload.username else None
     password = payload.password
     auth_key = payload.authKey.strip() if payload.authKey else None
-    if auth_key and auth_key.startswith("\"") and auth_key.endswith("\""):
+    if auth_key and auth_key.startswith('"') and auth_key.endswith('"'):
         auth_key = auth_key[1:-1].strip()
 
     if username and not password:
         raise HTTPException(status_code=400, detail="Password is required when a username is provided.")
 
     if password and not username:
-        raise HTTPException(status_code=400, detail="Username/email is required when a password is provided.")
+        raise HTTPException(
+            status_code=400,
+            detail="Username/email is required when a password is provided.",
+        )
 
     if not auth_key and not (username and password):
         raise HTTPException(
@@ -143,9 +147,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
 
     if created:
         try:
-            await refresh_catalogs_for_credentials(
-                payload_to_store, auth_key=verified_auth_key
-            )
+            await refresh_catalogs_for_credentials(payload_to_store, auth_key=verified_auth_key)
         except Exception as exc:  # pragma: no cover - remote dependency
             logger.error("Initial catalog refresh failed: {}", exc, exc_info=True)
             await token_store.delete_token(token)

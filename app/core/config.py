@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Literal
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -12,7 +14,28 @@ class Settings(BaseSettings):
     )
 
     TMDB_API_KEY: str | None = None
-    TMDB_ADDON_URL: str = "https://94c8cb9f702d-tmdb-addon.baby-beamup.club/N4IgTgDgJgRg1gUwJ4gFwgC4AYC0AzMBBHSWEAGhAjAHsA3ASygQEkBbWFqNTMAVwQVwCDHzAA7dp27oM-QZQA2AQ3EBzPsrWD0CcTgCqAZSEBnOQmVsG6tAG0AupQDGyjMsU01p+05CnLMGcACwBRcWUYRQQZEDwPAKFXcwBhGj5xDDQAVkpTYJoAdwBBbQAlNxs1FnEAcT1CH1l5IT1I6NKECowqnjkBMwKS8sr1AHUGDGCpGG7e9HjFRIBfIA"
+    TMDB_API_URL: str = "https://api.themoviedb.org/3"
+    TMDB_ADDON_CONFIG_DICT = {
+        "provideImdbId": "true",
+        "returnImdbId": "true",
+        "language": "en-US",
+        "enableEpisodeProvider": "true",
+        "useDomain": "",
+        "cacheItemExpiryInHours": "24",
+        "returnPoster": "true",
+        "returnBackdrop": "true",
+        "returnStreamingData": "true",
+        "streamingDataLanguage": "en",
+        "disableImdbLookup": "false",
+        "type": "catalog",
+        "enableHopAgeRating": "false",
+        "enableAgeRating": "false",
+        "showAgeRatingWithImdbRating": "false",
+    }
+    TMDB_ADDON_CONFIG: str = (
+        "N4IgDgTg9gbglgEwKYEkC2CBGKEgFwgAuEArkiADQgRKEkQB26WO+Rp5VANgIYMDmJHv3IEkDALQBVAMqUQAZ2JIeaOAPwBtALpUAxj0I8uUfgq27FKiHoAWAUQY9MXJLgIAzYws4gDSgGEoEgZCfABWKgVbKAB3AEERACVDdX4UBgBxcRpzAmIyeXFnV0SkFMI0ti8uH3louLKKtIB1OEJbZkxmjU9vcgBfIA"  # noqa
+    )
+    TMDB_ADDON_HOST: str = "https://94c8cb9f702d-tmdb-addon.baby-beamup.club"
     PORT: int = 8000
     ADDON_ID: str = "com.bimal.watchly"
     ADDON_NAME: str = "Watchly"
@@ -24,6 +47,9 @@ class Settings(BaseSettings):
     CATALOG_REFRESH_INTERVAL_SECONDS: int = 21600  # 6 hours
     APP_ENV: Literal["development", "production"] = "development"
 
+    @property
+    def TMDB_ADDON_URL(self) -> str:
+        return f"{self.TMDB_ADDON_HOST}/{self.TMDB_ADDON_CONFIG}"
+
 
 settings = Settings()
-

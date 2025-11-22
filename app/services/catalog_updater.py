@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict
+from typing import Any
 
 from loguru import logger
 
@@ -8,9 +8,7 @@ from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
 
 
-async def refresh_catalogs_for_credentials(
-    credentials: Dict[str, Any], auth_key: str | None = None
-) -> bool:
+async def refresh_catalogs_for_credentials(credentials: dict[str, Any], auth_key: str | None = None) -> bool:
     """Regenerate catalogs for the provided credentials and push them to Stremio."""
     stremio_service = StremioService(
         username=credentials.get("username") or "",
@@ -21,12 +19,8 @@ async def refresh_catalogs_for_credentials(
         library_items = await stremio_service.get_library_items()
         dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
 
-        catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(
-            library_items=library_items
-        )
-        catalogs += await dynamic_catalog_service.get_genre_based_catalogs(
-            library_items=library_items
-        )
+        catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(library_items=library_items)
+        catalogs += await dynamic_catalog_service.get_genre_based_catalogs(library_items=library_items)
         logger.info(
             "Prepared %s catalogs for %s",
             len(catalogs),
@@ -63,7 +57,10 @@ class BackgroundCatalogUpdater:
         try:
             async for key, payload in token_store.iter_payloads():
                 if not self._has_credentials(payload):
-                    logger.debug("Skipping token %s with incomplete credentials", self._mask_key(key))
+                    logger.debug(
+                        "Skipping token %s with incomplete credentials",
+                        self._mask_key(key),
+                    )
                     continue
                 try:
                     updated = await refresh_catalogs_for_credentials(payload)
@@ -83,23 +80,19 @@ class BackgroundCatalogUpdater:
             logger.error("Catalog refresh scan failed: {}", exc, exc_info=True)
 
     async def _run(self) -> None:
-        logger.info(
-            "Background catalog updater started (interval=%ss)", self.interval_seconds
-        )
+        logger.info("Background catalog updater started (interval=%ss)", self.interval_seconds)
         try:
             while not self._stop_event.is_set():
                 await self.refresh_all_tokens()
                 try:
-                    await asyncio.wait_for(
-                        self._stop_event.wait(), timeout=self.interval_seconds
-                    )
-                except asyncio.TimeoutError:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval_seconds)
+                except TimeoutError:
                     continue
         finally:
             logger.info("Background catalog updater stopped")
 
     @staticmethod
-    def _has_credentials(payload: Dict[str, Any]) -> bool:
+    def _has_credentials(payload: dict[str, Any]) -> bool:
         return bool(payload.get("authKey") or (payload.get("username") and payload.get("password")))
 
     @staticmethod

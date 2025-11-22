@@ -2,11 +2,13 @@
 
 import hashlib
 import json
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, Dict, Optional
+from typing import Any
+
 from cachetools import TTLCache
-from loguru import logger
 from fastapi import HTTPException
+from loguru import logger
 
 from app.services.token_store import token_store
 
@@ -95,14 +97,20 @@ def clear_cache():
     logger.info("All caches cleared")
 
 
-async def resolve_user_credentials(token: str) -> Dict[str, Any]:
+async def resolve_user_credentials(token: str) -> dict[str, Any]:
     """Resolve credentials from Redis token."""
     if not token:
-        raise HTTPException(status_code=400, detail="Missing credentials token. Please reinstall the addon.")
+        raise HTTPException(
+            status_code=400,
+            detail="Missing credentials token. Please reinstall the addon.",
+        )
 
     payload = await token_store.get_payload(token)
     if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token. Please reconfigure the addon.",
+        )
 
     include_watched = payload.get("includeWatched", False)
     username = payload.get("username")
@@ -110,7 +118,10 @@ async def resolve_user_credentials(token: str) -> Dict[str, Any]:
     auth_key = payload.get("authKey")
 
     if not auth_key and (not username or not password):
-        raise HTTPException(status_code=400, detail="Stored token is missing credentials. Please reconfigure the addon.")
+        raise HTTPException(
+            status_code=400,
+            detail="Stored token is missing credentials. Please reconfigure the addon.",
+        )
 
     return {
         "username": username,

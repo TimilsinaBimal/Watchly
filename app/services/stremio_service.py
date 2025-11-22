@@ -1,14 +1,16 @@
-import httpx
-from typing import List, Dict, Optional
-from loguru import logger
-from app.core.config import settings
-
 import asyncio
+
+import httpx
+from loguru import logger
+
+from app.core.config import settings
 
 BASE_CATALOGS = [
     {"type": "movie", "id": "watchly.rec", "name": "Recommended", "extra": []},
     {"type": "series", "id": "watchly.rec", "name": "Recommended", "extra": []},
 ]
+
+
 class StremioService:
     """Service for interacting with Stremio API to fetch user library."""
 
@@ -16,17 +18,17 @@ class StremioService:
         self,
         username: str = "",
         password: str = "",
-        auth_key: Optional[str] = None,
+        auth_key: str | None = None,
     ):
         self.base_url = "https://api.strem.io"
         self.username = username
         self.password = password
-        self._auth_key: Optional[str] = auth_key
+        self._auth_key: str | None = auth_key
         if not self._auth_key and (not self.username or not self.password):
             raise ValueError("Username/password or auth key are required")
         # Reuse HTTP client for connection pooling and better performance
-        self._client: Optional[httpx.AsyncClient] = None
-        self._likes_client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
+        self._likes_client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the main Stremio API client."""
@@ -126,7 +128,7 @@ class StremioService:
             )
             return False
 
-    async def get_library_items(self) -> Dict[str, List[Dict]]:
+    async def get_library_items(self) -> dict[str, list[dict]]:
         """
         Fetch library items from Stremio once and return both watched and loved items.
         Returns a dict with 'watched' and 'loved' keys.
@@ -170,16 +172,11 @@ class StremioService:
 
             # Check if user has loved the movie or series in parallel
             loved_statuses = await asyncio.gather(
-                *[
-                    self.is_loved(auth_key, item.get("_id"), item.get("type"))
-                    for item in watched_items
-                ]
+                *[self.is_loved(auth_key, item.get("_id"), item.get("type")) for item in watched_items]
             )
 
             # Separate loved and watched items
-            loved_items = [
-                item for item, loved in zip(watched_items, loved_statuses) if loved
-            ]
+            loved_items = [item for item, loved in zip(watched_items, loved_statuses) if loved]
             logger.info(f"Found {len(loved_items)} loved library items")
 
             # Format watched items
@@ -254,7 +251,7 @@ class StremioService:
         client = await self._get_client()
         result = await client.post(url, json=payload)
         result.raise_for_status()
-        logger.info(f"Updated addons")
+        logger.info("Updated addons")
         return result.json().get("result", {}).get("success", False)
 
     async def update_catalogs(self, catalogs: list[dict], auth_key: str | None = None):

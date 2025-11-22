@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from loguru import logger
+
 from app.utils import clear_cache
 
 router = APIRouter(prefix="/cache")

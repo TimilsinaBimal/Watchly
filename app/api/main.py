@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from .endpoints.manifest import router as manifest_router
-from .endpoints.catalogs import router as catalogs_router
+
 from .endpoints.caching import router as caching_router
+from .endpoints.catalogs import router as catalogs_router
+from .endpoints.health import router as health_router
+from .endpoints.manifest import router as manifest_router
 from .endpoints.streams import router as streams_router
 from .endpoints.tokens import router as tokens_router
-from .endpoints.health import router as health_router
 
 api_router = APIRouter()
 

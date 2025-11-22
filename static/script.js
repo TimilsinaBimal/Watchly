@@ -129,10 +129,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
             generatedUrl = data.manifestUrl;
             addonUrlBox.textContent = generatedUrl;
-            
+
             form.classList.add('hidden');
             successMessage.style.display = 'block';
-            
+
         } catch (error) {
             console.error('Error:', error);
             showError(error.message);
@@ -155,14 +155,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     copyBtn.addEventListener('click', async function () {
         if (!generatedUrl) return;
-        
+
         try {
             await navigator.clipboard.writeText(generatedUrl);
             const originalText = copyBtn.textContent;
             copyBtn.textContent = 'Copied!';
             copyBtn.classList.add('btn-primary');
             copyBtn.classList.remove('btn-outline');
-            
+
             setTimeout(() => {
                 copyBtn.textContent = originalText;
                 copyBtn.classList.remove('btn-primary');
@@ -178,7 +178,7 @@ document.addEventListener('DOMContentLoaded', function () {
         form.reset();
         authMethodSelect.value = 'credentials';
         updateMethodFields();
-        
+
         form.classList.remove('hidden');
         successMessage.style.display = 'none';
         hideError();
