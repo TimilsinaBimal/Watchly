@@ -1,7 +1,7 @@
 import httpx
 from typing import List, Dict, Optional
 from loguru import logger
-from app.config import settings
+from app.core.config import settings
 
 import asyncio
 

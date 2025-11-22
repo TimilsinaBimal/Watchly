@@ -150,7 +150,7 @@ Watchly is a FastAPI-based Stremio addon that:
 
 5. **Run the application:**
    ```bash
-   uvicorn main:app --host 0.0.0.0 --port 8000
+   uvicorn app.core.app:app --host 0.0.0.0 --port 8000
    ```
 
    Or using Python directly:
@@ -210,28 +210,33 @@ By default (`TOKEN_TTL_SECONDS=0`), tokens never expire. Set a positive TTL if y
 ```
 Watchly/
 ├── app/
-│   ├── __init__.py
-│   ├── api/
+│   ├── __init__.py              # Package initialization
+│   ├── core/                    # Core application components
+│   │   ├── __init__.py
+│   │   ├── config.py            # Application settings
+│   │   └── app.py               # FastAPI application initialization
+│   ├── models/                  # Pydantic models
+│   │   ├── __init__.py
+│   │   └── stremio.py           # Stremio data models
+│   ├── api/                     # API routes
 │   │   ├── main.py              # API router
 │   │   └── endpoints/
 │   │       ├── manifest.py      # Stremio manifest endpoint
 │   │       ├── catalogs.py      # Catalog endpoints
 │   │       ├── streams.py       # Stream endpoints
 │   │       └── caching.py       # Cache management
-│   ├── config.py                # Application settings
-│   ├── models.py                # Pydantic models
-│   ├── services/
+│   ├── services/                # Business logic services
 │   │   ├── tmdb_service.py      # TMDB API integration
 │   │   ├── stremio_service.py   # Stremio API integration
 │   │   ├── recommendation_service.py  # Recommendation engine
 │   │   └── catalog.py           # Dynamic catalog service
 │   └── utils.py                 # Utility functions
-├── static/
+├── static/                      # Static web files
 │   ├── index.html              # Configuration page
 │   ├── style.css               # Styling
 │   ├── script.js               # Configuration logic
 │   └── logo.png                # Addon logo
-├── main.py                      # FastAPI application entry point
+├── main.py                      # Application entry point (runs uvicorn)
 ├── requirements.txt             # Python dependencies
 ├── Dockerfile                   # Docker image definition
 ├── docker-compose.yml           # Docker Compose configuration
@@ -243,7 +248,12 @@ Watchly/
 ### Running in Development Mode
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.core.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+Or using Python directly (with auto-reload based on APP_ENV):
+```bash
+python main.py
 ```
 
 ### Health Check Endpoint

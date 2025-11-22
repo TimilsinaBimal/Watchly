@@ -27,8 +27,4 @@ COPY static/ ./static/
 COPY main.py .
 COPY pyproject.toml .
 
-# Expose port
-EXPOSE 8000
-
-# Run the application
-ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["python", "main.py"]

@@ -1,7 +1,7 @@
 import httpx
 from typing import Dict, Optional, Tuple
 from loguru import logger
-from app.config import settings
+from app.core.config import settings
 from app.utils import cached_api_call
 
 

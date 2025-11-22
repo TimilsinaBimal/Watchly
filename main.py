@@ -10,6 +10,8 @@ import logging
 from loguru import logger
 from pathlib import Path
 import os
+import uvicorn
+from app.core import app, settings
 
 class InterceptHandler(logging.Handler):
     def emit(self, record):
@@ -100,8 +102,8 @@ async def stop_background_catalog_refresh() -> None:
         await catalog_updater.stop()
         catalog_updater = None
 
-
-# if __name__ == "__main__":
-#     import uvicorn
-
-#     uvicorn.run("main:app", host="0.0.0.0", port=settings.PORT, reload=True)
+        
+if __name__ == "__main__":
+    PORT = os.getenv("PORT", settings.PORT)
+    reload = settings.APP_ENV == "development"
+    uvicorn.run("app.core.app:app", host="0.0.0.0", port=int(PORT), reload=reload)

@@ -24,3 +24,4 @@ class StremioCatalogResponse(BaseModel):
     """Stremio catalog response format."""
 
     metas: List[StremioMeta]
+

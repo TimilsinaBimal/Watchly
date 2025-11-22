@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
+from typing import Literal
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     ANNOUNCEMENT_HTML: str = ""
     AUTO_UPDATE_CATALOGS: bool = True
     CATALOG_REFRESH_INTERVAL_SECONDS: int = 21600  # 6 hours
+    APP_ENV: Literal["development", "production"] = "development"
 
 
 settings = Settings()
+
