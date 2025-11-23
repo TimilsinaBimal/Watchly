@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire
     ANNOUNCEMENT_HTML: str = ""
     AUTO_UPDATE_CATALOGS: bool = True
-    CATALOG_REFRESH_INTERVAL_SECONDS: int = 6 * 60 * 60  # 6 hours
+    CATALOG_UPDATE_MODE: Literal["cron", "interval"] = "cron"  # "cron" for fixed times, "interval" for periodic
+    CATALOG_REFRESH_INTERVAL_SECONDS: int = 6 * 60 * 60  # 6 hours (used when CATALOG_UPDATE_MODE="interval")
     APP_ENV: Literal["development", "production"] = "development"
     HOST_NAME: str = "https://1ccea4301587-watchly.baby-beamup.club"
 

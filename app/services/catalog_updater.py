@@ -2,9 +2,11 @@ import asyncio
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
+from app.core.config import settings
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
@@ -37,25 +39,57 @@ async def refresh_catalogs_for_credentials(credentials: dict[str, Any], auth_key
 
 
 class BackgroundCatalogUpdater:
-    """Periodic job that refreshes catalogs for every stored credential token."""
+    """Periodic job that refreshes catalogs for every stored credential token.
 
-    def __init__(self, interval_seconds: int) -> None:
-        self.interval_seconds = max(60, interval_seconds)
-        self.scheduler = AsyncIOScheduler()
+    Supports two modes:
+    - "cron": Runs twice daily at 12:00 PM UTC and 00:00 UTC (midnight)
+    - "interval": Runs every CATALOG_REFRESH_INTERVAL_SECONDS
+    """
+
+    def __init__(self) -> None:
+        self.scheduler = AsyncIOScheduler(timezone="UTC")
+        self.update_mode = settings.CATALOG_UPDATE_MODE
 
     def start(self) -> None:
         if self.scheduler.running:
             return
 
-        logger.info(f"Starting background catalog updater. Interval: {self.interval_seconds}s")
-        self.scheduler.add_job(
-            self.refresh_all_tokens,
-            trigger=IntervalTrigger(seconds=self.interval_seconds),
-            id="catalog_refresh",
-            replace_existing=True,
-            max_instances=1,  # Prevent new job from starting if previous one is still running
-            coalesce=True,  # If multiple runs are missed, only run once
-        )
+        if self.update_mode == "cron":
+            logger.info("Starting background catalog updater. Schedule: 12:00 PM UTC and 00:00 UTC (midnight) daily")
+
+            # Schedule job at 12:00 PM UTC (noon)
+            self.scheduler.add_job(
+                self.refresh_all_tokens,
+                trigger=CronTrigger(hour=12, minute=0, timezone="UTC"),
+                id="catalog_refresh_noon",
+                replace_existing=True,
+                max_instances=1,  # Prevent new job from starting if previous one is still running
+                coalesce=True,  # If multiple runs are missed, only run once
+            )
+
+            # Schedule job at 00:00 UTC (midnight)
+            self.scheduler.add_job(
+                self.refresh_all_tokens,
+                trigger=CronTrigger(hour=0, minute=0, timezone="UTC"),
+                id="catalog_refresh_midnight",
+                replace_existing=True,
+                max_instances=1,  # Prevent new job from starting if previous one is still running
+                coalesce=True,  # If multiple runs are missed, only run once
+            )
+        else:  # interval mode
+            interval_seconds = max(3600, settings.CATALOG_REFRESH_INTERVAL_SECONDS)  # minimum 1 hour
+            interval_hours = interval_seconds // 3600
+            logger.info(f"Starting background catalog updater. Interval: {interval_seconds}s ({interval_hours} hours)")
+
+            self.scheduler.add_job(
+                self.refresh_all_tokens,
+                trigger=IntervalTrigger(seconds=interval_seconds),
+                id="catalog_refresh",
+                replace_existing=True,
+                max_instances=1,  # Prevent new job from starting if previous one is still running
+                coalesce=True,  # If multiple runs are missed, only run once
+            )
+
         self.scheduler.start()
 
     async def stop(self) -> None:
