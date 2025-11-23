@@ -3,6 +3,7 @@ from collections import Counter
 
 from loguru import logger
 
+from app.core.settings import UserSettings
 from app.services.stremio_service import StremioService
 from app.services.tmdb_service import TMDBService
 
@@ -19,15 +20,21 @@ class DynamicCatalogService:
     def normalize_type(type_):
         return "series" if type_ == "tv" else type_
 
-    def build_catalog_entry(self, item, label):
+    def build_catalog_entry(self, item, label, config_id):
+        item_id = item.get("_id", "")
+        # Use watchly.{config_id}.{item_id} format for better organization
+        if item_id.startswith("tt") and config_id in ["watchly.loved", "watchly.watched"]:
+            catalog_id = f"{config_id}.{item_id}"
+        else:
+            catalog_id = item_id
         return {
             "type": self.normalize_type(item.get("type")),
-            "id": item.get("_id"),
-            "name": f"Because you {label} {item.get('name')}",
+            "id": catalog_id,
+            "name": f"{label} {item.get('name')}",
             "extra": [],
         }
 
-    def process_items(self, items, seen_items, seed, label):
+    def process_items(self, items, seen_items, seed, label, config_id):
         entries = []
         for item in items:
             type_ = self.normalize_type(item.get("type"))
@@ -35,10 +42,10 @@ class DynamicCatalogService:
                 continue
             seen_items.add(item.get("_id"))
             seed[type_] = True
-            entries.append(self.build_catalog_entry(item, label))
+            entries.append(self.build_catalog_entry(item, label, config_id))
         return entries
 
-    async def get_watched_loved_catalogs(self, library_items: list[dict]):
+    async def get_watched_loved_catalogs(self, library_items: list[dict], user_settings: UserSettings | None = None):
         seen_items = set()
         catalogs = []
 
@@ -56,8 +63,33 @@ class DynamicCatalogService:
         loved_items = library_items.get("loved", [])
         watched_items = library_items.get("watched", [])
 
-        catalogs += self.process_items(loved_items, seen_items, seed["loved"], "Loved")
-        catalogs += self.process_items(watched_items, seen_items, seed["watched"], "Watched")
+        # Determine labels and enablement from settings
+        loved_label = "Because you Loved"
+        watched_label = "Because you Watched"
+        loved_enabled = True
+        watched_enabled = True
+
+        if user_settings:
+            loved_config = next((c for c in user_settings.catalogs if c.id == "watchly.loved"), None)
+            watched_config = next((c for c in user_settings.catalogs if c.id == "watchly.watched"), None)
+
+            if loved_config:
+                loved_enabled = loved_config.enabled
+                if loved_config.name:
+                    loved_label = loved_config.name
+
+            if watched_config:
+                watched_enabled = watched_config.enabled
+                if watched_config.name:
+                    watched_label = watched_config.name
+
+        if loved_enabled:
+            catalogs += self.process_items(loved_items, seen_items, seed["loved"], loved_label, "watchly.loved")
+
+        if watched_enabled:
+            catalogs += self.process_items(
+                watched_items, seen_items, seed["watched"], watched_label, "watchly.watched"
+            )
 
         return catalogs
 
@@ -87,7 +119,20 @@ class DynamicCatalogService:
             logger.warning(f"Failed to fetch genres for {item_id}: {e}")
             return []
 
-    async def get_genre_based_catalogs(self, library_items: list[dict]):
+    async def get_genre_based_catalogs(self, library_items: list[dict], user_settings: UserSettings | None = None):
+        genre_label = "You might also Like"
+        genre_enabled = True
+
+        if user_settings:
+            genre_config = next((c for c in user_settings.catalogs if c.id == "watchly.genre"), None)
+            if genre_config:
+                genre_enabled = genre_config.enabled
+                if genre_config.name:
+                    genre_label = genre_config.name
+
+        if not genre_enabled:
+            return []
+
         # get separate movies and series lists from loved items
         loved_movies = [item for item in library_items.get("loved", []) if item.get("type") == "movie"]
         loved_series = [item for item in library_items.get("loved", []) if item.get("type") == "series"]
@@ -127,7 +172,7 @@ class DynamicCatalogService:
                 {
                     "type": "movie",
                     "id": f"watchly.genre.{'_'.join(top_2_movie_genres)}",
-                    "name": "You might also Like",
+                    "name": genre_label,
                     "extra": [],
                 }
             )
@@ -137,7 +182,7 @@ class DynamicCatalogService:
                 {
                     "type": "series",
                     "id": f"watchly.genre.{'_'.join(top_2_series_genres)}",
-                    "name": "You might also Like",
+                    "name": genre_label,
                     "extra": [],
                 }
             )

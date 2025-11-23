@@ -12,175 +12,246 @@
 
 <body>
     <div class="wrapper">
-        <!-- Left Side: Hero Content -->
-        <div class="hero">
-            <h1>
-                Your Stremio,<br>
-                <span class="gradient-text">Reimagined.</span>
-            </h1>
-            <p>
-                Watchly analyzes your library to deliver personalized movie and TV show recommendations,
-                powered by TMDB's advanced discovery engine.
-            </p>
-
-            <div class="features">
-                <div class="feature">
-                    <div class="feature-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-                    </div>
-                    <span>Based on loved content</span>
-                </div>
-                <div class="feature">
-                    <div class="feature-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                    </div>
-                    <span>Hides watched items</span>
-                </div>
-                <div class="feature">
-                    <div class="feature-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                    </div>
-                    <span>Instant updates</span>
-                </div>
-                <div class="feature">
-                    <div class="feature-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    </div>
-                    <span>Secure & Private</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Side: Config Card -->
-        <div class="config-card">
-            <div class="card-header">
-                <img src="/static/logo.png" alt="Watchly Logo" class="logo">
-                <h2>Configure Watchly</h2>
-                <div class="version-badge">v<!-- APP_VERSION --></div>
-                <!-- ANNOUNCEMENT_HTML -->
-            </div>
-
-            <form id="configForm">
-                <div class="form-group">
-                    <label class="label" for="authMethod">Authentication Method</label>
-                    <div class="input-wrapper">
-                        <select id="authMethod" class="select">
-                            <option value="credentials">Username & Password</option>
-                            <option value="authkey">Stremio Auth Key</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Credentials Section -->
-                <div id="credentialsFields" class="method-section">
-                    <div class="form-group">
-                        <label class="label" for="username">Email Address</label>
-                        <div class="input-wrapper">
-                            <div class="input-icon">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-                            </div>
-                            <input type="email" id="username" class="input has-icon" placeholder="name@example.com" autocomplete="email">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="label" for="password">Password</label>
-                        <div class="input-wrapper">
-                            <div class="input-icon">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                            </div>
-                            <input type="password" id="password" class="input has-icon" placeholder="••••••••" autocomplete="current-password">
-                            <button type="button" class="toggle-btn" data-target="password">Show</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Auth Key Section -->
-                <div id="authKeyField" class="method-section hidden">
-                    <div class="form-group">
-                        <label class="label" for="authKey">Auth Key</label>
-                        <div class="input-wrapper">
-                            <div class="input-icon">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-                            </div>
-                            <input type="password" id="authKey" class="input has-icon" placeholder="Paste your long auth key here" autocomplete="off">
-                            <button type="button" class="toggle-btn" data-target="authKey">Show</button>
-                        </div>
-                        <p class="helper-text">
-                            Found in localStorage on web.strem.io.
-                            <a href="#" id="showAuthHelp" style="color: var(--primary);">How to find?</a>
-                        </p>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="label">Recommendation Source</label>
-                    <div class="radio-grid">
-                        <label class="radio-option">
-                            <input type="radio" name="recommendationSource" value="loved" checked>
-                            <div class="radio-tile">
-                                <div class="radio-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-                                </div>
-                                <span>Loved Only</span>
-                            </div>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" name="recommendationSource" value="watched">
-                            <div class="radio-tile">
-                                <div class="radio-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                </div>
-                                <span>All Watched</span>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <div id="errorMessage" class="error-box"></div>
-
-                <button type="submit" id="submitBtn" class="btn btn-primary">
-                    <span class="btn-text">Generate My Catalog</span>
-                    <div class="loader hidden"></div>
-                </button>
-            </form>
-
-            <!-- Success View -->
-            <div id="successMessage" class="success-view">
-                <div class="success-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </div>
-                <h3>You're all set!</h3>
-                <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-                    Your personalized catalog is ready to install.
+        <!-- Left Side: Hero Content (Fixed) -->
+        <div class="hero-container">
+            <div class="hero">
+                <h1>
+                    Your Stremio,<br>
+                    <span class="gradient-text">Reimagined.</span>
+                </h1>
+                <p>
+                    Watchly analyzes your library to deliver personalized movie and TV show recommendations,
+                    powered by TMDB's advanced discovery engine.
                 </p>
 
-                <div class="url-box" id="addonUrl"></div>
-
-                <div class="warning-box">
-                    <div class="warning-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <div class="features">
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                            </svg>
+                        </div>
+                        <span>Based on loved content</span>
                     </div>
-                    <div class="warning-content">
-                        <h4>Private Token</h4>
-                        <p>This URL contains your private access token. Don't share it with others.</p>
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                <circle cx="12" cy="12" r="3" />
+                            </svg>
+                        </div>
+                        <span>Hides watched items</span>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                            </svg>
+                        </div>
+                        <span>Instant updates</span>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                        </div>
+                        <span>Secure & Private</span>
                     </div>
                 </div>
+                </div>
+        </div>
 
-                <div style="display: grid; gap: 1rem;">
-                    <button id="installDesktopBtn" class="btn btn-primary">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Install on Stremio
+        <!-- Right Side: Config Card (Scrollable) -->
+        <div class="config-container">
+            <div class="config-card">
+                <div class="card-header">
+                    <img src="/static/logo.png" alt="Watchly Logo" class="logo">
+                    <h2>Configure Watchly</h2>
+                    <div class="version-badge">v<!-- APP_VERSION --></div>
+                    <!-- ANNOUNCEMENT_HTML -->
+                </div>
+
+                <form id="configForm">
+                    <div class="form-group">
+                        <label class="label" for="authMethod">Authentication Method</label>
+                        <div class="input-wrapper">
+                            <select id="authMethod" class="select">
+                                <option value="credentials">Username & Password</option>
+                                <option value="authkey">Stremio Auth Key</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Credentials Section -->
+                    <div id="credentialsFields" class="method-section">
+                        <div class="form-group">
+                            <label class="label" for="username">Email Address</label>
+                            <div class="input-wrapper">
+                                <div class="input-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect width="20" height="16" x="2" y="4" rx="2" />
+                                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                                    </svg>
+                                </div>
+                                <input type="email" id="username" class="input has-icon" placeholder="name@example.com"
+                                    autocomplete="email">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="label" for="password">Password</label>
+                            <div class="input-wrapper">
+                                <div class="input-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                    </svg>
+                                </div>
+                                <input type="password" id="password" class="input has-icon" placeholder="••••••••"
+                                    autocomplete="current-password">
+                                <button type="button" class="toggle-btn" data-target="password">Show</button>
+                            </div>
+                        </div>
+                        </div>
+
+                    <!-- Auth Key Section -->
+                    <div id="authKeyField" class="method-section hidden">
+                        <div class="form-group">
+                            <label class="label" for="authKey">Auth Key</label>
+                            <div class="input-wrapper">
+                                <div class="input-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path
+                                            d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                    </svg>
+                                </div>
+                                <input type="password" id="authKey" class="input has-icon" placeholder="Paste your long auth key here"
+                                    autocomplete="off">
+                                <button type="button" class="toggle-btn" data-target="authKey">Show</button>
+                            </div>
+                            <p class="helper-text">
+                                Found in localStorage on web.strem.io.
+                                <a href="#" id="showAuthHelp" style="color: var(--primary);">How to find?</a>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="label">Recommendation Source</label>
+                        <div class="radio-grid">
+                            <label class="radio-option">
+                                <input type="radio" name="recommendationSource" value="loved" checked>
+                                <div class="radio-tile">
+                                    <div class="radio-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path
+                                                d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                                        </svg>
+                                    </div>
+                                    <span>Loved Only</span>
+                                </div>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="recommendationSource" value="watched">
+                                <div class="radio-tile">
+                                    <div class="radio-icon">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                    </div>
+                                    <span>All Watched</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="label">Customize Catalogs</label>
+                        <div id="catalogList">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <div id="errorMessage" class="error-box"></div>
+
+                    <button type="submit" id="submitBtn" class="btn btn-primary">
+                        <span class="btn-text">Generate My Catalog</span>
+                        <div class="loader hidden"></div>
                     </button>
-                    <button id="installWebBtn" class="btn btn-outline">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                        Install on Web
-                    </button>
-                    <button id="copyBtn" class="btn btn-outline">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                        Copy Link
-                    </button>
-                    <button id="resetBtn" class="btn btn-outline" style="margin-top: 1rem; border: none;">Start Over</button>
+                    </form>
+
+                <!-- Success View -->
+                <div id="successMessage" class="success-view">
+                    <div class="success-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                    </div>
+                    <h3>You're all set!</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+                        Your personalized catalog is ready to install.
+                    </p>
+
+                    <div class="url-box" id="addonUrl"></div>
+
+                    <div class="warning-box">
+                        <div class="warning-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                        </div>
+                        <div class="warning-content">
+                            <h4>Private Token</h4>
+                            <p>This URL contains your private access token. Don't share it with others.</p>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; gap: 1rem;">
+                        <button id="installDesktopBtn" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Install on Stremio
+                        </button>
+                        <button id="installWebBtn" class="btn btn-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="2" y1="12" x2="22" y2="12" />
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                            </svg>
+                            Install on Web
+                        </button>
+                        <button id="copyBtn" class="btn btn-outline">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                            </svg>
+                            Copy Link
+                        </button>
+                        <button id="resetBtn" class="btn btn-outline" style="margin-top: 1rem; border: none;">Start Over</button>
+                    </div>
                 </div>
             </div>
         </div>

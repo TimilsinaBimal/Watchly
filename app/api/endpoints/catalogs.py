@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
+from app.core.settings import decode_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.recommendation_service import RecommendationService
 from app.services.stremio_service import StremioService
@@ -11,11 +12,13 @@ router = APIRouter()
 
 @router.get("/catalog/{type}/{id}.json")
 @router.get("/{token}/catalog/{type}/{id}.json")
+@router.get("/{settings_str}/{token}/catalog/{type}/{id}.json")
 async def get_catalog(
-    token: str | None,
     type: str,
     id: str,
     response: Response,
+    token: str | None = None,
+    settings_str: str | None = None,
 ):
     """
     Stremio catalog endpoint for movies and series.
@@ -40,11 +43,20 @@ async def get_catalog(
         logger.warning(f"Invalid type: {type}")
         raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
 
-    if id not in ["watchly.rec"] and not id.startswith("tt") and not id.startswith("watchly.genre."):
+    if (
+        id not in ["watchly.rec"]
+        and not id.startswith("tt")
+        and not id.startswith("watchly.genre.")
+        and not id.startswith("watchly.loved.")
+        and not id.startswith("watchly.watched.")
+    ):
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(
             status_code=400,
-            detail="Invalid id. Use 'watchly.rec' or 'watchly.genre.<genre_id>'",
+            detail=(
+                "Invalid id. Use 'watchly.rec', 'watchly.loved.<item_id>', 'watchly.watched.<item_id>', or"
+                " 'watchly.genre.<genre_id>'"
+            ),
         )
     try:
         # Create services with credentials
@@ -55,17 +67,30 @@ async def get_catalog(
         )
         recommendation_service = RecommendationService(stremio_service=stremio_service)
 
-        # if id starts with tt, then return recommendations for that particular item
-        if id.startswith("tt"):
-            recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
-            logger.info(f"Found {len(recommendations)} recommendations for {id}")
+        # Handle item-based recommendations (watchly.loved.tt123456 or watchly.watched.tt123456 or legacy tt123456)
+        item_id = None
+        if id.startswith("watchly.loved."):
+            item_id = id.replace("watchly.loved.", "")
+        elif id.startswith("watchly.watched."):
+            item_id = id.replace("watchly.watched.", "")
+        elif id.startswith("tt"):
+            item_id = id
+
+        if item_id:
+            recommendations = await recommendation_service.get_recommendations_for_item(item_id=item_id)
+            logger.info(f"Found {len(recommendations)} recommendations for {item_id}")
         elif id.startswith("watchly.genre."):
             recommendations = await recommendation_service.get_recommendations_for_genre(genre_id=id, media_type=type)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
         else:
             # Get recommendations based on library
-            # Use config to determine if we should include watched items
-            include_watched = credentials.get("includeWatched", False)
+            # Use settings or config to determine if we should include watched items
+            user_settings = decode_settings(settings_str) if settings_str else None
+            if user_settings:
+                include_watched = user_settings.include_watched
+            else:
+                include_watched = credentials.get("includeWatched", False)
+
             # Use last 10 items as sources, get 5 recommendations per source item
             recommendations = await recommendation_service.get_recommendations(
                 content_type=type,
@@ -89,7 +114,8 @@ async def get_catalog(
 
 
 @router.get("/{token}/catalog/update")
-async def update_catalogs(token: str):
+@router.get("/{settings_str}/{token}/catalog/update")
+async def update_catalogs(token: str, settings_str: str | None = None):
     """
     Update the catalogs for the addon. This is a manual endpoint to update the catalogs.
     """

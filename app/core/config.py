@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     ADDON_ID: str = "com.bimal.watchly"
     ADDON_NAME: str = "Watchly"
-    APP_VERSION: str = "0.1.3"
+    APP_VERSION: str = "1.0.0"
     REDIS_URL: str = "redis://redis:6379/0"
     TOKEN_SALT: str = "change-me"
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire

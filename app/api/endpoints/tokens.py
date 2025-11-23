@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from redis import exceptions as redis_exceptions
 
 from app.core.config import settings
+from app.core.settings import CatalogConfig, UserSettings, encode_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
@@ -21,6 +22,7 @@ class TokenRequest(BaseModel):
         default=False,
         description="If true, recommendations can include watched titles",
     )
+    catalogs: list[CatalogConfig] | None = Field(default=None, description="Optional catalog configuration")
 
 
 class TokenResponse(BaseModel):
@@ -96,11 +98,12 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
             detail="Provide either a Stremio auth key or both username and password.",
         )
 
+    # We only store credentials in Redis, settings go into URL
     payload_to_store = {
         "username": username,
         "password": password,
         "authKey": auth_key,
-        "includeWatched": payload.includeWatched,
+        # includeWatched is no longer stored here for new tokens
     }
 
     verified_auth_key = await _verify_credentials_or_raise(payload_to_store)
@@ -131,8 +134,29 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
                 status_code=502,
                 detail="Credentials verified, but Watchly couldn't refresh your catalogs yet. Please try again.",
             ) from exc
+
+    # Construct Settings
+    user_settings = UserSettings(
+        include_watched=payload.includeWatched,
+        catalogs=payload.catalogs or [],
+    )
+    # If no catalogs provided, use default or leave empty?
+    # If empty, get_default_settings() in settings.py handles defaults if decoding fails,
+    # but here we are encoding. If list is empty, it means user didn't configure?
+    # Or should we default to all enabled?
+    if not payload.catalogs:
+        # Use default settings if not provided
+        from app.core.settings import get_default_settings
+
+        default = get_default_settings()
+        user_settings.catalogs = default.catalogs
+
+    # encode_settings now includes the "settings:" prefix
+    encoded_settings = encode_settings(user_settings)
+
     base_url = settings.HOST_NAME
-    manifest_url = f"{base_url}/{token}/manifest.json"
+    # New URL structure
+    manifest_url = f"{base_url}/{encoded_settings}/{token}/manifest.json"
 
     expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
 

@@ -3,6 +3,7 @@ from fastapi import Response
 from fastapi.routing import APIRouter
 
 from app.core.config import settings
+from app.core.settings import UserSettings, decode_settings
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
 from app.utils import resolve_user_credentials
@@ -10,7 +11,34 @@ from app.utils import resolve_user_credentials
 router = APIRouter()
 
 
-def get_base_manifest():
+def get_base_manifest(user_settings: UserSettings | None = None):
+    # Default catalog config
+    rec_config = None
+    if user_settings:
+        # Find config for 'recommended'
+        rec_config = next((c for c in user_settings.catalogs if c.id == "watchly.rec"), None)
+
+    # If disabled explicitly, don't include it.
+    # If not configured (None), default to enabled.
+    if rec_config and not rec_config.enabled:
+        catalogs = []
+    else:
+        name = rec_config.name if rec_config and rec_config.name else "Recommended"
+        catalogs = [
+            {
+                "type": "movie",
+                "id": "watchly.rec",
+                "name": name,
+                "extra": [],
+            },
+            {
+                "type": "series",
+                "id": "watchly.rec",
+                "name": name,
+                "extra": [],
+            },
+        ]
+
     return {
         "id": settings.ADDON_ID,
         "version": settings.APP_VERSION,
@@ -20,19 +48,18 @@ def get_base_manifest():
         "resources": [{"name": "catalog", "types": ["movie", "series"], "idPrefixes": ["tt"]}],
         "types": ["movie", "series"],
         "idPrefixes": ["tt"],
-        "catalogs": [
-            {"type": "movie", "id": "watchly.rec", "name": "Recommended", "extra": []},
-            {"type": "series", "id": "watchly.rec", "name": "Recommended", "extra": []},
-        ],
+        "catalogs": catalogs,
         "behaviorHints": {"configurable": True, "configurationRequired": False},
     }
 
 
 # Cache catalog definitions for 1 hour (3600s)
 @alru_cache(maxsize=1000, ttl=3600)
-async def fetch_catalogs(token: str | None = None):
+async def fetch_catalogs(token: str | None = None, settings_str: str | None = None):
     if not token:
         return []
+
+    user_settings = decode_settings(settings_str) if settings_str else None
 
     credentials = await resolve_user_credentials(token)
     stremio_service = StremioService(
@@ -40,28 +67,80 @@ async def fetch_catalogs(token: str | None = None):
         password=credentials.get("password") or "",
         auth_key=credentials.get("authKey"),
     )
+
     # Note: get_library_items is expensive, but we need it to determine *which* genre catalogs to show.
     library_items = await stremio_service.get_library_items()
     dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
 
     # Base catalogs are already in manifest, these are *extra* dynamic ones
-    catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(library_items=library_items)
-    catalogs += await dynamic_catalog_service.get_genre_based_catalogs(library_items=library_items)
+    # Pass user_settings to filter/rename
+    catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(
+        library_items=library_items, user_settings=user_settings
+    )
+    catalogs += await dynamic_catalog_service.get_genre_based_catalogs(
+        library_items=library_items, user_settings=user_settings
+    )
 
     return catalogs
 
 
-@router.get("/manifest.json")
-@router.get("/{token}/manifest.json")
-async def manifest(response: Response, token: str | None = None):
-    """Stremio manifest endpoint with optional credential token in the path."""
+async def _manifest_handler(response: Response, token: str | None, settings_str: str | None):
+    """Stremio manifest handler."""
     # Cache manifest for 1 day (86400 seconds)
     response.headers["Cache-Control"] = "public, max-age=86400"
 
-    base_manifest = get_base_manifest()
+    user_settings = decode_settings(settings_str) if settings_str else None
+    base_manifest = get_base_manifest(user_settings)
+
     if token:
-        catalogs = await fetch_catalogs(token)
-        if catalogs:
-            # Append dynamic catalogs to the base ones
-            base_manifest["catalogs"] += catalogs
+        # We pass settings_str to fetch_catalogs so it can cache different versions
+        # We COPY the lists to avoid modifying cached objects or base_manifest defaults
+        fetched_catalogs = await fetch_catalogs(token, settings_str)
+
+        # Create a new list with copies of all catalogs
+        all_catalogs = [c.copy() for c in base_manifest["catalogs"]] + [c.copy() for c in fetched_catalogs]
+
+        if user_settings:
+            # Create a lookup for order index
+            order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
+
+            # Sort. Items not in map go to end.
+            # Extract config id from catalog id for matching with user settings
+            def get_config_id(catalog):
+                catalog_id = catalog.get("id", "")
+                # For item-based catalogs (watchly.loved.tt123456 or watchly.watched.tt123456), use base config id
+                if catalog_id.startswith("watchly.loved."):
+                    return "watchly.loved"
+                if catalog_id.startswith("watchly.watched."):
+                    return "watchly.watched"
+                # For genre catalogs (watchly.genre.123_456), use base config id
+                if catalog_id.startswith("watchly.genre."):
+                    return "watchly.genre"
+                # For other watchly catalogs, use as-is
+                if catalog_id.startswith("watchly."):
+                    return catalog_id
+                # For legacy tt catalogs, try to determine from context (default to loved)
+                if catalog_id.startswith("tt"):
+                    return "watchly.loved"
+                return catalog_id
+
+            all_catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
+
+        base_manifest["catalogs"] = all_catalogs
+
     return base_manifest
+
+
+@router.get("/manifest.json")
+async def manifest_root(response: Response):
+    return await _manifest_handler(response, None, None)
+
+
+@router.get("/{token}/manifest.json")
+async def manifest_token(response: Response, token: str):
+    return await _manifest_handler(response, token, None)
+
+
+@router.get("/{settings_str}/{token}/manifest.json")
+async def manifest_settings(response: Response, settings_str: str, token: str):
+    return await _manifest_handler(response, token, settings_str)
