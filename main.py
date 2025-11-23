@@ -2,6 +2,7 @@ import os
 
 import uvicorn
 
+from app.core.app import app  # noqa: F401
 from app.core.config import settings
 
 if __name__ == "__main__":
