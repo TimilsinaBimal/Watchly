@@ -37,13 +37,9 @@ async def lifespan(app: FastAPI):
     global catalog_updater
 
     # Startup
-    if settings.AUTO_UPDATE_CATALOGS and settings.CATALOG_REFRESH_INTERVAL_SECONDS > 3600:  # minimum 1 hour
-        catalog_updater = BackgroundCatalogUpdater(interval_seconds=settings.CATALOG_REFRESH_INTERVAL_SECONDS)
+    if settings.AUTO_UPDATE_CATALOGS:
+        catalog_updater = BackgroundCatalogUpdater()
         catalog_updater.start()
-        logger.info(
-            "Background catalog updates enabled (interval=%ss)",
-            settings.CATALOG_REFRESH_INTERVAL_SECONDS,
-        )
     yield
 
     # Shutdown
