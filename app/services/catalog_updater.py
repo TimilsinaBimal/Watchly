@@ -55,27 +55,19 @@ class BackgroundCatalogUpdater:
             return
 
         if self.update_mode == "cron":
-            logger.info("Starting background catalog updater. Schedule: 12:00 PM UTC and 00:00 UTC (midnight) daily")
-
-            # Schedule job at 12:00 PM UTC (noon)
-            self.scheduler.add_job(
-                self.refresh_all_tokens,
-                trigger=CronTrigger(hour=12, minute=0, timezone="UTC"),
-                id="catalog_refresh_noon",
-                replace_existing=True,
-                max_instances=1,  # Prevent new job from starting if previous one is still running
-                coalesce=True,  # If multiple runs are missed, only run once
-            )
-
-            # Schedule job at 00:00 UTC (midnight)
-            self.scheduler.add_job(
-                self.refresh_all_tokens,
-                trigger=CronTrigger(hour=0, minute=0, timezone="UTC"),
-                id="catalog_refresh_midnight",
-                replace_existing=True,
-                max_instances=1,  # Prevent new job from starting if previous one is still running
-                coalesce=True,  # If multiple runs are missed, only run once
-            )
+            logger.info(f"Starting background catalog updater. Schedule: {settings.CATALOG_UPDATE_CRON_SCHEDULES}")
+            job_defaults = {
+                "func": self.refresh_all_tokens,
+                "replace_existing": True,
+                "max_instances": 1,
+                "coalesce": True,
+            }
+            for schedule in settings.CATALOG_UPDATE_CRON_SCHEDULES:
+                self.scheduler.add_job(
+                    trigger=CronTrigger(hour=schedule["hour"], minute=schedule["minute"], timezone="UTC"),
+                    id=schedule["id"],
+                    **job_defaults,
+                )
         else:  # interval mode
             interval_seconds = max(3600, settings.CATALOG_REFRESH_INTERVAL_SECONDS)  # minimum 1 hour
             interval_hours = interval_seconds // 3600
