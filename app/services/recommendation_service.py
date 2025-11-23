@@ -106,7 +106,7 @@ class RecommendationService:
 
             meta_data = {
                 "id": stremio_id,
-                "type": media_type,
+                "type": "series" if media_type in ["tv", "series"] else "movie",
                 "name": title,
                 "poster": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
                 "background": f"https://image.tmdb.org/t/p/original{backdrop_path}" if backdrop_path else None,
