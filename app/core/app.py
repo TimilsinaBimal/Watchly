@@ -61,7 +61,7 @@ else:
 app = FastAPI(
     title="Watchly",
     description="Stremio catalog addon for movie and series recommendations",
-    version="0.1.0",
+    version=settings.APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -99,6 +99,8 @@ async def configure_page(token: str | None = None):
         if announcement_html:
             snippet = '\n                <div class="announcement">' f"{announcement_html}" "</div>"
         html_content = html_content.replace("<!-- ANNOUNCEMENT_HTML -->", snippet, 1)
+        # Inject version
+        html_content = html_content.replace("<!-- APP_VERSION -->", settings.APP_VERSION, 1)
         return HTMLResponse(content=html_content, media_type="text/html")
     return HTMLResponse(
         content="Watchly API is running. Static files not found.",

@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
+from app.utils import redact_token
 
 router = APIRouter(prefix="/tokens", tags=["tokens"])
 
@@ -106,6 +107,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
 
     try:
         token, created = await token_store.store_payload(payload_to_store)
+        logger.info(f"[{redact_token(token)}] Token {'created' if created else 'updated'}")
     except RuntimeError as exc:
         logger.error("Token storage failed: {}", exc)
         raise HTTPException(
@@ -123,7 +125,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         try:
             await refresh_catalogs_for_credentials(payload_to_store, auth_key=verified_auth_key)
         except Exception as exc:  # pragma: no cover - remote dependency
-            logger.error("Initial catalog refresh failed: {}", exc, exc_info=True)
+            logger.error(f"[{redact_token(token)}] Initial catalog refresh failed: {{}}", exc, exc_info=True)
             await token_store.delete_token(token)
             raise HTTPException(
                 status_code=502,

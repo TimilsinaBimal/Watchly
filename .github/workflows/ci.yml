@@ -38,5 +38,6 @@ jobs:
       - name: Build and Push Docker image
         working-directory: "./"
         run: |
-          docker build -t ghcr.io/${{ github.repository }}:${{ steps.set-tag.outputs.IMAGE_TAG }} .
-          docker push ghcr.io/${{ github.repository }}:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          REPO_NAME="${GITHUB_REPOSITORY,,}"
+          docker build -t ghcr.io/${REPO_NAME}:${{ steps.set-tag.outputs.IMAGE_TAG }} .
+          docker push ghcr.io/${REPO_NAME}:${{ steps.set-tag.outputs.IMAGE_TAG }}

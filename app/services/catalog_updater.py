@@ -8,6 +8,7 @@ from loguru import logger
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
+from app.utils import redact_token
 
 # Max number of concurrent updates to prevent overwhelming external APIs
 MAX_CONCURRENT_UPDATES = 5
@@ -26,9 +27,9 @@ async def refresh_catalogs_for_credentials(credentials: dict[str, Any], auth_key
 
         catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(library_items=library_items)
         catalogs += await dynamic_catalog_service.get_genre_based_catalogs(library_items=library_items)
-        logger.info(
-            f"Prepared {len(catalogs)} catalogs for {credentials.get('authKey') or credentials.get('username')}"
-        )
+        auth_key_or_username = credentials.get("authKey") or credentials.get("username")
+        redacted = redact_token(auth_key_or_username) if auth_key_or_username else "unknown"
+        logger.info(f"[{redacted}] Prepared {len(catalogs)} catalogs")
         auth_key = await stremio_service.get_auth_key()
         return await stremio_service.update_catalogs(catalogs, auth_key)
     finally:

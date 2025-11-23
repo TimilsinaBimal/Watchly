@@ -4,7 +4,7 @@ from loguru import logger
 from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.recommendation_service import RecommendationService
 from app.services.stremio_service import StremioService
-from app.utils import resolve_user_credentials
+from app.utils import redact_token, resolve_user_credentials
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ async def get_catalog(
             detail="Missing credentials token. Please open Watchly from a configured manifest URL.",
         )
 
-    logger.info(f"Fetching catalog for {type} with id {id}")
+    logger.info(f"[{redact_token(token)}] Fetching catalog for {type} with id {id}")
 
     credentials = await resolve_user_credentials(token)
 
@@ -84,7 +84,7 @@ async def get_catalog(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching catalog for {type}/{id}: {e}", exc_info=True)
+        logger.error(f"[{redact_token(token)}] Error fetching catalog for {type}/{id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -96,7 +96,7 @@ async def update_catalogs(token: str):
     # Decode credentials from path
     credentials = await resolve_user_credentials(token)
 
-    logger.info("Updating catalogs in response to manual request")
+    logger.info(f"[{redact_token(token)}] Updating catalogs in response to manual request")
     updated = await refresh_catalogs_for_credentials(credentials)
     logger.info(f"Manual catalog update completed: {updated}")
     return {"success": updated}

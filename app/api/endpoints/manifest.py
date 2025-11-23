@@ -13,7 +13,7 @@ router = APIRouter()
 def get_base_manifest():
     return {
         "id": settings.ADDON_ID,
-        "version": "0.1.1",
+        "version": settings.APP_VERSION,
         "name": settings.ADDON_NAME,
         "description": "Movie and series recommendations based on your Stremio library",
         "logo": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/static/logo.png",

@@ -1,4 +1,8 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: watchly-redis
+    restart: unless-stopped
   watchly:
     build:
       context: .
@@ -6,32 +10,14 @@ services:
     container_name: watchly
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
-    environment:
-      - TMDB_API_KEY=${TMDB_API_KEY}
-      - PORT=${PORT:-8000}
-      - ADDON_ID=${ADDON_ID:-com.bimal.watchly}
-      - ADDON_NAME=${ADDON_NAME:-Watchly}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - TOKEN_SALT=${TOKEN_SALT:-change-me}
-      - TOKEN_TTL_SECONDS=${TOKEN_TTL_SECONDS:-0}
-      - ANNOUNCEMENT_HTML=${ANNOUNCEMENT_HTML:-}
+      - "127.0.0.1:8000:8000"
+      # some macos users need to use 127.0.0.1:8000:8000 to access the app on localhost due to IPV6 issues
     env_file:
       - .env
+    environment:
+      # Override REDIS_URL to use Docker service name instead of localhost
+      - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ./static:/app/static:ro
-    networks:
-      - watchly-network
+      - ./:/app
     depends_on:
       - redis
-
-  redis:
-    image: redis:7-alpine
-    container_name: watchly-redis
-    restart: unless-stopped
-    networks:
-      - watchly-network
-
-networks:
-  watchly-network:
-    driver: bridge

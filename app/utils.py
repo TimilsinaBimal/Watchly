@@ -5,6 +5,25 @@ from fastapi import HTTPException
 from app.services.token_store import token_store
 
 
+def redact_token(token: str | None, visible_chars: int = 8) -> str:
+    """
+    Redact a token for logging purposes.
+    Shows first few characters followed by *** for debugging.
+
+    Args:
+        token: The token to redact
+        visible_chars: Number of characters to show before redaction (default: 8)
+
+    Returns:
+        Redacted token string (e.g., "ksfjads***" or "None" if token is None)
+    """
+    if not token:
+        return "None"
+    if len(token) <= visible_chars:
+        return "***"
+    return f"{token[:visible_chars]}***"
+
+
 async def resolve_user_credentials(token: str) -> dict[str, Any]:
     """Resolve credentials from Redis token."""
     if not token:
