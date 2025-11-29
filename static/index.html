@@ -1,260 +1,320 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Watchly - Personalized Stremio Recommendations</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="icon" href="/static/logo.png" type="image/png">
     <meta name="description" content="Stremio catalog addon that provides personalized movie and series recommendations based on your library.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="/static/logo.png" type="image/png">
+    <script>
+        window.APP_HOST = "<!-- APP_HOST -->";
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#151f32',
+                        },
+                        stremio: {
+                            DEFAULT: '#3b2667',
+                            hover: '#4e3286',
+                            border: '#573b94'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #020617;
+            background-image: radial-gradient(circle at 50% 0%, rgba(30, 58, 138, 0.15), transparent 50%);
+        }
+
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
 </head>
+<body class="min-h-screen text-slate-200 font-sans antialiased selection:bg-blue-500/30">
+    <div class="max-w-3xl mx-auto px-4 py-12 md:py-20">
 
-<body>
-    <div class="wrapper">
-        <!-- Left Side: Hero Content (Fixed) -->
-        <div class="hero-container">
-            <div class="hero">
-                <h1>
-                    Your Stremio,<br>
-                    <span class="gradient-text">Reimagined.</span>
-                </h1>
-                <p>
-                    Watchly analyzes your library to deliver personalized movie and TV show recommendations,
-                    powered by TMDB's advanced discovery engine.
-                </p>
-
-                <div class="features">
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path
-                                    d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                            </svg>
-                        </div>
-                        <span>Based on loved content</span>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                                <circle cx="12" cy="12" r="3" />
-                            </svg>
-                        </div>
-                        <span>Hides watched items</span>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                            </svg>
-                        </div>
-                        <span>Instant updates</span>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                            </svg>
-                        </div>
-                        <span>Secure & Private</span>
-                    </div>
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <div class="relative inline-block group">
+                <div
+                    class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full opacity-25 group-hover:opacity-50 blur transition duration-500">
                 </div>
-                </div>
-        </div>
+                <img src="/static/logo.png" alt="Watchly"
+                    class="relative w-24 h-24 mx-auto rounded-2xl shadow-2xl transform transition duration-500 group-hover:scale-105">
+            </div>
+            <h1
+                class="mt-6 text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300 tracking-tight">
+                Watchly</h1>
+            <div class="flex items-center justify-center gap-2 mt-2">
+                <span
+                    class="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-xs font-medium text-blue-400">v<!-- APP_VERSION --></span>
+            </div>
+            <p class="mt-4 text-lg text-slate-400 max-w-lg mx-auto leading-relaxed">
+                Your Stremio, reimagined. Personalized recommendations powered by your library and TMDB.
+            </p>
 
-        <!-- Right Side: Config Card (Scrollable) -->
-        <div class="config-container">
-            <div class="config-card">
-                <div class="card-header">
-                    <img src="/static/logo.png" alt="Watchly Logo" class="logo">
-                    <h2>Configure Watchly</h2>
-                    <div class="version-badge">v<!-- APP_VERSION --></div>
-                    <!-- ANNOUNCEMENT_HTML -->
-                </div>
+            <!-- Dynamic Announcement -->
+            <!-- ANNOUNCEMENT_HTML -->
+            </div>
 
-                <form id="configForm">
-                    <div class="form-group">
-                        <label class="label" for="authMethod">Authentication Method</label>
-                        <div class="input-wrapper">
-                            <select id="authMethod" class="select">
-                                <option value="credentials">Username & Password</option>
-                                <option value="authkey">Stremio Auth Key</option>
-                            </select>
-                        </div>
-                    </div>
+        <!-- Main Config Card -->
+        <div
+            class="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 md:p-10 shadow-2xl ring-1 ring-white/5">
 
-                    <!-- Credentials Section -->
-                    <div id="credentialsFields" class="method-section">
-                        <div class="form-group">
-                            <label class="label" for="username">Email Address</label>
-                            <div class="input-wrapper">
-                                <div class="input-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect width="20" height="16" x="2" y="4" rx="2" />
-                                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-                                    </svg>
-                                </div>
-                                <input type="email" id="username" class="input has-icon" placeholder="name@example.com"
-                                    autocomplete="email">
-                            </div>
-                        </div>
+            <form id="configForm" class="space-y-10">
 
-                        <div class="form-group">
-                            <label class="label" for="password">Password</label>
-                            <div class="input-wrapper">
-                                <div class="input-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                    </svg>
-                                </div>
-                                <input type="password" id="password" class="input has-icon" placeholder="••••••••"
-                                    autocomplete="current-password">
-                                <button type="button" class="toggle-btn" data-target="password">Show</button>
-                            </div>
-                        </div>
-                        </div>
+                <!-- Auth Method Section -->
+                <div class="space-y-4">
+                    <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Authentication</label>
 
-                    <!-- Auth Key Section -->
-                    <div id="authKeyField" class="method-section hidden">
-                        <div class="form-group">
-                            <label class="label" for="authKey">Auth Key</label>
-                            <div class="input-wrapper">
-                                <div class="input-icon">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path
-                                            d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-                                    </svg>
-                                </div>
-                                <input type="password" id="authKey" class="input has-icon" placeholder="Paste your long auth key here"
-                                    autocomplete="off">
-                                <button type="button" class="toggle-btn" data-target="authKey">Show</button>
-                            </div>
-                            <p class="helper-text">
-                                Found in localStorage on web.strem.io.
-                                <a href="#" id="showAuthHelp" style="color: var(--primary);">How to find?</a>
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="label">Recommendation Source</label>
-                        <div class="radio-grid">
-                            <label class="radio-option">
-                                <input type="radio" name="recommendationSource" value="loved" checked>
-                                <div class="radio-tile">
-                                    <div class="radio-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path
-                                                d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                                        </svg>
-                                    </div>
-                                    <span>Loved Only</span>
-                                </div>
-                            </label>
-                            <label class="radio-option">
-                                <input type="radio" name="recommendationSource" value="watched">
-                                <div class="radio-tile">
-                                    <div class="radio-icon">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                                            <circle cx="12" cy="12" r="3" />
-                                        </svg>
-                                    </div>
-                                    <span>All Watched</span>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="label">Customize Catalogs</label>
-                        <div id="catalogList">
-                            <!-- Populated by JS -->
-                        </div>
-                    </div>
-
-                    <div id="errorMessage" class="error-box"></div>
-
-                    <button type="submit" id="submitBtn" class="btn btn-primary">
-                        <span class="btn-text">Generate My Catalog</span>
-                        <div class="loader hidden"></div>
+                    <!-- Stremio Login Button -->
+                    <button type="button" id="stremioLoginBtn"
+                        class="w-full bg-stremio hover:bg-stremio-hover text-white font-medium py-3.5 rounded-xl transition flex items-center justify-center gap-3 border border-stremio-border shadow-lg shadow-stremio/20">
+                        <img src="https://web.stremio.com/images/stremio_symbol.png" class="w-6 h-6" alt="Stremio">
+                        <span id="stremioLoginText">Login with Stremio</span>
                     </button>
-                    </form>
 
-                <!-- Success View -->
-                <div id="successMessage" class="success-view">
-                    <div class="success-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
+                    <div id="orDivider"
+                        class="flex items-center gap-3 text-xs font-medium text-slate-500 uppercase tracking-widest">
+                        <div class="h-px bg-slate-800 flex-grow"></div>
+                        <span>OR</span>
+                        <div class="h-px bg-slate-800 flex-grow"></div>
+                    </div>
+
+                    <div id="manualAuthContainer" class="relative">
+                        <select id="authMethod"
+                            class="w-full appearance-none bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all cursor-pointer">
+                            <option value="credentials">Username & Password</option>
+                            <option value="authkey">Stremio Auth Key</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    </div>
+
+                <!-- Credentials Inputs -->
+                <div id="credentialsFields" class="space-y-5 animate-fade-in">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-slate-400">Email Address</label>
+                        <div class="relative group">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207">
+                                    </path>
+                                </svg>
+                            </div>
+                            <input type="email" id="username"
+                                class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
+                                placeholder="name@example.com" autocomplete="email">
+                            </div>
+                            </div>
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-slate-400">Password</label>
+                        <div class="relative group">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+                                    </path>
+                                </svg>
+                            </div>
+                            <input type="password" id="password"
+                                class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-16 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
+                                placeholder="••••••••" autocomplete="current-password">
+                            <button type="button"
+                                class="toggle-btn absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide"
+                                data-target="password">Show</button>
+                            </div>
+                            </div>
+                            </div>
+
+                <!-- Auth Key Input -->
+                <div id="authKeyField" class="hidden space-y-2 animate-fade-in">
+                    <label class="block text-sm font-medium text-slate-400">Auth Key</label>
+                    <div class="relative group">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                                </path>
+                            </svg>
+                        </div>
+                        <input type="password" id="authKey"
+                            class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-16 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all font-mono text-sm"
+                            placeholder="Paste your long auth key here" autocomplete="off">
+                        <button type="button"
+                            class="toggle-btn absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide"
+                            data-target="authKey">Show</button>
+                        </div>
+                    <p class="text-xs text-slate-500 ml-1">Found in localStorage on web.strem.io. <a href="#" id="showAuthHelp"
+                            class="text-blue-400 hover:text-blue-300 transition-colors">How to find?</a></p>
+                </div>
+
+                <div class="border-t border-slate-800"></div>
+
+                <!-- Recommendation Source -->
+                <div class="space-y-4">
+                    <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Recommendation Source</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <label class="relative cursor-pointer group">
+                            <input type="radio" name="recommendationSource" value="loved" checked class="peer sr-only">
+                            <div
+                                class="h-full p-4 bg-slate-800/50 border border-slate-700 rounded-xl flex flex-col items-center justify-center gap-3 transition-all duration-300 peer-checked:bg-blue-500/10 peer-checked:border-blue-500/50 peer-checked:ring-1 peer-checked:ring-blue-500/50 group-hover:bg-slate-800 group-hover:border-slate-600">
+                                <div
+                                    class="p-2 bg-slate-800 rounded-lg text-blue-400 ring-1 ring-slate-700 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:ring-blue-500 transition-all">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <span class="font-medium text-sm text-slate-300 peer-checked:text-white">Loved Content</span>
+                                </div>
+                                </label>
+                        <label class="relative cursor-pointer group">
+                            <input type="radio" name="recommendationSource" value="watched" class="peer sr-only">
+                            <div
+                                class="h-full p-4 bg-slate-800/50 border border-slate-700 rounded-xl flex flex-col items-center justify-center gap-3 transition-all duration-300 peer-checked:bg-blue-500/10 peer-checked:border-blue-500/50 peer-checked:ring-1 peer-checked:ring-blue-500/50 group-hover:bg-slate-800 group-hover:border-slate-600">
+                                <div
+                                    class="p-2 bg-slate-800 rounded-lg text-blue-400 ring-1 ring-slate-700 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:ring-blue-500 transition-all">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <span class="font-medium text-sm text-slate-300 peer-checked:text-white">All Watched</span>
+                                </div>
+                                </label>
+                                </div>
+                                </div>
+
+                <div class="border-t border-slate-800"></div>
+
+                <!-- Catalogs -->
+                <div class="space-y-4">
+                    <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Customize Catalogs</label>
+                    <div id="catalogList" class="grid gap-3">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="errorMessage"
+                    class="hidden p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-200 text-sm animate-shake">
+                    <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                        </path>
+                    </svg>
+                    <span class="message-content">Error message here</span>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="submitBtn"
+                    class="w-full group relative overflow-hidden bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold py-4 rounded-xl transition-all shadow-lg shadow-blue-500/20 disabled:opacity-70 disabled:cursor-not-allowed">
+                    <div class="relative z-10 flex items-center justify-center gap-2">
+                        <span class="btn-text">Generate My Catalog</span>
+                        <div class="loader hidden w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        </div>
+                        <div
+                            class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out">
+                        </div>
+                        </button>
+
+            </form>
+
+            <!-- Success View -->
+            <div id="successMessage" class="hidden animate-fade-in">
+                <div class="text-center mb-8">
+                    <div
+                        class="w-20 h-20 bg-gradient-to-br from-green-500/20 to-emerald-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-6 ring-1 ring-green-500/30 shadow-lg shadow-green-500/10">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                         </svg>
                     </div>
-                    <h3>You're all set!</h3>
-                    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-                        Your personalized catalog is ready to install.
-                    </p>
-
-                    <div class="url-box" id="addonUrl"></div>
-
-                    <div class="warning-box">
-                        <div class="warning-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                                <line x1="12" y1="9" x2="12" y2="13" />
-                                <line x1="12" y1="17" x2="12.01" y2="17" />
-                            </svg>
-                        </div>
-                        <div class="warning-content">
-                            <h4>Private Token</h4>
-                            <p>This URL contains your private access token. Don't share it with others.</p>
-                        </div>
+                    <h3 class="text-3xl font-bold text-white mb-2">You're all set!</h3>
+                    <p class="text-slate-400">Your personalized catalog is ready to install.</p>
                     </div>
+<div
+    class="bg-slate-950/50 rounded-xl p-5 mb-8 border border-slate-800 font-mono text-sm text-blue-400 break-all relative group">
+    <div id="addonUrl"></div>
+    <div
+        class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+        <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
+    </div>
+</div>
 
-                    <div style="display: grid; gap: 1rem;">
-                        <button id="installDesktopBtn" class="btn btn-primary">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" y1="15" x2="12" y2="3" />
-                            </svg>
-                            Install on Stremio
-                        </button>
-                        <button id="installWebBtn" class="btn btn-outline">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="10" />
-                                <line x1="2" y1="12" x2="22" y2="12" />
-                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                            </svg>
-                            Install on Web
-                        </button>
-                        <button id="copyBtn" class="btn btn-outline">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                            </svg>
-                            Copy Link
-                        </button>
-                        <button id="resetBtn" class="btn btn-outline" style="margin-top: 1rem; border: none;">Start Over</button>
-                    </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <button id="installDesktopBtn"
+                        class="col-span-full md:col-span-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3.5 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Install on Stremio
+                    </button>
+                    <button id="installWebBtn"
+                        class="col-span-full md:col-span-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-3.5 rounded-xl transition border border-slate-700 flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke-width="2"></circle>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
+                        </svg>
+                        Install on Web
+                    </button>
+                    <button id="copyBtn"
+                        class="col-span-full bg-transparent hover:bg-slate-800/50 text-slate-400 hover:text-white font-medium py-3 rounded-xl transition border border-transparent hover:border-slate-700 flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy Link
+                    </button>
                 </div>
-            </div>
+
+                <div class="text-center mt-6">
+                    <button id="resetBtn" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Start Over</button>
+                </div>
+                </div>
+                </div>
+<!-- Footer / Credits -->
+<div class="mt-12 text-center text-slate-600 text-sm">
+    <p>&copy; 2024 Watchly. All rights reserved.</p>
         </div>
+
     </div>
 
     <script src="/static/script.js"></script>
@@ -268,5 +328,4 @@
         });
     </script>
 </body>
-
 </html>

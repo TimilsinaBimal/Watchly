@@ -97,6 +97,8 @@ async def configure_page(token: str | None = None):
         html_content = html_content.replace("<!-- ANNOUNCEMENT_HTML -->", snippet, 1)
         # Inject version
         html_content = html_content.replace("<!-- APP_VERSION -->", settings.APP_VERSION, 1)
+        # Inject host
+        html_content = html_content.replace("<!-- APP_HOST -->", settings.HOST_NAME, 1)
         return HTMLResponse(content=html_content, media_type="text/html")
     return HTMLResponse(
         content="Watchly API is running. Static files not found.",
