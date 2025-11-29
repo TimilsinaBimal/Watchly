@@ -53,13 +53,17 @@ async def get_catalog(
             ),
         )
     try:
+        # Decode settings to get language
+        user_settings = decode_settings(settings_str) if settings_str else None
+        language = user_settings.language if user_settings else "en-US"
+
         # Create services with credentials
         stremio_service = StremioService(
             username=credentials.get("username") or "",
             password=credentials.get("password") or "",
             auth_key=credentials.get("authKey"),
         )
-        recommendation_service = RecommendationService(stremio_service=stremio_service)
+        recommendation_service = RecommendationService(stremio_service=stremio_service, language=language)
 
         # Handle item-based recommendations (legacy or explicit link)
         if id.startswith("tt"):
@@ -80,19 +84,13 @@ async def get_catalog(
 
         else:
             # Top Picks (watchly.rec)
-            user_settings = decode_settings(settings_str) if settings_str else None
-            if user_settings:
-                include_watched = user_settings.include_watched
-            else:
-                include_watched = credentials.get("includeWatched", False)
 
             recommendations = await recommendation_service.get_recommendations(
                 content_type=type,
                 source_items_limit=10,
                 max_results=50,
-                include_watched=include_watched,
             )
-            logger.info(f"Found {len(recommendations)} recommendations for {type} (includeWatched: {include_watched})")
+            logger.info(f"Found {len(recommendations)} recommendations for {type}")
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
         # Cache catalog responses for 4 hours

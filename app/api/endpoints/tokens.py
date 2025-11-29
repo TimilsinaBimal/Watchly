@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from redis import exceptions as redis_exceptions
 
 from app.core.config import settings
-from app.core.settings import CatalogConfig, UserSettings, encode_settings
+from app.core.settings import CatalogConfig, UserSettings, encode_settings, get_default_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
@@ -18,11 +18,8 @@ class TokenRequest(BaseModel):
     username: str | None = Field(default=None, description="Stremio username or email")
     password: str | None = Field(default=None, description="Stremio password")
     authKey: str | None = Field(default=None, description="Existing Stremio auth key")
-    includeWatched: bool = Field(
-        default=False,
-        description="If true, recommendations can include watched titles",
-    )
     catalogs: list[CatalogConfig] | None = Field(default=None, description="Optional catalog configuration")
+    language: str = Field(default="en-US", description="Language for TMDB API")
 
 
 class TokenResponse(BaseModel):
@@ -124,9 +121,22 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
             detail="Token storage is temporarily unavailable. Please try again once Redis is reachable.",
         ) from exc
 
+    # Construct Settings
+    default_settings = get_default_settings()
+
+    user_settings = UserSettings(
+        language=payload.language or default_settings.language,
+        catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
+    )
+
+    # encode_settings now includes the "settings:" prefix
+    encoded_settings = encode_settings(user_settings)
+
     if created:
         try:
-            await refresh_catalogs_for_credentials(payload_to_store, auth_key=verified_auth_key)
+            await refresh_catalogs_for_credentials(
+                payload_to_store, user_settings=user_settings, auth_key=verified_auth_key
+            )
         except Exception as exc:  # pragma: no cover - remote dependency
             logger.error(f"[{redact_token(token)}] Initial catalog refresh failed: {{}}", exc, exc_info=True)
             await token_store.delete_token(token)
@@ -134,25 +144,6 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
                 status_code=502,
                 detail="Credentials verified, but Watchly couldn't refresh your catalogs yet. Please try again.",
             ) from exc
-
-    # Construct Settings
-    user_settings = UserSettings(
-        include_watched=payload.includeWatched,
-        catalogs=payload.catalogs or [],
-    )
-    # If no catalogs provided, use default or leave empty?
-    # If empty, get_default_settings() in settings.py handles defaults if decoding fails,
-    # but here we are encoding. If list is empty, it means user didn't configure?
-    # Or should we default to all enabled?
-    if not payload.catalogs:
-        # Use default settings if not provided
-        from app.core.settings import get_default_settings
-
-        default = get_default_settings()
-        user_settings.catalogs = default.catalogs
-
-    # encode_settings now includes the "settings:" prefix
-    encoded_settings = encode_settings(user_settings)
 
     base_url = settings.HOST_NAME
     # New URL structure

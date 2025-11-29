@@ -7,6 +7,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
 from app.core.config import settings
+from app.core.settings import UserSettings
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
@@ -16,7 +17,9 @@ from app.utils import redact_token
 MAX_CONCURRENT_UPDATES = 5
 
 
-async def refresh_catalogs_for_credentials(credentials: dict[str, Any], auth_key: str | None = None) -> bool:
+async def refresh_catalogs_for_credentials(
+    credentials: dict[str, Any], user_settings: UserSettings | None = None, auth_key: str | None = None
+) -> bool:
     """Regenerate catalogs for the provided credentials and push them to Stremio."""
     stremio_service = StremioService(
         username=credentials.get("username") or "",
@@ -27,8 +30,9 @@ async def refresh_catalogs_for_credentials(credentials: dict[str, Any], auth_key
         library_items = await stremio_service.get_library_items()
         dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
 
-        catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(library_items=library_items)
-        catalogs += await dynamic_catalog_service.get_genre_based_catalogs(library_items=library_items)
+        catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
+            library_items=library_items, user_settings=user_settings
+        )
         auth_key_or_username = credentials.get("authKey") or credentials.get("username")
         redacted = redact_token(auth_key_or_username) if auth_key_or_username else "unknown"
         logger.info(f"[{redacted}] Prepared {len(catalogs)} catalogs")

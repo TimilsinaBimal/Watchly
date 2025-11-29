@@ -8,9 +8,10 @@ from app.core.config import settings
 class TMDBService:
     """Service for interacting with The Movie Database (TMDB) API."""
 
-    def __init__(self):
+    def __init__(self, language: str = "en-US"):
         self.api_key = settings.TMDB_API_KEY
         self.base_url = "https://api.themoviedb.org/3"
+        self.language = language
         # Reuse HTTP client for connection pooling and better performance
         self._client: httpx.AsyncClient | None = None
         if not self.api_key:
@@ -36,7 +37,7 @@ class TMDBService:
         if not self.api_key:
             raise RuntimeError("TMDB_API_KEY is not configured. Set the environment variable to enable TMDB requests.")
         url = f"{self.base_url}{endpoint}"
-        default_params = {"api_key": self.api_key, "language": "en-US"}
+        default_params = {"api_key": self.api_key, "language": self.language}
 
         if params:
             default_params.update(params)

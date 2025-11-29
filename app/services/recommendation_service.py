@@ -42,10 +42,10 @@ class RecommendationService:
     Implements a Hybrid Recommendation System (Similarity + Discovery).
     """
 
-    def __init__(self, stremio_service: StremioService | None = None):
+    def __init__(self, stremio_service: StremioService | None = None, language: str = "en-US"):
         if stremio_service is None:
             raise ValueError("StremioService instance is required for personalized recommendations")
-        self.tmdb_service = TMDBService()
+        self.tmdb_service = TMDBService(language=language)
         self.stremio_service = stremio_service
         self.scoring_service = ScoringService()
         self.user_profile_service = UserProfileService()
@@ -340,7 +340,6 @@ class RecommendationService:
         content_type: str | None = None,
         source_items_limit: int = 5,
         max_results: int = 20,
-        include_watched: bool = False,
     ) -> list[dict]:
         """
         Get Smart Hybrid Recommendations.

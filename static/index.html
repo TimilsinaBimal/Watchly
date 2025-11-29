@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Watchly - Personalized Stremio Recommendations</title>
-    <meta name="description" content="Stremio catalog addon that provides personalized movie and series recommendations based on your library.">
+    <meta name="description"
+        content="Stremio catalog addon that provides personalized movie and series recommendations based on your library.">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" href="/static/logo.png" type="image/png">
     <script>
@@ -52,6 +54,7 @@
         }
     </style>
 </head>
+
 <body class="min-h-screen text-slate-200 font-sans antialiased selection:bg-blue-500/30">
     <div class="max-w-3xl mx-auto px-4 py-12 md:py-20">
 
@@ -77,7 +80,7 @@
 
             <!-- Dynamic Announcement -->
             <!-- ANNOUNCEMENT_HTML -->
-            </div>
+        </div>
 
         <!-- Main Config Card -->
         <div
@@ -92,7 +95,7 @@
                     <!-- Stremio Login Button -->
                     <button type="button" id="stremioLoginBtn"
                         class="w-full bg-stremio hover:bg-stremio-hover text-white font-medium py-3.5 rounded-xl transition flex items-center justify-center gap-3 border border-stremio-border shadow-lg shadow-stremio/20">
-                        <img src="https://web.stremio.com/images/stremio_symbol.png" class="w-6 h-6" alt="Stremio">
+                        <img src="https://stremio.com/website/stremio-logo-small.png" class="w-6 h-6" alt="Stremio">
                         <span id="stremioLoginText">Login with Stremio</span>
                     </button>
 
@@ -115,7 +118,7 @@
                             </svg>
                         </div>
                     </div>
-                    </div>
+                </div>
 
                 <!-- Credentials Inputs -->
                 <div id="credentialsFields" class="space-y-5 animate-fade-in">
@@ -123,8 +126,8 @@
                         <label class="block text-sm font-medium text-slate-400">Email Address</label>
                         <div class="relative group">
                             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none"
-                                    stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207">
                                     </path>
@@ -133,14 +136,14 @@
                             <input type="email" id="username"
                                 class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
                                 placeholder="name@example.com" autocomplete="email">
-                            </div>
-                            </div>
+                        </div>
+                        </div>
                     <div class="space-y-2">
                         <label class="block text-sm font-medium text-slate-400">Password</label>
                         <div class="relative group">
                             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none"
-                                    stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
                                     </path>
@@ -152,17 +155,17 @@
                             <button type="button"
                                 class="toggle-btn absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide"
                                 data-target="password">Show</button>
-                            </div>
-                            </div>
-                            </div>
+                        </div>
+                        </div>
+                        </div>
 
                 <!-- Auth Key Input -->
                 <div id="authKeyField" class="hidden space-y-2 animate-fade-in">
                     <label class="block text-sm font-medium text-slate-400">Auth Key</label>
                     <div class="relative group">
                         <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
                                 </path>
@@ -174,57 +177,38 @@
                         <button type="button"
                             class="toggle-btn absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide"
                             data-target="authKey">Show</button>
-                        </div>
+                    </div>
                     <p class="text-xs text-slate-500 ml-1">Found in localStorage on web.strem.io. <a href="#" id="showAuthHelp"
-                            class="text-blue-400 hover:text-blue-300 transition-colors">How to find?</a></p>
+                            class="text-blue-400 hover:text-blue-300 transition-colors">How to
+                            find?</a></p>
                 </div>
 
                 <div class="border-t border-slate-800"></div>
 
-                <!-- Recommendation Source -->
+                <!-- Language Selection -->
                 <div class="space-y-4">
-                    <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Recommendation Source</label>
-                    <div class="grid grid-cols-2 gap-4">
-                        <label class="relative cursor-pointer group">
-                            <input type="radio" name="recommendationSource" value="loved" checked class="peer sr-only">
-                            <div
-                                class="h-full p-4 bg-slate-800/50 border border-slate-700 rounded-xl flex flex-col items-center justify-center gap-3 transition-all duration-300 peer-checked:bg-blue-500/10 peer-checked:border-blue-500/50 peer-checked:ring-1 peer-checked:ring-blue-500/50 group-hover:bg-slate-800 group-hover:border-slate-600">
-                                <div
-                                    class="p-2 bg-slate-800 rounded-lg text-blue-400 ring-1 ring-slate-700 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:ring-blue-500 transition-all">
-                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
-                                        </path>
-                                    </svg>
-                                </div>
-                                <span class="font-medium text-sm text-slate-300 peer-checked:text-white">Loved Content</span>
-                                </div>
-                                </label>
-                        <label class="relative cursor-pointer group">
-                            <input type="radio" name="recommendationSource" value="watched" class="peer sr-only">
-                            <div
-                                class="h-full p-4 bg-slate-800/50 border border-slate-700 rounded-xl flex flex-col items-center justify-center gap-3 transition-all duration-300 peer-checked:bg-blue-500/10 peer-checked:border-blue-500/50 peer-checked:ring-1 peer-checked:ring-blue-500/50 group-hover:bg-slate-800 group-hover:border-slate-600">
-                                <div
-                                    class="p-2 bg-slate-800 rounded-lg text-blue-400 ring-1 ring-slate-700 peer-checked:bg-blue-500 peer-checked:text-white peer-checked:ring-blue-500 transition-all">
-                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z">
-                                        </path>
-                                    </svg>
-                                </div>
-                                <span class="font-medium text-sm text-slate-300 peer-checked:text-white">All Watched</span>
-                                </div>
-                                </label>
-                                </div>
-                                </div>
+                    <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Language</label>
+                    <div class="relative">
+                        <select id="languageSelect"
+                            class="w-full appearance-none bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all cursor-pointer">
+                            <!-- Populated by JS -->
+                        </select>
+                        <div
+                            class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    </div>
 
                 <div class="border-t border-slate-800"></div>
 
                 <!-- Catalogs -->
                 <div class="space-y-4">
-                    <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Customize Catalogs</label>
+                    <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Customize
+                        Catalogs</label>
                     <div id="catalogList" class="grid gap-3">
                         <!-- Populated by JS -->
                     </div>
@@ -246,7 +230,8 @@
                     class="w-full group relative overflow-hidden bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold py-4 rounded-xl transition-all shadow-lg shadow-blue-500/20 disabled:opacity-70 disabled:cursor-not-allowed">
                     <div class="relative z-10 flex items-center justify-center gap-2">
                         <span class="btn-text">Generate My Catalog</span>
-                        <div class="loader hidden w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <div class="loader hidden w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin">
+                        </div>
                         </div>
                         <div
                             class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out">
@@ -261,20 +246,22 @@
                     <div
                         class="w-20 h-20 bg-gradient-to-br from-green-500/20 to-emerald-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-6 ring-1 ring-green-500/30 shadow-lg shadow-green-500/10">
                         <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
                         </svg>
                     </div>
                     <h3 class="text-3xl font-bold text-white mb-2">You're all set!</h3>
                     <p class="text-slate-400">Your personalized catalog is ready to install.</p>
+                </div>
+
+                <div
+                    class="bg-slate-950/50 rounded-xl p-5 mb-8 border border-slate-800 font-mono text-sm text-blue-400 break-all relative group">
+                    <div id="addonUrl"></div>
+                    <div
+                        class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                        <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
                     </div>
-<div
-    class="bg-slate-950/50 rounded-xl p-5 mb-8 border border-slate-800 font-mono text-sm text-blue-400 break-all relative group">
-    <div id="addonUrl"></div>
-    <div
-        class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
-        <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
-    </div>
-</div>
+                </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
                     <button id="installDesktopBtn"
@@ -291,7 +278,8 @@
                             <circle cx="12" cy="12" r="10" stroke-width="2"></circle>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20"></path>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
+                                d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z">
+                            </path>
                         </svg>
                         Install on Web
                     </button>
@@ -306,13 +294,15 @@
                 </div>
 
                 <div class="text-center mt-6">
-                    <button id="resetBtn" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Start Over</button>
+                    <button id="resetBtn" class="text-sm text-slate-500 hover:text-slate-300 transition-colors">Start
+                        Over</button>
                 </div>
-                </div>
-                </div>
-<!-- Footer / Credits -->
-<div class="mt-12 text-center text-slate-600 text-sm">
-    <p>&copy; 2024 Watchly. All rights reserved.</p>
+            </div>
+            </div>
+
+        <!-- Footer / Credits -->
+        <div class="mt-12 text-center text-slate-600 text-sm">
+            <p>&copy; 2024 Watchly. All rights reserved.</p>
         </div>
 
     </div>
@@ -328,4 +318,5 @@
         });
     </script>
 </body>
+
 </html>

@@ -45,15 +45,9 @@ class DynamicCatalogService:
             "extra": [],
         }
 
-    async def get_dynamic_catalogs(
-        self, library_items: list[dict], user_settings: UserSettings | None = None
-    ) -> list[dict]:
-        """
-        Generate all dynamic catalog rows.
-        """
+    async def get_theme_based_catalogs(self, library_items: list[dict]) -> list[dict]:
         catalogs = []
-
-        # 1. Build User Profile (same logic as recommendation service, but simplified)
+        # 1. Build User Profile
         # Combine loved and watched
         all_items = library_items.get("loved", []) + library_items.get("watched", [])
 
@@ -63,7 +57,7 @@ class DynamicCatalogService:
         # Score items
         scored_objects = []
 
-        # Use only recent history for freshness (Optimization shared with RecommendationService)
+        # Use only recent history for freshness
         sorted_history = sorted(unique_items.values(), key=lambda x: x.get("_mtime", ""), reverse=True)
         recent_history = sorted_history[:30]
 
@@ -72,25 +66,47 @@ class DynamicCatalogService:
             scored_objects.append(scored_obj)
 
         # 2. Generate Thematic Rows with Type-Specific Profiles
-        # Generate for Movies (using only movie history)
+        # Generate for Movies
         movie_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type="movie")
         movie_rows = await self.row_generator.generate_rows(movie_profile, "movie")
 
         for row in movie_rows:
             catalogs.append({"type": "movie", "id": row.id, "name": row.title, "extra": []})
 
-        # Generate for Series (using only series history)
+        # Generate for Series
         series_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type="series")
         series_rows = await self.row_generator.generate_rows(series_profile, "series")
 
         for row in series_rows:
             catalogs.append({"type": "series", "id": row.id, "name": row.title, "extra": []})
 
-        # 3. Add Item-Based Rows (New)
-        # For Movies
-        self._add_item_based_rows(catalogs, library_items, "movie")
-        # For Series
-        self._add_item_based_rows(catalogs, library_items, "series")
+        return catalogs
+
+    async def get_dynamic_catalogs(
+        self, library_items: list[dict], user_settings: UserSettings | None = None
+    ) -> list[dict]:
+        """
+        Generate all dynamic catalog rows.
+        """
+        print(user_settings)
+
+        include_item_based_rows = bool(
+            next((c for c in user_settings.catalogs if c.id == "watchly.item" and c.enabled), True)
+        )
+        include_theme_based_rows = bool(
+            next((c for c in user_settings.catalogs if c.id == "watchly.theme" and c.enabled), True)
+        )
+        catalogs = []
+
+        if include_theme_based_rows:
+            catalogs.extend(await self.get_theme_based_catalogs(library_items))
+
+        # 3. Add Item-Based Rows
+        if include_item_based_rows:
+            # For Movies
+            self._add_item_based_rows(catalogs, library_items, "movie")
+            # For Series
+            self._add_item_based_rows(catalogs, library_items, "series")
 
         return catalogs
 
@@ -147,10 +163,3 @@ class DynamicCatalogService:
 
         if last_watched:
             catalogs.append(self.build_catalog_entry(last_watched, "Because you watched", "watchly.item"))
-
-    async def get_watched_loved_catalogs(self, library_items: list[dict], user_settings: UserSettings | None = None):
-        """Legacy compatibility wrapper - redirects to get_dynamic_catalogs"""
-        return await self.get_dynamic_catalogs(library_items, user_settings)
-
-    async def get_genre_based_catalogs(self, library_items: list[dict], user_settings: UserSettings | None = None):
-        return []  # No longer needed separately

@@ -1,9 +1,8 @@
 // Default catalog configurations
 const defaultCatalogs = [
-    { id: 'watchly.rec', name: 'Recommended', enabled: true, description: 'Personalized recommendations based on your library' },
-    { id: 'watchly.loved', name: 'Because you Loved', enabled: true, description: 'Recommendations based on most recent item you loved' },
-    { id: 'watchly.watched', name: 'Because you Watched', enabled: true, description: 'Recommendations based on the most recent item you watched' },
-    { id: 'watchly.genre', name: 'You might also Like', enabled: true, description: 'Recommendations based on your favorite genres' },
+    { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, description: 'Personalized recommendations based on your library' },
+    { id: 'watchly.item', name: 'Because you Loved/Watched', enabled: true, description: 'Recommendations based on content you interacted with' },
+    { id: 'watchly.theme', name: 'Keyword Genre Based Dynamic Recommendations', enabled: true, description: 'Recommendations based on your favorite genres and themes' },
 ];
 
 let catalogs = [...defaultCatalogs];
@@ -23,17 +22,54 @@ const stremioLoginBtn = document.getElementById('stremioLoginBtn');
 const stremioLoginText = document.getElementById('stremioLoginText');
 const manualAuthContainer = document.getElementById('manualAuthContainer');
 const orDivider = document.getElementById('orDivider');
+const languageSelect = document.getElementById('languageSelect');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initializeAuthMethodToggle();
     initializeCatalogList();
+    initializeLanguageSelect();
     initializeFormSubmission();
     initializeSuccessActions();
     initializePasswordToggles();
     initializeAuthHelp();
     initializeStremioLogin();
 });
+
+// Language Selection
+async function initializeLanguageSelect() {
+    try {
+
+        const languagesResponse = await fetch('/api/languages');
+        if (!languagesResponse.ok) throw new Error('Failed to fetch languages');
+
+        const languages = await languagesResponse.json();
+
+        // Sort: English first, then alphabetical by English name
+        languages.sort((a, b) => {
+            if (a.iso_639_1 === 'en') return -1;
+            if (b.iso_639_1 === 'en') return 1;
+            return a.english_name.localeCompare(b.english_name);
+        });
+
+        languageSelect.innerHTML = languages.map(lang => {
+            const code = lang.iso_639_1;
+            // Construct label: "English (US)" or just "English" if name is empty?
+            // The example showed "name": "" for Bislama.
+            const label = lang.name ? lang.name : lang.english_name;
+            const fullLabel = lang.name && lang.name !== lang.english_name
+                ? `${lang.english_name} (${lang.name})`
+                : lang.english_name;
+
+            return `<option value="${code}" ${code === 'en' ? 'selected' : ''}>${fullLabel}</option>`;
+        }).join('');
+
+    } catch (err) {
+        console.error('Failed to load languages:', err);
+        // Fallback
+        languageSelect.innerHTML = '<option value="en">English</option>';
+    }
+}
 
 // Stremio Login Logic
 function initializeStremioLogin() {
@@ -47,7 +83,7 @@ function initializeStremioLogin() {
 
         // Remove query param from URL without reload
         const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-        window.history.replaceState({path: newUrl}, '', newUrl);
+        window.history.replaceState({ path: newUrl }, '', newUrl);
     }
 
     // Handle login button click
@@ -187,6 +223,10 @@ function createCatalogItem(cat, index) {
     item.className = `catalog-item group bg-slate-800 border border-slate-700 rounded-xl p-4 transition-all hover:border-slate-600 ${disabledClass}`;
     item.setAttribute('data-index', index);
 
+    // Show rename button only for the first catalog (Recommended) or all?
+    // User asked: "give option to rename recommended catalog"
+    const isRenamable = cat.id === 'watchly.rec';
+
     item.innerHTML = `
         <div class="flex items-center gap-4">
             <!-- Sort Buttons -->
@@ -211,12 +251,14 @@ function createCatalogItem(cat, index) {
                     class="catalog-name-input hidden absolute inset-0 w-full bg-slate-900 border border-blue-500 rounded-lg px-3 text-white outline-none text-sm font-medium shadow-sm"
                     value="${escapeHtml(cat.name)}"
                 >
+                ${isRenamable ? `
                 <button type="button" class="action-btn rename-btn ml-2 p-1.5 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition opacity-0 group-hover:opacity-100 focus:opacity-100" title="Rename">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                     </svg>
                 </button>
+                ` : ''}
             </div>
 
             <!-- Toggle Switch -->
@@ -228,7 +270,9 @@ function createCatalogItem(cat, index) {
         <div class="catalog-desc text-xs text-slate-500 mt-2 ml-8 pl-1">${escapeHtml(cat.description || '')}</div>
     `;
 
-    setupRenameLogic(item, cat);
+    if (isRenamable) {
+        setupRenameLogic(item, cat);
+    }
 
     // Setup switch toggle
     const switchInput = item.querySelector('.switch input');
@@ -353,7 +397,7 @@ function initializeFormSubmission() {
         const username = document.getElementById('username')?.value.trim();
         const password = document.getElementById('password')?.value;
         const authKey = document.getElementById('authKey')?.value.trim();
-        const recommendationSource = document.querySelector('input[name="recommendationSource"]:checked')?.value;
+        const language = document.getElementById('languageSelect').value;
 
         // Validation
         if (authMethodValue === 'credentials') {
@@ -377,8 +421,8 @@ function initializeFormSubmission() {
 
         // Prepare payload
         const payload = {
-            includeWatched: recommendationSource === 'watched',
-            catalogs: catalogConfigs
+            catalogs: catalogConfigs,
+            language: language
         };
 
         if (authMethodValue === 'credentials') {
@@ -438,7 +482,7 @@ function initializeSuccessActions() {
     if (installWebBtn) {
         installWebBtn.addEventListener('click', () => {
             const url = document.getElementById('addonUrl').textContent;
-            window.open(`https://www.strem.io/s/addons?addon=${encodeURIComponent(url)}`, '_blank');
+            window.open(`https://web.stremio.com/#/addons?addon=${encodeURIComponent(url)}`, '_blank');
         });
     }
 
@@ -472,9 +516,6 @@ function initializeSuccessActions() {
             successMessage.style.display = '';
             hideError();
 
-            // If user was logged in via Stremio, log them out on "Start Over" too?
-            // Or maybe just resetting the form is enough.
-            // But to be consistent with "Start Over", let's assume full reset.
             if (stremioLoginBtn.getAttribute('data-action') === 'logout') {
                 setStremioLoggedOutState();
             }

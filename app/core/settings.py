@@ -5,14 +5,14 @@ from pydantic import BaseModel
 
 
 class CatalogConfig(BaseModel):
-    id: str  # "recommended", "loved", "watched", "genre"
+    id: str  # "watchly.rec", "watchly.theme", "watchly.item"
     name: str | None = None
     enabled: bool = True
 
 
 class UserSettings(BaseModel):
-    include_watched: bool = False
     catalogs: list[CatalogConfig]
+    language: str = "en-US"
 
 
 def encode_settings(settings: UserSettings) -> str:
@@ -44,11 +44,10 @@ def decode_settings(settings_str: str) -> UserSettings:
 
 def get_default_settings() -> UserSettings:
     return UserSettings(
-        include_watched=False,
+        language="en-US",
         catalogs=[
             CatalogConfig(id="watchly.rec", name="Recommended", enabled=True),
-            CatalogConfig(id="watchly.loved", name="Because you Loved", enabled=True),
-            CatalogConfig(id="watchly.watched", name="Because you Watched", enabled=True),
-            CatalogConfig(id="watchly.genre", name="You might also Like", enabled=True),
+            CatalogConfig(id="watchly.item", name="Because you Loved/Watched", enabled=True),
+            CatalogConfig(id="watchly.theme", name="Because of Genre/Theme", enabled=True),
         ],
     )

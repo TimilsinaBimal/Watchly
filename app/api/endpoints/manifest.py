@@ -23,7 +23,7 @@ def get_base_manifest(user_settings: UserSettings | None = None):
     if rec_config and not rec_config.enabled:
         catalogs = []
     else:
-        name = rec_config.name if rec_config and rec_config.name else "Recommended"
+        name = rec_config.name if rec_config and rec_config.name else "Top Picks for You"
         catalogs = [
             {
                 "type": "movie",
@@ -74,12 +74,7 @@ async def fetch_catalogs(token: str | None = None, settings_str: str | None = No
 
     # Base catalogs are already in manifest, these are *extra* dynamic ones
     # Pass user_settings to filter/rename
-    catalogs = await dynamic_catalog_service.get_watched_loved_catalogs(
-        library_items=library_items, user_settings=user_settings
-    )
-    catalogs += await dynamic_catalog_service.get_genre_based_catalogs(
-        library_items=library_items, user_settings=user_settings
-    )
+    catalogs = await dynamic_catalog_service.get_dynamic_catalogs(library_items, user_settings)
 
     return catalogs
 
@@ -108,20 +103,12 @@ async def _manifest_handler(response: Response, token: str | None, settings_str:
             # Extract config id from catalog id for matching with user settings
             def get_config_id(catalog):
                 catalog_id = catalog.get("id", "")
-                # For item-based catalogs (watchly.loved.tt123456 or watchly.watched.tt123456), use base config id
-                if catalog_id.startswith("watchly.loved."):
-                    return "watchly.loved"
-                if catalog_id.startswith("watchly.watched."):
-                    return "watchly.watched"
-                # For genre catalogs (watchly.genre.123_456), use base config id
-                if catalog_id.startswith("watchly.genre."):
-                    return "watchly.genre"
-                # For other watchly catalogs, use as-is
-                if catalog_id.startswith("watchly."):
-                    return catalog_id
-                # For legacy tt catalogs, try to determine from context (default to loved)
-                if catalog_id.startswith("tt"):
-                    return "watchly.loved"
+                if catalog_id.startswith("watchly.theme."):
+                    return "watchly.theme"
+                if catalog_id.startswith("watchly.item."):
+                    return "watchly.item"
+                if catalog_id.startswith("watchly.rec"):
+                    return "watchly.rec"
                 return catalog_id
 
             all_catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
