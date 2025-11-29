@@ -13,6 +13,7 @@ class CatalogConfig(BaseModel):
 class UserSettings(BaseModel):
     catalogs: list[CatalogConfig]
     language: str = "en-US"
+    rpdb_key: str | None = None
 
 
 def encode_settings(settings: UserSettings) -> str:

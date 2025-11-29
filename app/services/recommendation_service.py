@@ -3,7 +3,9 @@ from urllib.parse import unquote
 
 from loguru import logger
 
+from app.core.settings import UserSettings
 from app.services.discovery import DiscoveryEngine
+from app.services.rpdb import RPDBService
 from app.services.scoring import ScoringService
 from app.services.stremio_service import StremioService
 from app.services.tmdb_service import TMDBService
@@ -42,7 +44,12 @@ class RecommendationService:
     Implements a Hybrid Recommendation System (Similarity + Discovery).
     """
 
-    def __init__(self, stremio_service: StremioService | None = None, language: str = "en-US"):
+    def __init__(
+        self,
+        stremio_service: StremioService | None = None,
+        language: str = "en-US",
+        user_settings: UserSettings | None = None,
+    ):
         if stremio_service is None:
             raise ValueError("StremioService instance is required for personalized recommendations")
         self.tmdb_service = TMDBService(language=language)
@@ -51,6 +58,7 @@ class RecommendationService:
         self.user_profile_service = UserProfileService()
         self.discovery_engine = DiscoveryEngine()
         self.per_item_limit = 20
+        self.user_settings = user_settings
 
     async def _get_exclusion_sets(self, content_type: str | None = None) -> tuple[set[str], set[int]]:
         """
@@ -164,11 +172,16 @@ class RecommendationService:
             release_date = details.get("release_date") or details.get("first_air_date") or ""
             year = release_date[:4] if release_date else None
 
+            if self.user_settings and self.user_settings.rpdb_key:
+                poster_url = RPDBService.get_poster_url(self.user_settings.rpdb_key, stremio_id)
+            else:
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+
             meta_data = {
                 "id": stremio_id,
                 "type": "series" if media_type in ["tv", "series"] else "movie",
                 "name": title,
-                "poster": f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None,
+                "poster": poster_url,
                 "background": f"https://image.tmdb.org/t/p/original{backdrop_path}" if backdrop_path else None,
                 "description": details.get("overview"),
                 "releaseInfo": year,

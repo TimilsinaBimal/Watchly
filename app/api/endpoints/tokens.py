@@ -20,6 +20,7 @@ class TokenRequest(BaseModel):
     authKey: str | None = Field(default=None, description="Existing Stremio auth key")
     catalogs: list[CatalogConfig] | None = Field(default=None, description="Optional catalog configuration")
     language: str = Field(default="en-US", description="Language for TMDB API")
+    rpdb_key: str | None = Field(default=None, description="Optional RPDB API Key")
 
 
 class TokenResponse(BaseModel):
@@ -77,6 +78,8 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     username = payload.username.strip() if payload.username else None
     password = payload.password
     auth_key = payload.authKey.strip() if payload.authKey else None
+    rpdb_key = payload.rpdb_key.strip() if payload.rpdb_key else None
+
     if auth_key and auth_key.startswith('"') and auth_key.endswith('"'):
         auth_key = auth_key[1:-1].strip()
 
@@ -100,7 +103,6 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         "username": username,
         "password": password,
         "authKey": auth_key,
-        # includeWatched is no longer stored here for new tokens
     }
 
     verified_auth_key = await _verify_credentials_or_raise(payload_to_store)
@@ -127,6 +129,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     user_settings = UserSettings(
         language=payload.language or default_settings.language,
         catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
+        rpdb_key=rpdb_key,
     )
 
     # encode_settings now includes the "settings:" prefix

@@ -23,6 +23,7 @@ const stremioLoginText = document.getElementById('stremioLoginText');
 const manualAuthContainer = document.getElementById('manualAuthContainer');
 const orDivider = document.getElementById('orDivider');
 const languageSelect = document.getElementById('languageSelect');
+const rpdbKeyInput = document.getElementById('rpdbKey');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -398,6 +399,7 @@ function initializeFormSubmission() {
         const password = document.getElementById('password')?.value;
         const authKey = document.getElementById('authKey')?.value.trim();
         const language = document.getElementById('languageSelect').value;
+        const rpdbKey = document.getElementById('rpdbKey').value.trim();
 
         // Validation
         if (authMethodValue === 'credentials') {
@@ -422,7 +424,8 @@ function initializeFormSubmission() {
         // Prepare payload
         const payload = {
             catalogs: catalogConfigs,
-            language: language
+            language: language,
+            rpdb_key: rpdbKey || null
         };
 
         if (authMethodValue === 'credentials') {

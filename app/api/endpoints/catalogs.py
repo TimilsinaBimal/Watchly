@@ -63,7 +63,9 @@ async def get_catalog(
             password=credentials.get("password") or "",
             auth_key=credentials.get("authKey"),
         )
-        recommendation_service = RecommendationService(stremio_service=stremio_service, language=language)
+        recommendation_service = RecommendationService(
+            stremio_service=stremio_service, language=language, user_settings=user_settings
+        )
 
         # Handle item-based recommendations (legacy or explicit link)
         if id.startswith("tt"):
