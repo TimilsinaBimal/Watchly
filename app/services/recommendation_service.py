@@ -255,7 +255,7 @@ class RecommendationService:
     async def get_recommendations_for_theme(self, theme_id: str, content_type: str, limit: int = 20) -> list[dict]:
         """
         Parse a dynamic theme ID and fetch recommendations.
-        Format: watchly.theme.g<id>[-<id>].k<id>[-<id>]...
+        Format: watchly.theme.g<id>[-<id>].k<id>[-<id>].ct<code].y<year>...
         """
         # Parse params from ID
         params = {}
@@ -265,16 +265,22 @@ class RecommendationService:
             if part.startswith("g"):
                 # Genres: g878-53 -> 878,53
                 genre_str = part[1:].replace("-", ",")
-                params["with_genres"] = genre_str.replace(
-                    ",", "|"
-                )  # Use OR for broader match or AND? OR is safer for rows
+                params["with_genres"] = genre_str.replace(",", "|")
             elif part.startswith("k"):
                 # Keywords: k123-456
-                kw_str = part[1:].replace("-", "|")  # Use OR for keywords usually
+                kw_str = part[1:].replace("-", "|")
                 params["with_keywords"] = kw_str
-            elif part.startswith("d"):
-                # Director: d12345
-                params["with_crew"] = part[1:]
+            elif part.startswith("ct"):
+                # Country: ctUS
+                params["with_origin_country"] = part[2:]
+            elif part.startswith("y"):
+                # Year/Decade: y1990 -> 1990-01-01 to 1999-12-31
+                try:
+                    year = int(part[1:])
+                    params["primary_release_date.gte"] = f"{year}-01-01"
+                    params["primary_release_date.lte"] = f"{year+9}-12-31"
+                except ValueError:
+                    pass
             elif part == "sort-vote":
                 params["sort_by"] = "vote_average.desc"
                 params["vote_count.gte"] = 200
@@ -376,7 +382,8 @@ class RecommendationService:
             tasks_a.append(self._fetch_recommendations_from_tmdb(source.get("_id"), source.get("type"), limit=10))
 
         # --- Candidate Set B: Profile-based Discovery ---
-        user_profile = await self.user_profile_service.build_user_profile(scored_objects)
+        # Use typed profile based on content_type
+        user_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type=content_type)
         task_b = self.discovery_engine.discover_recommendations(user_profile, content_type, limit=20)
 
         # Execute all fetches

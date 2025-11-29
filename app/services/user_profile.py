@@ -17,9 +17,12 @@ class UserProfileService:
     def __init__(self):
         self.tmdb_service = TMDBService()
 
-    async def build_user_profile(self, scored_items: list[ScoredItem]) -> UserTasteProfile:
+    async def build_user_profile(
+        self, scored_items: list[ScoredItem], content_type: str | None = None
+    ) -> UserTasteProfile:
         """
         Aggregates multiple item vectors into a single User Taste Profile.
+        Optionally filters by content_type (movie/series) to build specific profiles.
         """
         # Use internal dicts for aggregation first, then convert to Pydantic
         profile_data = {
@@ -28,9 +31,14 @@ class UserProfileService:
             "cast": defaultdict(float),
             "crew": defaultdict(float),
             "years": defaultdict(float),
+            "countries": defaultdict(float),
         }
 
         for item in scored_items:
+            # Filter by content type if specified
+            if content_type and item.item.type != content_type:
+                continue
+
             # Resolve ID
             tmdb_id = await self._resolve_tmdb_id(item.item.id)
             if not tmdb_id:
@@ -57,6 +65,7 @@ class UserProfileService:
             cast={"values": dict(profile_data["cast"])},
             crew={"values": dict(profile_data["crew"])},
             years={"values": dict(profile_data["years"])},
+            countries={"values": dict(profile_data["countries"])},
         )
 
         # Normalize all vectors to 0-1 range
@@ -98,29 +107,42 @@ class UserProfileService:
         if year:
             score += profile.years.values.get(year, 0.0) * 0.5
 
+        # Country match
+        for c_code in item_vector["countries"]:
+            score += profile.countries.values.get(c_code, 0.0) * 0.5
+
         return score
 
-    def _vectorize_item(self, meta: dict) -> dict[str, list[int] | int | None]:
+    def _vectorize_item(self, meta: dict) -> dict[str, list[int] | int | list[str] | None]:
         """
         Converts raw TMDB metadata into a sparse vector format.
-        Returns lists of IDs.
+        Returns lists of IDs or values.
         """
+        # extract keywords
+        keywords = meta.get("keywords", {}).get("keywords", [])
+        if not keywords:
+            keywords = meta.get("keywords", {}).get("results", [])
+
+        # extract countries (origin_country is list of strings like ["US", "GB"])
+        # In details response, it might be production_countries list of dicts
+        countries = []
+        if "production_countries" in meta:
+            countries = [c.get("iso_3166_1") for c in meta.get("production_countries", []) if c.get("iso_3166_1")]
+        elif "origin_country" in meta:
+            countries = meta.get("origin_country", [])
+
         vector = {
             "genres": [g["id"] for g in meta.get("genres", [])],
-            "keywords": [k["id"] for k in meta.get("keywords", {}).get("keywords", [])],
+            "keywords": [k["id"] for k in keywords],
             "cast": [],
             "crew": [],
             "year": None,
+            "countries": countries,
         }
 
         # Cast (Top 3 only to reduce noise)
-        # Note: For candidates from lists, 'credits' might not be present unless we fetch details.
-        # If passing a basic list item, these might be empty, which is fine (score will just be lower).
         cast = meta.get("credits", {}).get("cast", [])
         if not cast:
-            # Fallback to checking if 'cast' is direct property (sometimes in minimal payloads)
-            # Usually discover results don't have cast, so we might need to fetch details
-            # OR relying on genres/year for initial filter if details aren't fetched yet.
             pass
 
         vector["cast"] = [c["id"] for c in cast[:3]]
@@ -144,7 +166,7 @@ class UserProfileService:
         """Merges an item's sparse vector into the main profile with a weight."""
 
         # Weights for specific dimensions (Feature Importance)
-        DIM_WEIGHTS = {"genres": 1.0, "keywords": 1.5, "cast": 0.8, "crew": 2.0, "year": 0.5}
+        DIM_WEIGHTS = {"genres": 1.0, "keywords": 1.5, "cast": 0.8, "crew": 2.0, "year": 0.5, "countries": 0.5}
 
         for dim, ids in item_vector.items():
             dim_weight = DIM_WEIGHTS.get(dim, 1.0)

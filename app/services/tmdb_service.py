@@ -42,6 +42,7 @@ class TMDBService:
             default_params.update(params)
 
         try:
+            logger.info(f"Making request to {url} with params {default_params}")
             client = await self._get_client()
             response = await client.get(url, params=default_params)
             response.raise_for_status()

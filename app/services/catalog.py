@@ -68,17 +68,18 @@ class DynamicCatalogService:
             scored_obj = self.scoring_service.process_item(item_data)
             scored_objects.append(scored_obj)
 
-        # Generate Profile
-        user_profile = await self.user_profile_service.build_user_profile(scored_objects)
+        # 2. Generate Thematic Rows with Type-Specific Profiles
+        # Generate for Movies (using only movie history)
+        movie_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type="movie")
+        movie_rows = await self.row_generator.generate_rows(movie_profile, "movie")
 
-        # 2. Generate Thematic Rows
-        # Generate for Movies
-        movie_rows = await self.row_generator.generate_rows(user_profile, "movie")
         for row in movie_rows:
             catalogs.append({"type": "movie", "id": row.id, "name": row.title, "extra": []})
 
-        # Generate for Series
-        series_rows = await self.row_generator.generate_rows(user_profile, "series")
+        # Generate for Series (using only series history)
+        series_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type="series")
+        series_rows = await self.row_generator.generate_rows(series_profile, "series")
+
         for row in series_rows:
             catalogs.append({"type": "series", "id": row.id, "name": row.title, "extra": []})
 
@@ -88,6 +89,5 @@ class DynamicCatalogService:
         """Legacy compatibility wrapper - redirects to get_dynamic_catalogs"""
         return await self.get_dynamic_catalogs(library_items, user_settings)
 
-    # Removed old helper methods that are no longer used (get_genre_based_catalogs, _get_item_genres)
     async def get_genre_based_catalogs(self, library_items: list[dict], user_settings: UserSettings | None = None):
         return []  # No longer needed separately
