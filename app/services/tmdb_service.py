@@ -107,13 +107,13 @@ class TMDBService:
     @alru_cache(maxsize=5000)
     async def get_movie_details(self, movie_id: int) -> dict:
         """Get details of a specific movie with credits and external IDs."""
-        params = {"append_to_response": "credits,external_ids"}
+        params = {"append_to_response": "credits,external_ids,keywords"}
         return await self._make_request(f"/movie/{movie_id}", params=params)
 
     @alru_cache(maxsize=5000)
     async def get_tv_details(self, tv_id: int) -> dict:
         """Get details of a specific TV series with credits and external IDs."""
-        params = {"append_to_response": "credits,external_ids"}
+        params = {"append_to_response": "credits,external_ids,keywords"}
         return await self._make_request(f"/tv/{tv_id}", params=params)
 
     @alru_cache(maxsize=1000)
@@ -137,12 +137,14 @@ class TMDBService:
         with_genres: str | None = None,
         sort_by: str = "popularity.desc",
         page: int = 1,
+        **kwargs,
     ) -> dict:
         """Get discover content based on params."""
         media_type = "movie" if media_type == "movie" else "tv"
         params = {"page": page, "sort_by": sort_by}
         if with_genres:
             params["with_genres"] = with_genres
-
+        if kwargs:
+            params.update(kwargs)
         endpoint = f"/discover/{media_type}"
         return await self._make_request(endpoint, params=params)

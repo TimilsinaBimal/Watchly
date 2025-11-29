@@ -252,6 +252,59 @@ class RecommendationService:
         logger.info(f"Found {len(final_items)} valid recommendations for {item_id}")
         return final_items
 
+    async def get_recommendations_for_theme(self, theme_id: str, content_type: str, limit: int = 20) -> list[dict]:
+        """
+        Parse a dynamic theme ID and fetch recommendations.
+        Format: watchly.theme.g<id>[-<id>].k<id>[-<id>]...
+        """
+        # Parse params from ID
+        params = {}
+        parts = theme_id.replace("watchly.theme.", "").split(".")
+
+        for part in parts:
+            if part.startswith("g"):
+                # Genres: g878-53 -> 878,53
+                genre_str = part[1:].replace("-", ",")
+                params["with_genres"] = genre_str.replace(
+                    ",", "|"
+                )  # Use OR for broader match or AND? OR is safer for rows
+            elif part.startswith("k"):
+                # Keywords: k123-456
+                kw_str = part[1:].replace("-", "|")  # Use OR for keywords usually
+                params["with_keywords"] = kw_str
+            elif part.startswith("d"):
+                # Director: d12345
+                params["with_crew"] = part[1:]
+            elif part == "sort-vote":
+                params["sort_by"] = "vote_average.desc"
+                params["vote_count.gte"] = 200
+
+        # Default Sort
+        if "sort_by" not in params:
+            params["sort_by"] = "popularity.desc"
+
+        # Fetch
+        recommendations = await self.tmdb_service.get_discover(content_type, **params)
+        candidates = recommendations.get("results", [])
+
+        # Strict Filtering
+        watched_imdb, watched_tmdb = await self._get_exclusion_sets()
+        filtered = await self._filter_candidates(candidates, watched_imdb, watched_tmdb)
+
+        # Meta
+        meta_items = await self._fetch_metadata_for_items(filtered[: limit * 2], content_type)
+
+        final_items = []
+        for item in meta_items:
+            if item["id"] in watched_imdb:
+                continue
+            if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
+                continue
+            item.pop("_external_ids", None)
+            final_items.append(item)
+
+        return final_items[:limit]
+
     async def _fetch_recommendations_from_tmdb(self, item_id: str, media_type: str, limit: int) -> list[dict]:
         """
         Fetch recommendations from TMDB for a given TMDB ID.
@@ -385,88 +438,3 @@ class RecommendationService:
                 break
 
         return final_items
-
-    async def get_recommendations_for_genre(self, genre_id: str, media_type: str) -> list[dict]:
-        """
-        Get recommendations for a specific genre.
-        """
-        watched_imdb, watched_tmdb = await self._get_exclusion_sets()
-
-        genre_id = genre_id.replace("watchly.genre.", "")
-        genre_id_params = genre_id.replace("-", ",").replace("_", "|")
-
-        recommendations = await self.tmdb_service.get_discover(
-            media_type=media_type,
-            with_genres=genre_id_params,
-            sort_by="popularity.desc",
-        )
-        candidates = recommendations.get("results", [])
-
-        # Filter
-        candidates = await self._filter_candidates(candidates, watched_imdb, watched_tmdb)
-
-        # Meta + Final Filter
-        meta_items = await self._fetch_metadata_for_items(candidates[: self.per_item_limit * 2], media_type)
-
-        final_items = []
-        for item in meta_items:
-            if item["id"] in watched_imdb:
-                continue
-            if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
-                continue
-            item.pop("_external_ids", None)
-            final_items.append(item)
-
-        return final_items[: self.per_item_limit]
-
-    async def get_trending(self, content_type: str, limit: int = 20) -> list[dict]:
-        """
-        Get trending items for a specific content type.
-        """
-        watched_imdb, watched_tmdb = await self._get_exclusion_sets()
-
-        rec_response = await self.tmdb_service.get_discover(media_type=content_type, sort_by="popularity.desc", page=1)
-        results = rec_response.get("results", [])
-
-        # Filter quality + watched
-        quality_results = [r for r in results if r.get("vote_average", 0) >= 6.0]
-        filtered = await self._filter_candidates(quality_results, watched_imdb, watched_tmdb)
-
-        meta_items = await self._fetch_metadata_for_items(filtered[: limit * 2], content_type)
-
-        final_items = []
-        for item in meta_items:
-            if item["id"] in watched_imdb:
-                continue
-            if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
-                continue
-            item.pop("_external_ids", None)
-            final_items.append(item)
-
-        return final_items[:limit]
-
-    async def get_hidden_gems(self, content_type: str, limit: int = 20) -> list[dict]:
-        """
-        Get 'Hidden Gems': High rated items with lower popularity.
-        """
-        watched_imdb, watched_tmdb = await self._get_exclusion_sets()
-
-        rec_response = await self.tmdb_service._make_request(f"/{content_type}/top_rated", params={"page": 1})
-        results = rec_response.get("results", [])
-
-        # Filter
-        hidden_gems = [r for r in results if r.get("popularity", 1000) < 500]
-        filtered = await self._filter_candidates(hidden_gems, watched_imdb, watched_tmdb)
-
-        meta_items = await self._fetch_metadata_for_items(filtered[: limit * 2], content_type)
-
-        final_items = []
-        for item in meta_items:
-            if item["id"] in watched_imdb:
-                continue
-            if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
-                continue
-            item.pop("_external_ids", None)
-            final_items.append(item)
-
-        return final_items[:limit]

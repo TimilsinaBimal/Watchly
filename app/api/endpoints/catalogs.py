@@ -22,12 +22,6 @@ async def get_catalog(
 ):
     """
     Stremio catalog endpoint for movies and series.
-    Returns recommendations based on user's Stremio library.
-
-    Args:
-    token: Redis-backed credential token
-        type: 'movie' or 'series'
-        id: Catalog ID (e.g., 'watchly.rec')
     """
     if not token:
         raise HTTPException(
@@ -43,20 +37,12 @@ async def get_catalog(
         logger.warning(f"Invalid type: {type}")
         raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
 
-    if (
-        id not in ["watchly.rec", "watchly.trending", "watchly.gems"]
-        and not id.startswith("tt")
-        and not id.startswith("watchly.genre.")
-        and not id.startswith("watchly.loved.")
-        and not id.startswith("watchly.watched.")
-    ):
+    # Supported IDs now include dynamic themes
+    if id != "watchly.rec" and not id.startswith("tt") and not id.startswith("watchly.theme."):
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(
             status_code=400,
-            detail=(
-                "Invalid id. Use 'watchly.rec', 'watchly.trending', 'watchly.gems', "
-                "'watchly.loved.<item_id>', 'watchly.watched.<item_id>', or 'watchly.genre.<genre_id>'"
-            ),
+            detail="Invalid id. Supported: 'watchly.rec', 'watchly.theme.<params>', or specific item IDs.",
         )
     try:
         # Create services with credentials
@@ -67,37 +53,25 @@ async def get_catalog(
         )
         recommendation_service = RecommendationService(stremio_service=stremio_service)
 
-        # Handle item-based recommendations (watchly.loved.tt123456 or watchly.watched.tt123456 or legacy tt123456)
-        item_id = None
-        if id.startswith("watchly.loved."):
-            item_id = id.replace("watchly.loved.", "")
-        elif id.startswith("watchly.watched."):
-            item_id = id.replace("watchly.watched.", "")
-        elif id.startswith("tt"):
-            item_id = id
-
-        if item_id:
-            recommendations = await recommendation_service.get_recommendations_for_item(item_id=item_id)
-            logger.info(f"Found {len(recommendations)} recommendations for {item_id}")
-        elif id == "watchly.trending":
-            recommendations = await recommendation_service.get_trending(content_type=type)
-            logger.info(f"Found {len(recommendations)} trending items for {type}")
-        elif id == "watchly.gems":
-            recommendations = await recommendation_service.get_hidden_gems(content_type=type)
-            logger.info(f"Found {len(recommendations)} hidden gems for {type}")
-        elif id.startswith("watchly.genre."):
-            recommendations = await recommendation_service.get_recommendations_for_genre(genre_id=id, media_type=type)
+        # Handle item-based recommendations (legacy or explicit link)
+        if id.startswith("tt"):
+            recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
+
+        elif id.startswith("watchly.theme."):
+            recommendations = await recommendation_service.get_recommendations_for_theme(
+                theme_id=id, content_type=type
+            )
+            logger.info(f"Found {len(recommendations)} recommendations for theme {id}")
+
         else:
-            # Get recommendations based on library (Top Picks / watchly.rec)
-            # Use settings or config to determine if we should include watched items
+            # Top Picks (watchly.rec)
             user_settings = decode_settings(settings_str) if settings_str else None
             if user_settings:
                 include_watched = user_settings.include_watched
             else:
                 include_watched = credentials.get("includeWatched", False)
 
-            # Use last 10 items as sources, get 5 recommendations per source item
             recommendations = await recommendation_service.get_recommendations(
                 content_type=type,
                 source_items_limit=10,
@@ -107,7 +81,7 @@ async def get_catalog(
             logger.info(f"Found {len(recommendations)} recommendations for {type} (includeWatched: {include_watched})")
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
-        # Cache catalog responses for 4 hours (14400 seconds)
+        # Cache catalog responses for 4 hours
         response.headers["Cache-Control"] = "public, max-age=14400"
         return {"metas": recommendations}
 
