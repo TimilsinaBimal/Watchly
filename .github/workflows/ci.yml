@@ -8,6 +8,10 @@ on:
   push:
     branches:
       - main
+      - dev
+    paths:
+      - 'app/core/version.py'
+      - 'pyproject.toml'
 
 concurrency:
   group: ${{ github.head_ref || github.run_id }}
@@ -30,14 +34,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.CR_TOKEN }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Read version from version.py
+        id: get-version
+        run: |
+          # Try Python import first
+          VERSION=$(python -c "import sys; sys.path.insert(0, '.'); from app.core.version import __version__; print(__version__)" 2>/dev/null || echo "")
+          # Fallback to regex if import fails
+          if [ -z "${VERSION}" ]; then
+            VERSION=$(grep -oP '__version__\s*=\s*"\K[^"]*' app/core/version.py || echo "0.0.0")
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Read version: ${VERSION}"
+
       - name: Set Docker image tag
         id: set-tag
         run: |
-          echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          VERSION="${{ steps.get-version.outputs.VERSION }}"
+          echo "IMAGE_TAG=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building Docker image with version: ${VERSION}"
 
       - name: Build and Push Docker image
         working-directory: "./"
         run: |
           REPO_NAME="${GITHUB_REPOSITORY,,}"
-          docker build -t ghcr.io/${REPO_NAME}:${{ steps.set-tag.outputs.IMAGE_TAG }} .
-          docker push ghcr.io/${REPO_NAME}:${{ steps.set-tag.outputs.IMAGE_TAG }}
+          IMAGE_TAG="${{ steps.set-tag.outputs.IMAGE_TAG }}"
+          # Build and tag with version
+          docker build -t ghcr.io/${REPO_NAME}:${IMAGE_TAG} .
+          docker push ghcr.io/${REPO_NAME}:${IMAGE_TAG}
+          # Also tag as latest
+          docker tag ghcr.io/${REPO_NAME}:${IMAGE_TAG} ghcr.io/${REPO_NAME}:latest
+          docker push ghcr.io/${REPO_NAME}:latest

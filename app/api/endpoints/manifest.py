@@ -4,6 +4,7 @@ from fastapi.routing import APIRouter
 
 from app.core.config import settings
 from app.core.settings import UserSettings, decode_settings
+from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
 from app.utils import resolve_user_credentials
@@ -41,7 +42,7 @@ def get_base_manifest(user_settings: UserSettings | None = None):
 
     return {
         "id": settings.ADDON_ID,
-        "version": settings.APP_VERSION,
+        "version": __version__,
         "name": settings.ADDON_NAME,
         "description": "Movie and series recommendations based on your Stremio library",
         "logo": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/static/logo.png",

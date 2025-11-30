@@ -1,0 +1,68 @@
+name: Create GitHub Release
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'app/core/version.py'
+      - 'pyproject.toml'
+
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Fetch all history for all tags and branches
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install openai pydantic
+
+      - name: Run Python script to generate release notes
+        id: generate_release_notes
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Running generate_release_notes.py"
+          python scripts/generate_release_notes.py
+          echo "Script completed"
+
+      - name: Debug Outputs
+        run: |
+          echo "Version: ${{ steps.generate_release_notes.outputs.version }}"
+          echo "Release Notes: ${{ steps.generate_release_notes.outputs.release_notes }}"
+
+      - name: Create Release Tag
+        run: |
+          VERSION=$(cat $GITHUB_OUTPUT | grep "^version=" | cut -f2- -d=)
+          echo "Creating tag: $VERSION"
+          git tag $VERSION
+          git push origin $VERSION
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.generate_release_notes.outputs.version }}
+          release_name: Release ${{ steps.generate_release_notes.outputs.version }} - ${{ steps.generate_release_notes.outputs.version_name }}
+          body: ${{ steps.generate_release_notes.outputs.release_notes }}
+          draft: false
+          prerelease: ${{ github.ref == 'refs/heads/dev' }}

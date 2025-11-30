@@ -1125,6 +1125,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "redis" },
+    { name = "tomli" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1147,6 +1148,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.5.0" },
     { name = "pydantic-settings", specifier = ">=2.1.0" },
     { name = "redis", specifier = ">=5.0.1" },
+    { name = "tomli", specifier = ">=2.3.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
 ]
 

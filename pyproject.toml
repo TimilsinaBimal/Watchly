@@ -1,6 +1,6 @@
 [project]
+dynamic = ["version"]
 name = "watchly"
-version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,8 +15,12 @@ dependencies = [
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "redis>=5.0.1",
+    "tomli>=2.3.0",
     "uvicorn[standard]>=0.24.0",
 ]
+
+[tool.setuptools.dynamic]
+version = { attr = "app.core.version.__version__" }
 
 [dependency-groups]
 dev = [

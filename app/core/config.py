@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.version import __version__
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -17,7 +19,6 @@ class Settings(BaseSettings):
     PORT: int = 8000
     ADDON_ID: str = "com.bimal.watchly"
     ADDON_NAME: str = "Watchly"
-    APP_VERSION: str = "1.0.0"
     REDIS_URL: str = "redis://redis:6379/0"
     TOKEN_SALT: str = "change-me"
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire
@@ -36,3 +37,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Get version from version.py (single source of truth)
+APP_VERSION = __version__

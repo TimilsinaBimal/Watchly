@@ -12,6 +12,7 @@ from app.api.main import api_router
 from app.services.catalog_updater import BackgroundCatalogUpdater
 
 from .config import settings
+from .version import __version__
 
 # class InterceptHandler(logging.Handler):
 #     def emit(self, record):
@@ -57,7 +58,7 @@ else:
 app = FastAPI(
     title="Watchly",
     description="Stremio catalog addon for movie and series recommendations",
-    version=settings.APP_VERSION,
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -93,10 +94,10 @@ async def configure_page(token: str | None = None):
         announcement_html = (dynamic_announcement or "").strip()
         snippet = ""
         if announcement_html:
-            snippet = '\n                <div class="announcement">' f"{announcement_html}" "</div>"
+            snippet = f'\n                <div class="announcement">{announcement_html}</div>'
         html_content = html_content.replace("<!-- ANNOUNCEMENT_HTML -->", snippet, 1)
         # Inject version
-        html_content = html_content.replace("<!-- APP_VERSION -->", settings.APP_VERSION, 1)
+        html_content = html_content.replace("<!-- APP_VERSION -->", __version__, 1)
         # Inject host
         html_content = html_content.replace("<!-- APP_HOST -->", settings.HOST_NAME, 1)
         return HTMLResponse(content=html_content, media_type="text/html")
