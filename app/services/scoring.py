@@ -9,12 +9,13 @@ class ScoringService:
     It consumes raw dictionary data or Pydantic models and returns enriched ScoredItems.
     """
 
-    # TODO: Handle this for series
+    # TODO: Make this a bit more complex based on more parameters.
+    # Rewatch, How many times? Watched but duration?? What if user stopped watching in middle?
 
     # Weights for different factors
-    WEIGHT_WATCH_PERCENTAGE = 0.35
-    WEIGHT_REWATCH = 0.15
-    WEIGHT_RECENCY = 0.15
+    WEIGHT_WATCH_PERCENTAGE = 0.25
+    WEIGHT_REWATCH = 0.20
+    WEIGHT_RECENCY = 0.20
     WEIGHT_EXPLICIT_RATING = 0.3
     ADDED_TO_LIBRARY_WEIGHT = 0.05
 

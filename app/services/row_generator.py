@@ -3,7 +3,8 @@ import random
 from pydantic import BaseModel
 
 from app.models.profile import UserTasteProfile
-from app.services.tmdb.genre import movie_genres, series_genres
+from app.services.tmdb.countries import COUNTRY_ADJECTIVES
+from app.services.tmdb.genre import GENRE_ADJECTIVES, movie_genres, series_genres
 from app.services.tmdb_service import TMDBService
 
 
@@ -32,45 +33,6 @@ class RowGeneratorService:
     def __init__(self, tmdb_service: TMDBService | None = None):
         self.tmdb_service = tmdb_service or TMDBService()
 
-    # Adjectives to spice up titles based on genres
-    GENRE_ADJECTIVES = {
-        28: ["Adrenaline-Pumping", "Explosive", "Hard-Hitting"],  # Action
-        12: ["Epic", "Globe-Trotting", "Daring"],  # Adventure
-        878: ["Mind-Bending", "Futuristic", "Dystopian"],  # Sci-Fi
-        27: ["Bone-Chilling", "Nightmarish", "Terrifying"],  # Horror
-        53: ["Edge-of-your-Seat", "Suspenseful", "Slow-Burn"],  # Thriller
-        10749: ["Heartwarming", "Passionate", "Bittersweet"],  # Romance
-        35: ["Laugh-Out-Loud", "Witty", "Feel-Good"],  # Comedy
-        18: ["Critically Acclaimed", "Powerful", "Emotional"],  # Drama
-        14: ["Magical", "Otherworldly", "Enchanting"],  # Fantasy
-        9648: ["Mysterious", "Puzzle-Box", "Twisted"],  # Mystery
-        80: ["Gritty", "Noir", "Underworld"],  # Crime
-    }
-
-    # Country Name Map
-    COUNTRY_NAMES = {
-        "US": "American",
-        "GB": "British",
-        "FR": "French",
-        "DE": "French",
-        "JP": "Japanese",
-        "KR": "Korean",
-        "IN": "Indian",
-        "CN": "Chinese",
-        "ES": "Spanish",
-        "IT": "Spanish",
-        "CA": "Canadian",
-        "AU": "Australian",
-        "HK": "Hong Kong",
-        "TW": "Hong Kong",
-        "RU": "Russian",
-        "BR": "Brazilian",
-        "MX": "Brazilian",
-        "SE": "Swedish",
-        "DK": "Swedish",
-        "NO": "Danish",
-    }
-
     async def generate_rows(self, profile: UserTasteProfile, content_type: str = "movie") -> list[RowDefinition]:
         """
         Generate a diverse set of 3-5 thematic rows.
@@ -91,12 +53,15 @@ class RowGeneratorService:
             return genre_map.get(gid, "Movies")
 
         def get_cname(code):
-            return self.COUNTRY_NAMES.get(code, "")
+            adjectives = COUNTRY_ADJECTIVES.get(code, [])
+            if adjectives:
+                return random.choice(adjectives)
+            return ""
 
         # Strategy 1: Genre + Mood (Adjective)
         if top_genres:
             g_id = top_genres[0][0]
-            adj = random.choice(self.GENRE_ADJECTIVES.get(g_id, ["Essential"]))
+            adj = random.choice(GENRE_ADJECTIVES.get(g_id, ["Essential"]))
             rows.append(
                 RowDefinition(
                     title=f"{adj} {get_gname(g_id)}",

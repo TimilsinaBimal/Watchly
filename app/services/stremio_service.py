@@ -1,6 +1,7 @@
 import asyncio
 
 import httpx
+from async_lru import alru_cache
 from loguru import logger
 
 from app.core.config import settings
@@ -8,10 +9,6 @@ from app.core.config import settings
 BASE_CATALOGS = [
     {"type": "movie", "id": "watchly.rec", "name": "Top Picks for You", "extra": []},
     {"type": "series", "id": "watchly.rec", "name": "Top Picks for You", "extra": []},
-    {"type": "movie", "id": "watchly.trending", "name": "Trending Movies", "extra": []},
-    {"type": "series", "id": "watchly.trending", "name": "Trending Series", "extra": []},
-    {"type": "movie", "id": "watchly.gems", "name": "Hidden Gems", "extra": []},
-    {"type": "series", "id": "watchly.gems", "name": "Hidden Gems", "extra": []},
 ]
 
 
@@ -136,6 +133,24 @@ class StremioService:
                 exc_info=True,
             )
             return False, False
+
+    @alru_cache(maxsize=1000, ttl=3600)
+    async def get_loved_items(self, auth_token: str, media_type: str) -> list[dict]:
+        async with httpx.AsyncClient() as client:
+            url = f"https://likes.stremio.com/addons/loved/movies-shows/{auth_token}/catalog/{media_type}/stremio-loved-{media_type.lower()}.json"  # noqa: E501
+            response = await client.get(url)
+            response.raise_for_status()
+            metas = response.json().get("metas", [])
+            return [meta.get("id") for meta in metas]
+
+    @alru_cache(maxsize=1000, ttl=3600)
+    async def get_liked_items(self, auth_token: str, media_type: str) -> list[dict]:
+        async with httpx.AsyncClient() as client:
+            url = f"https://likes.stremio.com/addons/liked/movies-shows/{auth_token}/catalog/{media_type}/stremio-liked-{media_type.lower()}.json"  # noqa: E501
+            response = await client.get(url)
+            response.raise_for_status()
+            metas = response.json().get("metas", [])
+            return [meta.get("id") for meta in metas]
 
     async def get_library_items(self) -> dict[str, list[dict]]:
         """

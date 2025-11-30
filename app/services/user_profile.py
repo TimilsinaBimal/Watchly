@@ -4,6 +4,14 @@ from app.models.profile import UserTasteProfile
 from app.models.scoring import ScoredItem
 from app.services.tmdb_service import TMDBService
 
+# TODO: Make these weights dynamic based on user's preferences.
+GENRES_WEIGHT = 1.0
+KEYWORDS_WEIGHT = 2.0
+CAST_WEIGHT = 1.2
+CREW_WEIGHT = 1.2
+YEAR_WEIGHT = 0.5
+COUNTRIES_WEIGHT = 0.5
+
 
 class UserProfileService:
     """
@@ -88,28 +96,28 @@ class UserProfileService:
 
         # Genres match
         for g_id in item_vector["genres"]:
-            score += profile.genres.values.get(g_id, 0.0) * 1.0
+            score += profile.genres.values.get(g_id, 0.0) * GENRES_WEIGHT
 
         # Keywords match (Higher weight usually)
         for k_id in item_vector["keywords"]:
-            score += profile.keywords.values.get(k_id, 0.0) * 1.5
+            score += profile.keywords.values.get(k_id, 0.0) * KEYWORDS_WEIGHT
 
         # Cast match
         for c_id in item_vector["cast"]:
-            score += profile.cast.values.get(c_id, 0.0) * 0.8
+            score += profile.cast.values.get(c_id, 0.0) * CAST_WEIGHT
 
         # Crew/Director match
         for cr_id in item_vector["crew"]:
-            score += profile.crew.values.get(cr_id, 0.0) * 2.0
+            score += profile.crew.values.get(cr_id, 0.0) * CREW_WEIGHT
 
         # Year match (Bucket)
         year = item_vector["year"]
         if year:
-            score += profile.years.values.get(year, 0.0) * 0.5
+            score += profile.years.values.get(year, 0.0) * YEAR_WEIGHT
 
         # Country match
         for c_code in item_vector["countries"]:
-            score += profile.countries.values.get(c_code, 0.0) * 0.5
+            score += profile.countries.values.get(c_code, 0.0) * COUNTRIES_WEIGHT
 
         return score
 
@@ -166,7 +174,14 @@ class UserProfileService:
         """Merges an item's sparse vector into the main profile with a weight."""
 
         # Weights for specific dimensions (Feature Importance)
-        DIM_WEIGHTS = {"genres": 1.0, "keywords": 1.5, "cast": 0.8, "crew": 2.0, "year": 0.5, "countries": 0.5}
+        DIM_WEIGHTS = {
+            "genres": GENRES_WEIGHT,
+            "keywords": KEYWORDS_WEIGHT,
+            "cast": CAST_WEIGHT,
+            "crew": CREW_WEIGHT,
+            "year": YEAR_WEIGHT,
+            "countries": COUNTRIES_WEIGHT,
+        }
 
         for dim, ids in item_vector.items():
             dim_weight = DIM_WEIGHTS.get(dim, 1.0)

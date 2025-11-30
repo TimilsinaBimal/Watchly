@@ -155,10 +155,13 @@ class RecommendationService:
             # Extract IMDB ID from external_ids
             external_ids = details.get("external_ids", {})
             imdb_id = external_ids.get("imdb_id")
-            tmdb_id = details.get("id")
+            # tmdb_id = details.get("id")
 
             # Prefer IMDB ID, fallback to TMDB ID
-            stremio_id = imdb_id if imdb_id else f"tmdb:{tmdb_id}"
+            if imdb_id:
+                stremio_id = imdb_id
+            else:  # skip content if imdb id is not available
+                continue
 
             # Construct Stremio meta object
             title = details.get("title") or details.get("name")
@@ -179,6 +182,7 @@ class RecommendationService:
 
             meta_data = {
                 "id": stremio_id,
+                "imdb_id": stremio_id,
                 "type": "series" if media_type in ["tv", "series"] else "movie",
                 "name": title,
                 "poster": poster_url,
