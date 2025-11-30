@@ -57,12 +57,13 @@ def get_merge_commit_details(commit_hash):
     return []
 
 
-def get_commits_between_releases(last_release, branch):
-    """Get commits since the last release tag for release notes generation."""
+def get_commits_between_releases(last_release, current_tag):
+    """Get commits between two tags for release notes generation."""
     if last_release:
-        range_spec = f"{last_release}..{branch}"
+        range_spec = f"{last_release}..{current_tag}"
     else:
-        range_spec = branch
+        # If no previous release, get all commits up to current tag
+        range_spec = current_tag
     print(f"Getting commits for release notes: {range_spec}")
 
     # Get merge commits with their hashes (these are the important ones in our flow)
@@ -131,27 +132,77 @@ class ReleaseNotes(BaseModel):
 
 
 def get_version_from_version_py() -> str:
-    """Read version from app/core/version.py."""
+    """Read version from app/core/version.py using regex (avoids import dependencies)."""
     try:
-        from app.core.version import __version__
-
-        print(f"Read version from app/core/version.py: {__version__}")
-        return __version__
-    except ImportError as e:
-        print(f"Error importing version from app.core.version: {e}")
-        # Fallback: try to read the file directly
-        try:
-            version_path = project_root / "app" / "core" / "version.py"
-            if version_path.exists():
-                content = version_path.read_text()
-                match = re.search(r'__version__\s*=\s*"([^"]*)"', content)
-                if match:
-                    version = match.group(1)
-                    print(f"Read version from version.py (regex fallback): {version}")
-                    return version
-        except Exception as e2:
-            print(f"Error reading version.py: {e2}")
+        version_path = project_root / "app" / "core" / "version.py"
+        if version_path.exists():
+            content = version_path.read_text()
+            match = re.search(r'__version__\s*=\s*"([^"]*)"', content)
+            if match:
+                version = match.group(1)
+                print(f"Read version from version.py: {version}")
+                return version
+        print("Warning: version.py not found")
         return "0.0.0"
+    except Exception as e:
+        print(f"Error reading version.py: {e}")
+        return "0.0.0"
+
+
+def is_prerelease(version: str) -> bool:
+    """Check if version is a pre-release (contains alpha, beta, rc, etc.)."""
+    prerelease_patterns = [r"alpha", r"beta", r"rc", r"pre", r"dev"]
+    version_lower = version.lower()
+    return any(re.search(pattern, version_lower) for pattern in prerelease_patterns)
+
+
+def get_all_tags() -> list[str]:
+    """Get all tags sorted by version."""
+    try:
+        result = subprocess.run(
+            ["git", "tag", "--sort=-version:refname"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            tags = [tag.strip() for tag in result.stdout.strip().split("\n") if tag.strip()]
+            return tags
+        return []
+    except Exception as e:
+        print(f"Error getting tags: {e}")
+        return []
+
+
+def get_previous_release_tag(current_version: str) -> str | None:
+    """Get the appropriate previous release tag based on pre-release logic."""
+    all_tags = get_all_tags()
+    current_is_prerelease = is_prerelease(current_version)
+
+    if not all_tags:
+        return None
+
+    # Find current tag in the list
+    try:
+        current_index = all_tags.index(current_version)
+    except ValueError:
+        # Current version not in tags, use the first tag as reference
+        current_index = 0
+
+    # If current is a pre-release, find previous pre-release or stable
+    # If current is stable, find previous stable (skip pre-releases)
+    for i in range(current_index + 1, len(all_tags)):
+        tag = all_tags[i]
+        tag_is_prerelease = is_prerelease(tag)
+
+        if current_is_prerelease:
+            # For pre-releases, include any previous release (stable or pre-release)
+            return tag
+        else:
+            # For stable releases, only include previous stable releases
+            if not tag_is_prerelease:
+                return tag
+
+    return None
 
 
 def generate_release_notes(commits, last_release_tag):
@@ -246,15 +297,36 @@ def write_to_github_output(name, value):
 
 
 def main():
-    branch_name = get_current_branch()
-    print(f"Current Branch Name: {branch_name}")
+    # Get current tag from environment (set by GitHub Actions) or from git
+    current_tag = os.environ.get("CURRENT_TAG")
+    if not current_tag:
+        # Try to get from git ref
+        try:
+            result = subprocess.run(
+                ["git", "describe", "--tags", "--exact-match", "HEAD"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                current_tag = result.stdout.strip()
+        except Exception:
+            pass
 
-    last_release_tag = get_last_release_tag()
-    print(f"Latest Release Tag: {last_release_tag}")
-    commits = get_commits_between_releases(last_release_tag, branch_name)
+    if not current_tag:
+        # Fallback: read from version.py
+        current_tag = get_version_from_version_py()
+        print(f"Warning: No tag found, using version from version.py: {current_tag}")
 
-    # Read version from version.py (single source of truth)
-    version = get_version_from_version_py()
+    print(f"Current Tag/Version: {current_tag}")
+
+    # Get the appropriate previous release based on pre-release logic
+    last_release_tag = get_previous_release_tag(current_tag)
+    print(f"Previous Release Tag: {last_release_tag}")
+
+    commits = get_commits_between_releases(last_release_tag, current_tag)
+
+    # Use current tag as version
+    version = current_tag
 
     if commits:
         print(f"Commits for release notes: {commits}")

@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout code
@@ -69,3 +69,15 @@ jobs:
           # Also tag as latest
           docker tag ghcr.io/${REPO_NAME}:${IMAGE_TAG} ghcr.io/${REPO_NAME}:latest
           docker push ghcr.io/${REPO_NAME}:latest
+
+      - name: Create and Push Git Tag
+        run: |
+          VERSION="${{ steps.get-version.outputs.VERSION }}"
+          # Check if tag already exists
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists, skipping"
+          else
+            echo "Creating tag: $VERSION"
+            git tag $VERSION
+            git push origin $VERSION
+          fi
