@@ -3,6 +3,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from traceback import print_exc
 
 from openai import OpenAI
 from pydantic import BaseModel
@@ -236,6 +237,7 @@ def generate_release_notes(commits, last_release_tag):
         return release_notes, version_name
     except Exception as e:
         print(f"Error generating release notes with LLM: {e}")
+        print_exc()
 
     try:
         commit_list = commits.split("\n")

@@ -532,6 +532,74 @@ function initializeSuccessActions() {
             }
         });
     }
+
+    const deleteAccountBtn = document.getElementById('deleteAccountBtn');
+    if (deleteAccountBtn) {
+        deleteAccountBtn.addEventListener('click', async () => {
+            if (!confirm('Are you sure you want to delete your settings? This will remove your credentials from the server and stop your addons from working.')) {
+                return;
+            }
+
+            const authMethodValue = authMethod.value;
+            const username = document.getElementById('username')?.value.trim();
+            const password = document.getElementById('password')?.value;
+            const authKey = document.getElementById('authKey')?.value.trim();
+
+            // Validation
+            if (authMethodValue === 'credentials') {
+                if (!username || !password) {
+                    showError('Please provide both email and password to delete your account.');
+                    return;
+                }
+            } else {
+                if (!authKey) {
+                    showError('Please provide your Stremio auth key to delete your account.');
+                    return;
+                }
+            }
+
+            const payload = {};
+            if (authMethodValue === 'credentials') {
+                payload.username = username;
+                payload.password = password;
+            } else {
+                payload.authKey = authKey;
+            }
+
+            setLoading(true);
+            hideError();
+
+            try {
+                const response = await fetch('/tokens/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to delete account');
+                }
+
+                alert('Settings deleted successfully.');
+                // Clear form
+                configForm.reset();
+                if (stremioLoginBtn.getAttribute('data-action') === 'logout') {
+                    setStremioLoggedOutState();
+                }
+                catalogs = [...defaultCatalogs];
+                renderCatalogList();
+
+            } catch (err) {
+                showError(err.message || 'Failed to delete account. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        });
+    }
 }
 
 // UI Helpers

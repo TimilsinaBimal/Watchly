@@ -159,3 +159,45 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         manifestUrl=manifest_url,
         expiresInSeconds=expires_in,
     )
+
+
+@router.post("/delete", status_code=200)
+async def delete_token(payload: TokenRequest):
+    """Delete a token based on provided credentials."""
+    username = payload.username.strip() if payload.username else None
+    password = payload.password
+    auth_key = payload.authKey.strip() if payload.authKey else None
+
+    if auth_key and auth_key.startswith('"') and auth_key.endswith('"'):
+        auth_key = auth_key[1:-1].strip()
+
+    if not auth_key and not (username and password):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either a Stremio auth key or both username and password to delete account.",
+        )
+
+    payload_to_derive = {
+        "username": username,
+        "password": password,
+        "authKey": auth_key,
+    }
+
+    try:
+        # We don't verify credentials with Stremio here, we just check if we have a token for them.
+        # If the user provides wrong credentials, we'll derive a wrong token, which won't exist in Redis.
+        # That's fine, we can just say "deleted" or "not found".
+        # However, to be nice, we might want to say "Settings deleted" even if they didn't exist.
+        # But if we want to be strict, we could check existence.
+        # Let's just try to delete.
+
+        token = token_store.derive_token(payload_to_derive)
+        await token_store.delete_token(token)
+        logger.info(f"[{redact_token(token)}] Token deleted (if existed)")
+        return {"detail": "Settings deleted successfully"}
+    except (redis_exceptions.RedisError, OSError) as exc:
+        logger.error("Token deletion failed: {}", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Token deletion is temporarily unavailable. Please try again once Redis is reachable.",
+        ) from exc

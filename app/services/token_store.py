@@ -80,6 +80,11 @@ class TokenStore:
         secret = settings.TOKEN_SALT.encode("utf-8")
         return hmac.new(secret, serialized.encode("utf-8"), hashlib.sha256).hexdigest()
 
+    def derive_token(self, payload: dict[str, Any]) -> str:
+        """Public wrapper to derive token from payload."""
+        normalized = self._normalize_payload(payload)
+        return self._derive_token_value(normalized)
+
     async def store_payload(self, payload: dict[str, Any]) -> tuple[str, bool]:
         self._ensure_secure_salt()
         normalized = self._normalize_payload(payload)
