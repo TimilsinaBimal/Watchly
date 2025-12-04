@@ -194,8 +194,8 @@ class StremioService:
             ]
             logger.info(f"Filtered {len(watched_items)} watched library items")
 
-            # Sort watched items by modification time (most recent first)
-            watched_items.sort(key=lambda x: x.get("_mtime", ""), reverse=True)
+            # Sort watched items by watched time (most recent first)
+            watched_items.sort(key=lambda x: x.get("state", {}).get("lastWatched", ""), reverse=True)
 
             #  is_loved only until we find 10 movies and 10 series
             loved_items = []
@@ -307,3 +307,11 @@ class StremioService:
                 addon["manifest"]["catalogs"] = catalogs
                 break
         return await self.update_addon(addons, auth_key)
+
+    async def is_addon_installed(self, auth_key: str | None = None):
+        auth_key = auth_key or await self.get_auth_key()
+        addons = await self.get_addons(auth_key)
+        for addon in addons:
+            if addon.get("manifest", {}).get("id") == settings.ADDON_ID:
+                return True
+        return False

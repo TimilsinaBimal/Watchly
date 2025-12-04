@@ -138,9 +138,12 @@ class TokenStore:
             logger.warning("Failed to decrypt or decode cached payload for token. Key might have changed.")
             return None
 
-    async def delete_token(self, token: str) -> None:
-        hashed = self._hash_token(token)
-        key = self._format_key(hashed)
+    async def delete_token(self, token: str = None, key: str = None) -> None:
+        if not token and not key:
+            raise ValueError("Either token or key must be provided")
+        if token:
+            hashed = self._hash_token(token)
+            key = self._format_key(hashed)
         client = await self._get_client()
         await client.delete(key)
 

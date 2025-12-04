@@ -142,7 +142,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
             )
         except Exception as exc:  # pragma: no cover - remote dependency
             logger.error(f"[{redact_token(token)}] Initial catalog refresh failed: {{}}", exc, exc_info=True)
-            await token_store.delete_token(token)
+            await token_store.delete_token(token=token)
             raise HTTPException(
                 status_code=502,
                 detail="Credentials verified, but Watchly couldn't refresh your catalogs yet. Please try again.",

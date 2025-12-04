@@ -87,7 +87,8 @@ if static_dir.exists():
 async def configure_page(token: str | None = None):
     index_path = static_dir / "index.html"
     if index_path.exists():
-        html_content = index_path.read_text(encoding="utf-8")
+        with open(index_path, encoding="utf-8") as file:
+            html_content = file.read()
         dynamic_announcement = os.getenv("ANNOUNCEMENT_HTML")
         if dynamic_announcement is None:
             dynamic_announcement = settings.ANNOUNCEMENT_HTML
