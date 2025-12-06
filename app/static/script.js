@@ -680,10 +680,7 @@ function showError(target, message) {
             errEl.classList.remove('hidden');
         } else { showToast(message, 'error'); }
     } else if (target === 'stremioAuthSection') {
-        // Fallback since we don't have a specific error div anymore
         showToast(message, 'error');
-        // Or highlight fields
-        document.getElementById('stremioManualFields').classList.remove('hidden');
     } else {
         const el = document.getElementById(target);
         if (el) {
