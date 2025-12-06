@@ -1,8 +1,9 @@
 // Default catalog configurations
 const defaultCatalogs = [
     { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, description: 'Personalized recommendations based on your library' },
-    { id: 'watchly.item', name: 'Because you Loved/Watched', enabled: true, description: 'Recommendations based on content you interacted with' },
-    { id: 'watchly.theme', name: 'Keyword Genre Based Dynamic Recommendations', enabled: true, description: 'Recommendations based on your favorite genres and themes' },
+    { id: 'watchly.loved', name: 'More like what you loved', enabled: true, description: 'Recommendations similar to content you explicitly loved' },
+    { id: 'watchly.watched', name: 'Because you watched', enabled: true, description: 'Recommendations based on your recent watch history' },
+    { id: 'watchly.theme', name: 'Genre & Theme Collections', enabled: true, description: 'Dynamic collections based on your favorite genres' },
 ];
 
 let catalogs = JSON.parse(JSON.stringify(defaultCatalogs));
@@ -578,7 +579,7 @@ function createCatalogItem(cat, index) {
     item.className = `catalog-item group bg-slate-900 border border-slate-700 rounded-xl p-4 transition-all hover:border-slate-600 ${disabledClass}`;
     item.setAttribute('data-index', index);
 
-    const isRenamable = cat.id === 'watchly.rec';
+    const isRenamable = true;
     item.innerHTML = `
         <div class="flex items-start gap-3 sm:items-center sm:gap-4">
             <div class="sort-buttons flex flex-col gap-1 flex-shrink-0 mt-0.5 sm:mt-0">

@@ -1,4 +1,4 @@
-from app.core.settings import UserSettings
+from app.core.settings import CatalogConfig, UserSettings
 from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
 from app.services.stremio_service import StremioService
@@ -26,7 +26,7 @@ class DynamicCatalogService:
     def build_catalog_entry(self, item, label, config_id):
         item_id = item.get("_id", "")
         # Use watchly.{config_id}.{item_id} format for better organization
-        if config_id == "watchly.item":
+        if config_id in ["watchly.item", "watchly.loved", "watchly.watched"]:
             # New Item-based catalog format
             catalog_id = f"{config_id}.{item_id}"
         elif item_id.startswith("tt") and config_id in ["watchly.loved", "watchly.watched"]:
@@ -103,34 +103,37 @@ class DynamicCatalogService:
         """
         Generate all dynamic catalog rows.
         """
+        catalogs = []
         lang = user_settings.language if user_settings else "en-US"
 
-        include_item_based_rows = bool(
-            next((c for c in user_settings.catalogs if c.id == "watchly.item" and c.enabled), True)
-        )
-        include_theme_based_rows = bool(
-            next((c for c in user_settings.catalogs if c.id == "watchly.theme" and c.enabled), True)
-        )
-        catalogs = []
-
-        if include_theme_based_rows:
+        # Theme Based
+        theme_config = next((c for c in user_settings.catalogs if c.id == "watchly.theme"), None)
+        if not theme_config or theme_config.enabled:
             catalogs.extend(await self.get_theme_based_catalogs(library_items, user_settings))
 
-        # 3. Add Item-Based Rows
-        if include_item_based_rows:
-            # For Movies
-            await self._add_item_based_rows(catalogs, library_items, "movie", lang)
-            # For Series
-            await self._add_item_based_rows(catalogs, library_items, "series", lang)
+        # Item Based (Loved/Watched)
+        loved_config = next((c for c in user_settings.catalogs if c.id == "watchly.loved"), None)
+        watched_config = next((c for c in user_settings.catalogs if c.id == "watchly.watched"), None)
+
+        # Fallback for old settings (watchly.item)
+        if not loved_config and not watched_config:
+            old_config = next((c for c in user_settings.catalogs if c.id == "watchly.item"), None)
+            if old_config and old_config.enabled:
+                # Create temporary configs
+                loved_config = CatalogConfig(id="watchly.loved", name=None, enabled=True)
+                watched_config = CatalogConfig(id="watchly.watched", name=None, enabled=True)
+
+        # Movies
+        await self._add_item_based_rows(catalogs, library_items, "movie", lang, loved_config, watched_config)
+        # Series
+        await self._add_item_based_rows(catalogs, library_items, "series", lang, loved_config, watched_config)
 
         return catalogs
 
-    async def _add_item_based_rows(self, catalogs: list, library_items: dict, content_type: str, language: str):
+    async def _add_item_based_rows(
+        self, catalogs: list, library_items: dict, content_type: str, language: str, loved_config, watched_config
+    ):
         """Helper to add 'Because you watched' and 'More like' rows."""
-
-        # Translate labels
-        label_more_like = await translation_service.translate("More like", language)
-        label_bc_watched = await translation_service.translate("Because you watched", language)
 
         # Helper to parse date
         def get_date(item):
@@ -154,24 +157,35 @@ class DynamicCatalogService:
             return datetime.datetime.min.replace(tzinfo=datetime.UTC)
 
         # 1. More Like <Loved Item>
-        loved = [i for i in library_items.get("loved", []) if i.get("type") == content_type]
-        loved.sort(key=get_date, reverse=True)
+        last_loved = None  # Initialize for the watched check
+        if loved_config and loved_config.enabled:
+            loved = [i for i in library_items.get("loved", []) if i.get("type") == content_type]
+            loved.sort(key=get_date, reverse=True)
 
-        last_loved = loved[0] if loved else None
-        if last_loved:
-            catalogs.append(self.build_catalog_entry(last_loved, label_more_like, "watchly.item"))
+            last_loved = loved[0] if loved else None
+            if last_loved:
+                label = loved_config.name
+                if not label or label == "More like what you loved":  # Default
+                    label = await translation_service.translate("More like what you loved", language)
+
+                catalogs.append(self.build_catalog_entry(last_loved, label, "watchly.loved"))
 
         # 2. Because you watched <Watched Item>
-        watched = [i for i in library_items.get("watched", []) if i.get("type") == content_type]
-        watched.sort(key=get_date, reverse=True)
+        if watched_config and watched_config.enabled:
+            watched = [i for i in library_items.get("watched", []) if i.get("type") == content_type]
+            watched.sort(key=get_date, reverse=True)
 
-        last_watched = None
-        for item in watched:
-            # Avoid duplicate row if it's the same item as 'More like'
-            if last_loved and item.get("_id") == last_loved.get("_id"):
-                continue
-            last_watched = item
-            break
+            last_watched = None
+            for item in watched:
+                # Avoid duplicate row if it's the same item as 'More like'
+                if last_loved and item.get("_id") == last_loved.get("_id"):
+                    continue
+                last_watched = item
+                break
 
-        if last_watched:
-            catalogs.append(self.build_catalog_entry(last_watched, label_bc_watched, "watchly.item"))
+            if last_watched:
+                label = watched_config.name
+                if not label or label == "Because you watched":
+                    label = await translation_service.translate("Because you watched", language)
+
+                catalogs.append(self.build_catalog_entry(last_watched, label, "watchly.watched"))

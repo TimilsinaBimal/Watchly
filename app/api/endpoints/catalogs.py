@@ -43,6 +43,8 @@ async def get_catalog(
         and not id.startswith("tt")
         and not id.startswith("watchly.theme.")
         and not id.startswith("watchly.item.")
+        and not id.startswith("watchly.loved.")
+        and not id.startswith("watchly.watched.")
     ):
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(
@@ -72,9 +74,9 @@ async def get_catalog(
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
 
-        elif id.startswith("watchly.item."):
+        elif id.startswith("watchly.item.") or id.startswith("watchly.loved.") or id.startswith("watchly.watched."):
             # Extract actual item ID (tt... or tmdb:...)
-            item_id = id.replace("watchly.item.", "")
+            item_id = id.replace("watchly.item.", "").replace("watchly.loved.", "").replace("watchly.watched.", "")
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=item_id)
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
 
@@ -107,8 +109,7 @@ async def get_catalog(
 
 
 @router.get("/{token}/catalog/update")
-@router.get("/{settings_str}/{token}/catalog/update")
-async def update_catalogs(token: str, settings_str: str | None = None):
+async def update_catalogs(token: str):
     """
     Update the catalogs for the addon. This is a manual endpoint to update the catalogs.
     """
