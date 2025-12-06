@@ -107,8 +107,6 @@ async def _manifest_handler(response: Response, token: str | None, settings_str:
 
     base_manifest = get_base_manifest(user_settings)
 
-    translation_service = TranslationService()
-
     if user_settings and user_settings.language:
         for cat in base_manifest.get("catalogs", []):
             if cat.get("name"):
