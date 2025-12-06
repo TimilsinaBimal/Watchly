@@ -7,7 +7,7 @@ from app.core.settings import UserSettings, decode_settings
 from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
-from app.services.translation import TranslationService
+from app.services.translation import translation_service
 from app.utils import resolve_user_credentials
 
 router = APIRouter()
