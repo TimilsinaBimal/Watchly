@@ -5,7 +5,7 @@ from typing import Any
 
 import redis.asyncio as redis
 from cachetools import TTLCache
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
@@ -43,11 +43,12 @@ class TokenStore:
 
     def _get_cipher(self) -> Fernet:
         """Get or create Fernet cipher instance based on TOKEN_SALT."""
+        salt = b"x7FDf9kypzQ1LmR32b8hWv49sKq2Pd8T"
         if self._cipher is None:
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=b"",  # empty salt
+                salt=salt,
                 iterations=200_000,
             )
 
@@ -120,7 +121,7 @@ class TokenStore:
                 data["authKey"] = self.decrypt_token(data["authKey"])
             self._payload_cache[token] = data
             return data
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, InvalidToken):
             return None
 
     async def delete_token(self, token: str = None, key: str = None) -> None:
