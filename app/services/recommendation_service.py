@@ -260,9 +260,7 @@ class RecommendationService:
         excluded_ids = set(self._get_excluded_genre_ids(media_type))
         if excluded_ids:
             recommendations = [
-                item
-                for item in recommendations
-                if not excluded_ids.intersection(item.get("genre_ids") or [])
+                item for item in recommendations if not excluded_ids.intersection(item.get("genre_ids") or [])
             ]
 
         # 2. Fetch Metadata (gets IMDB IDs)
@@ -442,13 +440,9 @@ class RecommendationService:
 
         similarity_recommendations = [item for item in similarity_recommendations if not isinstance(item, Exception)]
         for batch in similarity_recommendations:
-            for item in batch:
-                # Filter by excluded genres
-                # TMDB item 'genre_ids' is list[int]
-                if excluded_ids and item.get("genre_ids"):
-                    if any(gid in excluded_ids for gid in item["genre_ids"]):
-                        continue
-                similarity_candidates.append(item)
+            similarity_candidates.extend(
+                item for item in batch if not excluded_ids.intersection(item.get("genre_ids") or [])
+            )
 
         # --- Candidate Set B: Profile-based Discovery ---
         # Extract excluded genres
