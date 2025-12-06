@@ -63,19 +63,31 @@ class TokenStore:
 
     def _normalize_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {
+            "watchly_username": (payload.get("watchly_username") or "").strip() or None,
+            "watchly_password": payload.get("watchly_password") or None,
             "username": (payload.get("username") or "").strip() or None,
             "password": payload.get("password") or None,
             "authKey": (payload.get("authKey") or "").strip() or None,
             "includeWatched": bool(payload.get("includeWatched", False)),
+            "settings": payload.get("settings"),
         }
 
     def _derive_token_value(self, payload: dict[str, Any]) -> str:
-        canonical = {
-            "username": payload.get("username") or "",
-            "password": payload.get("password") or "",
-            "authKey": payload.get("authKey") or "",
-            "includeWatched": bool(payload.get("includeWatched", False)),
-        }
+        # Prioritize Watchly credentials for stable token generation
+        if payload.get("watchly_username"):
+            canonical = {
+                "watchly_username": payload.get("watchly_username"),
+                "watchly_password": payload.get("watchly_password") or "",
+            }
+        else:
+            # Legacy fallback
+            canonical = {
+                "username": payload.get("username") or "",
+                "password": payload.get("password") or "",
+                "authKey": payload.get("authKey") or "",
+                "includeWatched": bool(payload.get("includeWatched", False)),
+            }
+
         serialized = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
         secret = settings.TOKEN_SALT.encode("utf-8")
         return hmac.new(secret, serialized.encode("utf-8"), hashlib.sha256).hexdigest()

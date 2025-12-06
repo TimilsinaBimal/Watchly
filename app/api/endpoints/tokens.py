@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from redis import exceptions as redis_exceptions
 
 from app.core.config import settings
-from app.core.settings import CatalogConfig, UserSettings, encode_settings, get_default_settings
+from app.core.settings import CatalogConfig, UserSettings, get_default_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
@@ -15,6 +15,8 @@ router = APIRouter(prefix="/tokens", tags=["tokens"])
 
 
 class TokenRequest(BaseModel):
+    watchly_username: str | None = Field(default=None, description="Watchly account (user/id)")
+    watchly_password: str | None = Field(default=None, description="Watchly account password")
     username: str | None = Field(default=None, description="Stremio username or email")
     password: str | None = Field(default=None, description="Stremio password")
     authKey: str | None = Field(default=None, description="Existing Stremio auth key")
@@ -77,34 +79,95 @@ async def _verify_credentials_or_raise(payload: dict) -> str:
 
 @router.post("/", response_model=TokenResponse)
 async def create_token(payload: TokenRequest, request: Request) -> TokenResponse:
-    username = payload.username.strip() if payload.username else None
-    password = payload.password
-    auth_key = payload.authKey.strip() if payload.authKey else None
+    # Stremio Credentials
+    stremio_username = payload.username.strip() if payload.username else None
+    stremio_password = payload.password
+    stremio_auth_key = payload.authKey.strip() if payload.authKey else None
+
+    # Watchly Credentials (The new flow)
+    watchly_username = payload.watchly_username.strip() if payload.watchly_username else None
+    watchly_password = payload.watchly_password
+
     rpdb_key = payload.rpdb_key.strip() if payload.rpdb_key else None
 
-    if auth_key and auth_key.startswith('"') and auth_key.endswith('"'):
-        auth_key = auth_key[1:-1].strip()
+    if stremio_auth_key and stremio_auth_key.startswith('"') and stremio_auth_key.endswith('"'):
+        stremio_auth_key = stremio_auth_key[1:-1].strip()
 
-    if username and not password:
-        raise HTTPException(status_code=400, detail="Password is required when a username is provided.")
+    # Construct Settings
+    default_settings = get_default_settings()
 
-    if password and not username:
+    user_settings = UserSettings(
+        language=payload.language or default_settings.language,
+        catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
+        rpdb_key=rpdb_key,
+        excluded_movie_genres=payload.excluded_movie_genres,
+        excluded_series_genres=payload.excluded_series_genres,
+    )
+
+    # Logic to handle "Update Mode" (Watchly credentials only)
+    is_update_mode = (watchly_username and watchly_password) and not (
+        stremio_username or stremio_password or stremio_auth_key
+    )
+
+    if is_update_mode:
+        # User is trying to update settings using only Watchly credentials
+        # We must retrieve their existing Stremio credentials from the store
+        temp_payload_for_derivation = {
+            "watchly_username": watchly_username,
+            "watchly_password": watchly_password,
+            "username": None,
+            "password": None,
+            "authKey": None,
+        }
+        derived_token = token_store.derive_token(temp_payload_for_derivation)
+        existing_data = await token_store.get_payload(derived_token)
+
+        if not existing_data:
+            raise HTTPException(
+                status_code=404,
+                detail="Account not found. Please start as a New User to connect Stremio.",
+            )
+
+        # Hydrate Stremio credentials from existing data
+        stremio_username = existing_data.get("username")
+        stremio_password = existing_data.get("password")
+        stremio_auth_key = existing_data.get("authKey")
+
+    # Regular Validation Logic
+    if stremio_username and not stremio_password:
+        raise HTTPException(status_code=400, detail="Stremio password is required when username is provided.")
+
+    if stremio_password and not stremio_username:
         raise HTTPException(
             status_code=400,
-            detail="Username/email is required when a password is provided.",
+            detail="Stremio username/email is required when password is provided.",
         )
 
-    if not auth_key and not (username and password):
+    if not stremio_auth_key and not (stremio_username and stremio_password):
         raise HTTPException(
             status_code=400,
-            detail="Provide either a Stremio auth key or both username and password.",
+            detail="Provide either a Stremio auth key or both Stremio username and password.",
         )
 
-    # We only store credentials in Redis, settings go into URL
+    # if creating a new account, check if the Watchly ID is already taken.
+    if watchly_username and not is_update_mode:
+        derived_token = token_store.derive_token(
+            {"watchly_username": watchly_username, "watchly_password": watchly_password}
+        )
+        if await token_store.get_payload(derived_token):
+            raise HTTPException(
+                status_code=409,
+                detail="This Watchly ID is already in use. Please choose a different one or log in as an Existing User.",  # noqa: E501
+            )
+
+    # Payload to store includes BOTH Watchly and Stremio credentials + User Settings
     payload_to_store = {
-        "username": username,
-        "password": password,
-        "authKey": auth_key,
+        "watchly_username": watchly_username,
+        "watchly_password": watchly_password,
+        "username": stremio_username,
+        "password": stremio_password,
+        "authKey": stremio_auth_key,
+        "settings": user_settings.model_dump(),
     }
 
     verified_auth_key = await _verify_credentials_or_raise(payload_to_store)
@@ -125,20 +188,6 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
             detail="Token storage is temporarily unavailable. Please try again once Redis is reachable.",
         ) from exc
 
-    # Construct Settings
-    default_settings = get_default_settings()
-
-    user_settings = UserSettings(
-        language=payload.language or default_settings.language,
-        catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
-        rpdb_key=rpdb_key,
-        excluded_movie_genres=payload.excluded_movie_genres,
-        excluded_series_genres=payload.excluded_series_genres,
-    )
-
-    # encode_settings now includes the "settings:" prefix
-    encoded_settings = encode_settings(user_settings)
-
     if created:
         try:
             await refresh_catalogs_for_credentials(
@@ -153,8 +202,8 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
             ) from exc
 
     base_url = settings.HOST_NAME
-    # New URL structure
-    manifest_url = f"{base_url}/{encoded_settings}/{token}/manifest.json"
+    # New URL structure (Settings stored in Token)
+    manifest_url = f"{base_url}/{token}/manifest.json"
 
     expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
 
@@ -165,26 +214,64 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     )
 
 
+@router.post("/verify", status_code=200)
+async def verify_user(payload: TokenRequest):
+    """Verify if a Watchly user exists."""
+    watchly_username = payload.watchly_username.strip() if payload.watchly_username else None
+    watchly_password = payload.watchly_password
+
+    if not watchly_username or not watchly_password:
+        raise HTTPException(status_code=400, detail="Watchly username and password required.")
+
+    payload_to_derive = {
+        "watchly_username": watchly_username,
+        "watchly_password": watchly_password,
+        "username": None,
+        "password": None,
+        "authKey": None,
+    }
+
+    token = token_store.derive_token(payload_to_derive)
+    exists = await token_store.get_payload(token)
+
+    if not exists:
+        raise HTTPException(status_code=404, detail="Account not found.")
+
+    return {"found": True, "token": token, "settings": exists.get("settings")}
+
+
 @router.delete("/", status_code=200)
 async def delete_token(payload: TokenRequest):
     """Delete a token based on provided credentials."""
-    username = payload.username.strip() if payload.username else None
-    password = payload.password
-    auth_key = payload.authKey.strip() if payload.authKey else None
+    # Stremio Credentials
+    stremio_username = payload.username.strip() if payload.username else None
+    stremio_password = payload.password
+    stremio_auth_key = payload.authKey.strip() if payload.authKey else None
 
-    if auth_key and auth_key.startswith('"') and auth_key.endswith('"'):
-        auth_key = auth_key[1:-1].strip()
+    # Watchly Credentials
+    watchly_username = payload.watchly_username.strip() if payload.watchly_username else None
+    watchly_password = payload.watchly_password
 
-    if not auth_key and not (username and password):
+    if stremio_auth_key and stremio_auth_key.startswith('"') and stremio_auth_key.endswith('"'):
+        stremio_auth_key = stremio_auth_key[1:-1].strip()
+
+    # Need either Watchly creds OR Stremio creds (for legacy)
+    if (
+        not (watchly_username and watchly_password)
+        and not stremio_auth_key
+        and not (stremio_username and stremio_password)
+    ):
         raise HTTPException(
             status_code=400,
-            detail="Provide either a Stremio auth key or both username and password to delete account.",
+            detail="Provide Watchly credentials (or Stremio credentials for legacy accounts) to delete account.",
         )
 
     payload_to_derive = {
-        "username": username,
-        "password": password,
-        "authKey": auth_key,
+        "watchly_username": watchly_username,
+        "watchly_password": watchly_password,
+        "username": stremio_username,
+        "password": stremio_password,
+        "authKey": stremio_auth_key,
     }
 
     try:
