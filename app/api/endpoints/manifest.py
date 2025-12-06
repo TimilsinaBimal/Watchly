@@ -55,14 +55,21 @@ def get_base_manifest(user_settings: UserSettings | None = None):
 
 
 # Cache catalog definitions for 1 hour (3600s)
+# Cache catalog definitions for 1 hour (3600s)
 @alru_cache(maxsize=1000, ttl=3600)
 async def fetch_catalogs(token: str | None = None, settings_str: str | None = None):
     if not token:
         return []
 
-    user_settings = decode_settings(settings_str) if settings_str else None
-
     credentials = await resolve_user_credentials(token)
+
+    if settings_str:
+        user_settings = decode_settings(settings_str)
+    elif credentials.get("settings"):
+        user_settings = UserSettings(**credentials["settings"])
+    else:
+        user_settings = None
+
     stremio_service = StremioService(
         username=credentials.get("username") or "",
         password=credentials.get("password") or "",
@@ -85,7 +92,18 @@ async def _manifest_handler(response: Response, token: str | None, settings_str:
     # Cache manifest for 1 day (86400 seconds)
     response.headers["Cache-Control"] = "public, max-age=86400"
 
-    user_settings = decode_settings(settings_str) if settings_str else None
+    user_settings = None
+    if settings_str:
+        user_settings = decode_settings(settings_str)
+    elif token:
+        try:
+            creds = await resolve_user_credentials(token)
+            if creds.get("settings"):
+                user_settings = UserSettings(**creds["settings"])
+        except Exception:
+            # Fallback to defaults if token resolution fails (or let it fail later in fetch_catalogs)
+            pass
+
     base_manifest = get_base_manifest(user_settings)
 
     if token:

@@ -55,4 +55,5 @@ async def resolve_user_credentials(token: str) -> dict[str, Any]:
         "password": password,
         "authKey": auth_key,
         "includeWatched": include_watched,
+        "settings": payload.get("settings"),
     }
