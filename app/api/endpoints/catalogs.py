@@ -40,11 +40,7 @@ async def get_catalog(
     # Supported IDs now include dynamic themes and item-based rows
     if (
         id != "watchly.rec"
-        and not id.startswith("tt")
-        and not id.startswith("watchly.theme.")
-        and not id.startswith("watchly.item.")
-        and not id.startswith("watchly.loved.")
-        and not id.startswith("watchly.watched.")
+        and not any(id.startswith(p) for p in ("tt", "watchly.theme.", "watchly.item.", "watchly.loved.", "watchly.watched."))
     ):
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(
