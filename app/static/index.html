@@ -91,12 +91,27 @@
                 <h1 class="font-bold text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
                     Watchly</h1>
             </div>
-            <div class="text-sm text-white bg-blue-500 border mx-auto border-blue-500/20 rounded px-0.5 py-0.5">
-                v<!-- APP_VERSION --></div>
         </div>
+
 
         <nav
             class="flex-grow px-4 md:px-6 py-4 space-y-1 overflow-x-auto md:overflow-visible flex md:block whitespace-nowrap md:whitespace-normal gap-2 md:gap-0">
+
+            <!-- User Profile Section (Hidden by default, shown after login) -->
+            <div id="user-profile" class="hidden mb-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl w-full">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                        id="user-avatar">
+                        <!-- Avatar initials will be generated from email -->
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <div class="text-xs text-slate-500 mb-0.5">Logged in as</div>
+                        <div class="text-sm text-white font-medium truncate" id="user-email">
+                            <!-- Email will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <button id="nav-welcome"
                 class="nav-item w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-white hover:bg-slate-800/50 active text-left">
@@ -162,23 +177,24 @@
                 </div>
                 <span>Save & Install</span>
             </button>
-            <button
-                class="nav-item w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-white hover:bg-slate-800/50 text-left">
-                <div
-                    class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center border border-slate-700/50 flex-shrink-0">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path
-                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387 0.6.111 0.82-.25 0.82-.557 0-.276-0.01-1.003-0.015-1.972-3.337 0.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-0.744 0.084-0.73 0.084-0.73 1.205 0.084 1.838 1.237 1.838 1.237 1.07 1.835 2.809 1.305 3.492 0.998 0.108-0.776 0.419-1.305 0.762-1.604-2.665-0.3-5.466-1.332-5.466-5.93 0-1.31 0.465-2.38 1.235-3.221-0.135-0.303-0.54-1.523 0.116-3.176 0 0 1.008-0.322 3.301 1.23A11.026 11.026 0 0112 5.86c1.02 0 2.047 0.137 3.013 0.403 2.291-1.552 3.297-1.23 3.297-1.23 0.656 1.653 0.24 2.873 0.116 3.176 0.77 0.84 1.235 1.91 1.235 3.221 0 4.61-2.805 5.621-5.476 5.922 0.43 0.37 0.81 1.096 0.81 2.22 0 1.606-0.015 2.899-0.015 3.286 0 0.308 0.219 0.678 0.825 0.557C20.565 21.79 24 17.29 24 12c0-6.627-5.372-12-12-12z">
-                        </path>
-                    </svg>
-                </div>
-                <span> <a href="https://github.com/TimilsinaBimal/watchly" target="_blank">Source Code</a></span>
-            </button>
 
         </nav>
 
-        <div class="p-6 mb-10 mt-auto hidden md:block">
-            <div class="text-sm text-slate-600 text-center">
+        <div class="p-4 md:p-6 mt-auto space-y-4">
+            <!-- Ko-fi Support Button -->
+            <button type="button" id="kofiBtn"
+                class="block w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-lg shadow-pink-900/20 hover:shadow-xl hover:shadow-pink-900/30 group text-left">
+                <div class="flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z" />
+                    </svg>
+                    <span>Support on Ko-fi</span>
+                </div>
+            </button>
+
+            <!-- Copyright -->
+            <div class="text-xs text-slate-600 text-center hidden md:block">
                 &copy; <span id="currentYear">2024</span> Watchly
             </div>
         </div>
@@ -190,94 +206,167 @@
 
             <form id="configForm">
                 <!-- SECTION 0: WELCOME -->
-                <section id="sect-welcome" class="space-y-8 animate-fade-in text-center py-12">
-                    <div class="space-y-4">
-                        <h2
-                            class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
-                            Welcome
-                            to Watchly</h2>
-                        <p class="text-slate-400 text-lg max-w-lg mx-auto">Get personalized Stremio recommendations
-                            based on your unique
-                            taste.</p>
+                <section id="sect-welcome" class="space-y-8 animate-fade-in py-6">
+                    <!-- Version Badge -->
+                    <div class="flex justify-center">
+                        <div class="text-sm text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-2 font-medium">
+                            Version <!-- APP_VERSION -->
+                        </div>
                     </div>
 
-                    <div class="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto mt-12">
-                        <button type="button" id="btn-new-user"
-                            class="group relative p-8 bg-slate-900/50 hover:bg-slate-800 border border-slate-800 hover:border-blue-500/50 rounded-3xl transition-all shadow-xl hover:shadow-blue-900/20 text-left space-y-4">
+                    <!-- Hero Section -->
+                    <div class="text-center space-y-4">
+                        <div class="inline-block">
+                            <div class="flex items-center justify-center gap-3 mb-3">
+                                <img src="/app/static/logo.png" alt="Watchly" class="w-14 h-14 rounded-2xl shadow-lg shadow-blue-500/20">
+                                <h1
+                                    class="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-400">
+                                    Watchly
+                                </h1>
+                            </div>
+                        </div>
+                        <p class="text-lg md:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
+                            Personalized Recommendation Engine for Stremio
+                        </p>
+                        <p class="text-sm text-slate-400 max-w-2xl mx-auto">
+                            Discover movies and series tailored to your unique taste, powered by your Stremio library and watch history.
+                        </p>
+                    </div>
+
+                    <!-- Features Grid -->
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
+                        <!-- Feature 1 -->
+                        <div
+                            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-blue-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-blue-900/10">
                             <div
-                                class="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                class="w-10 h-10 bg-blue-500/10 text-blue-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 4v16m8-8H4"></path>
+                                        d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                 </svg>
                             </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-1">New User</h3>
-                                <p class="text-sm text-slate-400">Start fresh. Connect Stremio and create your Watchly
-                                    secured account.
-                                </p>
+                            <h3 class="text-base font-bold text-white mb-1">Smart Recommendations</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                AI-powered suggestions based on your watch history
+                            </p>
                             </div>
-                        </button>
 
-                        <button type="button" id="btn-existing-user"
-                            class="group relative p-8 bg-slate-900/50 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 rounded-3xl transition-all shadow-xl hover:shadow-purple-900/20 text-left space-y-4">
+                        <!-- Feature 2 -->
+                        <div
+                            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-cyan-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-cyan-900/10">
                             <div
-                                class="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                class="w-10 h-10 bg-cyan-500/10 text-cyan-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
+                                        d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-base font-bold text-white mb-1">Custom Catalogs</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Organize with customizable names and order
+                            </p>
+                        </div>
+
+                        <!-- Feature 3 -->
+                        <div
+                            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-purple-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-purple-900/10">
+                            <div
+                                class="w-10 h-10 bg-purple-500/10 text-purple-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
                                     </path>
                                 </svg>
                             </div>
-                            <div>
-                                <h3 class="text-xl font-bold text-white mb-1">Existing User</h3>
-                                <p class="text-sm text-slate-400">Log in with your Watchly ID to update your settings.
-                                </p>
+                            <h3 class="text-base font-bold text-white mb-1">Genre Filtering</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Exclude genres you don't like
+                            </p>
                             </div>
-                        </button>
-                    </div>
-                </section>
+                        <!-- Feature 4 -->
+                        <div
+                            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-green-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-green-900/10">
+                            <div
+                                class="w-10 h-10 bg-green-500/10 text-green-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                                    </path>
+                                </svg>
+                            </div>
+                            <h3 class="text-base font-bold text-white mb-1">Multi-Language</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Recommendations in your preferred language
+                            </p>
+                            </div>
 
-                <!-- SECTION 0.5: WATCHLY LOGIN (Existing Users) -->
-                <section id="sect-watchly-login" class="space-y-6 hidden animate-fade-in">
-                    <div class="mb-8">
-                        <button type="button" id="back-to-welcome"
-                            class="text-sm text-slate-500 hover:text-slate-300 mb-4 inline-flex items-center gap-1 transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M15 19l-7-7 7-7"></path>
-                            </svg>
-                            Back
-                        </button>
-                        <h2 class="text-3xl font-bold text-white mb-2">Watchly Login</h2>
-                        <p class="text-slate-400">Enter your Watchly credentials to proceed.</p>
-                    </div>
+                        <!-- Feature 5 -->
+                        <div
+                            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-orange-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-orange-900/10">
+                            <div
+                                class="w-10 h-10 bg-orange-500/10 text-orange-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
+                                    </path>
+                                </svg>
+                            </div>
+                            <h3 class="text-base font-bold text-white mb-1">RPDB Integration</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Enhanced posters with ratings
+                            </p>
+                            </div>
 
-                    <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6">
-                        <div class="space-y-4">
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-slate-400">Watchly ID</label>
-                                <input type="text" id="existing-watchly-user"
-                                    class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none transition-all font-mono">
+                        <!-- Feature 6 -->
+                        <div
+                            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-pink-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-pink-900/10">
+                            <div
+                                class="w-10 h-10 bg-pink-500/10 text-pink-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                                    </path>
+                                </svg>
                             </div>
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-slate-400">Password</label>
-                                <div class="relative">
-                                    <input type="password" id="existing-watchly-pass"
-                                        class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-16 py-3.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none transition-all">
-                                    <button type="button"
-                                        class="toggle-btn absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-purple-400 hover:text-purple-300 transition-colors uppercase tracking-wide"
-                                        data-target="existing-watchly-pass">Show</button>
-                                </div>
+                            <h3 class="text-base font-bold text-white mb-1">Based on Your Loves</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed">
+                                Recommendations from content you loved
+                            </p>
                             </div>
+                            </div>
+                    <!-- CTA Section -->
+                    <div class="text-center space-y-6">
+                        <div class="max-w-2xl mx-auto">
+                            <button type="button" id="btn-get-started"
+                                class="group w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-4 px-8 rounded-xl transition-all shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/40 text-lg flex items-center justify-center gap-3">
+                                <span>Get Started</span>
+                                <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6">
+                                    </path>
+                                </svg>
+                            </button>
                         </div>
 
-                        <button type="button" id="btn-watchly-login-submit"
-                            class="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-4 rounded-xl transition-all shadow-lg shadow-purple-900/20">
-                            Continue
-                        </button>
-                    </div>
+                        <!-- Source Code Link -->
+                        <div class="flex justify-center pt-2">
+                            <a href="https://github.com/TimilsinaBimal/watchly" target="_blank"
+                                class="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-blue-400 transition-colors bg-slate-800/50 border border-slate-700/50 hover:border-blue-500/50 rounded-xl px-5 py-3 hover:shadow-lg hover:shadow-blue-900/20">
+                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path
+                                        d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387 0.6.111 0.82-.25 0.82-.557 0-.276-0.01-1.003-0.015-1.972-3.337 0.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-0.744 0.084-0.73 0.084-0.73 1.205 0.084 1.838 1.237 1.838 1.237 1.07 1.835 2.809 1.305 3.492 0.998 0.108-0.776 0.419-1.305 0.762-1.604-2.665-0.3-5.466-1.332-5.466-5.93 0-1.31 0.465-2.38 1.235-3.221-0.135-0.303-0.54-1.523 0.116-3.176 0 0 1.008-0.322 3.301 1.23A11.026 11.026 0 0112 5.86c1.02 0 2.047 0.137 3.013 0.403 2.291-1.552 3.297-1.23 3.297-1.23 0.656 1.653 0.24 2.873 0.116 3.176 0.77 0.84 1.235 1.91 1.235 3.221 0 4.61-2.805 5.621-5.476 5.922 0.43 0.37 0.81 1.096 0.81 2.22 0 1.606-0.015 2.899-0.015 3.286 0 0.308 0.219 0.678 0.825 0.557C20.565 21.79 24 17.29 24 12c0-6.627-5.372-12-12-12z">
+                                    </path>
+                                </svg>
+                                <span class="font-medium">View Source Code</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                </svg>
+                            </a>
+                        </div>
+                        </div>
                 </section>
+
                 <!-- SECTION 1: LOGIN -->
                 <section id="sect-login" class="space-y-6 hidden animate-fade-in">
                     <div class="mb-8">
@@ -293,43 +382,7 @@
                             <span id="stremioLoginText" class="text-lg">Login with Stremio</span>
                         </button>
 
-                        <!-- Manual Toggle -->
-                        <div class="text-center mt-4">
-                            <button type="button" id="toggleStremioManual"
-                                class="text-xs text-slate-500 hover:text-slate-300 underline decoration-slate-700 underline-offset-4 transition-colors">
-                                I prefer to enter credentials manually
-                            </button>
-                        </div>
-                        <!-- Manual Fields -->
-                        <div id="stremioManualFields"
-                            class="hidden space-y-4 mt-6 pt-6 border-t border-slate-800/50 animate-fade-in">
-                            <div class="relative p-4 bg-slate-950/50 rounded-xl border border-slate-800">
-                                <div class="space-y-4">
-                                    <div class="space-y-2">
-                                        <label class="block text-sm font-medium text-slate-400">Email Address</label>
-                                        <input type="email" id="username" autocomplete="email"
-                                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
-                                            placeholder="name@example.com">
-                                    </div>
-                                    <div class="space-y-2">
-                                        <label class="block text-sm font-medium text-slate-400">Password</label>
-                                        <input type="password" id="password" autocomplete="current-password"
-                                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
-                                            placeholder="••••••••">
-                                    </div>
-                                    <div class="space-y-2 pt-2 border-t border-slate-700/30">
-                                        <label class="block text-sm font-medium text-slate-400">Or Auth Key</label>
-                                        <input type="password" id="authKey"
-                                            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-mono"
-                                            placeholder="Stremio Auth Key (Optional)">
-                                    </div>
-                                    <button type="button" id="manualContinueBtn"
-                                        class="w-full mt-4 bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-lg text-sm font-medium transition">
-                                        Verify & Continue
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <input type="hidden" id="authKey">
                     </div>
                 </section>
 
@@ -437,37 +490,14 @@
                 <section id="sect-install" class="space-y-8 hidden animate-fade-in">
                     <div class="mb-6">
                         <h2 class="text-3xl font-bold text-white mb-2">Save & Install</h2>
-                        <p class="text-slate-400">Create your Watchly account to secure your settings.</p>
+                        <p class="text-slate-400">Ready to install your personalized addon.</p>
                     </div>
 
                     <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 md:p-8 space-y-6">
-                        <div class="space-y-4">
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-slate-400">Watchly ID (Username)</label>
-                                <div class="relative">
-                                    <input type="text" id="watchlyUsername"
-                                        class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-24 py-3.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all font-mono"
-                                        placeholder="username">
-                                    <button type="button" id="generateIdBtn"
-                                        class="absolute right-2 top-2 bottom-2 px-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-300 transition-colors">Generate</button>
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-slate-400">Create Password</label>
-                                <div class="relative">
-                                    <input type="password" id="watchlyPassword"
-                                        class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-4 pr-16 py-3.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
-                                        placeholder="Enter a secure password">
-                                    <button type="button"
-                                        class="toggle-btn absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide"
-                                        data-target="watchlyPassword">Show</button>
-                                </div>
-                            </div>
-                        </div>
                         <div class="pt-4">
                             <button type="submit" id="submitBtn"
                                 class="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-blue-500/20 text-lg flex items-center justify-center gap-2">
-                                <span class="btn-text">Generate & Install</span>
+                                <span class="btn-text">Save & Install</span>
                                 <div
                                     class="loader hidden w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin">
                                 </div>
@@ -475,16 +505,32 @@
                         </div>
                     </div>
 
-                    <div class="text-center pt-8">
-                        <button type="button" id="deleteAccountBtn"
-                            class="text-sm text-red-500/60 hover:text-red-400 transition-colors flex items-center justify-center gap-2 mx-auto">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                </path>
-                            </svg>
-                            Delete settings/account
-                        </button>
+                    <div class="pt-8">
+                        <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+                            <div class="flex items-start gap-4">
+                                <div class="w-10 h-10 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <div class="flex-grow">
+                                    <h3 class="text-sm font-semibold text-red-400 mb-1">Danger Zone</h3>
+                                    <p class="text-xs text-slate-400 mb-4">Permanently delete your settings and account data. This action
+                                        cannot be undone.</p>
+                                    <button type="button" id="deleteAccountBtn"
+                                        class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 group">
+                                        <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                            </path>
+                                        </svg>
+                                        <span>Delete Account</span>
+                                        </button>
+                                </div>
+                                </div>
+                                </div>
                     </div>
 
                     <!-- Error Message -->
@@ -540,16 +586,72 @@
         </div>
     </main>
 
+    <!-- Ko-fi Modal -->
+    <div id="kofi-modal" class="fixed inset-0 z-50 hidden">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" id="kofi-backdrop"></div>
+
+        <!-- Modal Content -->
+        <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div
+                class="bg-[#f9f9f9] rounded-2xl w-full max-w-[400px] h-[712px] max-h-[90vh] shadow-2xl relative overflow-hidden animate-fade-in flex flex-col">
+                <!-- Floating Close Button -->
+                <button type="button" id="close-kofi"
+                    class="absolute top-3 right-3 z-50 bg-white/80 hover:bg-white text-slate-500 hover:text-slate-900 transition-all p-2 rounded-full shadow-sm backdrop-blur-sm border border-slate-200/50">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+
+                <!-- Iframe -->
+                <div class="flex-grow relative">
+                    <iframe id='kofiframe' src='about:blank'
+                        style='border:none;width:100%;height:100%;padding:0;background:#f9f9f9;' title='timilsinabimal'
+                        class="absolute inset-0 w-full h-full"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-3 max-w-md"></div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmModal"
+        class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full transform transition-all scale-95 opacity-0"
+            id="confirmModalContent">
+            <div class="p-6 space-y-4">
+                <div class="flex items-start gap-4">
+                    <div
+                        class="flex-shrink-0 w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                            </path>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="text-lg font-bold text-white mb-1" id="confirmModalTitle">Confirm Action</h3>
+                        <p class="text-sm text-slate-400 leading-relaxed" id="confirmModalMessage">Are you sure?</p>
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button id="confirmModalCancel"
+                        class="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition">
+                        Cancel
+                    </button>
+                    <button id="confirmModalConfirm"
+                        class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src='/app/static/script.js'></script>
-    <script src='https://storage.ko-fi.com/cdn/scripts/overlay-widget.js'></script>
-    <script>
-        kofiWidgetOverlay.draw('timilsinabimal', {
-            'type': 'floating-chat',
-            'floating-chat.donateButton.text': 'Support',
-            'floating-chat.donateButton.background-color': '#0ea5e9',
-            'floating-chat.donateButton.text-color': '#fff',
-        });
-    </script>
 </body>
 
 </html>

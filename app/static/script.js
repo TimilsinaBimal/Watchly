@@ -27,12 +27,6 @@ const submitBtn = document.getElementById('submitBtn');
 const stremioLoginBtn = document.getElementById('stremioLoginBtn');
 const stremioLoginText = document.getElementById('stremioLoginText');
 const languageSelect = document.getElementById('languageSelect');
-const generateIdBtn = document.getElementById('generateIdBtn');
-const watchlyUsername = document.getElementById('watchlyUsername');
-const watchlyPassword = document.getElementById('watchlyPassword');
-const toggleStremioManual = document.getElementById('toggleStremioManual');
-const stremioManualFields = document.getElementById('stremioManualFields');
-const manualContinueBtn = document.getElementById('manualContinueBtn');
 const configNextBtn = document.getElementById('configNextBtn');
 const catalogsNextBtn = document.getElementById('catalogsNextBtn');
 const successResetBtn = document.getElementById('successResetBtn');
@@ -48,7 +42,6 @@ const navItems = {
 
 const sections = {
     welcome: document.getElementById('sect-welcome'),
-    watchlyLogin: document.getElementById('sect-watchly-login'),
     login: document.getElementById('sect-login'),
     config: document.getElementById('sect-config'),
     catalogs: document.getElementById('sect-catalogs'),
@@ -56,19 +49,14 @@ const sections = {
     success: document.getElementById('sect-success')
 };
 
-// Welcome & Watchly Login Elements
-const btnNewUser = document.getElementById('btn-new-user');
-const btnExistingUser = document.getElementById('btn-existing-user');
-const btnWatchlyLoginSubmit = document.getElementById('btn-watchly-login-submit');
-const backToWelcome = document.getElementById('back-to-welcome');
-const existingWatchlyUser = document.getElementById('existing-watchly-user');
-const existingWatchlyPass = document.getElementById('existing-watchly-pass');
+// Welcome Elements
+const btnGetStarted = document.getElementById('btn-get-started');
 
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     // Start at Welcome
-    switchSection('welcome'); // ensure welcome is visible
+    switchSection('welcome');
     initializeWelcomeFlow();
 
     initializeNavigation();
@@ -77,43 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeGenreLists();
     initializeFormSubmission();
     initializeSuccessActions();
-    initializePasswordToggles();
     initializeStremioLogin();
     initializeFooter();
-
-    // Watchly ID Generator
-    if (generateIdBtn && watchlyUsername) {
-        generateIdBtn.addEventListener('click', () => {
-            const randomId = 'user-' + Math.random().toString(36).substring(2, 9);
-            watchlyUsername.value = randomId;
-        });
-    }
-
-    // Manual Stremio Toggle
-    if (toggleStremioManual && stremioManualFields) {
-        toggleStremioManual.addEventListener('click', () => {
-            stremioManualFields.classList.toggle('hidden');
-            toggleStremioManual.textContent = stremioManualFields.classList.contains('hidden')
-                ? "I prefer to enter credentials manually"
-                : "Hide manual credentials";
-        });
-    }
-
-    // Manual Continue Button
-    if (manualContinueBtn) {
-        manualContinueBtn.addEventListener('click', () => {
-            const user = document.getElementById('username').value.trim();
-            const pass = document.getElementById('password').value;
-            const key = document.getElementById('authKey').value.trim();
-
-            if ((user && pass) || key) {
-                unlockNavigation();
-                switchSection('config');
-            } else {
-                showError('stremioAuthSection', 'Please enter your credentials or auth key first.');
-            }
-        });
-    }
+    initializeKofi();
 
     // Next Buttons
     if (configNextBtn) configNextBtn.addEventListener('click', () => switchSection('catalogs'));
@@ -127,140 +81,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Welcome Flow Logic
 function initializeWelcomeFlow() {
-    if (btnNewUser) {
-        btnNewUser.addEventListener('click', () => {
-            // NEW USER FLOW
-            navItems.login.classList.remove('disabled'); // Unlock Login
-
-            // Reset "Save & Install" UI to default (Create Mode)
-            if (watchlyUsername) {
-                watchlyUsername.value = '';
-                watchlyUsername.removeAttribute('readonly');
-                // watchlyUsername.classList.remove('opacity-50', 'cursor-not-allowed'); // optional styling
-            }
-            if (watchlyPassword) watchlyPassword.value = '';
-
-            // Show Generate Button
-            if (generateIdBtn) generateIdBtn.classList.remove('hidden');
-
-            // Update Headers/Text
-            const installHeader = document.querySelector('#sect-install h2');
-            const installDesc = document.querySelector('#sect-install p');
-            if (installHeader) installHeader.textContent = "Save & Install";
-            if (installDesc) installDesc.textContent = "Create your Watchly account to secure your settings.";
-
-            const btnText = document.querySelector('#submitBtn .btn-text');
-            if (btnText) btnText.textContent = "Generate & Install";
-
-            // Go to Stremio Step
+    // Single "Get Started" button leads to Stremio login
+    if (btnGetStarted) {
+        btnGetStarted.addEventListener('click', () => {
+            navItems.login.classList.remove('disabled');
             switchSection('login');
-        });
-    }
-
-    if (btnExistingUser) {
-        btnExistingUser.addEventListener('click', () => {
-            switchSection('watchlyLogin');
-            // Ensure sidebar is reset visually
-            Object.values(navItems).forEach(el => el.classList.remove('active'));
-        });
-    }
-
-    if (backToWelcome) {
-        backToWelcome.addEventListener('click', () => {
-            switchSection('welcome');
-        });
-    }
-
-    if (btnWatchlyLoginSubmit) {
-        btnWatchlyLoginSubmit.addEventListener('click', async () => {
-            const wUser = existingWatchlyUser.value.trim();
-            const wPass = existingWatchlyPass.value;
-
-            if (!wUser || !wPass) {
-                alert("Please enter your Watchly ID and Password.");
-                return;
-            }
-
-            const originalText = btnWatchlyLoginSubmit.textContent;
-            btnWatchlyLoginSubmit.textContent = "Verifying...";
-            btnWatchlyLoginSubmit.disabled = true;
-
-            try {
-                const res = await fetch('/tokens/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ watchly_username: wUser, watchly_password: wPass })
-                });
-
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.detail || "Account not found or invalid credentials.");
-                }
-
-                const data = await res.json();
-
-                // POPULATE SETTINGS
-                if (data.settings) {
-                    const s = data.settings;
-                    if (s.language && languageSelect) languageSelect.value = s.language;
-                    if (s.rpdb_key && document.getElementById('rpdbKey')) document.getElementById('rpdbKey').value = s.rpdb_key;
-
-                    // Genres (Checked = Excluded)
-                    document.querySelectorAll('input[name="movie-genre"]').forEach(cb => cb.checked = false);
-                    document.querySelectorAll('input[name="series-genre"]').forEach(cb => cb.checked = false);
-
-                    if (s.excluded_movie_genres) s.excluded_movie_genres.forEach(id => {
-                        const cb = document.querySelector(`input[name="movie-genre"][value="${id}"]`);
-                        if (cb) cb.checked = true;
-                    });
-                    if (s.excluded_series_genres) s.excluded_series_genres.forEach(id => {
-                        const cb = document.querySelector(`input[name="series-genre"][value="${id}"]`);
-                        if (cb) cb.checked = true;
-                    });
-
-                    // Catalogs
-                    if (s.catalogs && Array.isArray(s.catalogs)) {
-                        s.catalogs.forEach(remote => {
-                            const local = catalogs.find(c => c.id === remote.id);
-                            if (local) {
-                                local.enabled = remote.enabled;
-                                if (remote.name) local.name = remote.name;
-                            }
-                        });
-                        renderCatalogList();
-                    }
-                }
-
-                // EXISTING USER FLOW (Success)
-                navItems.config.classList.remove('disabled');
-                navItems.catalogs.classList.remove('disabled');
-                navItems.install.classList.remove('disabled');
-
-                // Hide Login Nav
-                navItems.login.style.display = 'none';
-
-                if (watchlyUsername) {
-                    watchlyUsername.value = wUser;
-                    watchlyUsername.setAttribute('readonly', 'true');
-                }
-                if (watchlyPassword) watchlyPassword.value = wPass;
-                if (generateIdBtn) generateIdBtn.classList.add('hidden');
-
-                const installHeader = document.querySelector('#sect-install h2');
-                const installDesc = document.querySelector('#sect-install p');
-                if (installHeader) installHeader.textContent = "Update Account";
-                if (installDesc) installDesc.textContent = "Your settings will be updated for this account.";
-                const btnText = document.querySelector('#submitBtn .btn-text');
-                if (btnText) btnText.textContent = "Update & Re-Install";
-
-                switchSection('config');
-
-            } catch (error) {
-                alert(error.message);
-            } finally {
-                btnWatchlyLoginSubmit.textContent = originalText;
-                btnWatchlyLoginSubmit.disabled = false;
-            }
         });
     }
 }
@@ -318,10 +143,7 @@ function resetApp() {
     // But our nav click logic handles that. If we are at 'welcome', the sidebar is visible but inactive.
 
     // Reset Stremio State
-    if (stremioManualFields) {
-        stremioManualFields.classList.add('hidden');
-        if (toggleStremioManual) toggleStremioManual.textContent = "I prefer to enter credentials manually";
-    }
+
     setStremioLoggedOutState();
 
     // Reset catalogs
@@ -335,15 +157,23 @@ function resetApp() {
 
 
 // Stremio Login Logic
-function initializeStremioLogin() {
+async function initializeStremioLogin() {
     const urlParams = new URLSearchParams(window.location.search);
     const authKey = urlParams.get('key') || urlParams.get('authKey');
 
     if (authKey) {
         // Logged In -> Unlock and move to config
         setStremioLoggedInState(authKey);
-        unlockNavigation();
-        switchSection('config');
+
+        try {
+            await fetchStremioIdentity(authKey);
+            unlockNavigation();
+            switchSection('config');
+        } catch (error) {
+            showToast(error.message, "error");
+            resetApp();
+            return;
+        }
 
         // Remove query param
         const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
@@ -368,6 +198,81 @@ function initializeStremioLogin() {
     }
 }
 
+async function fetchStremioIdentity(authKey) {
+    const res = await fetch('/tokens/stremio-identity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authKey })
+    });
+
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to verify identity");
+    }
+
+    const data = await res.json();
+    const userDisplay = data.email || data.user_id;
+
+    // Show user profile in sidebar
+    showUserProfile(userDisplay);
+
+    if (data.exists) {
+        showToast(`Welcome back! Loading your settings for ${userDisplay}...`, "info", 5000);
+
+        // POPULATE SETTINGS
+        if (data.settings) {
+            const s = data.settings;
+            if (s.language && languageSelect) languageSelect.value = s.language;
+            if (s.rpdb_key && document.getElementById('rpdbKey')) document.getElementById('rpdbKey').value = s.rpdb_key;
+
+            // Genres (Checked = Excluded)
+            document.querySelectorAll('input[name="movie-genre"]').forEach(cb => cb.checked = false);
+            document.querySelectorAll('input[name="series-genre"]').forEach(cb => cb.checked = false);
+
+            if (s.excluded_movie_genres) s.excluded_movie_genres.forEach(id => {
+                const cb = document.querySelector(`input[name="movie-genre"][value="${id}"]`);
+                if (cb) cb.checked = true;
+            });
+            if (s.excluded_series_genres) s.excluded_series_genres.forEach(id => {
+                const cb = document.querySelector(`input[name="series-genre"][value="${id}"]`);
+                if (cb) cb.checked = true;
+            });
+
+            // Catalogs
+            if (s.catalogs && Array.isArray(s.catalogs)) {
+                s.catalogs.forEach(remote => {
+                    const local = catalogs.find(c => c.id === remote.id);
+                    if (local) {
+                        local.enabled = remote.enabled;
+                        if (remote.name) local.name = remote.name;
+                    }
+                });
+                renderCatalogList();
+            }
+        }
+
+        // Update UI for "Update Mode"
+        const installHeader = document.querySelector('#sect-install h2');
+        const installDesc = document.querySelector('#sect-install p');
+        if (installHeader) installHeader.textContent = "Update Settings";
+        if (installDesc) installDesc.textContent = "Update your preferences and re-install.";
+
+        const btnText = document.querySelector('#submitBtn .btn-text');
+        if (btnText) btnText.textContent = "Update & Re-Install";
+    } else {
+        // New Account
+        showToast(`Welcome! Setting up new account for ${userDisplay}`, "success", 5000);
+
+        const installHeader = document.querySelector('#sect-install h2');
+        const installDesc = document.querySelector('#sect-install p');
+        if (installHeader) installHeader.textContent = "Save & Install";
+        if (installDesc) installDesc.textContent = "Save your settings and install the addon.";
+
+        const btnText = document.querySelector('#submitBtn .btn-text');
+        if (btnText) btnText.textContent = "Save & Install";
+    }
+}
+
 function setStremioLoggedInState(authKey) {
     if (!stremioLoginBtn) return;
     stremioLoginText.textContent = 'Logout';
@@ -375,9 +280,7 @@ function setStremioLoggedInState(authKey) {
     stremioLoginBtn.classList.remove('bg-stremio', 'hover:bg-stremio-hover');
     stremioLoginBtn.classList.add('bg-red-600', 'hover:bg-red-700', 'border-red-700', 'shadow-red-900/20');
 
-    // Hide manual fields
-    if (stremioManualFields) stremioManualFields.classList.add('hidden');
-    if (toggleStremioManual) toggleStremioManual.classList.add('hidden');
+
 
     // Pre-fill hidden AuthKey for submission
     const authKeyInput = document.getElementById('authKey');
@@ -391,9 +294,56 @@ function setStremioLoggedOutState() {
     stremioLoginBtn.classList.add('bg-stremio', 'hover:bg-stremio-hover');
     stremioLoginBtn.classList.remove('bg-red-600', 'hover:bg-red-700', 'border-red-700', 'shadow-red-900/20');
 
-    if (toggleStremioManual) toggleStremioManual.classList.remove('hidden');
+
     const authKeyInput = document.getElementById('authKey');
     if (authKeyInput) authKeyInput.value = '';
+
+    // Hide user profile
+    hideUserProfile();
+}
+
+// User Profile Functions
+function showUserProfile(email) {
+    const userProfile = document.getElementById('user-profile');
+    const userEmail = document.getElementById('user-email');
+    const userAvatar = document.getElementById('user-avatar');
+
+    if (!userProfile || !userEmail || !userAvatar) return;
+
+    // Set email
+    userEmail.textContent = email;
+
+    // Generate avatar initials from email
+    const initials = getInitialsFromEmail(email);
+    userAvatar.textContent = initials;
+
+    // Show the profile
+    userProfile.classList.remove('hidden');
+}
+
+function hideUserProfile() {
+    const userProfile = document.getElementById('user-profile');
+    if (userProfile) {
+        userProfile.classList.add('hidden');
+    }
+}
+
+function getInitialsFromEmail(email) {
+    if (!email) return '?';
+
+    // If it's an email, get the part before @
+    const username = email.split('@')[0];
+
+    // Split by common separators (., _, -)
+    const parts = username.split(/[._-]/);
+
+    if (parts.length >= 2) {
+        // Take first letter of first two parts
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+    } else {
+        // Take first two letters of username
+        return username.substring(0, 2).toUpperCase();
+    }
 }
 
 
@@ -405,10 +355,6 @@ async function initializeFormSubmission() {
         e.preventDefault();
         clearErrors();
 
-        const wUser = document.getElementById("watchlyUsername").value.trim();
-        const wPass = document.getElementById("watchlyPassword").value;
-        const sUser = document.getElementById("username").value.trim();
-        const sPass = document.getElementById("password").value;
         const sAuthKey = document.getElementById("authKey").value.trim();
         const language = languageSelect.value;
         const rpdbKey = document.getElementById("rpdbKey").value.trim();
@@ -430,35 +376,16 @@ async function initializeFormSubmission() {
         });
 
         // Validation
-        let isValid = true;
-        if (!wUser) {
-            showError("watchlyUsername", "Please create a Watchly ID.");
-            isValid = false;
-        }
-        if (!wPass) {
-            showError("watchlyPassword", "Please secure your account with a password.");
-            isValid = false;
-        }
-
-        const hasStremioCreds = sAuthKey || (sUser && sPass);
-        const isUpdateMode = watchlyUsername && watchlyUsername.hasAttribute('readonly');
-
-        if (!hasStremioCreds && !isUpdateMode) {
-            showError("generalError", "Stremio credentials are missing. Please go back to Step 1.");
+        if (!sAuthKey) {
+            showError("generalError", "Stremio authorization missing. Please login with Stremio.");
             switchSection('login');
-            isValid = false;
+            return;
         }
-
-        if (!isValid) return;
 
         setLoading(true);
 
         try {
             const payload = {
-                watchly_username: wUser,
-                watchly_password: wPass,
-                username: sUser,
-                password: sPass,
                 authKey: sAuthKey,
                 catalogs: catalogsToSend,
                 language: language,
@@ -700,27 +627,27 @@ function initializeSuccessActions() {
 
     if (deleteAccountBtn) {
         deleteAccountBtn.addEventListener('click', async () => {
-            if (!confirm('Are you sure you want to delete your settings? This is irreversible.')) return;
-            const wUser = document.getElementById("watchlyUsername").value.trim();
-            const wPass = document.getElementById("watchlyPassword").value;
-            const sUser = document.getElementById("username").value.trim();
-            const sPass = document.getElementById("password").value;
+            const confirmed = await showConfirm(
+                'Delete Account?',
+                'Are you sure you want to delete your settings? This action is irreversible and all your data will be permanently removed.'
+            );
+
+            if (!confirmed) return;
+
             const sAuthKey = document.getElementById("authKey").value.trim();
 
-            if (!sAuthKey && (!sUser || !sPass) && (!wUser || !wPass)) {
-                showError('generalError', "We can't identify the account to delete. Please login or provide keys.");
+            if (!sAuthKey) {
+                showError('generalError', "Please login with Stremio to delete your account.");
+                switchSection('login');
                 return;
             }
 
             setLoading(true);
             try {
-                const payload = {
-                    watchly_username: wUser, watchly_password: wPass,
-                    username: sUser, password: sPass, authKey: sAuthKey
-                };
+                const payload = { authKey: sAuthKey };
                 const res = await fetch('/tokens/', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!res.ok) throw new Error((await res.json()).detail || 'Failed to delete');
-                alert('Account deleted.');
+                showToast('Account deleted successfully.', 'success');
                 resetApp();
             } catch (e) {
                 showError('generalError', e.message);
@@ -751,12 +678,9 @@ function showError(target, message) {
         if (errEl) {
             errEl.querySelector('.message-content').textContent = message;
             errEl.classList.remove('hidden');
-        } else { alert(message); }
+        } else { showToast(message, 'error'); }
     } else if (target === 'stremioAuthSection') {
-        // Fallback since we don't have a specific error div anymore
-        alert(message);
-        // Or highlight fields
-        document.getElementById('stremioManualFields').classList.remove('hidden');
+        showToast(message, 'error');
     } else {
         const el = document.getElementById(target);
         if (el) {
@@ -790,7 +714,199 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Toast Notification System
+function showToast(message, type = 'info', duration = 5000) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification transform translate-x-full opacity-0 transition-all duration-300 ease-out';
+
+    // Icon and color based on type
+    let icon, bgColor, borderColor, iconColor;
+    switch (type) {
+        case 'success':
+            icon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>`;
+            bgColor = 'bg-green-500/10';
+            borderColor = 'border-green-500/30';
+            iconColor = 'text-green-400';
+            break;
+        case 'error':
+            icon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>`;
+            bgColor = 'bg-red-500/10';
+            borderColor = 'border-red-500/30';
+            iconColor = 'text-red-400';
+            break;
+        case 'warning':
+            icon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>`;
+            bgColor = 'bg-yellow-500/10';
+            borderColor = 'border-yellow-500/30';
+            iconColor = 'text-yellow-400';
+            break;
+        default: // info
+            icon = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>`;
+            bgColor = 'bg-blue-500/10';
+            borderColor = 'border-blue-500/30';
+            iconColor = 'text-blue-400';
+    }
+
+    toast.innerHTML = `
+        <div class="flex items-start gap-3 p-4 ${bgColor} border ${borderColor} rounded-xl backdrop-blur-xl shadow-lg">
+            <div class="${iconColor} flex-shrink-0 mt-0.5">${icon}</div>
+            <div class="flex-1 text-sm text-slate-200 leading-relaxed">${escapeHtml(message)}</div>
+            <button class="toast-close flex-shrink-0 text-slate-400 hover:text-white transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    `;
+
+    container.appendChild(toast);
+
+    // Animate in
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-x-full', 'opacity-0');
+        });
+    });
+
+    // Close button
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', () => removeToast(toast));
+
+    // Auto remove
+    if (duration > 0) {
+        setTimeout(() => removeToast(toast), duration);
+    }
+}
+
+function removeToast(toast) {
+    toast.classList.add('translate-x-full', 'opacity-0');
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 300);
+}
+
+// Confirmation Modal System
+function showConfirm(title, message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const modalContent = document.getElementById('confirmModalContent');
+        const titleEl = document.getElementById('confirmModalTitle');
+        const messageEl = document.getElementById('confirmModalMessage');
+        const confirmBtn = document.getElementById('confirmModalConfirm');
+        const cancelBtn = document.getElementById('confirmModalCancel');
+
+        if (!modal || !modalContent) {
+            // Fallback to native confirm if modal not found
+            resolve(confirm(message));
+            return;
+        }
+
+        // Set content
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+
+        // Show modal
+        modal.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            });
+        });
+
+        // Handle clicks
+        const handleConfirm = () => {
+            cleanup();
+            resolve(true);
+        };
+
+        const handleCancel = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        const handleBackdropClick = (e) => {
+            if (e.target === modal) {
+                handleCancel();
+            }
+        };
+
+        const cleanup = () => {
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+
+            confirmBtn.removeEventListener('click', handleConfirm);
+            cancelBtn.removeEventListener('click', handleCancel);
+            modal.removeEventListener('click', handleBackdropClick);
+        };
+
+        confirmBtn.addEventListener('click', handleConfirm);
+        cancelBtn.addEventListener('click', handleCancel);
+        modal.addEventListener('click', handleBackdropClick);
+    });
+}
+
 function initializeFooter() {
     const y = document.getElementById('currentYear');
     if (y) y.textContent = new Date().getFullYear();
+}
+
+
+// Ko-fi Modal Logic
+function initializeKofi() {
+    const kofiBtn = document.getElementById('kofiBtn');
+    const modal = document.getElementById('kofi-modal');
+    const closeBtn = document.getElementById('close-kofi');
+    const backdrop = document.getElementById('kofi-backdrop');
+    const iframe = document.getElementById('kofiframe');
+
+    // URL for the Ko-fi embed widget
+    const KOFI_URL = "https://ko-fi.com/timilsinabimal/?hidefeed=true&widget=true&embed=true&preview=true";
+
+    function openModal() {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        // Lazy load the iframe source if not set correctly
+        if (iframe && (!iframe.src || !iframe.src.includes('ko-fi.com'))) {
+            iframe.src = KOFI_URL;
+        }
+    }
+
+    function closeModal() {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        // We don't clear src to keep it loaded for next time, but you could if needed
+    }
+
+    if (kofiBtn) kofiBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openModal();
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+    if (backdrop) backdrop.addEventListener('click', closeModal);
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+            closeModal();
+        }
+    });
 }

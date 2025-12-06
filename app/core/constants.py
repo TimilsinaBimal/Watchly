@@ -1,0 +1,1 @@
+RECOMMENDATIONS_CATALOG_NAME: str = "Top Picks For You"

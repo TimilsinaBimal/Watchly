@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import hmac
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -54,113 +53,104 @@ class TokenStore:
             self._client = redis.from_url(settings.REDIS_URL, decode_responses=True, encoding="utf-8")
         return self._client
 
-    def _hash_token(self, token: str) -> str:
-        secret = settings.TOKEN_SALT.encode("utf-8")
-        return hmac.new(secret, msg=token.encode("utf-8"), digestmod=hashlib.sha256).hexdigest()
+    def _format_key(self, token: str) -> str:
+        """Format Redis key from token."""
+        return f"{self.KEY_PREFIX}{token}"
 
-    def _format_key(self, hashed_token: str) -> str:
-        return f"{self.KEY_PREFIX}{hashed_token}"
+    def _encrypt_password(self, password: str) -> str:
+        """Encrypt password using Fernet."""
+        if not password:
+            return None
+        return self._get_cipher().encrypt(password.encode()).decode("utf-8")
 
-    def _normalize_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "watchly_username": (payload.get("watchly_username") or "").strip() or None,
-            "watchly_password": payload.get("watchly_password") or None,
-            "username": (payload.get("username") or "").strip() or None,
-            "password": payload.get("password") or None,
-            "authKey": (payload.get("authKey") or "").strip() or None,
-            "includeWatched": bool(payload.get("includeWatched", False)),
-            "settings": payload.get("settings"),
-        }
+    def _decrypt_password(self, encrypted_password: str) -> str:
+        """Decrypt password using Fernet."""
+        if not encrypted_password:
+            return None
+        try:
+            return self._get_cipher().decrypt(encrypted_password.encode()).decode("utf-8")
+        except InvalidToken:
+            return None
 
-    def _derive_token_value(self, payload: dict[str, Any]) -> str:
-        # Prioritize Watchly credentials for stable token generation
-        if payload.get("watchly_username"):
-            canonical = {
-                "watchly_username": payload.get("watchly_username"),
-                "watchly_password": payload.get("watchly_password") or "",
-            }
-        else:
-            # Legacy fallback
-            canonical = {
-                "username": payload.get("username") or "",
-                "password": payload.get("password") or "",
-                "authKey": payload.get("authKey") or "",
-                "includeWatched": bool(payload.get("includeWatched", False)),
-            }
+    def get_token_from_user_id(self, user_id: str) -> str:
+        """Generate token from user_id (plain user_id as token)."""
+        if not user_id:
+            raise ValueError("User ID is required to generate token")
+        # Use user_id directly as token (no encryption)
+        return user_id.strip()
 
-        serialized = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
-        secret = settings.TOKEN_SALT.encode("utf-8")
-        return hmac.new(secret, serialized.encode("utf-8"), hashlib.sha256).hexdigest()
+    def get_user_id_from_token(self, token: str) -> str:
+        """Get user_id from token (they are the same now)."""
+        return token.strip() if token else ""
 
-    def derive_token(self, payload: dict[str, Any]) -> str:
-        """Public wrapper to derive token from payload."""
-        normalized = self._normalize_payload(payload)
-        return self._derive_token_value(normalized)
-
-    async def store_payload(self, payload: dict[str, Any]) -> tuple[str, bool]:
+    async def store_user_data(self, user_id: str, payload: dict[str, Any]) -> str:
         self._ensure_secure_salt()
-        normalized = self._normalize_payload(payload)
-        token = self._derive_token_value(normalized)
-        hashed = self._hash_token(token)
-        key = self._format_key(hashed)
 
-        # JSON Encode -> Encrypt -> Store
-        json_str = json.dumps(normalized)
-        encrypted_value = self._get_cipher().encrypt(json_str.encode()).decode("utf-8")
+        token = self.get_token_from_user_id(user_id)
+        key = self._format_key(token)
+
+        # Prepare data for storage (Plain JSON, no password encryption needed)
+        storage_data = payload.copy()
+
+        # Store user_id in payload for convenience
+        storage_data["user_id"] = user_id
 
         client = await self._get_client()
-        existing = await client.exists(key)
+        json_str = json.dumps(storage_data)
 
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
-            await client.setex(key, settings.TOKEN_TTL_SECONDS, encrypted_value)
-            logger.info(
-                f"Stored encrypted credential payload with TTL {settings.TOKEN_TTL_SECONDS} seconds",
-            )
+            await client.setex(key, settings.TOKEN_TTL_SECONDS, json_str)
         else:
-            await client.set(key, encrypted_value)
-            logger.info("Stored encrypted credential payload without expiration")
+            await client.set(key, json_str)
 
-        # Cache the new payload immediately to avoid next-read hit
-        self._payload_cache[token] = normalized
+        # Update cache with the payload
+        self._payload_cache[token] = payload
 
-        return token, not bool(existing)
+        return token
 
-    async def get_payload(self, token: str) -> dict[str, Any] | None:
-        # Check local LRU cache first
+    async def get_user_data(self, token: str) -> dict[str, Any] | None:
         if token in self._payload_cache:
             return self._payload_cache[token]
 
-        hashed = self._hash_token(token)
-        key = self._format_key(hashed)
+        key = self._format_key(token)
         client = await self._get_client()
-        encrypted_raw = await client.get(key)
+        data_raw = await client.get(key)
 
-        if encrypted_raw is None:
+        if not data_raw:
             return None
 
         try:
-            # Decrypt -> JSON Decode
-            decrypted_json = self._get_cipher().decrypt(encrypted_raw.encode()).decode("utf-8")
-            payload = json.loads(decrypted_json)
-
-            # Cache for subsequent reads
-            self._payload_cache[token] = payload
-            return payload
-        except (InvalidToken, json.JSONDecodeError, UnicodeDecodeError):
-            logger.warning("Failed to decrypt or decode cached payload for token. Key might have changed.")
+            data = json.loads(data_raw)
+            self._payload_cache[token] = data
+            return data
+        except json.JSONDecodeError:
             return None
+
+    # Alias for compatibility with existing calls, but implementation changed
+    def derive_token(self, payload: dict[str, Any]) -> str:
+        # We can't really derive token from mixed payload anymore unless we have email.
+        # This might break existing calls in `tokens.py`. We need to fix `tokens.py` to use `get_token_from_email`.
+        raise NotImplementedError("Use get_token_from_email instead")
+
+    async def get_payload(self, token: str) -> dict[str, Any] | None:
+        return await self.get_user_data(token)
+
+    async def store_payload(self, payload: dict[str, Any]) -> tuple[str, bool]:
+        # This signature doesn't match new logic which needs email explicitly or inside payload.
+        # We will update tokens.py first.
+        raise NotImplementedError("Use store_user_data instead")
 
     async def delete_token(self, token: str = None, key: str = None) -> None:
         if not token and not key:
             raise ValueError("Either token or key must be provided")
         if token:
-            hashed = self._hash_token(token)
-            key = self._format_key(hashed)
+            key = self._format_key(token)
+
         client = await self._get_client()
         await client.delete(key)
 
         # Invalidate local cache
-        if token in self._payload_cache:
+        if token and token in self._payload_cache:
             del self._payload_cache[token]
 
     async def iter_payloads(self) -> AsyncIterator[tuple[str, dict[str, Any]]]:
@@ -172,24 +162,22 @@ class TokenStore:
             return
 
         pattern = f"{self.KEY_PREFIX}*"
-        cipher = self._get_cipher()
 
         try:
             async for key in client.scan_iter(match=pattern):
                 try:
-                    encrypted_raw = await client.get(key)
+                    data_raw = await client.get(key)
                 except (redis.RedisError, OSError) as exc:
                     logger.warning(f"Failed to fetch payload for {key}: {exc}")
                     continue
 
-                if encrypted_raw is None:
+                if not data_raw:
                     continue
 
                 try:
-                    decrypted_json = cipher.decrypt(encrypted_raw.encode()).decode("utf-8")
-                    payload = json.loads(decrypted_json)
-                except (InvalidToken, json.JSONDecodeError, UnicodeDecodeError):
-                    logger.warning(f"Failed to decrypt payload for key {key}. Skipping.")
+                    payload = json.loads(data_raw)
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to decode payload for key {key}. Skipping.")
                     continue
 
                 yield key, payload

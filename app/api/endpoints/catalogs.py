@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
@@ -38,9 +40,8 @@ async def get_catalog(
         raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
 
     # Supported IDs now include dynamic themes and item-based rows
-    if (
-        id != "watchly.rec"
-        and not any(id.startswith(p) for p in ("tt", "watchly.theme.", "watchly.item.", "watchly.loved.", "watchly.watched."))
+    if id != "watchly.rec" and not any(
+        id.startswith(p) for p in ("tt", "watchly.theme.", "watchly.item.", "watchly.loved.", "watchly.watched.")
     ):
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(
