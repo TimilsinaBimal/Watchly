@@ -7,6 +7,7 @@ from app.core.settings import UserSettings, decode_settings
 from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
+from app.services.translation import TranslationService
 from app.utils import resolve_user_credentials
 
 router = APIRouter()
@@ -45,7 +46,7 @@ def get_base_manifest(user_settings: UserSettings | None = None):
         "version": __version__,
         "name": settings.ADDON_NAME,
         "description": "Movie and series recommendations based on your Stremio library",
-        "logo": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/static/logo.png",
+        "logo": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/app/static/logo.png",
         "resources": [{"name": "catalog", "types": ["movie", "series"], "idPrefixes": ["tt"]}],
         "types": ["movie", "series"],
         "idPrefixes": ["tt"],
@@ -105,6 +106,13 @@ async def _manifest_handler(response: Response, token: str | None, settings_str:
             pass
 
     base_manifest = get_base_manifest(user_settings)
+
+    translation_service = TranslationService()
+
+    if user_settings and user_settings.language:
+        for cat in base_manifest.get("catalogs", []):
+            if cat.get("name"):
+                cat["name"] = await translation_service.translate(cat["name"], user_settings.language)
 
     if token:
         # We pass settings_str to fetch_catalogs so it can cache different versions

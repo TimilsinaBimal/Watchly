@@ -3,6 +3,7 @@ from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
 from app.services.stremio_service import StremioService
 from app.services.tmdb_service import TMDBService
+from app.services.translation import translation_service
 from app.services.user_profile import UserProfileService
 
 
@@ -34,9 +35,6 @@ class DynamicCatalogService:
             catalog_id = item_id
 
         name = item.get("name")
-        # # Truncate long names for cleaner UI
-        # if len(name) > 25:
-        #     name = name[:25] + "..."
 
         return {
             "type": self.normalize_type(item.get("type")),
@@ -49,6 +47,8 @@ class DynamicCatalogService:
         self, library_items: list[dict], user_settings: UserSettings | None = None
     ) -> list[dict]:
         catalogs = []
+        lang = user_settings.language if user_settings else "en-US"
+
         # 1. Build User Profile
         # Combine loved and watched
         all_items = library_items.get("loved", []) + library_items.get("watched", [])
@@ -82,7 +82,8 @@ class DynamicCatalogService:
         movie_rows = await self.row_generator.generate_rows(movie_profile, "movie")
 
         for row in movie_rows:
-            catalogs.append({"type": "movie", "id": row.id, "name": row.title, "extra": []})
+            translated_title = await translation_service.translate(row.title, lang)
+            catalogs.append({"type": "movie", "id": row.id, "name": translated_title, "extra": []})
 
         # Generate for Series
         series_profile = await self.user_profile_service.build_user_profile(
@@ -91,7 +92,8 @@ class DynamicCatalogService:
         series_rows = await self.row_generator.generate_rows(series_profile, "series")
 
         for row in series_rows:
-            catalogs.append({"type": "series", "id": row.id, "name": row.title, "extra": []})
+            translated_title = await translation_service.translate(row.title, lang)
+            catalogs.append({"type": "series", "id": row.id, "name": translated_title, "extra": []})
 
         return catalogs
 
@@ -101,6 +103,7 @@ class DynamicCatalogService:
         """
         Generate all dynamic catalog rows.
         """
+        lang = user_settings.language if user_settings else "en-US"
 
         include_item_based_rows = bool(
             next((c for c in user_settings.catalogs if c.id == "watchly.item" and c.enabled), True)
@@ -116,14 +119,18 @@ class DynamicCatalogService:
         # 3. Add Item-Based Rows
         if include_item_based_rows:
             # For Movies
-            self._add_item_based_rows(catalogs, library_items, "movie")
+            await self._add_item_based_rows(catalogs, library_items, "movie", lang)
             # For Series
-            self._add_item_based_rows(catalogs, library_items, "series")
+            await self._add_item_based_rows(catalogs, library_items, "series", lang)
 
         return catalogs
 
-    def _add_item_based_rows(self, catalogs: list, library_items: dict, content_type: str):
+    async def _add_item_based_rows(self, catalogs: list, library_items: dict, content_type: str, language: str):
         """Helper to add 'Because you watched' and 'More like' rows."""
+
+        # Translate labels
+        label_more_like = await translation_service.translate("More like", language)
+        label_bc_watched = await translation_service.translate("Because you watched", language)
 
         # Helper to parse date
         def get_date(item):
@@ -152,13 +159,9 @@ class DynamicCatalogService:
 
         last_loved = loved[0] if loved else None
         if last_loved:
-            catalogs.append(self.build_catalog_entry(last_loved, "More like", "watchly.item"))
+            catalogs.append(self.build_catalog_entry(last_loved, label_more_like, "watchly.item"))
 
         # 2. Because you watched <Watched Item>
-        # Filter only watched items (exclude loved if possible or treat as separate pool)
-        # Actually, watched_items in StremioService include everything with progress or watched flag
-        # We want 'Because you watched' to reflect recent activity.
-
         watched = [i for i in library_items.get("watched", []) if i.get("type") == content_type]
         watched.sort(key=get_date, reverse=True)
 
@@ -170,8 +173,5 @@ class DynamicCatalogService:
             last_watched = item
             break
 
-        # If no distinct last watched found (e.g. only watched 1 item and it was loved),
-        # we can skip or pick the next best.
-
         if last_watched:
-            catalogs.append(self.build_catalog_entry(last_watched, "Because you watched", "watchly.item"))
+            catalogs.append(self.build_catalog_entry(last_watched, label_bc_watched, "watchly.item"))

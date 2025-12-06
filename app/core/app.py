@@ -74,10 +74,10 @@ app.add_middleware(
 # Static directory is at project root (3 levels up from app/core/app.py)
 # app/core/app.py -> app/core -> app -> root
 project_root = Path(__file__).resolve().parent.parent.parent
-static_dir = project_root / "static"
+static_dir = project_root / "app/static"
 
 if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.mount("/app/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
 # Serve index.html at /configure and /{token}/configure

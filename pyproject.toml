@@ -1,7 +1,7 @@
 [project]
 dynamic = ["version"]
 name = "watchly"
-description = "Add your description here"
+description = "Personalized movie and series recommendations based on your library"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -9,6 +9,7 @@ dependencies = [
     "async-lru>=2.0.5",
     "cachetools>=6.2.2",
     "cryptography>=46.0.3",
+    "deep-translator>=1.11.4",
     "fastapi>=0.104.1",
     "httpx>=0.25.2",
     "loguru>=0.7.2",
