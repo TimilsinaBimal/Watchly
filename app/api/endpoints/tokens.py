@@ -149,6 +149,17 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
             detail="Provide either a Stremio auth key or both Stremio username and password.",
         )
 
+    # if creating a new account, check if the Watchly ID is already taken.
+    if watchly_username and not is_update_mode:
+        derived_token = token_store.derive_token(
+            {"watchly_username": watchly_username, "watchly_password": watchly_password}
+        )
+        if await token_store.get_payload(derived_token):
+            raise HTTPException(
+                status_code=409,
+                detail="This Watchly ID is already in use. Please choose a different one or log in as an Existing User.",  # noqa: E501
+            )
+
     # Payload to store includes BOTH Watchly and Stremio credentials + User Settings
     payload_to_store = {
         "watchly_username": watchly_username,
