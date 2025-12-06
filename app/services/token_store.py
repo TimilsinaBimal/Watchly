@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
 from app.core.config import settings
+from app.core.security import redact_token
 
 
 class TokenStore:
@@ -20,6 +21,7 @@ class TokenStore:
 
     def __init__(self) -> None:
         self._client: redis.Redis | None = None
+        self._cipher: Fernet | None = None
         # Cache decrypted payloads for 1 day (86400s) to reduce Redis hits
         # Max size 5000 allows many active users without eviction
         self._payload_cache: TTLCache = TTLCache(maxsize=5000, ttl=86400)
@@ -148,7 +150,7 @@ class TokenStore:
                 try:
                     data_raw = await client.get(key)
                 except (redis.RedisError, OSError) as exc:
-                    logger.warning(f"Failed to fetch payload for {key}: {exc}")
+                    logger.warning(f"Failed to fetch payload for {redact_token(key)}: {exc}")
                     continue
 
                 if not data_raw:
@@ -157,7 +159,7 @@ class TokenStore:
                 try:
                     payload = json.loads(data_raw)
                 except json.JSONDecodeError:
-                    logger.warning(f"Failed to decode payload for key {key}. Skipping.")
+                    logger.warning(f"Failed to decode payload for key {redact_token(key)}. Skipping.")
                     continue
 
                 yield key, payload

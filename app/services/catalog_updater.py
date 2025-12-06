@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from loguru import logger
 
 from app.core.config import settings
+from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
@@ -19,7 +20,7 @@ MAX_CONCURRENT_UPDATES = 5
 
 async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, Any]) -> bool:
     if not credentials:
-        logger.warning(f"[{token}] Attempted to refresh catalogs with no credentials.")
+        logger.warning(f"[{redact_token(token)}] Attempted to refresh catalogs with no credentials.")
         raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
     auth_key = credentials.get("authKey")
@@ -49,7 +50,7 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
         catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
             library_items=library_items, user_settings=user_settings
         )
-        logger.info(f"[{token}] Prepared {len(catalogs)} catalogs")
+        logger.info(f"[{redact_token(token)}] Prepared {len(catalogs)} catalogs")
         return await stremio_service.update_catalogs(catalogs, auth_key)
     except Exception as e:
         logger.exception(f"Failed to update catalogs: {e}", exc_info=True)
@@ -118,7 +119,7 @@ class BackgroundCatalogUpdater:
         async def _update_safe(key: str, payload: dict[str, Any]) -> None:
             if not payload.get("authKey"):
                 logger.debug(
-                    f"Skipping token {key} with incomplete credentials",
+                    f"Skipping token {redact_token(key)} with incomplete credentials",
                 )
                 return
 
@@ -126,10 +127,10 @@ class BackgroundCatalogUpdater:
                 try:
                     updated = await refresh_catalogs_for_credentials(key, payload)
                     logger.info(
-                        f"Background refresh for {key} completed (updated={updated})",
+                        f"Background refresh for {redact_token(key)} completed (updated={updated})",
                     )
                 except Exception as exc:
-                    logger.error(f"Background refresh failed for {key}: {exc}", exc_info=True)
+                    logger.error(f"Background refresh failed for {redact_token(key)}: {exc}", exc_info=True)
 
         try:
             async for key, payload in token_store.iter_payloads():

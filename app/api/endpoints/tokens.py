@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from redis import exceptions as redis_exceptions
 
 from app.core.config import settings
+from app.core.security import redact_token
 from app.core.settings import CatalogConfig, UserSettings, get_default_settings
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
@@ -93,8 +94,6 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     # 2. Check if user already exists
     token = token_store.get_token_from_user_id(user_id)
     existing_data = await token_store.get_user_data(token)
-    if not existing_data:
-        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
     # 3. Construct Settings
     default_settings = get_default_settings()
@@ -122,7 +121,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     # 6. Store user data
     try:
         token = await token_store.store_user_data(user_id, payload_to_store)
-        logger.info(f"[{token}] Account {'created' if is_new_account else 'updated'} for user {user_id}")
+        logger.info(f"[{redact_token(token)}] Account {'created' if is_new_account else 'updated'} for user {user_id}")
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail="Server configuration error.") from exc
     except (redis_exceptions.RedisError, OSError) as exc:
@@ -199,7 +198,7 @@ async def delete_token(payload: TokenRequest):
 
         # Delete the token
         await token_store.delete_token(token)
-        logger.info(f"[{token}] Token deleted for user {user_id}")
+        logger.info(f"[{redact_token(token)}] Token deleted for user {user_id}")
         return {"detail": "Settings deleted successfully"}
     except HTTPException:
         raise

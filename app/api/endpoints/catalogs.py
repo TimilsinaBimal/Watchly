@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
+from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.recommendation_service import RecommendationService
@@ -40,7 +41,7 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
             ),
         )
 
-    logger.info(f"[{token}] Fetching catalog for {type} with id {id}")
+    logger.info(f"[{redact_token(token)}] Fetching catalog for {type} with id {id}")
 
     credentials = await token_store.get_user_data(token)
     if not credentials:
@@ -88,7 +89,7 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"[{token}] Error fetching catalog for {type}/{id}: {e}")
+        logger.exception(f"[{redact_token(token)}] Error fetching catalog for {type}/{id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -100,7 +101,7 @@ async def update_catalogs(token: str):
     # Decode credentials from path
     credentials = await token_store.get_user_data(token)
 
-    logger.info(f"[{token}] Updating catalogs in response to manual request")
+    logger.info(f"[{redact_token(token)}] Updating catalogs in response to manual request")
     updated = await refresh_catalogs_for_credentials(token, credentials)
     logger.info(f"Manual catalog update completed: {updated}")
     return {"success": updated}
