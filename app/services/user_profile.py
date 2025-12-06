@@ -106,8 +106,6 @@ class UserProfileService:
 
         score = 0.0
 
-        print(profile)
-
         # 1. GENRES
         # Normalize so movies with many genres don't get excessive score.
         for gid in item_vec["genres"]:

@@ -7,34 +7,24 @@ from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
 from app.core.config import settings
-from app.core.settings import UserSettings
+from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
-from app.utils import redact_token
 
 # Max number of concurrent updates to prevent overwhelming external APIs
 MAX_CONCURRENT_UPDATES = 5
 
 
-async def refresh_catalogs_for_credentials(
-    credentials: dict[str, Any],
-    user_settings: UserSettings | None = None,
-    auth_key: str | None = None,
-    key: str | None = None,
-) -> bool:
-    """Regenerate catalogs for the provided credentials and push them to Stremio."""
-    stremio_service = StremioService(
-        username=credentials.get("username") or "",
-        password=credentials.get("password") or "",
-        auth_key=auth_key or credentials.get("authKey"),
-    )
+async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, Any]) -> bool:
+    auth_key = credentials.get("authKey")
+    stremio_service = StremioService(auth_key=auth_key)
     # check if user has addon installed or not
     try:
-        addon_installed = await stremio_service.is_addon_installed()
+        addon_installed = await stremio_service.is_addon_installed(auth_key)
         if not addon_installed:
             logger.info("User has not installed addon. Removing token from redis")
-            await token_store.delete_token(key=key)
+            await token_store.delete_token(key=token)
             return True
     except Exception as e:
         logger.exception(f"Failed to check if addon is installed: {e}")
@@ -43,13 +33,18 @@ async def refresh_catalogs_for_credentials(
         library_items = await stremio_service.get_library_items()
         dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
 
+        # Ensure user_settings is available
+        if credentials.get("settings"):
+            try:
+                user_settings = UserSettings(**credentials["settings"])
+            except Exception as e:
+                user_settings = get_default_settings()
+                logger.warning(f"Failed to parse user settings from credentials: {e}")
+
         catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
             library_items=library_items, user_settings=user_settings
         )
-        auth_key_or_username = credentials.get("authKey") or credentials.get("username")
-        redacted = redact_token(auth_key_or_username) if auth_key_or_username else "unknown"
-        logger.info(f"[{redacted}] Prepared {len(catalogs)} catalogs")
-        auth_key = await stremio_service.get_auth_key()
+        logger.info(f"[{token}] Prepared {len(catalogs)} catalogs")
         return await stremio_service.update_catalogs(catalogs, auth_key)
     except Exception as e:
         logger.exception(f"Failed to update catalogs: {e}", exc_info=True)
@@ -116,20 +111,20 @@ class BackgroundCatalogUpdater:
         sem = asyncio.Semaphore(MAX_CONCURRENT_UPDATES)
 
         async def _update_safe(key: str, payload: dict[str, Any]) -> None:
-            if not self._has_credentials(payload):
+            if not payload.get("authKey"):
                 logger.debug(
-                    f"Skipping token {self._mask_key(key)} with incomplete credentials",
+                    f"Skipping token {key} with incomplete credentials",
                 )
                 return
 
             async with sem:
                 try:
-                    updated = await refresh_catalogs_for_credentials(payload, key=key)
+                    updated = await refresh_catalogs_for_credentials(key, payload)
                     logger.info(
-                        f"Background refresh for {self._mask_key(key)} completed (updated={updated})",
+                        f"Background refresh for {key} completed (updated={updated})",
                     )
                 except Exception as exc:
-                    logger.error(f"Background refresh failed for {self._mask_key(key)}: {exc}", exc_info=True)
+                    logger.error(f"Background refresh failed for {key}: {exc}", exc_info=True)
 
         try:
             async for key, payload in token_store.iter_payloads():
@@ -144,12 +139,3 @@ class BackgroundCatalogUpdater:
 
         except Exception as exc:
             logger.error(f"Catalog refresh scan failed: {exc}", exc_info=True)
-
-    @staticmethod
-    def _has_credentials(payload: dict[str, Any]) -> bool:
-        return bool(payload.get("authKey") or (payload.get("username") and payload.get("password")))
-
-    @staticmethod
-    def _mask_key(key: str) -> str:
-        suffix = key.split(":")[-1]
-        return f"***{suffix[-6:]}"

@@ -3,37 +3,25 @@ import re
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
-from app.core.settings import decode_settings
+from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.recommendation_service import RecommendationService
 from app.services.stremio_service import StremioService
-from app.utils import redact_token, resolve_user_credentials
+from app.services.token_store import token_store
+
+MAX_RESULTS = 50
+SOURCE_ITEMS_LIMIT = 10
 
 router = APIRouter()
 
 
-@router.get("/catalog/{type}/{id}.json")
 @router.get("/{token}/catalog/{type}/{id}.json")
-@router.get("/{settings_str}/{token}/catalog/{type}/{id}.json")
-async def get_catalog(
-    type: str,
-    id: str,
-    response: Response,
-    token: str | None = None,
-    settings_str: str | None = None,
-):
-    """
-    Stremio catalog endpoint for movies and series.
-    """
+async def get_catalog(type: str, id: str, response: Response, token: str):
     if not token:
         raise HTTPException(
             status_code=400,
             detail="Missing credentials token. Please open Watchly from a configured manifest URL.",
         )
-
-    logger.info(f"[{redact_token(token)}] Fetching catalog for {type} with id {id}")
-
-    credentials = await resolve_user_credentials(token)
 
     if type not in ["movie", "series"]:
         logger.warning(f"Invalid type: {type}")
@@ -51,22 +39,23 @@ async def get_catalog(
                 " specific item IDs."
             ),
         )
+
+    logger.info(f"[{token}] Fetching catalog for {type} with id {id}")
+
+    credentials = await token_store.get_user_data(token)
     try:
-        # Decode settings to get language
-        user_settings = decode_settings(settings_str) if settings_str else None
+        # Extract settings from credentials
+        settings_dict = credentials.get("settings", {})
+        user_settings = UserSettings(**settings_dict) if settings_dict else get_default_settings()
         language = user_settings.language if user_settings else "en-US"
 
         # Create services with credentials
-        stremio_service = StremioService(
-            username=credentials.get("username") or "",
-            password=credentials.get("password") or "",
-            auth_key=credentials.get("authKey"),
-        )
+        stremio_service = StremioService(auth_key=credentials.get("authKey"))
         recommendation_service = RecommendationService(
             stremio_service=stremio_service, language=language, user_settings=user_settings
         )
 
-        # Handle item-based recommendations (legacy or explicit link)
+        # Handle item-based recommendations
         if id.startswith("tt"):
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
@@ -84,12 +73,8 @@ async def get_catalog(
             logger.info(f"Found {len(recommendations)} recommendations for theme {id}")
 
         else:
-            # Top Picks (watchly.rec)
-
             recommendations = await recommendation_service.get_recommendations(
-                content_type=type,
-                source_items_limit=10,
-                max_results=50,
+                content_type=type, source_items_limit=SOURCE_ITEMS_LIMIT, max_results=MAX_RESULTS
             )
             logger.info(f"Found {len(recommendations)} recommendations for {type}")
 
@@ -101,7 +86,7 @@ async def get_catalog(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[{redact_token(token)}] Error fetching catalog for {type}/{id}: {e}", exc_info=True)
+        logger.exception(f"[{token}] Error fetching catalog for {type}/{id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -111,9 +96,9 @@ async def update_catalogs(token: str):
     Update the catalogs for the addon. This is a manual endpoint to update the catalogs.
     """
     # Decode credentials from path
-    credentials = await resolve_user_credentials(token)
+    credentials = await token_store.get_user_data(token)
 
-    logger.info(f"[{redact_token(token)}] Updating catalogs in response to manual request")
-    updated = await refresh_catalogs_for_credentials(credentials)
+    logger.info(f"[{token}] Updating catalogs in response to manual request")
+    updated = await refresh_catalogs_for_credentials(token, credentials)
     logger.info(f"Manual catalog update completed: {updated}")
     return {"success": updated}

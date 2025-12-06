@@ -258,6 +258,7 @@ class RecommendationService:
         # We need to detect content_type from item_id or media_type to know which exclusion list to use.
         # media_type is already resolved above.
         excluded_ids = set(self._get_excluded_genre_ids(media_type))
+
         if excluded_ids:
             recommendations = [
                 item for item in recommendations if not excluded_ids.intersection(item.get("genre_ids") or [])

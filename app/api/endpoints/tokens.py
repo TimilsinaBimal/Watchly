@@ -6,10 +6,8 @@ from redis import exceptions as redis_exceptions
 
 from app.core.config import settings
 from app.core.settings import CatalogConfig, UserSettings, get_default_settings
-from app.services.catalog_updater import refresh_catalogs_for_credentials
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
-from app.utils import redact_token
 
 router = APIRouter(prefix="/tokens", tags=["tokens"])
 
@@ -107,41 +105,26 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         excluded_series_genres=payload.excluded_series_genres,
     )
 
-    # 4. Prepare payload to store
+    is_new_account = not existing_data
+
+    # 4. Verify Stremio connection
+    verified_auth_key = await _verify_credentials_or_raise({"authKey": stremio_auth_key})
+
+    # 5. Prepare payload to store
     payload_to_store = {
-        "authKey": stremio_auth_key,
+        "authKey": verified_auth_key,
         "email": email,
         "settings": user_settings.model_dump(),
     }
 
-    is_new_account = not existing_data
-
-    # 5. Verify Stremio connection
-    verified_auth_key = await _verify_credentials_or_raise({"authKey": stremio_auth_key})
-
     # 6. Store user data
     try:
         token = await token_store.store_user_data(user_id, payload_to_store)
-        logger.info(f"[{redact_token(token)}] Account {'created' if is_new_account else 'updated'} for user {user_id}")
+        logger.info(f"[{token}] Account {'created' if is_new_account else 'updated'} for user {user_id}")
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail="Server configuration error.") from exc
     except (redis_exceptions.RedisError, OSError) as exc:
         raise HTTPException(status_code=503, detail="Storage temporarily unavailable.") from exc
-
-    # 7. Refresh Catalogs
-    try:
-        await refresh_catalogs_for_credentials(
-            payload_to_store, user_settings=user_settings, auth_key=verified_auth_key
-        )
-    except Exception as exc:
-        logger.error(f"Catalog refresh failed: {exc}")
-        if is_new_account:
-            # Rollback on new account creation failure
-            await token_store.delete_token(token)
-            raise HTTPException(
-                status_code=502,
-                detail="Credentials verified, but catalog refresh failed. Please try again.",
-            ) from exc
 
     base_url = settings.HOST_NAME
     manifest_url = f"{base_url}/{token}/manifest.json"
@@ -154,9 +137,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     )
 
 
-@router.post("/stremio-identity", status_code=200)
-async def check_stremio_identity(payload: TokenRequest):
-    """Fetch user info from Stremio and check if account exists."""
+async def get_stremio_user_data(payload: TokenRequest) -> tuple[str, str]:
     auth_key = payload.authKey.strip() if payload.authKey else None
 
     if not auth_key:
@@ -170,6 +151,7 @@ async def check_stremio_identity(payload: TokenRequest):
         user_info = await stremio_service.get_user_info()
         user_id = user_info["user_id"]
         email = user_info.get("email", "")
+        return user_id, email
     except Exception as e:
         logger.error(f"Stremio identity check failed: {e}")
         raise HTTPException(
@@ -178,8 +160,13 @@ async def check_stremio_identity(payload: TokenRequest):
     finally:
         await stremio_service.close()
 
-    # Check existence
+
+@router.post("/stremio-identity", status_code=200)
+async def check_stremio_identity(payload: TokenRequest):
+    """Fetch user info from Stremio and check if account exists."""
+    user_id, email = await get_stremio_user_data(payload)
     try:
+        # Check existence
         token = token_store.get_token_from_user_id(user_id)
         user_data = await token_store.get_user_data(token)
         exists = bool(user_data)
@@ -197,27 +184,8 @@ async def check_stremio_identity(payload: TokenRequest):
 @router.delete("/", status_code=200)
 async def delete_token(payload: TokenRequest):
     """Delete a token based on Stremio auth key."""
-    stremio_auth_key = payload.authKey.strip() if payload.authKey else None
-
-    if not stremio_auth_key:
-        raise HTTPException(
-            status_code=400,
-            detail="Stremio auth key is required to delete account.",
-        )
-
-    if stremio_auth_key.startswith('"') and stremio_auth_key.endswith('"'):
-        stremio_auth_key = stremio_auth_key[1:-1].strip()
-
     try:
-        # Fetch user info from Stremio
-        stremio_service = StremioService(auth_key=stremio_auth_key)
-        try:
-            user_info = await stremio_service.get_user_info()
-            user_id = user_info["user_id"]
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to verify Stremio identity: {e}")
-        finally:
-            await stremio_service.close()
+        user_id, _ = await get_stremio_user_data(payload)
 
         # Get token from user_id
         token = token_store.get_token_from_user_id(user_id)
@@ -229,7 +197,7 @@ async def delete_token(payload: TokenRequest):
 
         # Delete the token
         await token_store.delete_token(token)
-        logger.info(f"[{redact_token(token)}] Token deleted for user {user_id}")
+        logger.info(f"[{token}] Token deleted for user {user_id}")
         return {"detail": "Settings deleted successfully"}
     except HTTPException:
         raise
