@@ -7,12 +7,56 @@ const defaultCatalogs = [
 
 let catalogs = JSON.parse(JSON.stringify(defaultCatalogs));
 
+// Genre Constants (TMDB)
+const MOVIE_GENRES = [
+    { id: '28', name: 'Action' },
+    { id: '12', name: 'Adventure' },
+    { id: '16', name: 'Animation' },
+    { id: '35', name: 'Comedy' },
+    { id: '80', name: 'Crime' },
+    { id: '99', name: 'Documentary' },
+    { id: '18', name: 'Drama' },
+    { id: '10751', name: 'Family' },
+    { id: '14', name: 'Fantasy' },
+    { id: '36', name: 'History' },
+    { id: '27', name: 'Horror' },
+    { id: '10402', name: 'Music' },
+    { id: '9648', name: 'Mystery' },
+    { id: '10749', name: 'Romance' },
+    { id: '878', name: 'Science Fiction' },
+    { id: '10770', name: 'TV Movie' },
+    { id: '53', name: 'Thriller' },
+    { id: '10752', name: 'War' },
+    { id: '37', name: 'Western' }
+];
+
+const SERIES_GENRES = [
+    { id: '10759', name: 'Action & Adventure' },
+    { id: '16', name: 'Animation' },
+    { id: '35', name: 'Comedy' },
+    { id: '80', name: 'Crime' },
+    { id: '99', name: 'Documentary' },
+    { id: '18', name: 'Drama' },
+    { id: '10751', name: 'Family' },
+    { id: '10762', name: 'Kids' },
+    { id: '9648', name: 'Mystery' },
+    { id: '10763', name: 'News' },
+    { id: '10764', name: 'Reality' },
+    { id: '10765', name: 'Sci-Fi & Fantasy' },
+    { id: '10766', name: 'Soap' },
+    { id: '10767', name: 'Talk' },
+    { id: '10768', name: 'War & Politics' },
+    { id: '37', name: 'Western' }
+];
+
 // DOM Elements
 const configForm = document.getElementById('configForm');
 const authMethod = document.getElementById('authMethod');
 const credentialsFields = document.getElementById('credentialsFields');
 const authKeyField = document.getElementById('authKeyField');
 const catalogList = document.getElementById('catalogList');
+const movieGenreList = document.getElementById('movieGenreList');
+const seriesGenreList = document.getElementById('seriesGenreList');
 const errorMessage = document.getElementById('errorMessage');
 const successMessage = document.getElementById('successMessage');
 const submitBtn = document.getElementById('submitBtn');
@@ -30,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAuthMethodToggle();
     initializeCatalogList();
     initializeLanguageSelect();
+    initializeGenreLists();
     initializeFormSubmission();
     initializeSuccessActions();
     initializePasswordToggles();
@@ -37,6 +82,28 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeStremioLogin();
     initializeFooter();
 });
+
+// Genre Lists
+function initializeGenreLists() {
+    renderGenreList(movieGenreList, MOVIE_GENRES, 'movie-genre');
+    renderGenreList(seriesGenreList, SERIES_GENRES, 'series-genre');
+}
+
+function renderGenreList(container, genres, namePrefix) {
+    container.innerHTML = genres.map(genre => `
+        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-700/50 cursor-pointer transition group">
+            <div class="relative flex items-center">
+                <input type="checkbox" name="${namePrefix}" value="${genre.id}"
+                    class="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-slate-800 checked:bg-blue-500 checked:border-blue-500 transition-colors">
+                <svg class="absolute w-3.5 h-3.5 text-white left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity"
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <span class="text-sm text-slate-300 group-hover:text-white transition-colors select-none">${genre.name}</span>
+        </label>
+    `).join('');
+}
 
 // Language Selection
 async function initializeLanguageSelect() {
@@ -409,6 +476,10 @@ function initializeFormSubmission() {
         const language = document.getElementById('languageSelect').value;
         const rpdbKey = document.getElementById('rpdbKey').value.trim();
 
+        // Get excluded genres
+        const excludedMovieGenres = Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value);
+        const excludedSeriesGenres = Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value);
+
         // Validation
         if (authMethodValue === 'credentials') {
             if (!username || !password) {
@@ -433,7 +504,9 @@ function initializeFormSubmission() {
         const payload = {
             catalogs: catalogConfigs,
             language: language,
-            rpdb_key: rpdbKey || null
+            rpdb_key: rpdbKey || null,
+            excluded_movie_genres: excludedMovieGenres,
+            excluded_series_genres: excludedSeriesGenres
         };
 
         if (authMethodValue === 'credentials') {

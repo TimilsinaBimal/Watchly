@@ -21,6 +21,8 @@ class TokenRequest(BaseModel):
     catalogs: list[CatalogConfig] | None = Field(default=None, description="Optional catalog configuration")
     language: str = Field(default="en-US", description="Language for TMDB API")
     rpdb_key: str | None = Field(default=None, description="Optional RPDB API Key")
+    excluded_movie_genres: list[str] = Field(default_factory=list, description="List of movie genre IDs to exclude")
+    excluded_series_genres: list[str] = Field(default_factory=list, description="List of series genre IDs to exclude")
 
 
 class TokenResponse(BaseModel):
@@ -130,6 +132,8 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         language=payload.language or default_settings.language,
         catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
         rpdb_key=rpdb_key,
+        excluded_movie_genres=payload.excluded_movie_genres,
+        excluded_series_genres=payload.excluded_series_genres,
     )
 
     # encode_settings now includes the "settings:" prefix

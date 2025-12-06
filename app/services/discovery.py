@@ -14,7 +14,11 @@ class DiscoveryEngine:
         self.tmdb_service = TMDBService()
 
     async def discover_recommendations(
-        self, profile: UserTasteProfile, content_type: str, limit: int = 20
+        self,
+        profile: UserTasteProfile,
+        content_type: str,
+        limit: int = 20,
+        excluded_genres: list[int] | None = None,
     ) -> list[dict]:
         """
         Find content that matches the user's taste profile.
@@ -33,17 +37,26 @@ class DiscoveryEngine:
         top_crew = profile.get_top_crew(limit=1)  # e.g. [(555, 1.0)] - Director
 
         top_countries = profile.get_top_countries(limit=2)
+        top_year = profile.get_top_year(limit=1)
 
         if not top_genres and not top_keywords and not top_cast:
             # Fallback if profile is empty
             return []
 
         tasks = []
+        base_params = {}
+        if excluded_genres:
+            base_params["without_genres"] = "|".join([str(g) for g in excluded_genres])
 
         # Query 1: Top Genres Mix
         if top_genres:
             genre_ids = "|".join([str(g[0]) for g in top_genres])
-            params_popular = {"with_genres": genre_ids, "sort_by": "popularity.desc", "vote_count.gte": 100}
+            params_popular = {
+                "with_genres": genre_ids,
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 500,
+                **base_params,
+            }
             tasks.append(self._fetch_discovery(content_type, params_popular))
 
             # fetch atleast two pages of results
@@ -51,15 +64,21 @@ class DiscoveryEngine:
                 params_rating = {
                     "with_genres": genre_ids,
                     "sort_by": "ratings.desc",
-                    "vote_count.gte": 300,
+                    "vote_count.gte": 500,
                     "page": i + 1,
+                    **base_params,
                 }
                 tasks.append(self._fetch_discovery(content_type, params_rating))
 
         # Query 2: Top Keywords
         if top_keywords:
             keyword_ids = "|".join([str(k[0]) for k in top_keywords])
-            params_keywords = {"with_keywords": keyword_ids, "sort_by": "popularity.desc"}
+            params_keywords = {
+                "with_keywords": keyword_ids,
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 500,
+                **base_params,
+            }
             tasks.append(self._fetch_discovery(content_type, params_keywords))
 
             # fetch atleast two pages of results
@@ -67,18 +86,29 @@ class DiscoveryEngine:
                 params_rating = {
                     "with_keywords": keyword_ids,
                     "sort_by": "ratings.desc",
-                    "vote_count.gte": 300,
+                    "vote_count.gte": 500,
                     "page": i + 1,
+                    **base_params,
                 }
                 tasks.append(self._fetch_discovery(content_type, params_rating))
 
         # Query 3: Top Actors
         for actor in top_cast:
             actor_id = actor[0]
-            params_actor = {"with_cast": str(actor_id), "sort_by": "popularity.desc"}
+            params_actor = {
+                "with_cast": str(actor_id),
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 500,
+                **base_params,
+            }
             tasks.append(self._fetch_discovery(content_type, params_actor))
 
-            params_rating = {"with_cast": str(actor_id), "sort_by": "ratings.desc", "vote_count.gte": 300}
+            params_rating = {
+                "with_cast": str(actor_id),
+                "sort_by": "ratings.desc",
+                "vote_count.gte": 500,
+                **base_params,
+            }
             tasks.append(self._fetch_discovery(content_type, params_rating))
 
         # Query 4: Top Director
@@ -87,19 +117,47 @@ class DiscoveryEngine:
             params_director = {
                 "with_crew": str(director_id),
                 "sort_by": "vote_average.desc",  # Directors imply quality preference
+                "vote_count.gte": 500,
+                **base_params,
             }
             tasks.append(self._fetch_discovery(content_type, params_director))
 
-            params_rating = {"with_crew": str(director_id), "sort_by": "ratings.desc", "vote_count.gte": 300}
+            params_rating = {
+                "with_crew": str(director_id),
+                "sort_by": "ratings.desc",
+                "vote_count.gte": 500,
+                **base_params,
+            }
             tasks.append(self._fetch_discovery(content_type, params_rating))
 
         # Query 5: Top Countries
         if top_countries:
             country_ids = "|".join([str(c[0]) for c in top_countries])
-            params_country = {"with_origin_country": country_ids, "sort_by": "popularity.desc", "vote_count.gte": 100}
+            params_country = {
+                "with_origin_country": country_ids,
+                "sort_by": "popularity.desc",
+                "vote_count.gte": 100,
+                **base_params,
+            }
             tasks.append(self._fetch_discovery(content_type, params_country))
 
-            params_rating = {"with_origin_country": country_ids, "sort_by": "ratings.desc", "vote_count.gte": 300}
+            params_rating = {
+                "with_origin_country": country_ids,
+                "sort_by": "ratings.desc",
+                "vote_count.gte": 300,
+                **base_params,
+            }
+            tasks.append(self._fetch_discovery(content_type, params_rating))
+
+        # query 6: Top year
+        if top_year:
+            year = top_year[0][0]
+            params_rating = {
+                "year": year,
+                "sort_by": "ratings.desc",
+                "vote_count.gte": 500,
+                **base_params,
+            }
             tasks.append(self._fetch_discovery(content_type, params_rating))
 
         # 3. Execute Parallel Queries

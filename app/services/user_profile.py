@@ -38,7 +38,10 @@ class UserProfileService:
         self.tmdb_service = TMDBService()
 
     async def build_user_profile(
-        self, scored_items: list[ScoredItem], content_type: str | None = None
+        self,
+        scored_items: list[ScoredItem],
+        content_type: str | None = None,
+        excluded_genres: list[int] | None = None,
     ) -> UserTasteProfile:
         """
         Aggregates multiple item vectors into a single User Taste Profile.
@@ -76,7 +79,7 @@ class UserProfileService:
             # Scale by Interest Score (0.0 - 1.0)
             interest_weight = item.score / 100.0
 
-            self._merge_vector(profile_data, item_vector, interest_weight)
+            self._merge_vector(profile_data, item_vector, interest_weight, excluded_genres)
 
         # Convert to Pydantic Model
         profile = UserTasteProfile(
@@ -206,7 +209,13 @@ class UserProfileService:
 
         return vector
 
-    def _merge_vector(self, profile: dict, item_vector: dict, weight: float):
+    def _merge_vector(
+        self,
+        profile: dict,
+        item_vector: dict,
+        weight: float,
+        excluded_genres: list[int] | None = None,
+    ):
         """Merges an item's sparse vector into the main profile with a weight."""
 
         # Weights for specific dimensions (Feature Importance)
@@ -228,6 +237,8 @@ class UserProfileService:
                     profile["years"][ids] += final_weight
             elif ids:
                 for feature_id in ids:
+                    if dim == "genres" and excluded_genres and feature_id in excluded_genres:
+                        continue
                     profile[dim][feature_id] += final_weight
 
     async def _fetch_full_metadata(self, tmdb_id: int, type_: str) -> dict | None:

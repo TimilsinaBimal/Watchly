@@ -254,6 +254,15 @@ class RecommendationService:
         # 1. Filter by TMDB ID
         recommendations = await self._filter_candidates(recommendations, watched_imdb, watched_tmdb)
 
+        # 1.5 Filter by Excluded Genres
+        # We need to detect content_type from item_id or media_type to know which exclusion list to use.
+        # media_type is already resolved above.
+        excluded_ids = set(self._get_excluded_genre_ids(media_type))
+        if excluded_ids:
+            recommendations = [
+                item for item in recommendations if not excluded_ids.intersection(item.get("genre_ids") or [])
+            ]
+
         # 2. Fetch Metadata (gets IMDB IDs)
         meta_items = await self._fetch_metadata_for_items(recommendations, media_type)
 
@@ -277,6 +286,15 @@ class RecommendationService:
 
         logger.info(f"Found {len(final_items)} valid recommendations for {item_id}")
         return final_items
+
+    def _get_excluded_genre_ids(self, content_type: str) -> list[int]:
+        if not self.user_settings:
+            return []
+        if content_type == "movie":
+            return [int(g) for g in self.user_settings.excluded_movie_genres]
+        elif content_type in ["series", "tv"]:
+            return [int(g) for g in self.user_settings.excluded_series_genres]
+        return []
 
     async def get_recommendations_for_theme(self, theme_id: str, content_type: str, limit: int = 20) -> list[dict]:
         """
@@ -314,6 +332,16 @@ class RecommendationService:
         # Default Sort
         if "sort_by" not in params:
             params["sort_by"] = "popularity.desc"
+
+        # Apply Excluded Genres
+        excluded_ids = self._get_excluded_genre_ids(content_type)
+        if excluded_ids:
+            # If with_genres is specified, we technically shouldn't exclude what is explicitly asked for?
+            # But the user asked to "exclude those genres".
+            # If I exclude them from "without_genres", TMDB might return 0 results if the theme IS that genre.
+            # But RowGenerator safeguards against generating themes for excluded genres.
+            # So this is safe for keyword/country rows.
+            params["without_genres"] = "|".join(str(g) for g in excluded_ids)
 
         # Fetch
         recommendations = await self.tmdb_service.get_discover(content_type, **params)
@@ -407,15 +435,25 @@ class RecommendationService:
             tasks_a.append(self._fetch_recommendations_from_tmdb(source.get("_id"), source.get("type"), limit=10))
         similarity_candidates = []
         similarity_recommendations = await asyncio.gather(*tasks_a, return_exceptions=True)
+
+        excluded_ids = set(self._get_excluded_genre_ids(content_type))
+
         similarity_recommendations = [item for item in similarity_recommendations if not isinstance(item, Exception)]
-        for item in similarity_recommendations:
-            similarity_candidates.extend(item)
+        for batch in similarity_recommendations:
+            similarity_candidates.extend(
+                item for item in batch if not excluded_ids.intersection(item.get("genre_ids") or [])
+            )
 
         # --- Candidate Set B: Profile-based Discovery ---
+        # Extract excluded genres
+        excluded_genres = list(excluded_ids)  # Convert back to list for consistency
+
         # Use typed profile based on content_type
-        user_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type=content_type)
+        user_profile = await self.user_profile_service.build_user_profile(
+            scored_objects, content_type=content_type, excluded_genres=excluded_genres
+        )
         discovery_candidates = await self.discovery_engine.discover_recommendations(
-            user_profile, content_type, limit=20
+            user_profile, content_type, limit=20, excluded_genres=excluded_genres
         )
 
         # --- Combine & Deduplicate ---

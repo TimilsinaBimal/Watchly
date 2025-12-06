@@ -208,6 +208,31 @@
 
                 <div class="border-t border-slate-800"></div>
 
+                <!-- Genre Exclusion -->
+                <div class="space-y-6">
+                    <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Exclude Genres</label>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <!-- Movie Genres -->
+                        <div class="space-y-3">
+                            <label class="block text-xs font-semibold text-slate-500 uppercase">Movies</label>
+                            <div id="movieGenreList" class="h-48 overflow-y-auto pr-2 space-y-2 custom-scrollbar bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Series Genres -->
+                        <div class="space-y-3">
+                            <label class="block text-xs font-semibold text-slate-500 uppercase">Series</label>
+                            <div id="seriesGenreList" class="h-48 overflow-y-auto pr-2 space-y-2 custom-scrollbar bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-800"></div>
+
                 <!-- RPDB API Key -->
                 <div class="space-y-4">
                     <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">RPDB API Key

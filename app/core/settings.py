@@ -14,6 +14,8 @@ class UserSettings(BaseModel):
     catalogs: list[CatalogConfig]
     language: str = "en-US"
     rpdb_key: str | None = None
+    excluded_movie_genres: list[str] = []
+    excluded_series_genres: list[str] = []
 
 
 def encode_settings(settings: UserSettings) -> str:

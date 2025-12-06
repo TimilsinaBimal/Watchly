@@ -45,7 +45,9 @@ class DynamicCatalogService:
             "extra": [],
         }
 
-    async def get_theme_based_catalogs(self, library_items: list[dict]) -> list[dict]:
+    async def get_theme_based_catalogs(
+        self, library_items: list[dict], user_settings: UserSettings | None = None
+    ) -> list[dict]:
         catalogs = []
         # 1. Build User Profile
         # Combine loved and watched
@@ -65,16 +67,27 @@ class DynamicCatalogService:
             scored_obj = self.scoring_service.process_item(item_data)
             scored_objects.append(scored_obj)
 
+        # Get excluded genres
+        excluded_movie_genres = []
+        excluded_series_genres = []
+        if user_settings:
+            excluded_movie_genres = [int(g) for g in user_settings.excluded_movie_genres]
+            excluded_series_genres = [int(g) for g in user_settings.excluded_series_genres]
+
         # 2. Generate Thematic Rows with Type-Specific Profiles
         # Generate for Movies
-        movie_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type="movie")
+        movie_profile = await self.user_profile_service.build_user_profile(
+            scored_objects, content_type="movie", excluded_genres=excluded_movie_genres
+        )
         movie_rows = await self.row_generator.generate_rows(movie_profile, "movie")
 
         for row in movie_rows:
             catalogs.append({"type": "movie", "id": row.id, "name": row.title, "extra": []})
 
         # Generate for Series
-        series_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type="series")
+        series_profile = await self.user_profile_service.build_user_profile(
+            scored_objects, content_type="series", excluded_genres=excluded_series_genres
+        )
         series_rows = await self.row_generator.generate_rows(series_profile, "series")
 
         for row in series_rows:
@@ -98,7 +111,7 @@ class DynamicCatalogService:
         catalogs = []
 
         if include_theme_based_rows:
-            catalogs.extend(await self.get_theme_based_catalogs(library_items))
+            catalogs.extend(await self.get_theme_based_catalogs(library_items, user_settings))
 
         # 3. Add Item-Based Rows
         if include_item_based_rows:
