@@ -59,6 +59,8 @@ def get_base_manifest(user_settings: UserSettings | None = None):
 @alru_cache(maxsize=1000, ttl=3600)
 async def fetch_catalogs(token: str):
     credentials = await token_store.get_user_data(token)
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
     if credentials.get("settings"):
         user_settings = UserSettings(**credentials["settings"])

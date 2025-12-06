@@ -93,6 +93,8 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     # 2. Check if user already exists
     token = token_store.get_token_from_user_id(user_id)
     existing_data = await token_store.get_user_data(token)
+    if not existing_data:
+        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
     # 3. Construct Settings
     default_settings = get_default_settings()

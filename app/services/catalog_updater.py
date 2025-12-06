@@ -4,6 +4,7 @@ from typing import Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from fastapi import HTTPException
 from loguru import logger
 
 from app.core.config import settings
@@ -17,6 +18,10 @@ MAX_CONCURRENT_UPDATES = 5
 
 
 async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, Any]) -> bool:
+    if not credentials:
+        logger.warning(f"[{token}] Attempted to refresh catalogs with no credentials.")
+        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
+
     auth_key = credentials.get("authKey")
     stremio_service = StremioService(auth_key=auth_key)
     # check if user has addon installed or not

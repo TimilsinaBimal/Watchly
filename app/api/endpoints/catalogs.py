@@ -43,6 +43,8 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
     logger.info(f"[{token}] Fetching catalog for {type} with id {id}")
 
     credentials = await token_store.get_user_data(token)
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
     try:
         # Extract settings from credentials
         settings_dict = credentials.get("settings", {})

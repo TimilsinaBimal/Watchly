@@ -1,9 +1,13 @@
+import base64
 import json
 from collections.abc import AsyncIterator
 from typing import Any
 
 import redis.asyncio as redis
 from cachetools import TTLCache
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
 from app.core.config import settings
@@ -23,6 +27,38 @@ class TokenStore:
         if not settings.REDIS_URL:
             logger.warning("REDIS_URL is not set. Token storage will fail until a Redis instance is configured.")
 
+        if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
+            logger.warning(
+                "TOKEN_SALT is missing or using the default placeholder. Set a strong value to secure tokens."
+            )
+
+    def _ensure_secure_salt(self) -> None:
+        if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
+            logger.error("Refusing to store credentials because TOKEN_SALT is unset or using the insecure default.")
+            raise RuntimeError(
+                "Server misconfiguration: TOKEN_SALT must be set to a non-default value before storing credentials."
+            )
+
+    def _get_cipher(self) -> Fernet:
+        """Get or create Fernet cipher instance based on TOKEN_SALT."""
+        if self._cipher is None:
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=b"",  # empty salt
+                iterations=200_000,
+            )
+
+            key = base64.urlsafe_b64encode(kdf.derive(settings.TOKEN_SALT.encode("utf-8")))
+            self._cipher = Fernet(key)
+        return self._cipher
+
+    def encrypt_token(self, token: str) -> str:
+        return self._cipher.encrypt(token.encode("utf-8")).decode("utf-8")
+
+    def decrypt_token(self, enc: str) -> str:
+        return self._cipher.decrypt(enc.encode("utf-8")).decode("utf-8")
+
     async def _get_client(self) -> redis.Redis:
         if self._client is None:
             self._client = redis.from_url(settings.REDIS_URL, decode_responses=True, encoding="utf-8")
@@ -39,6 +75,7 @@ class TokenStore:
         return token.strip() if token else ""
 
     async def store_user_data(self, user_id: str, payload: dict[str, Any]) -> str:
+        self._ensure_secure_salt()
         token = self.get_token_from_user_id(user_id)
         key = self._format_key(token)
 
@@ -47,6 +84,9 @@ class TokenStore:
 
         # Store user_id in payload for convenience
         storage_data["user_id"] = user_id
+
+        if storage_data.get("authKey"):
+            storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
 
         client = await self._get_client()
         json_str = json.dumps(storage_data)
@@ -74,6 +114,8 @@ class TokenStore:
 
         try:
             data = json.loads(data_raw)
+            if data.get("authKey"):
+                data["authKey"] = self.decrypt_token(data["authKey"])
             self._payload_cache[token] = data
             return data
         except json.JSONDecodeError:
