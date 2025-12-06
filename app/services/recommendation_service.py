@@ -259,12 +259,11 @@ class RecommendationService:
         # media_type is already resolved above.
         excluded_ids = set(self._get_excluded_genre_ids(media_type))
         if excluded_ids:
-            filtered_by_genre = []
-            for item in recommendations:
-                if item.get("genre_ids") and any(gid in excluded_ids for gid in item["genre_ids"]):
-                    continue
-                filtered_by_genre.append(item)
-            recommendations = filtered_by_genre
+            recommendations = [
+                item
+                for item in recommendations
+                if not excluded_ids.intersection(item.get("genre_ids") or [])
+            ]
 
         # 2. Fetch Metadata (gets IMDB IDs)
         meta_items = await self._fetch_metadata_for_items(recommendations, media_type)
