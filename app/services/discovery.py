@@ -152,8 +152,12 @@ class DiscoveryEngine:
         # query 6: Top year
         if top_year:
             year = top_year[0][0]
+            # we store year in 10 years bucket
+            start_year = f"{year}-01-01"
+            end_year = f"{int(year) + 10}-12-31"
             params_rating = {
-                "year": year,
+                "primary_release_date.gte": start_year,
+                "primary_release_date.lte": end_year,
                 "sort_by": "ratings.desc",
                 "vote_count.gte": 500,
                 **base_params,

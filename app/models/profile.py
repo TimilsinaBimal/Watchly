@@ -88,3 +88,6 @@ class UserTasteProfile(BaseModel):
 
     def get_top_countries(self, limit: int = 2) -> list[tuple[str, float]]:
         return self.countries.get_top_features(limit)
+
+    def get_top_year(self, limit: int = 1) -> list[tuple[int, float]]:
+        return self.years.get_top_features(limit)

@@ -130,6 +130,10 @@ async def _manifest_handler(response: Response, token: str | None, settings_str:
                 catalog_id = catalog.get("id", "")
                 if catalog_id.startswith("watchly.theme."):
                     return "watchly.theme"
+                if catalog_id.startswith("watchly.loved."):
+                    return "watchly.loved"
+                if catalog_id.startswith("watchly.watched."):
+                    return "watchly.watched"
                 if catalog_id.startswith("watchly.item."):
                     return "watchly.item"
                 if catalog_id.startswith("watchly.rec"):
