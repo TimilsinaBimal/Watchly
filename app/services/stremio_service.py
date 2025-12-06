@@ -94,13 +94,10 @@ class StremioService:
             raise
 
     async def get_auth_key(self) -> str:
-        """Return a cached auth key or login to retrieve one."""
-        if self._auth_key:
-            return self._auth_key
-        auth_key = await self._login_for_auth_key()
-        if not auth_key:
-            raise ValueError("Failed to obtain Stremio auth key")
-        return auth_key
+        """Return the cached auth key."""
+        if not self._auth_key:
+            raise ValueError("Stremio auth key is missing.")
+        return self._auth_key
 
     async def is_loved(self, auth_key: str, imdb_id: str, media_type: str) -> tuple[bool, bool]:
         """
@@ -152,13 +149,54 @@ class StremioService:
             metas = response.json().get("metas", [])
             return [meta.get("id") for meta in metas]
 
+    async def get_user_info(self) -> dict[str, str]:
+        """Fetch user ID and email using the auth key."""
+        if not self._auth_key:
+            raise ValueError("Stremio auth key is missing.")
+
+        url = f"{self.base_url}/api/getUser"
+        payload = {
+            "type": "GetUser",
+            "authKey": self._auth_key,
+        }
+
+        try:
+            client = await self._get_client()
+            result = await client.post(url, json=payload)
+            result.raise_for_status()
+            data = result.json()
+
+            if "error" in data:
+                error_msg = data["error"]
+                if isinstance(error_msg, dict):
+                    error_msg = error_msg.get("message", "Unknown error")
+                raise ValueError(f"Stremio Error: {error_msg}")
+
+            # Structure: { result: { _id, email, ... } }
+            res = data.get("result", {})
+            user_id = res.get("_id", "")
+            email = res.get("email", "")
+
+            if not user_id:
+                raise ValueError("Could not retrieve user ID from Stremio profile.")
+
+            return {"user_id": user_id, "email": email}
+        except Exception as e:
+            logger.error(f"Error fetching user profile: {e}")
+            raise
+
+    async def get_user_email(self) -> str:
+        """Fetch user email using the auth key."""
+        user_info = await self.get_user_info()
+        return user_info.get("email", "")
+
     async def get_library_items(self) -> dict[str, list[dict]]:
         """
         Fetch library items from Stremio once and return both watched and loved items.
         Returns a dict with 'watched' and 'loved' keys.
         """
-        if not self._auth_key and (not self.username or not self.password):
-            logger.warning("Stremio credentials not configured")
+        if not self._auth_key:
+            logger.warning("Stremio auth key not configured")
             return {"watched": [], "loved": []}
 
         try:
