@@ -76,7 +76,7 @@ async def get_catalog(
 
         elif id.startswith("watchly.item.") or id.startswith("watchly.loved.") or id.startswith("watchly.watched."):
             # Extract actual item ID (tt... or tmdb:...)
-            item_id = id.replace("watchly.item.", "").replace("watchly.loved.", "").replace("watchly.watched.", "")
+            item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", id)
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=item_id)
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
 
