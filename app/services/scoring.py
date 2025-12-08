@@ -91,7 +91,10 @@ class ScoringService:
 
             days_since = (now - last_watched).days
 
-            if days_since < 30:
+            if days_since < 7:
+                recency_score = 150
+                is_recent = True
+            elif days_since < 30:
                 recency_score = 100
                 is_recent = True
             elif days_since < 90:
