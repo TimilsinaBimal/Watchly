@@ -1,3 +1,4 @@
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,6 +11,7 @@ from loguru import logger
 
 from app.api.main import api_router
 from app.services.catalog_updater import BackgroundCatalogUpdater
+from app.startup.migration import migrate_tokens
 
 from .config import settings
 from .version import __version__
@@ -36,6 +38,7 @@ async def lifespan(app: FastAPI):
     Manage application lifespan events (startup/shutdown).
     """
     global catalog_updater
+    asyncio.create_task(migrate_tokens())
 
     # Startup
     if settings.AUTO_UPDATE_CATALOGS:

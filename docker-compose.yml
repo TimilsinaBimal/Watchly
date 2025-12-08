@@ -14,9 +14,6 @@ services:
       # some macos users need to use 127.0.0.1:8000:8000 to access the app on localhost due to IPV6 issues
     env_file:
       - .env
-    environment:
-      # Override REDIS_URL to use Docker service name instead of localhost
-      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./:/app
     depends_on:
