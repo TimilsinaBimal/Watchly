@@ -19,10 +19,10 @@ def get_default_settings() -> UserSettings:
     return UserSettings(
         language="en-US",
         catalogs=[
-            CatalogConfig(id="watchly.rec", name="Recommended", enabled=True),
-            CatalogConfig(id="watchly.loved", name="More like what you loved", enabled=True),
+            CatalogConfig(id="watchly.rec", name="Top Picks for You", enabled=True),
+            CatalogConfig(id="watchly.loved", name="More Like", enabled=True),
             CatalogConfig(id="watchly.watched", name="Because you watched", enabled=True),
-            CatalogConfig(id="watchly.theme", name="Because of Genre/Theme", enabled=True),
+            CatalogConfig(id="watchly.theme", name="Genre & Keyword Catalogs", enabled=True),
         ],
     )
 

@@ -3,7 +3,6 @@ from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
 from app.services.stremio_service import StremioService
 from app.services.tmdb_service import TMDBService
-from app.services.translation import translation_service
 from app.services.user_profile import UserProfileService
 
 
@@ -47,7 +46,6 @@ class DynamicCatalogService:
         self, library_items: list[dict], user_settings: UserSettings | None = None
     ) -> list[dict]:
         catalogs = []
-        lang = user_settings.language if user_settings else "en-US"
 
         # 1. Build User Profile
         # Combine loved and watched
@@ -82,8 +80,8 @@ class DynamicCatalogService:
         movie_rows = await self.row_generator.generate_rows(movie_profile, "movie")
 
         for row in movie_rows:
-            translated_title = await translation_service.translate(row.title, lang)
-            catalogs.append({"type": "movie", "id": row.id, "name": translated_title, "extra": []})
+            # translated_title = await translation_service.translate(row.title, lang)
+            catalogs.append({"type": "movie", "id": row.id, "name": row.title, "extra": []})
 
         # Generate for Series
         series_profile = await self.user_profile_service.build_user_profile(
@@ -92,8 +90,8 @@ class DynamicCatalogService:
         series_rows = await self.row_generator.generate_rows(series_profile, "series")
 
         for row in series_rows:
-            translated_title = await translation_service.translate(row.title, lang)
-            catalogs.append({"type": "series", "id": row.id, "name": translated_title, "extra": []})
+            # translated_title = await translation_service.translate(row.title, lang)
+            catalogs.append({"type": "series", "id": row.id, "name": row.title, "extra": []})
 
         return catalogs
 
@@ -108,7 +106,8 @@ class DynamicCatalogService:
 
         # Theme Based
         theme_config = next((c for c in user_settings.catalogs if c.id == "watchly.theme"), None)
-        if not theme_config or theme_config.enabled:
+
+        if theme_config and theme_config.enabled:
             catalogs.extend(await self.get_theme_based_catalogs(library_items, user_settings))
 
         # Item Based (Loved/Watched)
@@ -165,8 +164,6 @@ class DynamicCatalogService:
             last_loved = loved[0] if loved else None
             if last_loved:
                 label = loved_config.name
-                if not label or label == "More like what you loved":  # Default
-                    label = await translation_service.translate("More like what you loved", language)
 
                 catalogs.append(self.build_catalog_entry(last_loved, label, "watchly.loved"))
 
@@ -185,7 +182,5 @@ class DynamicCatalogService:
 
             if last_watched:
                 label = watched_config.name
-                if not label or label == "Because you watched":
-                    label = await translation_service.translate("Because you watched", language)
 
                 catalogs.append(self.build_catalog_entry(last_watched, label, "watchly.watched"))

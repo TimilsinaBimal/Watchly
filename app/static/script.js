@@ -1,9 +1,9 @@
 // Default catalog configurations
 const defaultCatalogs = [
     { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, description: 'Personalized recommendations based on your library' },
-    { id: 'watchly.loved', name: 'More like what you loved', enabled: true, description: 'Recommendations similar to content you explicitly loved' },
-    { id: 'watchly.watched', name: 'Because you watched', enabled: true, description: 'Recommendations based on your recent watch history' },
-    { id: 'watchly.theme', name: 'Genre & Theme Collections', enabled: true, description: 'Dynamic collections based on your favorite genres' },
+    { id: 'watchly.loved', name: 'More Like', enabled: true, description: 'Recommendations similar to content you explicitly loved' },
+    { id: 'watchly.watched', name: 'Because You Watched', enabled: true, description: 'Recommendations based on your recent watch history' },
+    { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
 ];
 
 let catalogs = JSON.parse(JSON.stringify(defaultCatalogs));
@@ -506,7 +506,7 @@ function createCatalogItem(cat, index) {
     item.className = `catalog-item group bg-slate-900 border border-slate-700 rounded-xl p-4 transition-all hover:border-slate-600 ${disabledClass}`;
     item.setAttribute('data-index', index);
 
-    const isRenamable = true;
+    const isRenamable = cat.id !== 'watchly.theme';
     item.innerHTML = `
         <div class="flex items-start gap-3 sm:items-center sm:gap-4">
             <div class="sort-buttons flex flex-col gap-1 flex-shrink-0 mt-0.5 sm:mt-0">

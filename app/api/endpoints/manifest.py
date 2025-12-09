@@ -111,23 +111,36 @@ async def _manifest_handler(response: Response, token: str):
 
     base_manifest = get_base_manifest(user_settings)
 
-    # translate to target language
-    if user_settings and user_settings.language:
-        for cat in base_manifest.get("catalogs", []):
-            if cat.get("name"):
-                cat["name"] = await translation_service.translate(cat["name"], user_settings.language)
-
     fetched_catalogs = await fetch_catalogs(token)
 
     all_catalogs = [c.copy() for c in base_manifest["catalogs"]] + [c.copy() for c in fetched_catalogs]
 
+    translated_catalogs = []
+
+    # translate to target language
+    if user_settings and user_settings.language:
+        for cat in all_catalogs:
+            if cat.get("name"):
+                cat["name"] = await translation_service.translate(cat["name"], user_settings.language)
+                translated_catalogs.append(cat)
+    else:
+        translated_catalogs = all_catalogs
+
     if user_settings:
         order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
-        all_catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
+        translated_catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
 
-    base_manifest["catalogs"] = all_catalogs
+    base_manifest["catalogs"] = translated_catalogs
 
     return base_manifest
+
+
+@router.get("/manifest.json")
+async def manifest():
+    manifest = await get_base_manifest()
+    # since user is not logged in, return empty catalogs
+    manifest["catalogs"] = []
+    return manifest
 
 
 @router.get("/{token}/manifest.json")
