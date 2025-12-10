@@ -1,16 +1,7 @@
 from google import genai
 from loguru import logger
-from pydantic import BaseModel, Field
 
 from app.core.config import settings
-
-# class CatalogRow(BaseModel):
-#     name: str = Field(description="Name of the catalog/row.")
-#     translated_name: str = Field(description="Translated name of the catalog/row.")
-
-
-class Catalog(BaseModel):
-    title: str = Field(description="Simplified title of the catalog")
 
 
 class GeminiService:
