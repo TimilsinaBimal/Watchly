@@ -13,6 +13,7 @@ from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog import DynamicCatalogService
 from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
+from app.services.translation import translation_service
 
 # Max number of concurrent updates to prevent overwhelming external APIs
 MAX_CONCURRENT_UPDATES = 5
@@ -50,6 +51,11 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
         catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
             library_items=library_items, user_settings=user_settings
         )
+
+        if user_settings and user_settings.language:
+            for cat in catalogs:
+                if name := cat.get("name"):
+                    cat["name"] = await translation_service.translate(name, user_settings.language)
         logger.info(f"[{redact_token(token)}] Prepared {len(catalogs)} catalogs")
         return await stremio_service.update_catalogs(catalogs, auth_key)
     except Exception as e:

@@ -3,6 +3,7 @@ import random
 from pydantic import BaseModel
 
 from app.models.profile import UserTasteProfile
+from app.services.gemini import gemini_service
 from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres
 from app.services.tmdb_service import TMDBService
@@ -62,38 +63,54 @@ class RowGeneratorService:
                 return random.choice(adjectives)
             return ""
 
-        # Strategy 1: Pure Keyword Row (Top Priority)
+        # Strategy 1: Combined Keyword Row (Top Priority)
         if top_keywords:
-            k_id = top_keywords[0][0]
-            kw_name = await self._get_keyword_name(k_id)
-            if kw_name:
+            k_id1 = top_keywords[0][0]
+            kw_name1 = await self._get_keyword_name(k_id1)
+
+            use_single_keyword_row = True
+            if len(top_keywords) >= 2:
+                k_id2 = top_keywords[1][0]
+                kw_name2 = await self._get_keyword_name(k_id2)
+                title = ""
+                if kw_name1 and kw_name2:
+                    title = gemini_service.generate_content(f"Keywords: {kw_name1} + {kw_name2}")
+
+                if title:
+                    rows.append(
+                        RowDefinition(
+                            title=title,
+                            id=f"watchly.theme.k{k_id1}.k{k_id2}",
+                            keywords=[k_id1, k_id2],
+                        )
+                    )
+                    use_single_keyword_row = False
+
+            if use_single_keyword_row and kw_name1:
                 rows.append(
                     RowDefinition(
-                        title=f"{normalize_keyword(kw_name)}",
-                        id=f"watchly.theme.k{k_id}",
-                        keywords=[k_id],
+                        title=normalize_keyword(kw_name1),
+                        id=f"watchly.theme.k{k_id1}",
+                        keywords=[k_id1],
                     )
                 )
 
         # Strategy 2: Keyword + Genre (Specific Niche)
-        if top_genres and len(top_keywords) > 1:
+        if top_genres and len(top_keywords) > 2:
             g_id = top_genres[0][0]
             # get random keywords: Just to surprise user in every refresh
-            k_id = random.choice(top_keywords[1:])[0]
+            k_id = random.choice(top_keywords[2:])[0]
 
             if k_id:
                 kw_name = await self._get_keyword_name(k_id)
                 if kw_name:
-                    title = f"{normalize_keyword(kw_name)} {get_gname(g_id)}"
-                    # keyword and genre can have same name sometimes, remove if so
-                    words = title.split()
-                    seen_words = set()
-                    unique_words = []
-                    for word in words:
-                        if word not in seen_words:
-                            unique_words.append(word)
-                            seen_words.add(word)
-                    title = " ".join(unique_words)
+                    title = gemini_service.generate_content(
+                        f"Genre: {get_gname(g_id)} + Keyword: {normalize_keyword(kw_name)}"
+                    )
+                    if not title:
+                        title = f"{get_gname(g_id)} {normalize_keyword(kw_name)}"
+                        # keyword and genre can have same name sometimes, remove if so
+                        title = " ".join(dict.fromkeys(title.split()))
 
                     rows.append(
                         RowDefinition(
@@ -110,9 +127,12 @@ class RowGeneratorService:
             c_code = top_countries[0][0]
             c_adj = get_cname(c_code)
             if c_adj:
+                title = gemini_service.generate_content(f"Genre: {get_gname(g_id)} + Country: {c_adj}")
+                if not title:
+                    title = f"{get_gname(g_id)} {c_adj}"
                 rows.append(
                     RowDefinition(
-                        title=f"{c_adj} {get_gname(g_id)}",
+                        title=title,
                         id=f"watchly.theme.g{g_id}.ct{c_code}",  # ct for country
                         genres=[g_id],
                         country=c_code,
@@ -130,9 +150,12 @@ class RowGeneratorService:
             # # Only do this if decade is valid and somewhat old (nostalgia factor)
             if 1970 <= decade_start <= 2010:
                 decade_str = str(decade_start)[2:] + "s"  # "90s"
+                title = gemini_service.generate_content(f"Genre: {get_gname(g_id)} + Era: {decade_str}")
+                if not title:
+                    title = f"{get_gname(g_id)} {decade_str}"
                 rows.append(
                     RowDefinition(
-                        title=f"{decade_str} {get_gname(g_id)}",
+                        title=title,
                         id=f"watchly.theme.g{g_id}.y{decade_start}",
                         genres=[g_id],
                         year_range=(decade_start, decade_start + 9),

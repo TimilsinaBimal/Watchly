@@ -36,6 +36,10 @@ class Settings(BaseSettings):
 
     RECOMMENDATION_SOURCE_ITEMS_LIMIT: int = 10
 
+    # AI
+    DEFAULT_GEMINI_MODEL: str = "gemma-3-27b-it"
+    GEMINI_API_KEY: str | None = None
+
 
 settings = Settings()
 

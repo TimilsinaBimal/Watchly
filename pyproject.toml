@@ -11,6 +11,7 @@ dependencies = [
     "cryptography>=46.0.3",
     "deep-translator>=1.11.4",
     "fastapi>=0.104.1",
+    "google-genai>=1.54.0",
     "httpx>=0.25.2",
     "loguru>=0.7.2",
     "pydantic>=2.5.0",
