@@ -64,34 +64,29 @@ class RowGeneratorService:
             return ""
 
         # Strategy 1: Combined Keyword Row (Top Priority)
-        if len(top_keywords) >= 2:
-            k_id1, k_id2 = top_keywords[0][0], top_keywords[1][0]
-            kw_name1 = await self._get_keyword_name(k_id1)
-            kw_name2 = await self._get_keyword_name(k_id2)
-            title = ""
-            if kw_name1 and kw_name2:
-                title = gemini_service.generate_content(f"Keywords: {kw_name1} + {kw_name2}")
-
-            if title:
-                rows.append(
-                    RowDefinition(
-                        title=title,
-                        id=f"watchly.theme.k{k_id1}.k{k_id2}",
-                        keywords=[k_id1, k_id2],
-                    )
-                )
-            elif kw_name1:
-                rows.append(
-                    RowDefinition(
-                        title=normalize_keyword(kw_name1),
-                        id=f"watchly.theme.k{k_id1}",
-                        keywords=[k_id1],
-                    )
-                )
-        elif top_keywords:
+        if top_keywords:
             k_id1 = top_keywords[0][0]
             kw_name1 = await self._get_keyword_name(k_id1)
-            if kw_name1:
+
+            use_single_keyword_row = True
+            if len(top_keywords) >= 2:
+                k_id2 = top_keywords[1][0]
+                kw_name2 = await self._get_keyword_name(k_id2)
+                title = ""
+                if kw_name1 and kw_name2:
+                    title = gemini_service.generate_content(f"Keywords: {kw_name1} + {kw_name2}")
+
+                if title:
+                    rows.append(
+                        RowDefinition(
+                            title=title,
+                            id=f"watchly.theme.k{k_id1}.k{k_id2}",
+                            keywords=[k_id1, k_id2],
+                        )
+                    )
+                    use_single_keyword_row = False
+
+            if use_single_keyword_row and kw_name1:
                 rows.append(
                     RowDefinition(
                         title=normalize_keyword(kw_name1),
