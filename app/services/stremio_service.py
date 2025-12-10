@@ -127,11 +127,6 @@ class StremioService:
             result = await client.get(url, params=params)
             result.raise_for_status()
             status = result.json().get("status", "")
-            # Stremio returns "loved" for loved items
-            # We assume there might be a "liked" status or we can infer based on user input
-            # For now, the API mainly returns 'loved' or nothing.
-            # If the user mentioned a specific "liked" signal, it might be a different value or endpoint.
-            # Assuming "liked" is a valid return value for now based on user query.
             return (status == "loved", status == "liked")
         except Exception as e:
             logger.error(
@@ -244,54 +239,30 @@ class StremioService:
             # Sort watched items by watched time (most recent first)
             watched_items.sort(key=lambda x: x.get("state", {}).get("lastWatched", ""), reverse=True)
 
-            #  is_loved only until we find 10 movies and 10 series
             loved_items = []
-            movies_found = 0
-            series_found = 0
-            target_count = settings.RECOMMENDATION_SOURCE_ITEMS_LIMIT
-            batch_size = 20
 
-            # Process in batches to stop early
-            for i in range(0, len(watched_items), batch_size):
-                if movies_found >= target_count and series_found >= target_count:
-                    logger.info("Found enough loved items, stopping check")
-                    break
+            # fetch loved and liked items
 
-                batch = watched_items[i : i + batch_size]  # noqa: E203
-
-                # Filter batch to only check types we still need
-                check_candidates = []
-                for item in batch:
-                    itype = item.get("type")
-                    if itype == "movie" and movies_found < target_count:
-                        check_candidates.append(item)
-                    elif itype == "series" and series_found < target_count:
-                        check_candidates.append(item)
-
-                if not check_candidates:
-                    continue
-
-                # Check loved status for candidates in parallel
-                loved_statuses = await asyncio.gather(
-                    *[self.is_loved(auth_key, item.get("_id"), item.get("type")) for item in check_candidates]
-                )
-
-                # Process results
-                for item, (is_loved_status, is_liked_status) in zip(check_candidates, loved_statuses):
-                    if is_loved_status or is_liked_status:
-                        # Store status on item for scoring later
-                        item["_is_loved"] = is_loved_status
-                        item["_is_liked"] = is_liked_status
-
-                        loved_items.append(item)
-                        if item.get("type") == "movie":
-                            movies_found += 1
-                        elif item.get("type") == "series":
-                            series_found += 1
-
-            logger.info(
-                f"Found {len(loved_items)} loved library items (Movies: {movies_found}, Series: {series_found})"
+            loved_movies, loved_series, liked_movies, liked_series = await asyncio.gather(
+                self.get_loved_items(auth_key, "movie"),
+                self.get_loved_items(auth_key, "series"),
+                self.get_liked_items(auth_key, "movie"),
+                self.get_liked_items(auth_key, "series"),
             )
+
+            for item in watched_items:
+                loved = False
+                if item.get("_id") in loved_movies or item.get("_id") in loved_series:
+                    item["_is_loved"] = True
+                    loved = True
+                if item.get("_id") in liked_movies or item.get("_id") in liked_series:
+                    item["_is_liked"] = True
+                    loved = True
+
+                if loved:
+                    loved_items.append(item)
+
+            logger.info(f"Found {len(loved_items)} loved library items")
 
             # Return raw items; ScoringService will handle Pydantic conversion
             return {"watched": watched_items, "loved": loved_items}
