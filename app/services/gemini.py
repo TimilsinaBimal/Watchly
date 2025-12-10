@@ -15,8 +15,15 @@ class Catalog(BaseModel):
 
 class GeminiService:
     def __init__(self, model: str = settings.DEFAULT_GEMINI_MODEL):
-        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
         self.model = model
+        self.client = None
+        if api_key := settings.GEMINI_API_KEY:
+            try:
+                self.client = genai.Client(api_key=api_key)
+            except Exception as e:
+                logger.warning(f"Failed to initialize Gemini client: {e}")
+        else:
+            logger.warning("GEMINI_API_KEY not set. Gemini features will be disabled.")
 
     @staticmethod
     def get_prompt():
@@ -41,18 +48,15 @@ class GeminiService:
 
     def generate_content(self, prompt: str) -> str:
         system_prompt = self.get_prompt()
+        if not self.client:
+            logger.warning("Gemini client not initialized. Gemini features will be disabled.")
+            return ""
         try:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=system_prompt + "\n\n" + prompt,
-                # config={
-                #     # "response_mime_type": "application/json",
-                #     # "response_json_schema": Catalog.model_json_schema(),
-                #     "system_instruction": system_prompt,
-                # },
             )
-            print(response.text)
-            return response.text
+            return response.text.strip()
         except Exception as e:
             logger.error(f"Error generating content: {e}")
             return ""
