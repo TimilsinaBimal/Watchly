@@ -110,14 +110,7 @@ class RowGeneratorService:
                     if not title:
                         title = f"{get_gname(g_id)} {normalize_keyword(kw_name)}"
                         # keyword and genre can have same name sometimes, remove if so
-                        words = title.split()
-                        seen_words = set()
-                        unique_words = []
-                        for word in words:
-                            if word not in seen_words:
-                                unique_words.append(word)
-                                seen_words.add(word)
-                        title = " ".join(unique_words)
+                        title = " ".join(dict.fromkeys(title.split()))
 
                     rows.append(
                         RowDefinition(
