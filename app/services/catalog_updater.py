@@ -52,14 +52,10 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
             library_items=library_items, user_settings=user_settings
         )
 
-        translated_catalogs = []
-
         if user_settings and user_settings.language:
             for cat in catalogs:
-                if cat.get("name"):
-                    cat["name"] = await translation_service.translate(cat["name"], user_settings.language)
-                    translated_catalogs.append(cat)
-        catalogs = translated_catalogs if translated_catalogs else catalogs
+                if name := cat.get("name"):
+                    cat["name"] = await translation_service.translate(name, user_settings.language)
         logger.info(f"[{redact_token(token)}] Prepared {len(catalogs)} catalogs")
         return await stremio_service.update_catalogs(catalogs, auth_key)
     except Exception as e:
