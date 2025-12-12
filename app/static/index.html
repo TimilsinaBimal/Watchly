@@ -74,7 +74,8 @@
 
         /* Announcement link styling to ensure visibility */
         #announcement-content a {
-            color: #60a5fa; /* blue-400 */
+            color: #60a5fa;
+            /* blue-400 */
             text-decoration: underline;
         }
 
@@ -89,13 +90,20 @@
 
     <!-- Mobile Header -->
     <div class="md:hidden p-4 bg-slate-900 border-b border-slate-800 flex items-center gap-3">
+        <button id="mobileNavToggle" aria-label="Open navigation" class="p-2 rounded-md hover:bg-slate-800/50">
+            <svg class="w-6 h-6 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+        </button>
         <img src="/app/static/logo.png" alt="Watchly" class="w-8 h-8 rounded-lg">
         <h1 class="font-bold text-lg text-white">Watchly</h1>
 
     </div>
+    <!-- Mobile Nav Backdrop -->
+    <div id="mobileNavBackdrop" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"></div>
     <!-- Sidebar Navigation -->
-    <aside
-        class="w-full md:w-72 bg-slate-900/50 backdrop-blur-xl border-b md:border-b-0 md:border-r border-slate-800 flex flex-col flex-shrink-0 relative z-20">
+    <aside id="mainSidebar"
+        class="fixed inset-y-0 left-0 z-40 w-72 transform -translate-x-full transition-transform duration-300 ease-out bg-slate-900/50 backdrop-blur-xl border-b md:border-b-0 md:border-r border-slate-800 flex flex-col flex-shrink-0 md:relative md:translate-x-0 md:flex">
         <div class="p-6 md:p-8 flex-col items-start gap-4 hidden md:flex">
             <div class="flex items-center gap-3">
                 <img src="/app/static/logo.png" alt="Watchly" class="w-10 h-10 rounded-xl shadow-lg shadow-blue-500/10">
@@ -106,7 +114,7 @@
 
 
         <nav
-            class="flex-grow px-4 md:px-6 py-4 space-y-1 overflow-x-auto md:overflow-visible flex md:block whitespace-nowrap md:whitespace-normal gap-2 md:gap-0">
+            class="flex-grow px-4 md:px-6 py-4 space-y-1 md:overflow-visible flex flex-col md:block whitespace-normal gap-2">
 
             <!-- User Profile Section (Hidden by default, shown after login) -->
             <div id="user-profile" class="hidden mb-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl w-full">
@@ -194,13 +202,16 @@
         <div class="p-4 md:p-6 mt-auto space-y-4">
             <!-- Ko-fi Support Button -->
             <button type="button" id="kofiBtn"
-                class="block w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-lg shadow-pink-900/20 hover:shadow-xl hover:shadow-pink-900/30 group text-left">
-                <div class="flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor">
-                        <path
-                            d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.77s1.971.551 1.971 2.638c0 1.913-.985 2.667-2.059 3.015z" />
+                class="block w-full bg-gradient-to-r from-amber-700 to-amber-900 hover:from-amber-600 hover:to-amber-800 text-white font-medium py-3 px-4 rounded-xl transition-all shadow-lg shadow-amber-900/40 hover:shadow-xl group text-left"
+                aria-label="Buy me Coffee">
+                <div class="flex items-center justify-center gap-3">
+                    <!-- Coffee cup icon -->
+                    <svg class="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 7h14v3a5 5 0 01-5 5H8a5 5 0 01-5-5V7z" fill="#fff" opacity="0.9"/>
+                        <path d="M19 8.5a3 3 0 010 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M6 4v1M9 4v1M12 4v1" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    <span>Support on Ko-fi</span>
+                    <span>Buy me Coffee</span>
                 </div>
             </button>
 
@@ -240,20 +251,21 @@
                             Personalized Recommendation Engine for Stremio
                         </p>
                         <p class="text-sm text-slate-400 max-w-2xl mx-auto">
-                            Discover movies and series tailored to your unique taste, powered by your Stremio library and watch history.
+                            Discover movies and series tailored to your unique taste, powered by your Stremio library
+                            and watch history.
                         </p>
-<!-- Announcement (fetched from API) -->
-<div id="announcement"
-    class="hidden max-w-2xl mx-auto mt-6 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 text-sm text-slate-200 flex items-start gap-3"
-    role="region" aria-live="polite">
-    <div class="flex-shrink-0 text-blue-400 mt-0.5">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-    </div>
-    <div id="announcement-content" class="flex-grow text-slate-200"></div>
-</div>
+                        <!-- Announcement (fetched from API) -->
+                        <div id="announcement"
+                            class="hidden max-w-2xl mx-auto mt-6 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 text-sm text-slate-200 flex items-start gap-3"
+                            role="region" aria-live="polite">
+                            <div class="flex-shrink-0 text-blue-400 mt-0.5">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div id="announcement-content" class="flex-grow text-slate-200"></div>
+                        </div>
                     </div>
 
                     <!-- Features Grid -->
@@ -272,7 +284,7 @@
                             <p class="text-xs text-slate-400 leading-relaxed">
                                 AI-powered suggestions based on your watch history
                             </p>
-                            </div>
+                        </div>
 
                         <!-- Feature 2 -->
                         <div
@@ -305,7 +317,7 @@
                             <p class="text-xs text-slate-400 leading-relaxed">
                                 Exclude genres you don't like
                             </p>
-                            </div>
+                        </div>
                         <!-- Feature 4 -->
                         <div
                             class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-green-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-green-900/10">
@@ -321,7 +333,7 @@
                             <p class="text-xs text-slate-400 leading-relaxed">
                                 Recommendations in your preferred language
                             </p>
-                            </div>
+                        </div>
 
                         <!-- Feature 5 -->
                         <div
@@ -338,7 +350,7 @@
                             <p class="text-xs text-slate-400 leading-relaxed">
                                 Enhanced posters with ratings
                             </p>
-                            </div>
+                        </div>
 
                         <!-- Feature 6 -->
                         <div
@@ -355,8 +367,8 @@
                             <p class="text-xs text-slate-400 leading-relaxed">
                                 Recommendations from content you loved
                             </p>
-                            </div>
-                            </div>
+                        </div>
+                        </div>
                     <!-- CTA Section -->
                     <div class="text-center space-y-6">
                         <div class="max-w-2xl mx-auto">
@@ -383,11 +395,12 @@
                                 <span class="font-medium">View Source Code</span>
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14">
+                                    </path>
                                 </svg>
                             </a>
                         </div>
-                        </div>
+                    </div>
                 </section>
 
                 <!-- SECTION 1: LOGIN -->
@@ -540,7 +553,8 @@
                                 </div>
                                 <div class="flex-grow">
                                     <h3 class="text-sm font-semibold text-red-400 mb-1">Danger Zone</h3>
-                                    <p class="text-xs text-slate-400 mb-4">Permanently delete your settings and account data. This action
+                                    <p class="text-xs text-slate-400 mb-4">Permanently delete your settings and account
+                                        data. This action
                                         cannot be undone.</p>
                                     <button type="button" id="deleteAccountBtn"
                                         class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 group">
@@ -550,10 +564,10 @@
                                             </path>
                                         </svg>
                                         <span>Delete Account</span>
-                                        </button>
+                                    </button>
                                 </div>
-                                </div>
-                                </div>
+                            </div>
+                            </div>
                     </div>
 
                     <!-- Error Message -->
@@ -608,6 +622,8 @@
 
         </div>
     </main>
+
+    <!-- BuyMeMoMo modal removed — button now redirects directly -->
 
     <!-- Ko-fi Modal -->
     <div id="kofi-modal" class="fixed inset-0 z-50 hidden">

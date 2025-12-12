@@ -60,8 +60,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeWelcomeFlow();
 
     initializeNavigation();
+    // By default, ensure logged-out users see only Welcome/Login and not configure/install/catalogs
+    lockNavigationForLoggedOut();
     initializeCatalogList();
     initializeLanguageSelect();
+    initializeMobileNav();
     initializeGenreLists();
     initializeFormSubmission();
     initializeSuccessActions();
@@ -83,12 +86,19 @@ document.addEventListener('DOMContentLoaded', () => {
 // Welcome Flow Logic
 function initializeWelcomeFlow() {
     // Single "Get Started" button leads to Stremio login
-    if (btnGetStarted) {
-        btnGetStarted.addEventListener('click', () => {
-            navItems.login.classList.remove('disabled');
-            switchSection('login');
-        });
-    }
+    if (!btnGetStarted) return;
+
+    // Support mobile taps reliably while avoiding double-fire (touch -> click)
+    let touched = false;
+    const handleGetStarted = (e) => {
+        if (e.type === 'click' && touched) return;
+        if (e.type === 'touchstart') touched = true;
+        navItems.login.classList.remove('disabled');
+        switchSection('login');
+    };
+
+    btnGetStarted.addEventListener('click', handleGetStarted);
+    btnGetStarted.addEventListener('touchstart', handleGetStarted, { passive: true });
 }
 
 
@@ -105,6 +115,46 @@ function initializeNavigation() {
 
 function unlockNavigation() {
     Object.values(navItems).forEach(el => el.classList.remove('disabled'));
+}
+
+function lockNavigationForLoggedOut() {
+    // Ensure welcome and login remain accessible; disable only config/catalogs/install
+    if (navItems.welcome) navItems.welcome.classList.remove('disabled');
+    if (navItems.login) navItems.login.classList.remove('disabled');
+    if (navItems.config) navItems.config.classList.add('disabled');
+    if (navItems.catalogs) navItems.catalogs.classList.add('disabled');
+    if (navItems.install) navItems.install.classList.add('disabled');
+}
+
+function initializeMobileNav() {
+    const mobileToggle = document.getElementById('mobileNavToggle');
+    const sidebar = document.getElementById('mainSidebar');
+    const backdrop = document.getElementById('mobileNavBackdrop');
+    if (!mobileToggle || !sidebar || !backdrop) return;
+
+    const openNav = () => {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        backdrop.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    };
+    const closeNav = () => {
+        sidebar.classList.remove('translate-x-0');
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    };
+
+    mobileToggle.addEventListener('click', (e) => { e.preventDefault(); openNav(); });
+    backdrop.addEventListener('click', closeNav);
+
+    // Auto-close when a nav item is selected (mobile)
+    Object.values(navItems).forEach(n => {
+        if (!n) return;
+        n.addEventListener('click', () => {
+            if (!sidebar.classList.contains('hidden')) closeNav();
+        });
+    });
 }
 
 function switchSection(sectionKey) {
@@ -137,8 +187,9 @@ function resetApp() {
     switchSection('welcome');
 
     // Lock Navs
+    // Keep the Welcome nav enabled so the main Get Started entry remains usable.
     Object.keys(navItems).forEach(key => {
-        if (key !== 'login') navItems[key].classList.add('disabled'); // Login is always enabled technically, but we hide it via switchSection('welcome')
+        if (key !== 'login' && key !== 'welcome') navItems[key].classList.add('disabled');
     });
     // Actually, we should probably disable 'login' too until they choose New/Existing User?
     // But our nav click logic handles that. If we are at 'welcome', the sidebar is visible but inactive.
@@ -872,43 +923,13 @@ function initializeFooter() {
 // Ko-fi Modal Logic
 function initializeKofi() {
     const kofiBtn = document.getElementById('kofiBtn');
-    const modal = document.getElementById('kofi-modal');
-    const closeBtn = document.getElementById('close-kofi');
-    const backdrop = document.getElementById('kofi-backdrop');
-    const iframe = document.getElementById('kofiframe');
-
-    // URL for the Ko-fi embed widget
-    const KOFI_URL = "https://ko-fi.com/timilsinabimal/?hidefeed=true&widget=true&embed=true&preview=true";
-
-    function openModal() {
-        if (!modal) return;
-        modal.classList.remove('hidden');
-        // Lazy load the iframe source if not set correctly
-        if (iframe && (!iframe.src || !iframe.src.includes('ko-fi.com'))) {
-            iframe.src = KOFI_URL;
-        }
-    }
-
-    function closeModal() {
-        if (!modal) return;
-        modal.classList.add('hidden');
-        // We don't clear src to keep it loaded for next time, but you could if needed
-    }
+    const MEMOMO_URL = 'https://buymemomo.com/timilsinabimal';
 
     if (kofiBtn) kofiBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        openModal();
-    });
-
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
-
-    if (backdrop) backdrop.addEventListener('click', closeModal);
-
-    // Close on Escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
-            closeModal();
-        }
+        // Open BuyMeMoMo in a new tab and remove window.opener for safety
+        const win = window.open(MEMOMO_URL, '_blank');
+        try { if (win) win.opener = null; } catch (err) { /* ignore */ }
     });
 }
 
