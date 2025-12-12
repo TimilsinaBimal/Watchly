@@ -1,4 +1,5 @@
 import asyncio
+import random
 from urllib.parse import unquote
 
 from loguru import logger
@@ -72,12 +73,18 @@ class RecommendationService:
     async def _get_exclusion_sets(self, content_type: str | None = None) -> tuple[set[str], set[int]]:
         """
         Fetch library items and build strict exclusion sets for watched content.
+        Also exclude items the user has added to library to avoid recommending duplicates.
         Returns (watched_imdb_ids, watched_tmdb_ids)
         """
         # Always fetch fresh library to ensure we don't recommend what was just watched
         library_data = await self.stremio_service.get_library_items()
-        # Combine loved and watched - both implies user has seen/interacted
-        all_items = library_data.get("loved", []) + library_data.get("watched", [])
+        # Combine loved, watched, added, and removed (added/removed treated as exclude-only)
+        all_items = (
+            library_data.get("loved", [])
+            + library_data.get("watched", [])
+            + library_data.get("added", [])
+            + library_data.get("removed", [])
+        )
 
         imdb_ids = set()
         tmdb_ids = set()
@@ -115,9 +122,7 @@ class RecommendationService:
         for item in candidates:
             tmdb_id = item.get("id")
             # 1. Check TMDB ID (Fast)
-            if tmdb_id and (
-                tmdb_id in watched_tmdb_ids or f"tmdb:{tmdb_id}" in watched_imdb_ids
-            ):  # check both sets just in case
+            if tmdb_id and tmdb_id in watched_tmdb_ids:
                 continue
 
             # 2. Check external IDs (if present in candidate)
@@ -137,12 +142,15 @@ class RecommendationService:
         # Ensure media_type is correct
         query_media_type = "movie" if media_type == "movie" else "tv"
 
+        sem = asyncio.Semaphore(30)
+
         async def _fetch_details(tmdb_id: int):
             try:
-                if query_media_type == "movie":
-                    return await self.tmdb_service.get_movie_details(tmdb_id)
-                else:
-                    return await self.tmdb_service.get_tv_details(tmdb_id)
+                async with sem:
+                    if query_media_type == "movie":
+                        return await self.tmdb_service.get_movie_details(tmdb_id)
+                    else:
+                        return await self.tmdb_service.get_tv_details(tmdb_id)
             except Exception as e:
                 logger.warning(f"Failed to fetch details for TMDB ID {tmdb_id}: {e}")
                 return None
@@ -337,11 +345,6 @@ class RecommendationService:
         # Apply Excluded Genres
         excluded_ids = self._get_excluded_genre_ids(content_type)
         if excluded_ids:
-            # If with_genres is specified, we technically shouldn't exclude what is explicitly asked for?
-            # But the user asked to "exclude those genres".
-            # If I exclude them from "without_genres", TMDB might return 0 results if the theme IS that genre.
-            # But RowGenerator safeguards against generating themes for excluded genres.
-            # So this is safe for keyword/country rows.
             params["without_genres"] = "|".join(str(g) for g in excluded_ids)
 
         # Fetch
@@ -364,7 +367,7 @@ class RecommendationService:
             item.pop("_external_ids", None)
             final_items.append(item)
 
-        return final_items[:limit]
+        return final_items
 
     async def _fetch_recommendations_from_tmdb(self, item_id: str, media_type: str, limit: int) -> list[dict]:
         """
@@ -381,10 +384,30 @@ class RecommendationService:
                 media_type = detected_type
         elif item_id.startswith("tmdb:"):
             tmdb_id = int(item_id.split(":")[1])
+            # Detect media_type if unknown or invalid
+            if media_type not in ("movie", "tv", "series"):
+                detected_type = None
+                try:
+                    details = await self.tmdb_service.get_movie_details(tmdb_id)
+                    if details:
+                        detected_type = "movie"
+                except Exception:
+                    pass
+                if not detected_type:
+                    try:
+                        details = await self.tmdb_service.get_tv_details(tmdb_id)
+                        if details:
+                            detected_type = "tv"
+                    except Exception:
+                        pass
+                if detected_type:
+                    media_type = detected_type
         else:
             tmdb_id = item_id
 
-        recommendation_response = await self.tmdb_service.get_recommendations(tmdb_id, media_type)
+        # Normalize series alias
+        mtype = "tv" if media_type in ("tv", "series") else "movie"
+        recommendation_response = await self.tmdb_service.get_recommendations(tmdb_id, mtype)
         recommended_items = recommendation_response.get("results", [])
         if not recommended_items:
             return []
@@ -407,7 +430,11 @@ class RecommendationService:
 
         # Step 1: Fetch & Score User Library
         library_data = await self.stremio_service.get_library_items()
-        all_items = library_data.get("loved", []) + library_data.get("watched", [])
+        all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("added", [])
+        logger.info(f"processing {len(all_items)} Items.")
+        # Cold-start fallback remains (redundant safety)
+        if not all_items:
+            all_items = library_data.get("added", [])
 
         # Build Exclusion Sets explicitly
         watched_imdb_ids, watched_tmdb_ids = await self._get_exclusion_sets()
@@ -417,9 +444,10 @@ class RecommendationService:
         processed_items = []
         scored_objects = []
 
-        # OPTIMIZATION: Limit source items for profile building to recent history (last 30 items)
-        sorted_history = sorted(unique_items.values(), key=lambda x: x.get("_mtime", ""), reverse=True)
-        recent_history = sorted_history[:30]
+        sorted_history = sorted(
+            unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched"), reverse=True
+        )
+        recent_history = sorted_history[:source_items_limit]
 
         for item_data in recent_history:
             scored_obj = self.scoring_service.process_item(item_data)
@@ -485,16 +513,71 @@ class RecommendationService:
 
             final_score = (sim_score * 0.6) + (vote_score * 0.3) + (pop_score * 0.1)
 
+            # Add tiny jitter to promote freshness and avoid static ordering
+            jitter = random.uniform(-0.02, 0.02)  # +/-2%
+            final_score = final_score * (1 + jitter)
+
             # Boost candidate if its from tmdb collaborative recommendations
             if item.get("_ranked_candidate"):
                 final_score *= 1.25
             ranked_candidates.append((final_score, item))
 
-        # Sort by Final Score
+        # Sort by Final Score and cache score on item for diversification
         ranked_candidates.sort(key=lambda x: x[0], reverse=True)
+        for score, item in ranked_candidates:
+            item["_final_score"] = score
 
-        # Select with buffer for final IMDB filtering
-        buffer_selection = [item for score, item in ranked_candidates[: max_results * 2]]
+        # Diversify with MMR to avoid shallow, repetitive picks
+        def _jaccard(a: set, b: set) -> float:
+            if not a and not b:
+                return 0.0
+            inter = len(a & b)
+            union = len(a | b)
+            return inter / union if union else 0.0
+
+        def _candidate_similarity(x: dict, y: dict) -> float:
+            gx = set(x.get("genre_ids") or [])
+            gy = set(y.get("genre_ids") or [])
+            s = _jaccard(gx, gy)
+            # Mild penalty if same language to encourage variety
+            lx = x.get("original_language")
+            ly = y.get("original_language")
+            if lx and ly and lx == ly:
+                s += 0.05
+            return min(s, 1.0)
+
+        def _mmr_select(cands: list[dict], k: int, lamb: float = 0.75) -> list[dict]:
+            selected: list[dict] = []
+            remaining = cands[:]
+            while remaining and len(selected) < k:
+                if not selected:
+                    best = remaining.pop(0)
+                    selected.append(best)
+                    continue
+                best_item = None
+                best_score = float("-inf")
+                for cand in remaining[:50]:  # evaluate a window for speed
+                    rel = cand.get("_final_score", 0.0)
+                    div = 0.0
+                    for s in selected:
+                        div = max(div, _candidate_similarity(cand, s))
+                    mmr = lamb * rel - (1 - lamb) * div
+                    if mmr > best_score:
+                        best_score = mmr
+                        best_item = cand
+                if best_item is None:
+                    break
+                selected.append(best_item)
+                try:
+                    remaining.remove(best_item)
+                except ValueError:
+                    pass
+            return selected
+
+        top_ranked_items = [item for _, item in ranked_candidates]
+        diversified = _mmr_select(top_ranked_items, k=max_results * 2, lamb=0.75)
+        # Select with buffer for final IMDB filtering after diversification
+        buffer_selection = diversified
 
         # Fetch Full Metadata
         meta_items = await self._fetch_metadata_for_items(buffer_selection, content_type)
@@ -510,7 +593,5 @@ class RecommendationService:
 
             item.pop("_external_ids", None)
             final_items.append(item)
-            if len(final_items) >= max_results:
-                break
 
         return final_items

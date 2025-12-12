@@ -1,3 +1,5 @@
+import asyncio
+
 from google import genai
 from loguru import logger
 
@@ -51,6 +53,11 @@ class GeminiService:
         except Exception as e:
             logger.error(f"Error generating content: {e}")
             return ""
+
+    async def generate_content_async(self, prompt: str) -> str:
+        """Async wrapper to avoid blocking the event loop during network calls."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.generate_content(prompt))
 
 
 gemini_service = GeminiService()

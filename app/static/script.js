@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeStremioLogin();
     initializeFooter();
     initializeKofi();
+    initializeAnnouncement();
 
     // Next Buttons
     if (configNextBtn) configNextBtn.addEventListener('click', () => switchSection('catalogs'));
@@ -909,4 +910,32 @@ function initializeKofi() {
             closeModal();
         }
     });
+}
+
+// Announcement: fetch small message/HTML from API and render in the home hero
+async function initializeAnnouncement() {
+    const container = document.getElementById('announcement');
+    const content = document.getElementById('announcement-content');
+    if (!container || !content) return;
+
+    try {
+        const res = await fetch('/announcement');
+        if (!res.ok) return;
+
+        let data = null;
+        try { data = await res.json(); } catch (e) { data = null; }
+
+        let html = '';
+        if (data) html = data.html || data.message || '';
+        if (!html) {
+            try { html = await res.text(); } catch (e) { html = ''; }
+        }
+
+        if (!html) return;
+
+        content.innerHTML = html;
+        container.classList.remove('hidden');
+    } catch (e) {
+        // silent
+    }
 }

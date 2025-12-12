@@ -62,7 +62,14 @@ class TokenStore:
 
     async def _get_client(self) -> redis.Redis:
         if self._client is None:
-            self._client = redis.from_url(settings.REDIS_URL, decode_responses=True, encoding="utf-8")
+            # Add socket timeouts to avoid hanging on Redis operations
+            self._client = redis.from_url(
+                settings.REDIS_URL,
+                decode_responses=True,
+                encoding="utf-8",
+                socket_connect_timeout=5,
+                socket_timeout=5,
+            )
         return self._client
 
     def _format_key(self, token: str) -> str:

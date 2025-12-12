@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.config import settings
+from app.core.config import settings
 
 router = APIRouter(prefix="/announcement", tags=["announcement"])
 

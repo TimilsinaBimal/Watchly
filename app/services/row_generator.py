@@ -74,7 +74,7 @@ class RowGeneratorService:
                 kw_name2 = await self._get_keyword_name(k_id2)
                 title = ""
                 if kw_name1 and kw_name2:
-                    title = gemini_service.generate_content(f"Keywords: {kw_name1} + {kw_name2}")
+                    title = await gemini_service.generate_content_async(f"Keywords: {kw_name1} + {kw_name2}")
 
                 if title:
                     rows.append(
@@ -104,7 +104,7 @@ class RowGeneratorService:
             if k_id:
                 kw_name = await self._get_keyword_name(k_id)
                 if kw_name:
-                    title = gemini_service.generate_content(
+                    title = await gemini_service.generate_content_async(
                         f"Genre: {get_gname(g_id)} + Keyword: {normalize_keyword(kw_name)}"
                     )
                     if not title:
@@ -127,7 +127,7 @@ class RowGeneratorService:
             c_code = top_countries[0][0]
             c_adj = get_cname(c_code)
             if c_adj:
-                title = gemini_service.generate_content(f"Genre: {get_gname(g_id)} + Country: {c_adj}")
+                title = await gemini_service.generate_content_async(f"Genre: {get_gname(g_id)} + Country: {c_adj}")
                 if not title:
                     title = f"{get_gname(g_id)} {c_adj}"
                 rows.append(
@@ -150,7 +150,7 @@ class RowGeneratorService:
             # # Only do this if decade is valid and somewhat old (nostalgia factor)
             if 1970 <= decade_start <= 2010:
                 decade_str = str(decade_start)[2:] + "s"  # "90s"
-                title = gemini_service.generate_content(f"Genre: {get_gname(g_id)} + Era: {decade_str}")
+                title = await gemini_service.generate_content_async(f"Genre: {get_gname(g_id)} + Era: {decade_str}")
                 if not title:
                     title = f"{get_gname(g_id)} {decade_str}"
                 rows.append(

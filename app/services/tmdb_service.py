@@ -1,8 +1,12 @@
+import asyncio
+import random
+
 import httpx
 from async_lru import alru_cache
 from loguru import logger
 
 from app.core.config import settings
+from app.core.version import __version__
 
 
 class TMDBService:
@@ -23,6 +27,11 @@ class TMDBService:
             self._client = httpx.AsyncClient(
                 timeout=10.0,
                 limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+                http2=True,
+                headers={
+                    "User-Agent": f"Watchly/{__version__} (+https://github.com/TimilsinaBimal/Watchly)",
+                    "Accept": "application/json",
+                },
             )
         return self._client
 
@@ -42,27 +51,49 @@ class TMDBService:
         if params:
             default_params.update(params)
 
-        try:
-            client = await self._get_client()
-            response = await client.get(url, params=default_params)
-            response.raise_for_status()
-
-            # Check if response has content
-            if not response.text:
-                logger.warning(f"TMDB API returned empty response for {endpoint}")
-                return {}
-
+        attempts = 0
+        last_exc: Exception | None = None
+        while attempts < 3:
             try:
-                return response.json()
-            except ValueError as e:
-                logger.error(f"TMDB API returned invalid JSON for {endpoint}: {e}. Response: {response.text[:200]}")
-                return {}
-        except httpx.HTTPStatusError as e:
-            logger.error(f"TMDB API error for {endpoint}: {e.response.status_code} - {e.response.text[:200]}")
-            raise
-        except httpx.RequestError as e:
-            logger.error(f"TMDB API request error for {endpoint}: {e}")
-            raise
+                client = await self._get_client()
+                response = await client.get(url, params=default_params)
+                response.raise_for_status()
+
+                if not response.text:
+                    logger.warning(f"TMDB API returned empty response for {endpoint}")
+                    return {}
+
+                try:
+                    return response.json()
+                except ValueError as e:
+                    logger.error(
+                        f"TMDB API returned invalid JSON for {endpoint}: {e}. Response: {response.text[:200]}"
+                    )
+                    return {}
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                # Retry on 429 or 5xx
+                if status == 429 or 500 <= status < 600:
+                    attempts += 1
+                    backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
+                    logger.warning(f"TMDB {endpoint} failed with {status}; retry {attempts}/3 in {backoff:.2f}s")
+                    await asyncio.sleep(backoff)
+                    last_exc = e
+                    continue
+                logger.error(f"TMDB API error for {endpoint}: {status} - {e.response.text[:200]}")
+                raise
+            except httpx.RequestError as e:
+                attempts += 1
+                backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
+                logger.warning(f"TMDB request error for {endpoint}: {e}; retry {attempts}/3 in {backoff:.2f}s")
+                await asyncio.sleep(backoff)
+                last_exc = e
+                continue
+
+        # Exhausted retries
+        if last_exc:
+            raise last_exc
+        return {}
 
     @alru_cache(maxsize=2000)
     async def find_by_imdb_id(self, imdb_id: str) -> tuple[int | None, str | None]:

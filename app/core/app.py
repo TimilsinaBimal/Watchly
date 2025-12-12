@@ -38,7 +38,16 @@ async def lifespan(app: FastAPI):
     Manage application lifespan events (startup/shutdown).
     """
     global catalog_updater
-    asyncio.create_task(migrate_tokens())
+    task = asyncio.create_task(migrate_tokens())
+
+    # Ensure background exceptions are surfaced in logs
+    def _on_done(t: asyncio.Task):
+        try:
+            t.result()
+        except Exception as exc:
+            logger.error(f"migrate_tokens background task failed: {exc}")
+
+    task.add_done_callback(_on_done)
 
     # Startup
     if settings.AUTO_UPDATE_CATALOGS:

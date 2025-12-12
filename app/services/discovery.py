@@ -12,6 +12,8 @@ class DiscoveryEngine:
 
     def __init__(self):
         self.tmdb_service = TMDBService()
+        # Limit concurrent discovery calls to avoid rate limiting
+        self._sem = asyncio.Semaphore(10)
 
     async def discover_recommendations(
         self,
@@ -63,7 +65,7 @@ class DiscoveryEngine:
             for i in range(2):
                 params_rating = {
                     "with_genres": genre_ids,
-                    "sort_by": "ratings.desc",
+                    "sort_by": "vote_average.desc",
                     "vote_count.gte": 500,
                     "page": i + 1,
                     **base_params,
@@ -85,7 +87,7 @@ class DiscoveryEngine:
             for i in range(3):
                 params_rating = {
                     "with_keywords": keyword_ids,
-                    "sort_by": "ratings.desc",
+                    "sort_by": "vote_average.desc",
                     "vote_count.gte": 500,
                     "page": i + 1,
                     **base_params,
@@ -105,7 +107,7 @@ class DiscoveryEngine:
 
             params_rating = {
                 "with_cast": str(actor_id),
-                "sort_by": "ratings.desc",
+                "sort_by": "vote_average.desc",
                 "vote_count.gte": 500,
                 **base_params,
             }
@@ -124,7 +126,7 @@ class DiscoveryEngine:
 
             params_rating = {
                 "with_crew": str(director_id),
-                "sort_by": "ratings.desc",
+                "sort_by": "vote_average.desc",
                 "vote_count.gte": 500,
                 **base_params,
             }
@@ -143,7 +145,7 @@ class DiscoveryEngine:
 
             params_rating = {
                 "with_origin_country": country_ids,
-                "sort_by": "ratings.desc",
+                "sort_by": "vote_average.desc",
                 "vote_count.gte": 300,
                 **base_params,
             }
@@ -154,11 +156,11 @@ class DiscoveryEngine:
             year = top_year[0][0]
             # we store year in 10 years bucket
             start_year = f"{year}-01-01"
-            end_year = f"{int(year) + 10}-12-31"
+            end_year = f"{int(year) + 9}-12-31"
             params_rating = {
                 "primary_release_date.gte": start_year,
                 "primary_release_date.lte": end_year,
-                "sort_by": "ratings.desc",
+                "sort_by": "vote_average.desc",
                 "vote_count.gte": 500,
                 **base_params,
             }
@@ -181,7 +183,8 @@ class DiscoveryEngine:
     async def _fetch_discovery(self, media_type: str, params: dict) -> list[dict]:
         """Helper to call TMDB discovery."""
         try:
-            data = await self.tmdb_service.get_discover(media_type, **params)
-            return data.get("results", [])
+            async with self._sem:
+                data = await self.tmdb_service.get_discover(media_type, **params)
+                return data.get("results", [])
         except Exception:
             return []

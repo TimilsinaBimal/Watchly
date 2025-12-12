@@ -1,4 +1,5 @@
 import asyncio
+import random
 from urllib.parse import urlparse
 
 import httpx
@@ -14,11 +15,16 @@ BASE_CATALOGS = [
 
 
 def match_hostname(url: str, hostname: str) -> bool:
+    """Return True if the URL host matches the target host (scheme-agnostic).
+
+    Accepts `hostname` as either a naked host (example.com) or full URL (https://example.com).
     """
-    Checks if the hostname extracted from a URL matches a given hostname string.
-    """
-    parsed_url = urlparse(url)
-    return parsed_url.hostname == hostname
+    try:
+        url_host = urlparse(url if "://" in url else f"https://{url}").hostname
+        target_host = urlparse(hostname if "://" in hostname else f"https://{hostname}").hostname
+        return bool(url_host and target_host and url_host.lower() == target_host.lower())
+    except Exception:
+        return False
 
 
 class StremioService:
@@ -44,8 +50,13 @@ class StremioService:
         """Get or create the main Stremio API client."""
         if self._client is None:
             self._client = httpx.AsyncClient(
-                timeout=30.0,
+                timeout=10.0,
                 limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
+                http2=True,
+                headers={
+                    "User-Agent": "Watchly/Client",
+                    "Accept": "application/json",
+                },
             )
         return self._client
 
@@ -53,8 +64,13 @@ class StremioService:
         """Get or create the likes API client."""
         if self._likes_client is None:
             self._likes_client = httpx.AsyncClient(
-                timeout=30.0,
+                timeout=10.0,
                 limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
+                http2=True,
+                headers={
+                    "User-Agent": "Watchly/Client",
+                    "Accept": "application/json",
+                },
             )
         return self._likes_client
 
@@ -81,9 +97,8 @@ class StremioService:
 
         try:
             client = await self._get_client()
-            result = await client.post(url, json=payload)
-            result.raise_for_status()
-            data = result.json()
+            result = await self._post_with_retries(client, url, json=payload)
+            data = result
             auth_key = data.get("result", {}).get("authKey", "")
             if auth_key:
                 logger.info("Successfully authenticated with Stremio")
@@ -124,14 +139,8 @@ class StremioService:
 
         try:
             client = await self._get_likes_client()
-            result = await client.get(url, params=params)
-            result.raise_for_status()
-            status = result.json().get("status", "")
-            # Stremio returns "loved" for loved items
-            # We assume there might be a "liked" status or we can infer based on user input
-            # For now, the API mainly returns 'loved' or nothing.
-            # If the user mentioned a specific "liked" signal, it might be a different value or endpoint.
-            # Assuming "liked" is a valid return value for now based on user query.
+            result = await self._get_with_retries(client, url, params=params)
+            status = result.get("status", "")
             return (status == "loved", status == "liked")
         except Exception as e:
             logger.error(
@@ -141,22 +150,28 @@ class StremioService:
             return False, False
 
     @alru_cache(maxsize=1000, ttl=3600)
-    async def get_loved_items(self, auth_token: str, media_type: str) -> list[dict]:
-        async with httpx.AsyncClient() as client:
-            url = f"https://likes.stremio.com/addons/loved/movies-shows/{auth_token}/catalog/{media_type}/stremio-loved-{media_type.lower()}.json"  # noqa: E501
-            response = await client.get(url)
-            response.raise_for_status()
-            metas = response.json().get("metas", [])
+    async def get_loved_items(self, auth_token: str, media_type: str) -> list[str]:
+        url = f"https://likes.stremio.com/addons/loved/movies-shows/{auth_token}/catalog/{media_type}/stremio-loved-{media_type.lower()}.json"  # noqa
+        try:
+            client = await self._get_likes_client()
+            data = await self._get_with_retries(client, url)
+            metas = data.get("metas", [])
             return [meta.get("id") for meta in metas]
+        except Exception as e:
+            logger.warning(f"Failed to fetch loved items: {e}")
+            return []
 
     @alru_cache(maxsize=1000, ttl=3600)
-    async def get_liked_items(self, auth_token: str, media_type: str) -> list[dict]:
-        async with httpx.AsyncClient() as client:
-            url = f"https://likes.stremio.com/addons/liked/movies-shows/{auth_token}/catalog/{media_type}/stremio-liked-{media_type.lower()}.json"  # noqa: E501
-            response = await client.get(url)
-            response.raise_for_status()
-            metas = response.json().get("metas", [])
+    async def get_liked_items(self, auth_token: str, media_type: str) -> list[str]:
+        url = f"https://likes.stremio.com/addons/liked/movies-shows/{auth_token}/catalog/{media_type}/stremio-liked-{media_type.lower()}.json"  # noqa
+        try:
+            client = await self._get_likes_client()
+            data = await self._get_with_retries(client, url)
+            metas = data.get("metas", [])
             return [meta.get("id") for meta in metas]
+        except Exception as e:
+            logger.warning(f"Failed to fetch liked items: {e}")
+            return []
 
     async def get_user_info(self) -> dict[str, str]:
         """Fetch user ID and email using the auth key."""
@@ -171,9 +186,7 @@ class StremioService:
 
         try:
             client = await self._get_client()
-            result = await client.post(url, json=payload)
-            result.raise_for_status()
-            data = result.json()
+            data = await self._post_with_retries(client, url, json=payload)
 
             if "error" in data:
                 error_msg = data["error"]
@@ -224,77 +237,94 @@ class StremioService:
             }
 
             client = await self._get_client()
-            result = await client.post(url, json=payload)
-            result.raise_for_status()
-            items = result.json().get("result", [])
+            data = await self._post_with_retries(client, url, json=payload)
+            items = data.get("result", [])
             logger.info(f"Fetched {len(items)} library items from Stremio")
 
-            # Filter only items that user has watched
-            watched_items = [
-                item
-                for item in items
-                if (
-                    item.get("state", {}).get("timesWatched", 0) > 0
-                    and item.get("type") in ["movie", "series"]
-                    and item.get("_id").startswith("tt")
-                )
-            ]
+            # Filter items considered watched: explicit timesWatched/flaggedWatched OR high completion ratio
+            watched_items = []
+            for item in items:
+                if item.get("type") not in ["movie", "series"]:
+                    continue
+                item_id = item.get("_id", "")
+                if not item_id.startswith("tt"):
+                    continue
+                state = item.get("state", {}) or {}
+                times_watched = int(state.get("timesWatched") or 0)
+                flagged_watched = int(state.get("flaggedWatched") or 0)
+                duration = int(state.get("duration") or 0)
+                time_watched = int(state.get("timeWatched") or 0)
+                ratio_ok = duration > 0 and (time_watched / duration) >= 0.7
+                if times_watched > 0 or flagged_watched > 0 or ratio_ok:
+                    watched_items.append(item)
             logger.info(f"Filtered {len(watched_items)} watched library items")
 
-            # Sort watched items by watched time (most recent first)
-            watched_items.sort(key=lambda x: x.get("state", {}).get("lastWatched", ""), reverse=True)
-
-            #  is_loved only until we find 10 movies and 10 series
-            loved_items = []
-            movies_found = 0
-            series_found = 0
-            target_count = settings.RECOMMENDATION_SOURCE_ITEMS_LIMIT
-            batch_size = 20
-
-            # Process in batches to stop early
-            for i in range(0, len(watched_items), batch_size):
-                if movies_found >= target_count and series_found >= target_count:
-                    logger.info("Found enough loved items, stopping check")
-                    break
-
-                batch = watched_items[i : i + batch_size]  # noqa: E203
-
-                # Filter batch to only check types we still need
-                check_candidates = []
-                for item in batch:
-                    itype = item.get("type")
-                    if itype == "movie" and movies_found < target_count:
-                        check_candidates.append(item)
-                    elif itype == "series" and series_found < target_count:
-                        check_candidates.append(item)
-
-                if not check_candidates:
-                    continue
-
-                # Check loved status for candidates in parallel
-                loved_statuses = await asyncio.gather(
-                    *[self.is_loved(auth_key, item.get("_id"), item.get("type")) for item in check_candidates]
+            # Sort watched items by lastWatched, fallback to _mtime (most recent first)
+            def _sort_key(x: dict):
+                state = x.get("state", {}) or {}
+                return (
+                    str(state.get("lastWatched") or ""),
+                    str(x.get("_mtime") or ""),
                 )
 
-                # Process results
-                for item, (is_loved_status, is_liked_status) in zip(check_candidates, loved_statuses):
-                    if is_loved_status or is_liked_status:
-                        # Store status on item for scoring later
-                        item["_is_loved"] = is_loved_status
-                        item["_is_liked"] = is_liked_status
+            watched_items.sort(key=_sort_key, reverse=True)
 
-                        loved_items.append(item)
-                        if item.get("type") == "movie":
-                            movies_found += 1
-                        elif item.get("type") == "series":
-                            series_found += 1
+            loved_items = []
+            added_items = []
+            removed_items = []
 
-            logger.info(
-                f"Found {len(loved_items)} loved library items (Movies: {movies_found}, Series: {series_found})"
+            # fetch loved and liked items
+
+            loved_movies, loved_series, liked_movies, liked_series = await asyncio.gather(
+                self.get_loved_items(auth_key, "movie"),
+                self.get_loved_items(auth_key, "series"),
+                self.get_liked_items(auth_key, "movie"),
+                self.get_liked_items(auth_key, "series"),
             )
 
+            watched_ids = {i.get("_id") for i in watched_items}
+
+            for item in watched_items:
+                loved = False
+                if item.get("_id") in loved_movies or item.get("_id") in loved_series:
+                    item["_is_loved"] = True
+                    loved = True
+                if item.get("_id") in liked_movies or item.get("_id") in liked_series:
+                    item["_is_liked"] = True
+                    loved = True
+
+                if loved:
+                    loved_items.append(item)
+
+            logger.info(f"Found {len(loved_items)} loved library items")
+
+            # Build added-only items: in library, type movie/series, imdb id, not watched, not loved/liked
+            for item in items:
+                if item.get("type") not in ["movie", "series"]:
+                    continue
+                iid = item.get("_id", "")
+                if not iid.startswith("tt"):
+                    continue
+                if iid in watched_ids:
+                    continue
+                if iid in loved_movies or iid in loved_series or iid in liked_movies or iid in liked_series:
+                    continue
+                if item.get("temp"):
+                    continue
+                if item.get("removed"):
+                    removed_items.append(item)
+                    continue
+
+                added_items.append(item)
+
+            logger.info(f"Found {len(added_items)} added (unwatched) and {len(removed_items)} removed library items")
             # Return raw items; ScoringService will handle Pydantic conversion
-            return {"watched": watched_items, "loved": loved_items}
+            return {
+                "watched": watched_items,
+                "loved": loved_items,
+                "added": added_items,
+                "removed": removed_items,
+            }
         except Exception as e:
             logger.error(f"Error fetching library items: {e}", exc_info=True)
             return {"watched": [], "loved": []}
@@ -308,9 +338,7 @@ class StremioService:
             "update": True,
         }
         client = await self._get_client()
-        result = await client.post(url, json=payload)
-        result.raise_for_status()
-        data = result.json()
+        data = await self._post_with_retries(client, url, json=payload)
         error_payload = data.get("error")
         if not error_payload and (data.get("code") and data.get("message")):
             error_payload = data
@@ -337,10 +365,9 @@ class StremioService:
         }
 
         client = await self._get_client()
-        result = await client.post(url, json=payload)
-        result.raise_for_status()
+        data = await self._post_with_retries(client, url, json=payload)
         logger.info("Updated addons")
-        return result.json().get("result", {}).get("success", False)
+        return data.get("result", {}).get("success", False)
 
     async def update_catalogs(self, catalogs: list[dict], auth_key: str | None = None):
         auth_key = auth_key or await self.get_auth_key()
@@ -366,3 +393,69 @@ class StremioService:
             ):
                 return True
         return False
+
+    async def _post_with_retries(self, client: httpx.AsyncClient, url: str, json: dict, max_tries: int = 3) -> dict:
+        attempts = 0
+        last_exc: Exception | None = None
+        while attempts < max_tries:
+            try:
+                resp = await client.post(url, json=json)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                if status == 429 or 500 <= status < 600:
+                    attempts += 1
+                    backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
+                    logger.warning(
+                        f"Stremio POST {url} failed with {status}; retry {attempts}/{max_tries} in" f" {backoff:.2f}s"
+                    )
+                    await asyncio.sleep(backoff)
+                    last_exc = e
+                    continue
+                raise
+            except httpx.RequestError as e:
+                attempts += 1
+                backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
+                logger.warning(
+                    f"Stremio POST {url} request error: {e}; retry {attempts}/{max_tries} in {backoff:.2f}s"
+                )
+                await asyncio.sleep(backoff)
+                last_exc = e
+                continue
+        if last_exc:
+            raise last_exc
+        return {}
+
+    async def _get_with_retries(
+        self, client: httpx.AsyncClient, url: str, params: dict | None = None, max_tries: int = 3
+    ) -> dict:
+        attempts = 0
+        last_exc: Exception | None = None
+        while attempts < max_tries:
+            try:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                if status == 429 or 500 <= status < 600:
+                    attempts += 1
+                    backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
+                    logger.warning(
+                        f"Stremio GET {url} failed with {status}; retry {attempts}/{max_tries} in" f" {backoff:.2f}s"
+                    )
+                    await asyncio.sleep(backoff)
+                    last_exc = e
+                    continue
+                raise
+            except httpx.RequestError as e:
+                attempts += 1
+                backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
+                logger.warning(f"Stremio GET {url} request error: {e}; retry {attempts}/{max_tries} in {backoff:.2f}s")
+                await asyncio.sleep(backoff)
+                last_exc = e
+                continue
+        if last_exc:
+            raise last_exc
+        return {}

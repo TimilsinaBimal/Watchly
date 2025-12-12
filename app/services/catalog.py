@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.core.settings import CatalogConfig, UserSettings
 from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
@@ -130,19 +132,24 @@ class DynamicCatalogService:
         return catalogs
 
     async def _add_item_based_rows(
-        self, catalogs: list, library_items: dict, content_type: str, language: str, loved_config, watched_config
+        self,
+        catalogs: list,
+        library_items: dict,
+        content_type: str,
+        language: str,
+        loved_config,
+        watched_config,
     ):
         """Helper to add 'Because you watched' and 'More like' rows."""
 
         # Helper to parse date
         def get_date(item):
-            import datetime
 
             val = item.get("state", {}).get("lastWatched")
             if val:
                 try:
                     if isinstance(val, str):
-                        return datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
+                        return datetime.fromisoformat(val.replace("Z", "+00:00"))
                     return val
                 except (ValueError, TypeError):
                     pass
@@ -150,10 +157,10 @@ class DynamicCatalogService:
             val = item.get("_mtime")
             if val:
                 try:
-                    return datetime.datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+                    return datetime.fromisoformat(str(val).replace("Z", "+00:00"))
                 except (ValueError, TypeError):
                     pass
-            return datetime.datetime.min.replace(tzinfo=datetime.UTC)
+            return datetime.min.replace(tzinfo=timezone.utc)
 
         # 1. More Like <Loved Item>
         last_loved = None  # Initialize for the watched check
