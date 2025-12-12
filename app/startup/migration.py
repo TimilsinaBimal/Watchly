@@ -35,7 +35,7 @@ async def get_auth_key(username: str, password: str):
         "type": "Login",
         "facebook": False,
     }
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         result = await client.post(url, json=payload)
         result.raise_for_status()
         data = result.json()
@@ -49,7 +49,7 @@ async def get_user_info(auth_key):
         "type": "GetUser",
         "authKey": auth_key,
     }
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()
@@ -66,7 +66,7 @@ async def get_addons(auth_key: str):
         "authKey": auth_key,
         "update": True,
     }
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         result = await client.post(url, json=payload)
         result.raise_for_status()
         data = result.json()
@@ -101,7 +101,7 @@ async def update_addon_url(auth_key: str, user_id: str):
         "addons": addons,
     }
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         result = await client.post(url, json=payload)
         result.raise_for_status()
         logger.info("Updated addon url")
@@ -117,7 +117,7 @@ async def decode_old_payloads(encrypted_raw: str):
     return payload
 
 
-async def encrypt_auth_key(auth_key):
+def encrypt_auth_key(auth_key):
     salt = b"x7FDf9kypzQ1LmR32b8hWv49sKq2Pd8T"
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -198,7 +198,7 @@ async def process_migration_key(redis_client: redis.Redis, key: str) -> bool:
 
         new_payload = prepare_default_payload(email, user_id)
         if auth_key:
-            new_payload["authKey"] = await encrypt_auth_key(auth_key)
+            new_payload["authKey"] = encrypt_auth_key(auth_key)
 
         new_key = user_id.strip()
         payload_json = json.dumps(new_payload)

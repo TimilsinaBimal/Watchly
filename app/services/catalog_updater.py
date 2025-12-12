@@ -31,7 +31,8 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
         addon_installed = await stremio_service.is_addon_installed(auth_key)
         if not addon_installed:
             logger.info(f"[{redact_token(token)}] User has not installed addon. Removing token from redis")
-            await token_store.delete_token(key=token)
+            # Ensure we delete by token, not by raw Redis key
+            await token_store.delete_token(token=token)
             return True
     except Exception as e:
         logger.exception(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
@@ -41,6 +42,7 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
         dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
 
         # Ensure user_settings is available
+        user_settings = get_default_settings()
         if credentials.get("settings"):
             try:
                 user_settings = UserSettings(**credentials["settings"])
@@ -140,7 +142,10 @@ class BackgroundCatalogUpdater:
 
         try:
             async for key, payload in token_store.iter_payloads():
-                tasks.append(asyncio.create_task(_update_safe(key, payload)))
+                # Extract token from redis key prefix
+                prefix = token_store.KEY_PREFIX
+                tok = key[len(prefix) :] if key.startswith(prefix) else key  # noqa
+                tasks.append(asyncio.create_task(_update_safe(tok, payload)))
 
             if tasks:
                 logger.info(f"Starting background refresh for {len(tasks)} tokens...")

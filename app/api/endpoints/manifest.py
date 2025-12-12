@@ -137,7 +137,7 @@ async def _manifest_handler(response: Response, token: str):
 
 @router.get("/manifest.json")
 async def manifest():
-    manifest = await get_base_manifest()
+    manifest = get_base_manifest()
     # since user is not logged in, return empty catalogs
     manifest["catalogs"] = []
     return manifest

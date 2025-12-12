@@ -1,3 +1,4 @@
+import asyncio
 from collections import defaultdict
 
 from app.models.profile import UserTasteProfile
@@ -57,28 +58,38 @@ class UserProfileService:
             "countries": defaultdict(float),
         }
 
-        for item in scored_items:
+        async def _process(item):
             # Filter by content type if specified
             if content_type and item.item.type != content_type:
-                continue
+                return None
 
             # Resolve ID
             tmdb_id = await self._resolve_tmdb_id(item.item.id)
             if not tmdb_id:
-                continue
+                return None
 
             # Fetch full details including keywords and credits
             meta = await self._fetch_full_metadata(tmdb_id, item.item.type)
             if not meta:
-                continue
+                return None
 
             # Vectorize this single item
             item_vector = self._vectorize_item(meta)
 
-            # Weighted Aggregation
             # Scale by Interest Score (0.0 - 1.0)
             interest_weight = item.score / 100.0
 
+            return item_vector, interest_weight
+
+        # Launch all item processing coroutines in parallel
+        tasks = [_process(item) for item in scored_items]
+        results = await asyncio.gather(*tasks)
+
+        # Merge results sequentially to avoid interleaved writes
+        for res in results:
+            if res is None:
+                continue
+            item_vector, interest_weight = res
             self._merge_vector(profile_data, item_vector, interest_weight, excluded_genres)
 
         # Convert to Pydantic Model
@@ -155,6 +166,25 @@ class UserProfileService:
                 s = emphasis(pref)
                 s = safe_div(s, len(item_vec["countries"]))
                 score += s * COUNTRIES_WEIGHT
+
+        # 6. YEAR/DECADE
+        # Reward matches on the user's preferred decades, with soft credit to adjacent decades.
+        item_year = item_vec.get("year")
+        if item_year is not None:
+            base_pref = profile.years.values.get(item_year, 0.0)
+            if base_pref > 0:
+                score += emphasis(base_pref) * YEAR_WEIGHT
+            else:
+                # Soft-match adjacent decades at half strength
+                prev_decade = item_year - 10
+                next_decade = item_year + 10
+                neighbor_pref = 0.0
+                if prev_decade in profile.years.values:
+                    neighbor_pref = max(neighbor_pref, profile.years.values.get(prev_decade, 0.0))
+                if next_decade in profile.years.values:
+                    neighbor_pref = max(neighbor_pref, profile.years.values.get(next_decade, 0.0))
+                if neighbor_pref > 0:
+                    score += emphasis(neighbor_pref) * (YEAR_WEIGHT * 0.5)
 
         return score
 

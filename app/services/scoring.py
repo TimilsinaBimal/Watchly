@@ -13,11 +13,11 @@ class ScoringService:
     # Rewatch, How many times? Watched but duration?? What if user stopped watching in middle?
 
     # Weights for different factors
-    WEIGHT_WATCH_PERCENTAGE = 0.25
-    WEIGHT_REWATCH = 0.20
-    WEIGHT_RECENCY = 0.20
-    WEIGHT_EXPLICIT_RATING = 0.3
-    ADDED_TO_LIBRARY_WEIGHT = 0.05
+    WEIGHT_WATCH_PERCENTAGE = 0.10
+    WEIGHT_REWATCH = 0.17
+    WEIGHT_RECENCY = 0.30
+    WEIGHT_EXPLICIT_RATING = 0.35
+    ADDED_TO_LIBRARY_WEIGHT = 0.08
 
     def process_item(self, raw_item: dict) -> ScoredItem:
         """
@@ -64,20 +64,67 @@ class ScoringService:
         completion_score = 0.0
         completion_rate = 0.0
 
-        if state.duration > 0:
-            ratio = min(state.timeWatched / state.duration, 1.0)
-            completion_score = ratio * 100
+        # Prefer ratio-based completion when duration is available to avoid
+        # treating short partial plays as full completion just because
+        # `timesWatched` was incremented. If duration is missing, fall back
+        # to conservative estimates based on timesWatched/flaggedWatched.
+        if state.duration and state.duration > 0:
+            try:
+                ratio = min(float(state.timeWatched) / float(state.duration), 1.0)
+            except Exception:
+                ratio = 0.0
             completion_rate = ratio
+            completion_score = ratio * 100.0
+
+            # If the item was explicitly marked watched or has timesWatched but
+            # the observed ratio is very small, give a modest boost (not full 100).
+            if (state.timesWatched > 0 or state.flaggedWatched > 0) and completion_score < 50.0:
+                completion_score = max(completion_score, 50.0)
+                completion_rate = max(completion_rate, 0.5)
         elif state.timesWatched > 0 or state.flaggedWatched > 0:
-            completion_score = 100.0
-            completion_rate = 1.0
+            # No duration information: use a conservative assumed completion.
+            completion_score = 80.0
+            completion_rate = 0.8
 
         # 2. Rewatch Bonus
+        # We compute rewatch strength using two complementary metrics:
+        #  - times_based: how many extra explicit watches the user has (timesWatched - 1)
+        #  - ratio_based: overallTimeWatched / duration measures how many full-length equivalents
+        # If duration is missing we fall back to conservative estimators to avoid false positives.
         rewatch_score = 0.0
         is_rewatched = False
-        if state.timesWatched > 1:
-            rewatch_score = min((state.timesWatched - 1) * 50, 100)
+        if state.timesWatched > 1 and not state.flaggedWatched:
             is_rewatched = True
+
+            # times-based component (each extra watch gives a boost)
+            times_component = (state.timesWatched - 1) * 50
+
+            # ratio-based component: how many full durations the user has watched in total
+            ratio_component = 0.0
+            try:
+                overall_timewatched = float(state.overallTimeWatched or 0)
+                duration = float(state.duration or 0)
+                if duration > 0 and overall_timewatched > 0:
+                    watch_ratio = overall_timewatched / duration
+                    ratio_component = max((watch_ratio - 1.0) * 100.0, 0.0)
+                else:
+                    # If duration is missing, be conservative: estimate based on timeWatched
+                    # If timeWatched exists, assume it approximates one viewing; otherwise use timesWatched
+                    time_watched = float(state.timeWatched or 0)
+                    if time_watched > 0:
+                        # assume a single-view baseline equal to time_watched, so overall/time_watched ~= times
+                        ratio_est = (
+                            overall_timewatched / time_watched if time_watched > 0 else float(state.timesWatched)
+                        )
+                        ratio_component = max((ratio_est - 1.0) * 100.0, 0.0)
+                    else:
+                        ratio_component = max((float(state.timesWatched) - 1.0) * 20.0, 0.0)
+            except Exception:
+                ratio_component = 0.0
+
+            # Combine components but clamp to reasonable bounds
+            combined = max(times_component, ratio_component)
+            rewatch_score = min(combined, 100.0)
 
         # 3. Recency Score
         recency_score = 0.0
@@ -92,7 +139,7 @@ class ScoringService:
             days_since = (now - last_watched).days
 
             if days_since < 7:
-                recency_score = 150
+                recency_score = 200
                 is_recent = True
             elif days_since < 30:
                 recency_score = 100
@@ -100,9 +147,9 @@ class ScoringService:
             elif days_since < 90:
                 recency_score = 70
             elif days_since < 180:
-                recency_score = 40
+                recency_score = 30
             elif days_since < 365:
-                recency_score = 20
+                recency_score = 10
 
         # 4. Explicit Rating Score
         rating_score = 0.0

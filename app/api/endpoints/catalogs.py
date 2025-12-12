@@ -11,7 +11,7 @@ from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
 
 MAX_RESULTS = 50
-SOURCE_ITEMS_LIMIT = 10
+SOURCE_ITEMS_LIMIT = 15
 
 router = APIRouter()
 

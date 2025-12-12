@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from .endpoints.announcement import router as announcement_router
 from .endpoints.catalogs import router as catalogs_router
 from .endpoints.health import router as health_router
 from .endpoints.manifest import router as manifest_router
@@ -19,3 +20,4 @@ api_router.include_router(catalogs_router)
 api_router.include_router(tokens_router)
 api_router.include_router(health_router)
 api_router.include_router(meta_router)
+api_router.include_router(announcement_router)
