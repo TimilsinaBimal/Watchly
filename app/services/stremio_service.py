@@ -313,6 +313,7 @@ class StremioService:
                     continue
                 if item.get("removed"):
                     removed_items.append(item)
+                    continue
 
                 added_items.append(item)
 
