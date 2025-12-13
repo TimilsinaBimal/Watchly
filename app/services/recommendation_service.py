@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import math
 from urllib.parse import unquote
 
 from cachetools import TTLCache
@@ -12,6 +13,9 @@ from app.services.scoring import ScoringService
 from app.services.stremio_service import StremioService
 from app.services.tmdb_service import TMDBService
 from app.services.user_profile import TOP_GENRE_WHITELIST_LIMIT, UserProfileService
+
+# Diversification: cap per-genre share in final results (e.g., 0.4 => max 40% per genre)
+PER_GENRE_MAX_SHARE = 0.4
 
 
 def normalize(value, min_v=0, max_v=10):
@@ -117,6 +121,106 @@ class RecommendationService:
             self._cache[key] = value
         except Exception:
             pass
+
+    # ---------------- Recency preference (AUTO, sigmoid intensity) ----------------
+    def _get_recency_multiplier_fn(self, profile, candidate_decades: set[int] | None = None):
+        """
+        Build a multiplier function m(year) using a sigmoid-scaled intensity of the user's
+        recent vs classic preference derived from profile.years.
+        - Compute score in [-1,1] from recent (>=2015) vs classic (<2000) weights
+        - intensity = 2*(sigmoid(k*score)-0.5) in [-1,1]
+        - Apply per-year-bin deltas scaled by intensity, clamped to [0.85, 1.15]
+        """
+        try:
+            years_map = getattr(profile.years, "values", {}) or {}
+            # Build user decade weights (keys are decades like 1990, 2000, ...)
+            decade_weights = {int(k): float(v) for k, v in years_map.items() if isinstance(k, int)}
+            total_w = sum(decade_weights.values())
+        except Exception:
+            decade_weights = {}
+            total_w = 0.0
+
+        # Recent vs classic signal for intensity
+        recent_w = sum(w for d, w in decade_weights.items() if d >= 2010)
+        classic_w = sum(w for d, w in decade_weights.items() if d < 2000)
+        total_rc = recent_w + classic_w
+        if total_rc <= 0:
+            # No signal → neutral function with zero intensity
+            return (lambda _y: 1.0), 0.0
+
+        score = (recent_w - classic_w) / (total_rc + 1e-6)
+        k = 2.0
+        intensity_raw = 1.0 / (1.0 + math.exp(-k * score))
+        intensity = 2.0 * (intensity_raw - 0.5)  # [-1, 1]
+        alpha = abs(intensity)
+
+        # Build p_user over the support set of decades (union of profile and candidate decades)
+        if candidate_decades:
+            support = {int(d) for d in candidate_decades if isinstance(d, int)} | set(decade_weights.keys())
+        else:
+            support = set(decade_weights.keys())
+        if not support:
+            return (lambda _y: 1.0), 0.0
+
+        # Normalize user distribution over support (zero for unseen decades)
+        # If total_w is zero, return neutral
+        if total_w > 0:
+            p_user = {d: (decade_weights.get(d, 0.0) / total_w) for d in support}
+        else:
+            p_user = {d: 0.0 for d in support}
+        D = max(1, len(support))
+        uniform = 1.0 / D
+
+        def m_raw(year: int | None) -> float:
+            if year is None:
+                return 1.0
+            try:
+                y = int(year)
+            except Exception:
+                return 1.0
+            decade = (y // 10) * 10
+            pu = p_user.get(decade, 0.0)
+            return 1.0 + intensity * (pu - uniform)
+
+        return m_raw, alpha
+
+    @staticmethod
+    def _extract_year_from_item(item: dict) -> int | None:
+        """Extract year from a TMDB item dict (raw or enriched)."""
+        date_str = item.get("release_date") or item.get("first_air_date")
+        if not date_str:
+            ri = item.get("releaseInfo")
+            if isinstance(ri, str) and len(ri) >= 4 and ri[:4].isdigit():
+                try:
+                    return int(ri[:4])
+                except Exception:
+                    return None
+            return None
+        try:
+            return int(date_str[:4])
+        except Exception:
+            return None
+
+    @staticmethod
+    def _recency_multiplier(year: int | None) -> float:
+        """Prefer recent titles. Softly dampen very old titles."""
+        if not year:
+            return 1.0
+        try:
+            y = int(year)
+        except Exception:
+            return 1.0
+        if y >= 2021:
+            return 1.12
+        if y >= 2015:
+            return 1.06
+        if y >= 2010:
+            return 1.00
+        if y >= 2000:
+            return 0.92
+        if y >= 1990:
+            return 0.82
+        return 0.70
 
     async def _get_exclusion_sets(self, content_type: str | None = None) -> tuple[set[str], set[int]]:
         """
@@ -404,7 +508,11 @@ class RecommendationService:
                 fresh_pool = []
                 fresh_pool.extend(trending[:40])
                 fresh_pool.extend(top_rated[:40])
+                from collections import defaultdict
+
                 seen_ids = {it.get("id") for it in recommendations if it.get("id") is not None}
+                fresh_genre_counts = defaultdict(int)
+                cap_injection = max(1, int(self.per_item_limit * PER_GENRE_MAX_SHARE))
                 for it in fresh_pool:
                     tid = it.get("id")
                     if not tid or tid in seen_ids:
@@ -416,6 +524,8 @@ class RecommendationService:
                         continue
                     if not _passes_top_genre(gids):
                         continue
+                    if gids and any(fresh_genre_counts[g] >= cap_injection for g in gids):
+                        continue
                     # quality gate
                     va = float(it.get("vote_average") or 0.0)
                     vc = int(it.get("vote_count") or 0)
@@ -423,6 +533,8 @@ class RecommendationService:
                         continue
                     recommendations.append(it)
                     seen_ids.add(tid)
+                    for g in gids:
+                        fresh_genre_counts[g] += 1
                     fresh_added += 1
                     if len(recommendations) >= buffer_limit:
                         break
@@ -576,7 +688,7 @@ class RecommendationService:
         watched_imdb, watched_tmdb = await self._get_exclusion_sets()
         filtered = await self._filter_candidates(candidates, watched_imdb, watched_tmdb)
 
-        # Freshness injection: add trending/top-rated (within whitelist) if pool thin
+        # Freshness injection: add trending/popular/top-rated (within whitelist) if pool thin
         try:
             if len(filtered) < limit * 2:
                 mtype = "tv" if content_type in ("tv", "series") else "movie"
@@ -587,7 +699,11 @@ class RecommendationService:
                 fresh_pool = []
                 fresh_pool.extend(trending[:40])
                 fresh_pool.extend(top_rated[:40])
+                from collections import defaultdict
+
                 existing_ids = {it.get("id") for it in filtered if it.get("id") is not None}
+                fresh_genre_counts = defaultdict(int)
+                cap_injection = max(1, int(limit * PER_GENRE_MAX_SHARE))
                 fresh_added = 0
                 for it in fresh_pool:
                     tid = it.get("id")
@@ -602,12 +718,17 @@ class RecommendationService:
                     # Apply top-genre whitelist
                     if not _passes_top_genre(gids):
                         continue
+                    # Diversify freshness injection by genre
+                    if gids and any(fresh_genre_counts[g] >= cap_injection for g in gids):
+                        continue
                     va = float(it.get("vote_average") or 0.0)
                     vc = int(it.get("vote_count") or 0)
                     if vc < 300 or va < 7.0:
                         continue
                     filtered.append(it)
                     existing_ids.add(tid)
+                    for g in gids:
+                        fresh_genre_counts[g] += 1
                     fresh_added += 1
                     if len(filtered) >= limit * 3:
                         break
@@ -797,6 +918,8 @@ class RecommendationService:
         user_profile = await self.user_profile_service.build_user_profile(
             scored_objects, content_type=content_type, excluded_genres=excluded_genres
         )
+        # AUTO recency preference function based on profile years
+        # recency_fn = self._get_recency_multiplier_fn(user_profile)
         # Build per-user top-genre whitelist
         try:
             top_gen_pairs = user_profile.get_top_genres(limit=TOP_GENRE_WHITELIST_LIMIT)
@@ -848,13 +971,28 @@ class RecommendationService:
 
         logger.info(f"Similarity candidates collected: {len(similarity_candidates)}; pool size: {len(candidate_pool)}")
 
+        # Build recency blend function (m_raw, alpha) based on profile and candidate decades
+        try:
+            candidate_decades = set()
+            for it in candidate_pool.values():
+                y = self._extract_year_from_item(it)
+                if y:
+                    candidate_decades.add((int(y) // 10) * 10)
+            recency_m_raw, recency_alpha = self._get_recency_multiplier_fn(user_profile, candidate_decades)
+        except Exception:
+            recency_m_raw, recency_alpha = (lambda _y: 1.0), 0.0
+
         # Freshness injection: trending/highly rated items to broaden taste
         try:
             fresh_added = 0
+            from collections import defaultdict
+
+            fresh_genre_counts = defaultdict(int)
+            cap_injection = max(1, int(max_results * PER_GENRE_MAX_SHARE))
             mtype = "tv" if content_type in ("tv", "series") else "movie"
             trending_resp = await self.tmdb_service.get_trending(mtype, time_window="week")
             trending = trending_resp.get("results", []) if trending_resp else []
-            # Optionally mix in top-rated first page
+            # Mix in top-rated
             top_rated_resp = await self.tmdb_service.get_top_rated(mtype)
             top_rated = top_rated_resp.get("results", []) if top_rated_resp else []
             fresh_pool = []
@@ -880,11 +1018,16 @@ class RecommendationService:
                 vc = int(it.get("vote_count") or 0)
                 if vc < 300 or va < 7.0:
                     continue
+                # Genre diversity inside freshness injection
+                if gids and any(fresh_genre_counts[g] >= cap_injection for g in gids):
+                    continue
                 # Mark as freshness candidate
                 it["_fresh_boost"] = True
                 candidate_pool[tid] = it
+                for g in gids:
+                    fresh_genre_counts[g] += 1
                 fresh_added += 1
-                if fresh_added >= max_results:
+                if fresh_added >= max_results * 2:
                     break
             if fresh_added:
                 logger.info(f"Freshness injection added {fresh_added} trending/top-rated candidates")
@@ -932,6 +1075,13 @@ class RecommendationService:
 
             # Increase weight on quality to avoid low-rated picks
             final_score = (sim_score * 0.55) + (vote_score * 0.35) + (pop_score * 0.10)
+            # AUTO recency (blend): final *= (1 - alpha) + alpha * m_raw
+            try:
+                y = self._extract_year_from_item(item)
+                m = recency_m_raw(y)
+                final_score *= (1.0 - recency_alpha) + (recency_alpha * m)
+            except Exception:
+                pass
             # Stable tiny epsilon to break ties deterministically
             final_score += self._stable_epsilon(tmdb_id)
 
@@ -1031,6 +1181,14 @@ class RecommendationService:
             elif wr >= 7.0 and vc >= 500:
                 q_mult *= 1.10
 
+            # AUTO recency (blend) in post-metadata stage as well
+            try:
+                y = self._extract_year_from_item(item)
+                m = recency_m_raw(y)
+                q_mult *= (1.0 - recency_alpha) + (recency_alpha * m)
+            except Exception:
+                pass
+
             score = base * q_mult
 
             # Collection/cast suppression
@@ -1049,9 +1207,97 @@ class RecommendationService:
         # Sort by adjusted score descending
         final_items.sort(key=lambda x: x.get("_adjusted_score", 0.0), reverse=True)
 
+        # Diversified selection: per-genre cap AND proportional decade apportionment
+        from collections import defaultdict
+
+        genre_take_counts = defaultdict(int)
+        cap_per_genre = max(1, int(max_results * PER_GENRE_MAX_SHARE))
+
+        # Build decade targets from user profile distribution over decades present in final_items
+        decades_in_results = []
+        for it in final_items:
+            y = self._extract_year_from_item(it)
+            if y:
+                decades_in_results.append((int(y) // 10) * 10)
+            else:
+                decades_in_results.append(None)
+
+        # User decade prefs
+        try:
+            years_map = getattr(user_profile.years, "values", {}) or {}
+            decade_weights = {int(k): float(v) for k, v in years_map.items() if isinstance(k, int)}
+            total_w = sum(decade_weights.values())
+        except Exception:
+            decade_weights = {}
+            total_w = 0.0
+
+        support = {d for d in decades_in_results if d is not None}
+        if total_w > 0 and support:
+            p_user = {d: (decade_weights.get(d, 0.0) / total_w) for d in support}
+            # Normalize to sum 1 over support
+            s = sum(p_user.values())
+            if s > 0:
+                for d in list(p_user.keys()):
+                    p_user[d] = p_user[d] / s
+            else:
+                # fallback to uniform over support
+                p_user = {d: 1.0 / len(support) for d in support}
+        else:
+            # Neutral: uniform over decades present
+            p_user = {d: 1.0 / len(support) for d in support} if support else {}
+
+        # Largest remainder apportionment
+        targets = defaultdict(int)
+        remainders = []
+        slots = max_results
+        for d, p in p_user.items():
+            tgt = p * slots
+            base = int(tgt)
+            targets[d] = base
+            remainders.append((tgt - base, d))
+        assigned = sum(targets.values())
+        remaining = max(0, slots - assigned)
+        if remaining > 0 and remainders:
+            remainders.sort(key=lambda x: x[0], reverse=True)
+            for _, d in remainders[:remaining]:
+                targets[d] += 1
+
+        # First pass: honor decade targets and genre caps
+        decade_counts = defaultdict(int)
+        diversified = []
+        for it in final_items:
+            if len(diversified) >= max_results * 2:
+                break
+            gids = list(it.get("genre_ids") or [])
+            if gids and any(genre_take_counts[g] >= cap_per_genre for g in gids):
+                continue
+            y = self._extract_year_from_item(it)
+            d = (int(y) // 10) * 10 if y else None
+            if d is not None and d in targets and decade_counts[d] >= targets[d]:
+                continue
+            diversified.append(it)
+            for g in gids:
+                genre_take_counts[g] += 1
+            if d is not None:
+                decade_counts[d] += 1
+
+        # Second pass: fill remaining up to max_results ignoring decade targets but keeping genre caps
+        if len(diversified) < max_results:
+            for it in final_items:
+                if it in diversified:
+                    continue
+                if len(diversified) >= max_results * 2:
+                    break
+                gids = list(it.get("genre_ids") or [])
+                if gids and any(genre_take_counts[g] >= cap_per_genre for g in gids):
+                    continue
+                diversified.append(it)
+                for g in gids:
+                    genre_take_counts[g] += 1
+
         # Update used sets for next requests (implicit) and cleanup internal fields
         ordered = []
-        for it in final_items:
+        for it in diversified:
             coll = it.pop("_collection_id", None)
             if isinstance(coll, int):
                 used_collections.add(coll)
