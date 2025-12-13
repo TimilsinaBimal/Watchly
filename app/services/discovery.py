@@ -1,7 +1,7 @@
 import asyncio
 
 from app.models.profile import UserTasteProfile
-from app.services.tmdb_service import TMDBService
+from app.services.tmdb_service import get_tmdb_service
 
 
 class DiscoveryEngine:
@@ -10,8 +10,8 @@ class DiscoveryEngine:
     Uses TMDB Discovery API with weighted query parameters derived from the user profile.
     """
 
-    def __init__(self):
-        self.tmdb_service = TMDBService()
+    def __init__(self, language: str = "en-US"):
+        self.tmdb_service = get_tmdb_service(language=language)
         # Limit concurrent discovery calls to avoid rate limiting
         self._sem = asyncio.Semaphore(10)
 

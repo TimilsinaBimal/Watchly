@@ -71,7 +71,7 @@ async def fetch_catalogs(token: str):
 
     # Note: get_library_items is expensive, but we need it to determine *which* genre catalogs to show.
     library_items = await stremio_service.get_library_items()
-    dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
+    dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service, language=user_settings.language)
 
     # Base catalogs are already in manifest, these are *extra* dynamic ones
     # Pass user_settings to filter/rename

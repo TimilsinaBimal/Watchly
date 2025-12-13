@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 
-from app.services.tmdb_service import TMDBService
+from app.services.tmdb_service import get_tmdb_service
 
 router = APIRouter()
 
@@ -11,9 +11,9 @@ async def get_languages():
     """
     Proxy endpoint to fetch languages from TMDB.
     """
-    tmdb_service = TMDBService()
     try:
-        languages = await tmdb_service._make_request("/configuration/languages")
+        tmdb = get_tmdb_service()
+        languages = await tmdb._make_request("/configuration/languages")
         if not languages:
             return []
         return languages
@@ -21,4 +21,5 @@ async def get_languages():
         logger.error(f"Failed to fetch languages: {e}")
         raise HTTPException(status_code=502, detail="Failed to fetch languages from TMDB")
     finally:
-        await tmdb_service.close()
+        # shared client: no explicit close
+        pass

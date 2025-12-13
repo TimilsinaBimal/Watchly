@@ -6,7 +6,7 @@ from app.models.profile import UserTasteProfile
 from app.services.gemini import gemini_service
 from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres
-from app.services.tmdb_service import TMDBService
+from app.services.tmdb_service import TMDBService, get_tmdb_service
 
 
 def normalize_keyword(kw):
@@ -36,7 +36,7 @@ class RowGeneratorService:
     """
 
     def __init__(self, tmdb_service: TMDBService | None = None):
-        self.tmdb_service = tmdb_service or TMDBService()
+        self.tmdb_service = tmdb_service or get_tmdb_service()
 
     async def generate_rows(self, profile: UserTasteProfile, content_type: str = "movie") -> list[RowDefinition]:
         """

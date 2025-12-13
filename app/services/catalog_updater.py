@@ -38,9 +38,6 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
         logger.exception(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
 
     try:
-        library_items = await stremio_service.get_library_items()
-        dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service)
-
         # Ensure user_settings is available
         user_settings = get_default_settings()
         if credentials.get("settings"):
@@ -49,7 +46,11 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
             except Exception as e:
                 user_settings = get_default_settings()
                 logger.warning(f"[{redact_token(token)}] Failed to parse user settings from credentials: {e}")
-
+        library_items = await stremio_service.get_library_items()
+        dynamic_catalog_service = DynamicCatalogService(
+            stremio_service=stremio_service,
+            language=(user_settings.language if user_settings else "en-US"),
+        )
         catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
             library_items=library_items, user_settings=user_settings
         )
