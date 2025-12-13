@@ -17,15 +17,6 @@ from app.services.user_profile import TOP_GENRE_WHITELIST_LIMIT, UserProfileServ
 PER_GENRE_MAX_SHARE = 0.4
 
 
-def normalize(value, min_v=0, max_v=10):
-    """
-    Normalize popularity / rating when blending.
-    """
-    if max_v == min_v:
-        return 0
-    return (value - min_v) / (max_v - min_v)
-
-
 def _parse_identifier(identifier: str) -> tuple[str | None, int | None]:
     """Parse Stremio identifier to extract IMDB ID and TMDB ID."""
     if not identifier:
@@ -79,6 +70,8 @@ class RecommendationService:
         self.stable_seed = token or ""
         # Optional pre-fetched library payload (reuse within the request)
         self._library_data: dict | None = library_data
+        # cache: content_type -> set of top genre IDs
+        self._whitelist_cache: dict[str, set[int]] = {}
 
     def _stable_epsilon(self, tmdb_id: int) -> float:
         if not self.stable_seed:
@@ -246,6 +239,107 @@ class RecommendationService:
                     pass
 
         return imdb_ids, tmdb_ids
+
+    async def _get_top_genre_whitelist(self, content_type: str) -> set[int]:
+        """Compute and cache user's top-genre whitelist for the given content type."""
+        if content_type in self._whitelist_cache:
+            return self._whitelist_cache[content_type]
+
+        try:
+            if self._library_data is None:
+                self._library_data = await self.stremio_service.get_library_items()
+            all_items = (
+                self._library_data.get("loved", [])
+                + self._library_data.get("watched", [])
+                + self._library_data.get("added", [])
+            )
+            typed = [
+                it
+                for it in all_items
+                if it.get("type") == content_type or (content_type in ("tv", "series") and it.get("type") == "series")
+            ]
+            unique_items = {it["_id"]: it for it in typed}
+            scored_objects = []
+            sorted_history = sorted(
+                unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched"), reverse=True
+            )
+            for it in sorted_history[:10]:
+                scored_objects.append(self.scoring_service.process_item(it))
+            # UserProfileService expects 'movie' or 'series'
+            prof_content_type = "series" if content_type in ("tv", "series") else "movie"
+            user_profile = await self.user_profile_service.build_user_profile(
+                scored_objects, content_type=prof_content_type
+            )
+            top_gen_pairs = user_profile.get_top_genres(limit=TOP_GENRE_WHITELIST_LIMIT)
+            whitelist = {int(gid) for gid, _ in top_gen_pairs}
+        except Exception:
+            whitelist = set()
+
+        self._whitelist_cache[content_type] = whitelist
+        return whitelist
+
+    async def _passes_top_genre(self, genre_ids: list[int] | None, content_type: str) -> bool:
+        whitelist = await self._get_top_genre_whitelist(content_type)
+        if not whitelist:
+            return True
+        gids = set(genre_ids or [])
+        if not gids:
+            return True
+        if 16 in gids and 16 not in whitelist:
+            return False
+        return bool(gids & whitelist)
+
+    async def _inject_freshness(
+        self,
+        pool: list[dict],
+        media_type: str,
+        watched_tmdb: set[int],
+        excluded_ids: set[int],
+        cap_injection: int,
+        target_capacity: int,
+    ) -> list[dict]:
+        try:
+            mtype = "tv" if media_type in ("tv", "series") else "movie"
+            trending_resp = await self.tmdb_service.get_trending(mtype, time_window="week")
+            trending = trending_resp.get("results", []) if trending_resp else []
+            top_rated_resp = await self.tmdb_service.get_top_rated(mtype)
+            top_rated = top_rated_resp.get("results", []) if top_rated_resp else []
+            fresh_pool = []
+            fresh_pool.extend(trending[:40])
+            fresh_pool.extend(top_rated[:40])
+
+            from collections import defaultdict
+
+            existing_ids = {it.get("id") for it in pool if it.get("id") is not None}
+            fresh_genre_counts = defaultdict(int)
+            fresh_added = 0
+            for it in fresh_pool:
+                tid = it.get("id")
+                if not tid or tid in existing_ids or tid in watched_tmdb:
+                    continue
+                gids = it.get("genre_ids") or []
+                if excluded_ids and excluded_ids.intersection(set(gids)):
+                    continue
+                if not await self._passes_top_genre(gids, media_type):
+                    continue
+                if gids and any(fresh_genre_counts[g] >= cap_injection for g in gids):
+                    continue
+                va = float(it.get("vote_average") or 0.0)
+                vc = int(it.get("vote_count") or 0)
+                if vc < 300 or va < 7.0:
+                    continue
+                pool.append(it)
+                existing_ids.add(tid)
+                for g in gids:
+                    fresh_genre_counts[g] += 1
+                fresh_added += 1
+                if len(pool) >= target_capacity:
+                    break
+            if fresh_added:
+                logger.info(f"Freshness injection added {fresh_added} items")
+        except Exception as e:
+            logger.warning(f"Freshness injection failed: {e}")
+        return pool
 
     async def _filter_candidates(
         self, candidates: list[dict], watched_imdb_ids: set[str], watched_tmdb_ids: set[int]
@@ -428,39 +522,18 @@ class RecommendationService:
         if not media_type:
             media_type = "movie"
 
-        # Build user profile (for genre whitelist)
-        try:
-            if self._library_data is None:
-                self._library_data = await self.stremio_service.get_library_items()
-            library_data = self._library_data
-            all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("added", [])
-            # Filter by type
-            typed = [it for it in all_items if it.get("type") == ("tv" if media_type in ("tv", "series") else "movie")]
-            # score and pick some recent top
-            unique_items = {it["_id"]: it for it in typed}
-            scored_objects = []
-            sorted_history = sorted(
-                unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched"), reverse=True
-            )
-            for it in sorted_history[:10]:
-                scored_objects.append(self.scoring_service.process_item(it))
-            user_profile = await self.user_profile_service.build_user_profile(
-                scored_objects, content_type=("tv" if media_type in ("tv", "series") else "movie")
-            )
-            top_gen_pairs = user_profile.get_top_genres(limit=TOP_GENRE_WHITELIST_LIMIT)
-            top_genre_whitelist: set[int] = {int(gid) for gid, _ in top_gen_pairs}
-        except Exception:
-            top_genre_whitelist = set()
+        # Build top-genre whitelist for this type
+        _whitelist = await self._get_top_genre_whitelist(media_type)
 
         def _passes_top_genre(item_genre_ids: list[int] | None) -> bool:
-            if not top_genre_whitelist:
+            if not _whitelist:
                 return True
             gids = set(item_genre_ids or [])
             if not gids:
                 return True
-            if 16 in gids and 16 not in top_genre_whitelist:
+            if 16 in gids and 16 not in _whitelist:
                 return False
-            return bool(gids & top_genre_whitelist)
+            return bool(gids & _whitelist)
 
         # Fetch more candidates to account for filtering
         # We want 20 final, so fetch 40
@@ -486,51 +559,15 @@ class RecommendationService:
         recommendations = [it for it in recommendations if _passes_top_genre(it.get("genre_ids"))]
 
         # 1.6 Freshness: inject trending/top-rated within whitelist to expand pool
-        try:
-            if len(recommendations) < buffer_limit:
-                mtype = "tv" if media_type in ("tv", "series") else "movie"
-                fresh_added = 0
-                trending_resp = await self.tmdb_service.get_trending(mtype, time_window="week")
-                trending = trending_resp.get("results", []) if trending_resp else []
-                top_rated_resp = await self.tmdb_service.get_top_rated(mtype)
-                top_rated = top_rated_resp.get("results", []) if top_rated_resp else []
-                fresh_pool = []
-                fresh_pool.extend(trending[:40])
-                fresh_pool.extend(top_rated[:40])
-                from collections import defaultdict
-
-                seen_ids = {it.get("id") for it in recommendations if it.get("id") is not None}
-                fresh_genre_counts = defaultdict(int)
-                cap_injection = max(1, int(self.per_item_limit * PER_GENRE_MAX_SHARE))
-                for it in fresh_pool:
-                    tid = it.get("id")
-                    if not tid or tid in seen_ids:
-                        continue
-                    if tid in watched_tmdb:
-                        continue
-                    gids = it.get("genre_ids") or []
-                    if excluded_ids and excluded_ids.intersection(set(gids)):
-                        continue
-                    if not _passes_top_genre(gids):
-                        continue
-                    if gids and any(fresh_genre_counts[g] >= cap_injection for g in gids):
-                        continue
-                    # quality gate
-                    va = float(it.get("vote_average") or 0.0)
-                    vc = int(it.get("vote_count") or 0)
-                    if vc < 300 or va < 7.0:
-                        continue
-                    recommendations.append(it)
-                    seen_ids.add(tid)
-                    for g in gids:
-                        fresh_genre_counts[g] += 1
-                    fresh_added += 1
-                    if len(recommendations) >= buffer_limit:
-                        break
-                if fresh_added:
-                    logger.info(f"Item-rec freshness injection added {fresh_added} items")
-        except Exception as e:
-            logger.warning(f"Item-rec freshness injection failed: {e}")
+        if len(recommendations) < buffer_limit:
+            recommendations = await self._inject_freshness(
+                recommendations,
+                media_type,
+                watched_tmdb,
+                excluded_ids,
+                max(1, int(self.per_item_limit * PER_GENRE_MAX_SHARE)),
+                buffer_limit,
+            )
 
         # 2. Fetch Metadata (gets IMDB IDs)
         meta_items = await self._fetch_metadata_for_items(
@@ -624,35 +661,18 @@ class RecommendationService:
             if final_without:
                 params["without_genres"] = "|".join(str(g) for g in final_without)
 
-        # Build user profile to derive top-genre whitelist
-        try:
-            library_data = await self.stremio_service.get_library_items()
-            all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("added", [])
-            typed = [it for it in all_items if it.get("type") == content_type]
-            unique_items = {it["_id"]: it for it in typed}
-            scored_objects = []
-            sorted_history = sorted(
-                unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched"), reverse=True
-            )
-            for it in sorted_history[:10]:
-                scored_objects.append(self.scoring_service.process_item(it))
-            user_profile = await self.user_profile_service.build_user_profile(
-                scored_objects, content_type=content_type
-            )
-            top_gen_pairs = user_profile.get_top_genres(limit=TOP_GENRE_WHITELIST_LIMIT)
-            top_genre_whitelist: set[int] = {int(gid) for gid, _ in top_gen_pairs}
-        except Exception:
-            top_genre_whitelist = set()
+        # Build whitelist via helper
+        _whitelist = await self._get_top_genre_whitelist(content_type)
 
         def _passes_top_genre(item_genre_ids: list[int] | None) -> bool:
-            if not top_genre_whitelist:
+            if not _whitelist:
                 return True
             gids = set(item_genre_ids or [])
             if not gids:
                 return True
-            if 16 in gids and 16 not in top_genre_whitelist:
+            if 16 in gids and 16 not in _whitelist:
                 return False
-            return bool(gids & top_genre_whitelist)
+            return bool(gids & _whitelist)
 
         # Fetch (with simple multi-page fallback to increase pool)
         candidates: list[dict] = []
@@ -678,53 +698,15 @@ class RecommendationService:
         filtered = await self._filter_candidates(candidates, watched_imdb, watched_tmdb)
 
         # Freshness injection: add trending/popular/top-rated (within whitelist) if pool thin
-        try:
-            if len(filtered) < limit * 2:
-                mtype = "tv" if content_type in ("tv", "series") else "movie"
-                trending_resp = await self.tmdb_service.get_trending(mtype, time_window="week")
-                trending = trending_resp.get("results", []) if trending_resp else []
-                top_rated_resp = await self.tmdb_service.get_top_rated(mtype)
-                top_rated = top_rated_resp.get("results", []) if top_rated_resp else []
-                fresh_pool = []
-                fresh_pool.extend(trending[:40])
-                fresh_pool.extend(top_rated[:40])
-                from collections import defaultdict
-
-                existing_ids = {it.get("id") for it in filtered if it.get("id") is not None}
-                fresh_genre_counts = defaultdict(int)
-                cap_injection = max(1, int(limit * PER_GENRE_MAX_SHARE))
-                fresh_added = 0
-                for it in fresh_pool:
-                    tid = it.get("id")
-                    if not tid or tid in existing_ids:
-                        continue
-                    if tid in watched_tmdb:
-                        continue
-                    gids = it.get("genre_ids") or []
-                    # Exclude by user excluded genre list
-                    if excluded_ids and set(gids) & set(excluded_ids):
-                        continue
-                    # Apply top-genre whitelist
-                    if not _passes_top_genre(gids):
-                        continue
-                    # Diversify freshness injection by genre
-                    if gids and any(fresh_genre_counts[g] >= cap_injection for g in gids):
-                        continue
-                    va = float(it.get("vote_average") or 0.0)
-                    vc = int(it.get("vote_count") or 0)
-                    if vc < 300 or va < 7.0:
-                        continue
-                    filtered.append(it)
-                    existing_ids.add(tid)
-                    for g in gids:
-                        fresh_genre_counts[g] += 1
-                    fresh_added += 1
-                    if len(filtered) >= limit * 3:
-                        break
-                if fresh_added:
-                    logger.info(f"Theme freshness injection added {fresh_added} items")
-        except Exception as e:
-            logger.warning(f"Theme freshness injection failed: {e}")
+        if len(filtered) < limit * 2:
+            filtered = await self._inject_freshness(
+                filtered,
+                content_type,
+                watched_tmdb,
+                set(excluded_ids),
+                max(1, int(limit * PER_GENRE_MAX_SHARE)),
+                limit * 3,
+            )
 
         # Meta
         meta_items = await self._fetch_metadata_for_items(filtered, content_type, target_count=limit * 3)

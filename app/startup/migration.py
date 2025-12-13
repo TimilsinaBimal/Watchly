@@ -6,11 +6,10 @@ import traceback
 import httpx
 import redis.asyncio as redis
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
 from app.core.config import settings
+from app.services.token_store import token_store
 
 
 def decrypt_data(enc_json: str):
@@ -117,18 +116,9 @@ async def decode_old_payloads(encrypted_raw: str):
     return payload
 
 
-def encrypt_auth_key(auth_key):
-    salt = b"x7FDf9kypzQ1LmR32b8hWv49sKq2Pd8T"
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=200_000,
-    )
-
-    key = base64.urlsafe_b64encode(kdf.derive(settings.TOKEN_SALT.encode("utf-8")))
-    client = Fernet(key)
-    return client.encrypt(auth_key.encode("utf-8")).decode("utf-8")
+def encrypt_auth_key(auth_key: str) -> str:
+    # Delegate to TokenStore to keep encryption consistent everywhere
+    return token_store.encrypt_token(auth_key)
 
 
 def prepare_default_payload(email, user_id):
