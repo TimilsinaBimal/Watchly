@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CatalogConfig(BaseModel):
@@ -11,8 +11,8 @@ class UserSettings(BaseModel):
     catalogs: list[CatalogConfig]
     language: str = "en-US"
     rpdb_key: str | None = None
-    excluded_movie_genres: list[str] = []
-    excluded_series_genres: list[str] = []
+    excluded_movie_genres: list[str] = Field(default_factory=list)
+    excluded_series_genres: list[str] = Field(default_factory=list)
 
 
 def get_default_settings() -> UserSettings:

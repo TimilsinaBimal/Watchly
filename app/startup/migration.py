@@ -157,7 +157,7 @@ async def store_payload(client: redis.Redis, email: str, user_id: str, auth_key:
         # encrypt auth_key
         if auth_key:
             payload["authKey"] = encrypt_auth_key(auth_key)
-        key = user_id.strip()
+        key = f"{settings.REDIS_TOKEN_KEY}{user_id.strip()}"
         await client.set(key, json.dumps(payload))
     except (redis.RedisError, OSError) as exc:
         logger.warning(f"Failed to store payload for {key}: {exc}")
@@ -200,7 +200,7 @@ async def process_migration_key(redis_client: redis.Redis, key: str) -> bool:
         if auth_key:
             new_payload["authKey"] = encrypt_auth_key(auth_key)
 
-        new_key = user_id.strip()
+        new_key = f"{settings.REDIS_TOKEN_KEY}{user_id.strip()}"
         payload_json = json.dumps(new_payload)
 
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:

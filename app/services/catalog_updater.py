@@ -46,7 +46,8 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
             except Exception as e:
                 user_settings = get_default_settings()
                 logger.warning(f"[{redact_token(token)}] Failed to parse user settings from credentials: {e}")
-        library_items = await stremio_service.get_library_items()
+        # force fresh library for background refresh
+        library_items = await stremio_service.get_library_items(use_cache=False)
         dynamic_catalog_service = DynamicCatalogService(
             stremio_service=stremio_service,
             language=(user_settings.language if user_settings else "en-US"),
