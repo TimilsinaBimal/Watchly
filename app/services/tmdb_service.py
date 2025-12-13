@@ -180,3 +180,19 @@ class TMDBService:
             params.update(kwargs)
         endpoint = f"/discover/{media_type}"
         return await self._make_request(endpoint, params=params)
+
+    @alru_cache(maxsize=500)
+    async def get_trending(self, media_type: str, time_window: str = "week", page: int = 1) -> dict:
+        """Get trending content. media_type: 'movie' or 'tv'. time_window: 'day' or 'week'"""
+        mt = "movie" if media_type == "movie" else "tv"
+        params = {"page": page}
+        endpoint = f"/trending/{mt}/{time_window}"
+        return await self._make_request(endpoint, params=params)
+
+    @alru_cache(maxsize=500)
+    async def get_top_rated(self, media_type: str, page: int = 1) -> dict:
+        """Get top-rated content list."""
+        mt = "movie" if media_type == "movie" else "tv"
+        params = {"page": page}
+        endpoint = f"/{mt}/top_rated"
+        return await self._make_request(endpoint, params=params)

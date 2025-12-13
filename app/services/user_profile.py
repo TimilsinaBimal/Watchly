@@ -6,13 +6,17 @@ from app.models.scoring import ScoredItem
 from app.services.tmdb_service import TMDBService
 
 # TODO: Make these weights dynamic based on user's preferences.
-GENRES_WEIGHT = 0.3
-KEYWORDS_WEIGHT = 0.40
-CAST_WEIGHT = 0.1
-CREW_WEIGHT = 0.1
+GENRES_WEIGHT = 0.20
+KEYWORDS_WEIGHT = 0.30
+CAST_WEIGHT = 0.12
+CREW_WEIGHT = 0.08
 YEAR_WEIGHT = 0.05
 COUNTRIES_WEIGHT = 0.05
-BASE_GENRE_WEIGHT = 0.15
+BASE_GENRE_WEIGHT = 0.05
+TOPICS_WEIGHT = 0.20
+
+# Global constant to control size of user's top-genre whitelist used in filtering
+TOP_GENRE_WHITELIST_LIMIT = 5
 
 
 def emphasis(x: float) -> float:
@@ -56,6 +60,7 @@ class UserProfileService:
             "crew": defaultdict(float),
             "years": defaultdict(float),
             "countries": defaultdict(float),
+            "topics": defaultdict(float),
         }
 
         async def _process(item):
@@ -100,6 +105,7 @@ class UserProfileService:
             crew={"values": dict(profile_data["crew"])},
             years={"values": dict(profile_data["years"])},
             countries={"values": dict(profile_data["countries"])},
+            topics={"values": dict(profile_data["topics"])},
         )
 
         # Normalize all vectors to 0-1 range
@@ -110,83 +116,142 @@ class UserProfileService:
     def calculate_similarity(self, profile: UserTasteProfile, item_meta: dict) -> float:
         """
         Final improved similarity scoring function.
-        Uses normalized sparse matching + rarity boosting + non-linear emphasis.
+        Simplified similarity: linear weighted sum across core dimensions.
         """
-
         item_vec = self._vectorize_item(item_meta)
 
-        score = 0.0
+        # Linear weighted sum across selected dimensions
+        # For each dimension we average per-feature match to avoid bias from many features
+        def avg_pref(features, mapping):
+            if not features:
+                return 0.0
+            s = 0.0
+            for f in features:
+                s += mapping.get(f, 0.0)
+            return s / max(1, len(features))
 
-        # 1. GENRES
-        # Normalize so movies with many genres don't get excessive score.
-        for gid in item_vec["genres"]:
-            pref = profile.genres.values.get(gid, 0.0)
+        g_score = avg_pref(item_vec.get("genres", []), profile.genres.values) * GENRES_WEIGHT
+        k_score = avg_pref(item_vec.get("keywords", []), profile.keywords.values) * KEYWORDS_WEIGHT
+        c_score = avg_pref(item_vec.get("cast", []), profile.cast.values) * CAST_WEIGHT
+        t_score = avg_pref(item_vec.get("topics", []), profile.topics.values) * TOPICS_WEIGHT
 
-            if pref > 0:
-                s = emphasis(pref)
-                s = safe_div(s, len(item_vec["genres"]))
-                score += s * GENRES_WEIGHT
+        # Optional extras with small weights
+        crew_score = avg_pref(item_vec.get("crew", []), profile.crew.values) * CREW_WEIGHT
+        country_score = avg_pref(item_vec.get("countries", []), profile.countries.values) * COUNTRIES_WEIGHT
+        year_val = item_vec.get("year")
+        year_score = 0.0
+        if year_val is not None:
+            year_score = profile.years.values.get(year_val, 0.0) * YEAR_WEIGHT
 
-            # Soft prior bias (genre-only)
-            base_pref = profile.top_genres_normalized.get(gid, 0.0)
-            score += base_pref * BASE_GENRE_WEIGHT
+        score = g_score + k_score + c_score + t_score + crew_score + country_score + year_score
 
-        # 2. KEYWORDS
-        for kw in item_vec["keywords"]:
-            pref = profile.keywords.values.get(kw, 0.0)
+        return float(score)
 
-            if pref > 0:
-                s = emphasis(pref)
-                s = safe_div(s, len(item_vec["keywords"]))
-                score += s * KEYWORDS_WEIGHT
+    def calculate_similarity_with_breakdown(self, profile: UserTasteProfile, item_meta: dict) -> tuple[float, dict]:
+        """
+        Compute similarity and also return a per-dimension breakdown for logging/tuning.
+        Returns (score, breakdown_dict)
+        """
+        item_vec = self._vectorize_item(item_meta)
 
-        # 3. CAST
-        for cid in item_vec["cast"]:
-            pref = profile.cast.values.get(cid, 0.0)
+        def avg_pref(features, mapping):
+            if not features:
+                return 0.0
+            s = 0.0
+            for f in features:
+                s += mapping.get(f, 0.0)
+            return s / max(1, len(features))
 
-            if pref > 0:
-                s = emphasis(pref)
-                s = safe_div(s, len(item_vec["cast"]))
-                score += s * CAST_WEIGHT
+        g_score = avg_pref(item_vec.get("genres", []), profile.genres.values) * GENRES_WEIGHT
+        k_score = avg_pref(item_vec.get("keywords", []), profile.keywords.values) * KEYWORDS_WEIGHT
+        c_score = avg_pref(item_vec.get("cast", []), profile.cast.values) * CAST_WEIGHT
+        t_score = avg_pref(item_vec.get("topics", []), profile.topics.values) * TOPICS_WEIGHT
+        crew_score = avg_pref(item_vec.get("crew", []), profile.crew.values) * CREW_WEIGHT
+        country_score = avg_pref(item_vec.get("countries", []), profile.countries.values) * COUNTRIES_WEIGHT
+        year_val = item_vec.get("year")
+        year_score = 0.0
+        if year_val is not None:
+            year_score = profile.years.values.get(year_val, 0.0) * YEAR_WEIGHT
 
-        # 4. CREW
-        for cr in item_vec["crew"]:
-            pref = profile.crew.values.get(cr, 0.0)
+        score = g_score + k_score + c_score + t_score + crew_score + country_score + year_score
 
-            if pref > 0:
-                s = emphasis(pref)
-                s = safe_div(s, len(item_vec["crew"]))
-                score += s * CREW_WEIGHT
+        breakdown = {
+            "genres": float(g_score),
+            "keywords": float(k_score),
+            "cast": float(c_score),
+            "topics": float(t_score),
+            "crew": float(crew_score),
+            "countries": float(country_score),
+            "year": float(year_score),
+            "total": float(score),
+        }
 
-        # 5. COUNTRIES
-        for c in item_vec["countries"]:
-            pref = profile.countries.values.get(c, 0.0)
+        return float(score), breakdown
 
-            if pref > 0:
-                s = emphasis(pref)
-                s = safe_div(s, len(item_vec["countries"]))
-                score += s * COUNTRIES_WEIGHT
+    # ---------------- Super-simple overlap similarity ----------------
+    @staticmethod
+    def _jaccard(a: set, b: set) -> float:
+        if not a and not b:
+            return 0.0
+        if not a or not b:
+            return 0.0
+        inter = len(a & b)
+        union = len(a | b)
+        if union == 0:
+            return 0.0
+        return inter / union
 
-        # 6. YEAR/DECADE
-        # Reward matches on the user's preferred decades, with soft credit to adjacent decades.
-        item_year = item_vec.get("year")
-        if item_year is not None:
-            base_pref = profile.years.values.get(item_year, 0.0)
-            if base_pref > 0:
-                score += emphasis(base_pref) * YEAR_WEIGHT
-            else:
-                # Soft-match adjacent decades at half strength
-                prev_decade = item_year - 10
-                next_decade = item_year + 10
-                neighbor_pref = 0.0
-                if prev_decade in profile.years.values:
-                    neighbor_pref = max(neighbor_pref, profile.years.values.get(prev_decade, 0.0))
-                if next_decade in profile.years.values:
-                    neighbor_pref = max(neighbor_pref, profile.years.values.get(next_decade, 0.0))
-                if neighbor_pref > 0:
-                    score += emphasis(neighbor_pref) * (YEAR_WEIGHT * 0.5)
+    def calculate_simple_overlap_with_breakdown(
+        self,
+        profile: UserTasteProfile,
+        item_meta: dict,
+        *,
+        top_topic_tokens: int = 300,
+        top_genres: int = 20,
+        top_keyword_ids: int = 200,
+    ) -> tuple[float, dict]:
+        """
+        Very simple, explainable similarity using plain set overlaps:
+        - Jaccard of token-level "topics" (title/overview/keyword-names tokens)
+        - Jaccard of genre ids
+        - Jaccard of TMDB keyword ids (optional, small weight)
 
-        return score
+        No embeddings; robust to partial-word matching via lightweight tokenization
+        and heuristic stemming in _tokenize().
+        """
+        # Preference sets from profile (take top-N by weight to reduce noise)
+        pref_topics_sorted = sorted(profile.topics.values.items(), key=lambda kv: kv[1], reverse=True)
+        pref_topic_tokens = {k for k, _ in pref_topics_sorted[:top_topic_tokens]}
+
+        pref_genres_sorted = sorted(profile.genres.values.items(), key=lambda kv: kv[1], reverse=True)
+        pref_genres = {int(k) for k, _ in pref_genres_sorted[:top_genres]}
+
+        pref_keywords_sorted = sorted(profile.keywords.values.items(), key=lambda kv: kv[1], reverse=True)
+        pref_keyword_ids = {int(k) for k, _ in pref_keywords_sorted[:top_keyword_ids]}
+
+        # Item sets
+        vec = self._vectorize_item(item_meta)
+        item_topic_tokens = set(vec.get("topics") or [])
+        item_genres = {int(g) for g in (vec.get("genres") or [])}
+        item_keyword_ids = {int(k) for k in (vec.get("keywords") or [])}
+
+        # Jaccard components
+        topics_j = self._jaccard(item_topic_tokens, pref_topic_tokens)
+        genres_j = self._jaccard(item_genres, pref_genres)
+        kw_j = self._jaccard(item_keyword_ids, pref_keyword_ids)
+
+        # Simple weighted sum; emphasize token overlap
+        w_topics, w_genres, w_kw = 0.6, 0.25, 0.15
+        score = (topics_j * w_topics) + (genres_j * w_genres) + (kw_j * w_kw)
+
+        breakdown = {
+            "topics_jaccard": float(topics_j),
+            "genres_jaccard": float(genres_j),
+            "keywords_jaccard": float(kw_j),
+            "total": float(score),
+        }
+
+        return float(score), breakdown
 
     def _vectorize_item(self, meta: dict) -> dict[str, list[int] | int | list[str] | None]:
         """
@@ -206,13 +271,32 @@ class UserProfileService:
         elif "origin_country" in meta:
             countries = meta.get("origin_country", [])
 
+        # genres: prefer explicit genre_ids; fallback to dict list if present
+        genre_ids = meta.get("genre_ids") or []
+        if not genre_ids:
+            genres_src = meta.get("genres") or []
+            if genres_src and isinstance(genres_src, list) and genres_src and isinstance(genres_src[0], dict):
+                genre_ids = [g.get("id") for g in genres_src if isinstance(g, dict) and g.get("id") is not None]
+
+        # Build topics tokens from title/overview and keyword names
+        # Handle both our enriched meta format and raw TMDB payloads
+        title_text = meta.get("name") or meta.get("title") or meta.get("original_title") or ""
+        overview_text = meta.get("description") or meta.get("overview") or ""
+        kw_names = [k.get("name") for k in keywords if isinstance(k, dict) and k.get("name")]
+        topics_tokens: list[str] = []
+        topics_tokens.extend(self._tokenize(title_text))
+        topics_tokens.extend(self._tokenize(overview_text))
+        for nm in kw_names:
+            topics_tokens.extend(self._tokenize(nm))
+
         vector = {
-            "genres": [g["id"] for g in meta.get("genres", [])],
+            "genres": genre_ids,
             "keywords": [k["id"] for k in keywords],
             "cast": [],
             "crew": [],
             "year": None,
             "countries": countries,
+            "topics": topics_tokens,
         }
 
         # Cast (Top 3 only to reduce noise)
@@ -254,6 +338,7 @@ class UserProfileService:
             "crew": CREW_WEIGHT,
             "year": YEAR_WEIGHT,
             "countries": COUNTRIES_WEIGHT,
+            "topics": TOPICS_WEIGHT,
         }
 
         for dim, ids in item_vector.items():
@@ -268,6 +353,93 @@ class UserProfileService:
                     if dim == "genres" and excluded_genres and feature_id in excluded_genres:
                         continue
                     profile[dim][feature_id] += final_weight
+
+    # ---------------- Tokenization helpers ----------------
+    _STOPWORDS = {
+        "a",
+        "an",
+        "and",
+        "the",
+        "of",
+        "to",
+        "in",
+        "on",
+        "for",
+        "with",
+        "by",
+        "from",
+        "at",
+        "as",
+        "is",
+        "it",
+        "this",
+        "that",
+        "be",
+        "or",
+        "are",
+        "was",
+        "were",
+        "has",
+        "have",
+        "had",
+        "into",
+        "their",
+        "his",
+        "her",
+        "its",
+        "but",
+        "not",
+        "no",
+        "so",
+        "about",
+        "over",
+        "under",
+        "after",
+        "before",
+        "than",
+        "then",
+        "out",
+        "up",
+        "down",
+        "off",
+        "only",
+        "more",
+        "most",
+        "some",
+        "any",
+    }
+
+    @staticmethod
+    def _normalize_token(tok: str) -> str:
+        t = tok.lower()
+        t = "".join(ch for ch in t if ch.isalnum())
+        if len(t) <= 2:
+            return ""
+        for suf in ("ing", "ers", "ies", "ment", "tion", "s", "ed"):
+            if t.endswith(suf) and len(t) - len(suf) >= 3:
+                t = t[: -len(suf)]
+                break
+        return t
+
+    def _tokenize(self, text: str) -> list[str]:
+        if not text:
+            return []
+        raw = text.replace("-", " ").replace("_", " ")
+        tokens = []
+        for part in raw.split():
+            t = self._normalize_token(part)
+            if not t or t in self._STOPWORDS:
+                continue
+            tokens.append(t)
+        # de-duplicate while preserving order
+        seen = set()
+        dedup = []
+        for t in tokens:
+            if t in seen:
+                continue
+            seen.add(t)
+            dedup.append(t)
+        return dedup
 
     async def _fetch_full_metadata(self, tmdb_id: int, type_: str) -> dict | None:
         """Helper to fetch deep metadata."""

@@ -11,7 +11,7 @@ from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
 
 MAX_RESULTS = 50
-SOURCE_ITEMS_LIMIT = 15
+SOURCE_ITEMS_LIMIT = 10
 
 router = APIRouter()
 
@@ -55,7 +55,10 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         # Create services with credentials
         stremio_service = StremioService(auth_key=credentials.get("authKey"))
         recommendation_service = RecommendationService(
-            stremio_service=stremio_service, language=language, user_settings=user_settings
+            stremio_service=stremio_service,
+            language=language,
+            user_settings=user_settings,
+            token=token,
         )
 
         # Handle item-based recommendations
@@ -83,7 +86,8 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
         # Cache catalog responses for 4 hours
-        response.headers["Cache-Control"] = "public, max-age=14400" if len(recommendations) > 0 else "no-cache"
+        # response.headers["Cache-Control"] = "public, max-age=14400" if len(recommendations) > 0 else "no-cache"
+        response.headers["Cache-Control"] = "no-cache"
         return {"metas": recommendations}
 
     except HTTPException:

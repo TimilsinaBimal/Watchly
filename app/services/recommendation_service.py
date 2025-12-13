@@ -1,7 +1,8 @@
 import asyncio
-import random
+import hashlib
 from urllib.parse import unquote
 
+from cachetools import TTLCache
 from loguru import logger
 
 from app.core.settings import UserSettings
@@ -10,7 +11,7 @@ from app.services.rpdb import RPDBService
 from app.services.scoring import ScoringService
 from app.services.stremio_service import StremioService
 from app.services.tmdb_service import TMDBService
-from app.services.user_profile import UserProfileService
+from app.services.user_profile import TOP_GENRE_WHITELIST_LIMIT, UserProfileService
 
 
 def normalize(value, min_v=0, max_v=10):
@@ -59,6 +60,7 @@ class RecommendationService:
         stremio_service: StremioService | None = None,
         language: str = "en-US",
         user_settings: UserSettings | None = None,
+        token: str | None = None,
     ):
         if stremio_service is None:
             raise ValueError("StremioService instance is required for personalized recommendations")
@@ -69,22 +71,64 @@ class RecommendationService:
         self.discovery_engine = DiscoveryEngine()
         self.per_item_limit = 20
         self.user_settings = user_settings
+        # Stable seed for tie-breaking and per-token caching
+        self.stable_seed = token or ""
+        # Short-TTL in-memory cache per process
+        # key: tuple -> value: list[dict]
+        if not hasattr(RecommendationService, "_cache"):
+            RecommendationService._cache = TTLCache(maxsize=1000, ttl=300)
+        self._cache: TTLCache = RecommendationService._cache
+
+    def _stable_epsilon(self, tmdb_id: int) -> float:
+        if not self.stable_seed:
+            return 0.0
+        h = hashlib.md5(f"{self.stable_seed}:{tmdb_id}".encode()).hexdigest()
+        # Use last 6 hex digits for tiny epsilon
+        eps = int(h[-6:], 16) % 1000
+        return eps / 1_000_000.0
+
+    @staticmethod
+    def _normalize(value: float, min_v: float = 0.0, max_v: float = 10.0) -> float:
+        if max_v == min_v:
+            return 0.0
+        return max(0.0, min(1.0, (value - min_v) / (max_v - min_v)))
+
+    @staticmethod
+    def _weighted_rating(vote_avg: float | None, vote_count: int | None, C: float = 6.8, m: int = 300) -> float:
+        """
+        IMDb-style weighted rating. Returns value on 0-10 scale.
+        C = global mean; m = minimum votes for full weight.
+        """
+        try:
+            R = float(vote_avg or 0.0)
+            v = int(vote_count or 0)
+        except Exception:
+            R, v = 0.0, 0
+        return ((v / (v + m)) * R) + ((m / (v + m)) * C)
+
+    def _cache_get(self, key):
+        try:
+            return self._cache.get(key)
+        except Exception:
+            return None
+
+    def _cache_set(self, key, value):
+        try:
+            self._cache[key] = value
+        except Exception:
+            pass
 
     async def _get_exclusion_sets(self, content_type: str | None = None) -> tuple[set[str], set[int]]:
         """
         Fetch library items and build strict exclusion sets for watched content.
-        Also exclude items the user has added to library to avoid recommending duplicates.
+        Excludes watched and loved items (and items user explicitly removed).
+        Note: We no longer exclude 'added' items to avoid over-thinning the pool.
         Returns (watched_imdb_ids, watched_tmdb_ids)
         """
         # Always fetch fresh library to ensure we don't recommend what was just watched
         library_data = await self.stremio_service.get_library_items()
         # Combine loved, watched, added, and removed (added/removed treated as exclude-only)
-        all_items = (
-            library_data.get("loved", [])
-            + library_data.get("watched", [])
-            + library_data.get("added", [])
-            + library_data.get("removed", [])
-        )
+        all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("removed", [])
 
         imdb_ids = set()
         tmdb_ids = set()
@@ -134,7 +178,9 @@ class RecommendationService:
             filtered.append(item)
         return filtered
 
-    async def _fetch_metadata_for_items(self, items: list[dict], media_type: str) -> list[dict]:
+    async def _fetch_metadata_for_items(
+        self, items: list[dict], media_type: str, target_count: int | None = None, batch_size: int = 20
+    ) -> list[dict]:
         """
         Fetch detailed metadata for items directly from TMDB API and format for Stremio.
         """
@@ -155,72 +201,112 @@ class RecommendationService:
                 logger.warning(f"Failed to fetch details for TMDB ID {tmdb_id}: {e}")
                 return None
 
-        # Create tasks for all items to fetch details (needed for IMDB ID and full meta)
-        # Filter out items without ID
+        # Filter out items without ID and process in batches for early stop
         valid_items = [item for item in items if item.get("id")]
-        tasks = [_fetch_details(item["id"]) for item in valid_items]
-
-        if not tasks:
+        if not valid_items:
             return []
 
-        details_results = await asyncio.gather(*tasks)
+        # Decide target_count if not provided
+        if target_count is None:
+            # Aim to collect up to 2x of typical need but not exceed total
+            target_count = min(len(valid_items), 40)
 
-        for details in details_results:
-            if not details:
-                continue
+        for i in range(0, len(valid_items), batch_size):
+            if len(final_results) >= target_count:
+                break
+            chunk = valid_items[i : i + batch_size]  # noqa
+            tasks = [_fetch_details(item["id"]) for item in chunk]
+            details_results = await asyncio.gather(*tasks)
+            for details in details_results:
+                if not details:
+                    continue
 
-            # Extract IMDB ID from external_ids
-            external_ids = details.get("external_ids", {})
-            imdb_id = external_ids.get("imdb_id")
-            # tmdb_id = details.get("id")
+                # Extract IMDB ID from external_ids
+                external_ids = details.get("external_ids", {})
+                imdb_id = external_ids.get("imdb_id")
 
-            # Prefer IMDB ID, fallback to TMDB ID
-            if imdb_id:
-                stremio_id = imdb_id
-            else:  # skip content if imdb id is not available
-                continue
+                # Prefer IMDB ID, fallback to TMDB ID (as stremio:tmdb:<id>) to avoid losing candidates
+                if imdb_id:
+                    stremio_id = imdb_id
+                else:
+                    tmdb_fallback = details.get("id")
+                    if tmdb_fallback:
+                        stremio_id = f"tmdb:{tmdb_fallback}"
+                    else:
+                        continue
 
-            # Construct Stremio meta object
-            title = details.get("title") or details.get("name")
-            if not title:
-                continue
+                # Construct Stremio meta object
+                title = details.get("title") or details.get("name")
+                if not title:
+                    continue
 
-            # Image paths
-            poster_path = details.get("poster_path")
-            backdrop_path = details.get("backdrop_path")
+                # Image paths
+                poster_path = details.get("poster_path")
+                backdrop_path = details.get("backdrop_path")
 
-            release_date = details.get("release_date") or details.get("first_air_date") or ""
-            year = release_date[:4] if release_date else None
+                release_date = details.get("release_date") or details.get("first_air_date") or ""
+                year = release_date[:4] if release_date else None
 
-            if self.user_settings and self.user_settings.rpdb_key:
-                poster_url = RPDBService.get_poster_url(self.user_settings.rpdb_key, stremio_id)
-            else:
-                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+                if self.user_settings and self.user_settings.rpdb_key:
+                    poster_url = RPDBService.get_poster_url(self.user_settings.rpdb_key, stremio_id)
+                else:
+                    poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
 
-            meta_data = {
-                "id": stremio_id,
-                "imdb_id": stremio_id,
-                "type": "series" if media_type in ["tv", "series"] else "movie",
-                "name": title,
-                "poster": poster_url,
-                "background": f"https://image.tmdb.org/t/p/original{backdrop_path}" if backdrop_path else None,
-                "description": details.get("overview"),
-                "releaseInfo": year,
-                "imdbRating": str(details.get("vote_average", "")),
-                "genres": [g.get("name") for g in details.get("genres", [])],
-                # pass internal external_ids for post-filtering if needed
-                "_external_ids": external_ids,
-            }
+                genres_full = details.get("genres", []) or []
+                genre_ids = [g.get("id") for g in genres_full if isinstance(g, dict) and g.get("id") is not None]
 
-            # Add runtime if available (Movie) or episode run time (TV)
-            runtime = details.get("runtime")
-            if not runtime and details.get("episode_run_time"):
-                runtime = details.get("episode_run_time")[0]
+                meta_data = {
+                    "id": stremio_id,
+                    "imdb_id": imdb_id,
+                    "type": "series" if media_type in ["tv", "series"] else "movie",
+                    "name": title,
+                    "poster": poster_url,
+                    "background": f"https://image.tmdb.org/t/p/original{backdrop_path}" if backdrop_path else None,
+                    "description": details.get("overview"),
+                    "releaseInfo": year,
+                    "imdbRating": str(details.get("vote_average", "")),
+                    # Display genres (names) but keep full ids separately
+                    "genres": [g.get("name") for g in genres_full],
+                    # Keep fields for ranking and post-processing
+                    "vote_average": details.get("vote_average"),
+                    "vote_count": details.get("vote_count"),
+                    "popularity": details.get("popularity"),
+                    "original_language": details.get("original_language"),
+                    # pass internal external_ids for post-filtering if needed
+                    "_external_ids": external_ids,
+                    # internal fields for suppression/rerank
+                    "_tmdb_id": details.get("id"),
+                    "genre_ids": genre_ids,
+                }
 
-            if runtime:
-                meta_data["runtime"] = f"{runtime} min"
+                # Add runtime if available (Movie) or episode run time (TV)
+                runtime = details.get("runtime")
+                if not runtime and details.get("episode_run_time"):
+                    runtime = details.get("episode_run_time")[0]
 
-            final_results.append(meta_data)
+                if runtime:
+                    meta_data["runtime"] = f"{runtime} min"
+
+                # internal fields for collection and cast (movies only for collection)
+                if query_media_type == "movie":
+                    coll = details.get("belongs_to_collection") or {}
+                    if isinstance(coll, dict):
+                        meta_data["_collection_id"] = coll.get("id")
+
+                # top 3 cast ids
+                cast = details.get("credits", {}).get("cast", []) or []
+                meta_data["_top_cast_ids"] = [c.get("id") for c in cast[:3] if c.get("id") is not None]
+
+                # Attach minimal structures for similarity to use keywords/credits later
+                if details.get("keywords"):
+                    meta_data["keywords"] = details.get("keywords")
+                if details.get("credits"):
+                    meta_data["credits"] = details.get("credits")
+
+                final_results.append(meta_data)
+
+                if len(final_results) >= target_count:
+                    break
 
         return final_results
 
@@ -251,6 +337,38 @@ class RecommendationService:
         if not media_type:
             media_type = "movie"
 
+        # Build user profile (for genre whitelist)
+        try:
+            library_data = await self.stremio_service.get_library_items()
+            all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("added", [])
+            # Filter by type
+            typed = [it for it in all_items if it.get("type") == ("tv" if media_type in ("tv", "series") else "movie")]
+            # score and pick some recent top
+            unique_items = {it["_id"]: it for it in typed}
+            scored_objects = []
+            sorted_history = sorted(
+                unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched"), reverse=True
+            )
+            for it in sorted_history[:10]:
+                scored_objects.append(self.scoring_service.process_item(it))
+            user_profile = await self.user_profile_service.build_user_profile(
+                scored_objects, content_type=("tv" if media_type in ("tv", "series") else "movie")
+            )
+            top_gen_pairs = user_profile.get_top_genres(limit=TOP_GENRE_WHITELIST_LIMIT)
+            top_genre_whitelist: set[int] = {int(gid) for gid, _ in top_gen_pairs}
+        except Exception:
+            top_genre_whitelist = set()
+
+        def _passes_top_genre(item_genre_ids: list[int] | None) -> bool:
+            if not top_genre_whitelist:
+                return True
+            gids = set(item_genre_ids or [])
+            if not gids:
+                return True
+            if 16 in gids and 16 not in top_genre_whitelist:
+                return False
+            return bool(gids & top_genre_whitelist)
+
         # Fetch more candidates to account for filtering
         # We want 20 final, so fetch 40
         buffer_limit = self.per_item_limit * 2
@@ -271,9 +389,52 @@ class RecommendationService:
             recommendations = [
                 item for item in recommendations if not excluded_ids.intersection(item.get("genre_ids") or [])
             ]
+        # Top-genre whitelist filter
+        recommendations = [it for it in recommendations if _passes_top_genre(it.get("genre_ids"))]
+
+        # 1.6 Freshness: inject trending/top-rated within whitelist to expand pool
+        try:
+            if len(recommendations) < buffer_limit:
+                mtype = "tv" if media_type in ("tv", "series") else "movie"
+                fresh_added = 0
+                trending_resp = await self.tmdb_service.get_trending(mtype, time_window="week")
+                trending = trending_resp.get("results", []) if trending_resp else []
+                top_rated_resp = await self.tmdb_service.get_top_rated(mtype)
+                top_rated = top_rated_resp.get("results", []) if top_rated_resp else []
+                fresh_pool = []
+                fresh_pool.extend(trending[:40])
+                fresh_pool.extend(top_rated[:40])
+                seen_ids = {it.get("id") for it in recommendations if it.get("id") is not None}
+                for it in fresh_pool:
+                    tid = it.get("id")
+                    if not tid or tid in seen_ids:
+                        continue
+                    if tid in watched_tmdb:
+                        continue
+                    gids = it.get("genre_ids") or []
+                    if excluded_ids and excluded_ids.intersection(set(gids)):
+                        continue
+                    if not _passes_top_genre(gids):
+                        continue
+                    # quality gate
+                    va = float(it.get("vote_average") or 0.0)
+                    vc = int(it.get("vote_count") or 0)
+                    if vc < 300 or va < 7.0:
+                        continue
+                    recommendations.append(it)
+                    seen_ids.add(tid)
+                    fresh_added += 1
+                    if len(recommendations) >= buffer_limit:
+                        break
+                if fresh_added:
+                    logger.info(f"Item-rec freshness injection added {fresh_added} items")
+        except Exception as e:
+            logger.warning(f"Item-rec freshness injection failed: {e}")
 
         # 2. Fetch Metadata (gets IMDB IDs)
-        meta_items = await self._fetch_metadata_for_items(recommendations, media_type)
+        meta_items = await self._fetch_metadata_for_items(
+            recommendations, media_type, target_count=self.per_item_limit * 2
+        )
 
         # 3. Strict Filter by IMDB ID (using metadata)
         final_items = []
@@ -284,6 +445,9 @@ class RecommendationService:
             # check hidden external_ids if available
             ext_ids = item.get("_external_ids", {})
             if ext_ids.get("imdb_id") in watched_imdb:
+                continue
+            # Apply top-genre whitelist with enriched genre_ids
+            if not _passes_top_genre(item.get("genre_ids")):
                 continue
 
             # Clean up internal fields
@@ -342,21 +506,118 @@ class RecommendationService:
         if "sort_by" not in params:
             params["sort_by"] = "popularity.desc"
 
-        # Apply Excluded Genres
+        # Apply Excluded Genres but don't conflict with explicit with_genres from theme
         excluded_ids = self._get_excluded_genre_ids(content_type)
         if excluded_ids:
-            params["without_genres"] = "|".join(str(g) for g in excluded_ids)
+            try:
+                with_ids = {
+                    int(g)
+                    for g in (
+                        params.get("with_genres", "").replace("|", ",").split(",") if params.get("with_genres") else []
+                    )
+                    if g
+                }
+            except Exception:
+                with_ids = set()
+            final_without = [g for g in excluded_ids if g not in with_ids]
+            if final_without:
+                params["without_genres"] = "|".join(str(g) for g in final_without)
 
-        # Fetch
-        recommendations = await self.tmdb_service.get_discover(content_type, **params)
-        candidates = recommendations.get("results", [])
+        # Build user profile to derive top-genre whitelist
+        try:
+            library_data = await self.stremio_service.get_library_items()
+            all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("added", [])
+            typed = [it for it in all_items if it.get("type") == content_type]
+            unique_items = {it["_id"]: it for it in typed}
+            scored_objects = []
+            sorted_history = sorted(
+                unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched"), reverse=True
+            )
+            for it in sorted_history[:10]:
+                scored_objects.append(self.scoring_service.process_item(it))
+            user_profile = await self.user_profile_service.build_user_profile(
+                scored_objects, content_type=content_type
+            )
+            top_gen_pairs = user_profile.get_top_genres(limit=TOP_GENRE_WHITELIST_LIMIT)
+            top_genre_whitelist: set[int] = {int(gid) for gid, _ in top_gen_pairs}
+        except Exception:
+            top_genre_whitelist = set()
+
+        def _passes_top_genre(item_genre_ids: list[int] | None) -> bool:
+            if not top_genre_whitelist:
+                return True
+            gids = set(item_genre_ids or [])
+            if not gids:
+                return True
+            if 16 in gids and 16 not in top_genre_whitelist:
+                return False
+            return bool(gids & top_genre_whitelist)
+
+        # Fetch (with simple multi-page fallback to increase pool)
+        candidates: list[dict] = []
+        try:
+            first = await self.tmdb_service.get_discover(content_type, **params)
+            candidates.extend(first.get("results", []))
+            # If we have too few, try page 2 (and 3) to increase pool size
+            if len(candidates) < limit * 2:
+                second = await self.tmdb_service.get_discover(content_type, page=2, **params)
+                candidates.extend(second.get("results", []))
+            if len(candidates) < limit * 2:
+                third = await self.tmdb_service.get_discover(content_type, page=3, **params)
+                candidates.extend(third.get("results", []))
+        except Exception:
+            candidates = []
+
+        # Apply top-genre whitelist on raw candidates
+        if candidates:
+            candidates = [it for it in candidates if _passes_top_genre(it.get("genre_ids"))]
 
         # Strict Filtering
         watched_imdb, watched_tmdb = await self._get_exclusion_sets()
         filtered = await self._filter_candidates(candidates, watched_imdb, watched_tmdb)
 
+        # Freshness injection: add trending/top-rated (within whitelist) if pool thin
+        try:
+            if len(filtered) < limit * 2:
+                mtype = "tv" if content_type in ("tv", "series") else "movie"
+                trending_resp = await self.tmdb_service.get_trending(mtype, time_window="week")
+                trending = trending_resp.get("results", []) if trending_resp else []
+                top_rated_resp = await self.tmdb_service.get_top_rated(mtype)
+                top_rated = top_rated_resp.get("results", []) if top_rated_resp else []
+                fresh_pool = []
+                fresh_pool.extend(trending[:40])
+                fresh_pool.extend(top_rated[:40])
+                existing_ids = {it.get("id") for it in filtered if it.get("id") is not None}
+                fresh_added = 0
+                for it in fresh_pool:
+                    tid = it.get("id")
+                    if not tid or tid in existing_ids:
+                        continue
+                    if tid in watched_tmdb:
+                        continue
+                    gids = it.get("genre_ids") or []
+                    # Exclude by user excluded genre list
+                    if excluded_ids and set(gids) & set(excluded_ids):
+                        continue
+                    # Apply top-genre whitelist
+                    if not _passes_top_genre(gids):
+                        continue
+                    va = float(it.get("vote_average") or 0.0)
+                    vc = int(it.get("vote_count") or 0)
+                    if vc < 300 or va < 7.0:
+                        continue
+                    filtered.append(it)
+                    existing_ids.add(tid)
+                    fresh_added += 1
+                    if len(filtered) >= limit * 3:
+                        break
+                if fresh_added:
+                    logger.info(f"Theme freshness injection added {fresh_added} items")
+        except Exception as e:
+            logger.warning(f"Theme freshness injection failed: {e}")
+
         # Meta
-        meta_items = await self._fetch_metadata_for_items(filtered[: limit * 2], content_type)
+        meta_items = await self._fetch_metadata_for_items(filtered, content_type, target_count=limit * 3)
 
         final_items = []
         for item in meta_items:
@@ -364,8 +625,15 @@ class RecommendationService:
                 continue
             if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
                 continue
+            # Apply whitelist again on enriched metadata
+            if not _passes_top_genre(item.get("genre_ids")):
+                continue
             item.pop("_external_ids", None)
             final_items.append(item)
+
+        # Enforce limit
+        if len(final_items) > limit:
+            final_items = final_items[:limit]
 
         return final_items
 
@@ -407,11 +675,42 @@ class RecommendationService:
 
         # Normalize series alias
         mtype = "tv" if media_type in ("tv", "series") else "movie"
-        recommendation_response = await self.tmdb_service.get_recommendations(tmdb_id, mtype)
-        recommended_items = recommendation_response.get("results", [])
-        if not recommended_items:
-            return []
-        return recommended_items
+        # Try multiple pages to increase pool
+        combined: dict[int, dict] = {}
+        try:
+            rec1 = await self.tmdb_service.get_recommendations(tmdb_id, mtype, page=1)
+            for it in rec1.get("results", []):
+                if it.get("id") is not None:
+                    combined[it["id"]] = it
+            if len(combined) < limit:
+                rec2 = await self.tmdb_service.get_recommendations(tmdb_id, mtype, page=2)
+                for it in rec2.get("results", []):
+                    if it.get("id") is not None:
+                        combined[it["id"]] = it
+            if len(combined) < limit:
+                rec3 = await self.tmdb_service.get_recommendations(tmdb_id, mtype, page=3)
+                for it in rec3.get("results", []):
+                    if it.get("id") is not None:
+                        combined[it["id"]] = it
+        except Exception:
+            pass
+
+        # If still thin, use similar as fallback
+        if len(combined) < max(20, limit // 2):
+            try:
+                sim1 = await self.tmdb_service.get_similar(tmdb_id, mtype, page=1)
+                for it in sim1.get("results", []):
+                    if it.get("id") is not None:
+                        combined[it["id"]] = it
+                if len(combined) < limit:
+                    sim2 = await self.tmdb_service.get_similar(tmdb_id, mtype, page=2)
+                    for it in sim2.get("results", []):
+                        if it.get("id") is not None:
+                            combined[it["id"]] = it
+            except Exception:
+                pass
+
+        return list(combined.values())
 
     async def get_recommendations(
         self,
@@ -468,10 +767,27 @@ class RecommendationService:
         excluded_ids = set(self._get_excluded_genre_ids(content_type))
 
         similarity_recommendations = [item for item in similarity_recommendations if not isinstance(item, Exception)]
+        # Apply excluded-genre filter for similarity candidates (whitelist will be applied after profile build)
         for batch in similarity_recommendations:
-            similarity_candidates.extend(
-                item for item in batch if not excluded_ids.intersection(item.get("genre_ids") or [])
-            )
+            for item in batch:
+                gids = item.get("genre_ids") or []
+                if excluded_ids.intersection(gids):
+                    continue
+                similarity_candidates.append(item)
+
+        # Quality gate for similarity candidates: keep higher-quality when we have enough
+        def _qual(item: dict) -> bool:
+            try:
+                vc = int(item.get("vote_count") or 0)
+                va = float(item.get("vote_average") or 0.0)
+                wr = self._weighted_rating(va, vc)
+                return (vc >= 150 and wr >= 6.0) or (vc >= 500 and wr >= 5.6)
+            except Exception:
+                return False
+
+        # filtered_sim = [it for it in similarity_candidates if _qual(it)]
+        # if len(filtered_sim) >= 40:
+        #     similarity_candidates = filtered_sim
 
         # --- Candidate Set B: Profile-based Discovery ---
         # Extract excluded genres
@@ -481,20 +797,99 @@ class RecommendationService:
         user_profile = await self.user_profile_service.build_user_profile(
             scored_objects, content_type=content_type, excluded_genres=excluded_genres
         )
-        discovery_candidates = await self.discovery_engine.discover_recommendations(
-            user_profile, content_type, limit=20, excluded_genres=excluded_genres
-        )
+        # Build per-user top-genre whitelist
+        try:
+            top_gen_pairs = user_profile.get_top_genres(limit=TOP_GENRE_WHITELIST_LIMIT)
+            top_genre_whitelist: set[int] = {int(gid) for gid, _ in top_gen_pairs}
+        except Exception:
+            top_genre_whitelist = set()
+
+        def _passes_top_genre(item_genre_ids: list[int] | None) -> bool:
+            if not top_genre_whitelist:
+                return True
+            gids = set(item_genre_ids or [])
+            if not gids:
+                return True
+            if 16 in gids and 16 not in top_genre_whitelist:
+                return False
+            return bool(gids & top_genre_whitelist)
+
+        # Always include discovery, but bias to keywords/cast (avoid genre-heavy discovery)
+        try:
+            discovery_candidates = await self.discovery_engine.discover_recommendations(
+                user_profile,
+                content_type,
+                limit=max_results * 3,
+                excluded_genres=excluded_genres,
+                use_genres=False,
+                use_keywords=True,
+                use_cast=True,
+                use_director=True,
+                use_countries=False,
+                use_year=False,
+            )
+        except Exception as e:
+            logger.warning(f"Discovery fetch failed: {e}")
+            discovery_candidates = []
 
         # --- Combine & Deduplicate ---
         candidate_pool = {}  # tmdb_id -> item_dict
 
         for item in discovery_candidates:
+            gids = item.get("genre_ids") or []
+            if not _passes_top_genre(gids):
+                continue
             candidate_pool[item["id"]] = item
 
         for item in similarity_candidates:
             # add score to boost similarity candidates
             item["_ranked_candidate"] = True
             candidate_pool[item["id"]] = item
+
+        logger.info(f"Similarity candidates collected: {len(similarity_candidates)}; pool size: {len(candidate_pool)}")
+
+        # Freshness injection: trending/highly rated items to broaden taste
+        try:
+            fresh_added = 0
+            mtype = "tv" if content_type in ("tv", "series") else "movie"
+            trending_resp = await self.tmdb_service.get_trending(mtype, time_window="week")
+            trending = trending_resp.get("results", []) if trending_resp else []
+            # Optionally mix in top-rated first page
+            top_rated_resp = await self.tmdb_service.get_top_rated(mtype)
+            top_rated = top_rated_resp.get("results", []) if top_rated_resp else []
+            fresh_pool = []
+            fresh_pool.extend(trending[:40])
+            fresh_pool.extend(top_rated[:40])
+            # Filter by excluded genres and quality threshold
+            for it in fresh_pool:
+                tid = it.get("id")
+                if not tid or tid in candidate_pool:
+                    continue
+                # Exclude already watched by TMDB id
+                if tid in watched_tmdb_ids:
+                    continue
+                # Excluded genres
+                gids = it.get("genre_ids") or []
+                if excluded_ids and excluded_ids.intersection(set(gids)):
+                    continue
+                # Respect top-genre whitelist
+                if not _passes_top_genre(gids):
+                    continue
+                # Quality: prefer strong audience signal
+                va = float(it.get("vote_average") or 0.0)
+                vc = int(it.get("vote_count") or 0)
+                if vc < 300 or va < 7.0:
+                    continue
+                # Mark as freshness candidate
+                it["_fresh_boost"] = True
+                candidate_pool[tid] = it
+                fresh_added += 1
+                if fresh_added >= max_results:
+                    break
+            if fresh_added:
+                logger.info(f"Freshness injection added {fresh_added} trending/top-rated candidates")
+        except Exception as e:
+            logger.warning(f"Freshness injection failed: {e}")
 
         # --- Re-Ranking & Filtering ---
         ranked_candidates = []
@@ -504,22 +899,68 @@ class RecommendationService:
             if tmdb_id in watched_tmdb_ids or f"tmdb:{tmdb_id}" in watched_imdb_ids:
                 continue
 
-            sim_score = self.user_profile_service.calculate_similarity(user_profile, item)
-            vote_average = item.get("vote_average", 0)
-            popularity = item.get("popularity", 0)
+            # Use simple overlap similarity (Jaccard on tokens/genres/keywords)
+            try:
+                sim_score, sim_breakdown = self.user_profile_service.calculate_simple_overlap_with_breakdown(
+                    user_profile, item
+                )
+            except Exception:
+                sim_score = 0.0
+                sim_breakdown = {}
+            # attach breakdown to item for later inspection
+            item["_sim_breakdown"] = sim_breakdown
 
-            pop_score = normalize(popularity, 0, 1000)
-            vote_score = normalize(vote_average, 0, 10)
+            # If we only matched on genres (topics/keywords near zero), slightly penalize
+            try:
+                non_gen_relevance = float(sim_breakdown.get("topics_jaccard", 0.0)) + float(
+                    sim_breakdown.get("keywords_jaccard", 0.0)
+                )
+                if non_gen_relevance <= 0.0001:
+                    sim_score *= 0.8
+                    item["_sim_penalty"] = True
+                    item["_sim_penalty_reason"] = "genre_only_match"
+            except Exception:
+                pass
+            vote_avg = item.get("vote_average", 0.0)
+            vote_count = item.get("vote_count", 0)
+            popularity = float(item.get("popularity", 0.0))
 
-            final_score = (sim_score * 0.6) + (vote_score * 0.3) + (pop_score * 0.1)
+            # Weighted rating then normalize to 0-1
+            wr = self._weighted_rating(vote_avg, vote_count)
+            vote_score = self._normalize(wr, 0.0, 10.0)
+            pop_score = self._normalize(popularity, 0.0, 1000.0)
 
-            # Add tiny jitter to promote freshness and avoid static ordering
-            jitter = random.uniform(-0.02, 0.02)  # +/-2%
-            final_score = final_score * (1 + jitter)
+            # Increase weight on quality to avoid low-rated picks
+            final_score = (sim_score * 0.55) + (vote_score * 0.35) + (pop_score * 0.10)
+            # Stable tiny epsilon to break ties deterministically
+            final_score += self._stable_epsilon(tmdb_id)
 
-            # Boost candidate if its from tmdb collaborative recommendations
+            # Quality-aware multiplicative adjustments
+            q_mult = 1.0
+            if vote_count < 50:
+                q_mult *= 0.6
+            elif vote_count < 150:
+                q_mult *= 0.85
+            if wr < 5.5:
+                q_mult *= 0.5
+            elif wr < 6.0:
+                q_mult *= 0.7
+            elif wr >= 7.0 and vote_count >= 500:
+                q_mult *= 1.10
+
+            # Boost candidate if from TMDB collaborative recommendations, but only if quality is decent
             if item.get("_ranked_candidate"):
-                final_score *= 1.25
+                if wr >= 6.5 and vote_count >= 200:
+                    q_mult *= 1.25
+                elif wr >= 6.0 and vote_count >= 100:
+                    q_mult *= 1.10
+                # else no boost
+
+            # Mild boost for freshness-injected trending/top-rated picks to keep feed fresh
+            if item.get("_fresh_boost") and wr >= 7.0 and vote_count >= 300:
+                q_mult *= 1.10
+
+            final_score *= q_mult
             ranked_candidates.append((final_score, item))
 
         # Sort by Final Score and cache score on item for diversification
@@ -527,71 +968,105 @@ class RecommendationService:
         for score, item in ranked_candidates:
             item["_final_score"] = score
 
-        # Diversify with MMR to avoid shallow, repetitive picks
-        def _jaccard(a: set, b: set) -> float:
-            if not a and not b:
-                return 0.0
-            inter = len(a & b)
-            union = len(a | b)
-            return inter / union if union else 0.0
+        # Lightweight logging: show top 5 ranked candidates with similarity breakdown
+        try:
+            top_n = ranked_candidates[:5]
+            if top_n:
+                logger.info("Top similarity-ranked candidates (pre-meta):")
+                for sc, it in top_n:
+                    name = it.get("title") or it.get("name") or it.get("original_title") or it.get("id")
+                    bd = it.get("_sim_breakdown") or {}
+                    logger.info(f"- {name} (tmdb:{it.get('id')}): score={sc:.4f} breakdown={bd}")
+        except Exception:
+            pass
 
-        def _candidate_similarity(x: dict, y: dict) -> float:
-            gx = set(x.get("genre_ids") or [])
-            gy = set(y.get("genre_ids") or [])
-            s = _jaccard(gx, gy)
-            # Mild penalty if same language to encourage variety
-            lx = x.get("original_language")
-            ly = y.get("original_language")
-            if lx and ly and lx == ly:
-                s += 0.05
-            return min(s, 1.0)
-
-        def _mmr_select(cands: list[dict], k: int, lamb: float = 0.75) -> list[dict]:
-            selected: list[dict] = []
-            remaining = cands[:]
-            while remaining and len(selected) < k:
-                if not selected:
-                    best = remaining.pop(0)
-                    selected.append(best)
-                    continue
-                best_item = None
-                best_score = float("-inf")
-                for cand in remaining[:50]:  # evaluate a window for speed
-                    rel = cand.get("_final_score", 0.0)
-                    div = 0.0
-                    for s in selected:
-                        div = max(div, _candidate_similarity(cand, s))
-                    mmr = lamb * rel - (1 - lamb) * div
-                    if mmr > best_score:
-                        best_score = mmr
-                        best_item = cand
-                if best_item is None:
-                    break
-                selected.append(best_item)
-                try:
-                    remaining.remove(best_item)
-                except ValueError:
-                    pass
-            return selected
-
+        # Simplified selection: take top-ranked items directly (no MMR diversification)
         top_ranked_items = [item for _, item in ranked_candidates]
-        diversified = _mmr_select(top_ranked_items, k=max_results * 2, lamb=0.75)
-        # Select with buffer for final IMDB filtering after diversification
-        buffer_selection = diversified
+        # Buffer selection size is 2x requested results to allow final filtering
+        buffer_selection = top_ranked_items[: max_results * 2]
 
         # Fetch Full Metadata
-        meta_items = await self._fetch_metadata_for_items(buffer_selection, content_type)
+        meta_items = await self._fetch_metadata_for_items(buffer_selection, content_type, target_count=max_results * 2)
 
-        # Final Strict Filter by IMDB ID
+        # Recompute similarity with enriched metadata (keywords, credits)
         final_items = []
+        used_collections: set[int] = set()
+        used_cast: set[int] = set()
         for item in meta_items:
             if item["id"] in watched_imdb_ids:
                 continue
             ext_ids = item.get("_external_ids", {})
             if ext_ids.get("imdb_id") in watched_imdb_ids:
                 continue
+            # Apply top-genre whitelist again using enriched genre_ids if present
+            if not _passes_top_genre(item.get("genre_ids")):
+                continue
 
-            item.pop("_external_ids", None)
+            try:
+                sim_score, sim_breakdown = self.user_profile_service.calculate_simple_overlap_with_breakdown(
+                    user_profile, item
+                )
+            except Exception:
+                sim_score = 0.0
+                sim_breakdown = {}
+            item["_sim_breakdown"] = sim_breakdown
+            wr = self._weighted_rating(item.get("vote_average"), item.get("vote_count"))
+            vote_score = self._normalize(wr, 0.0, 10.0)
+            pop_score = self._normalize(float(item.get("popularity") or 0.0), 0.0, 1000.0)
+
+            base = (sim_score * 0.55) + (vote_score * 0.35) + (pop_score * 0.10)
+            base += self._stable_epsilon(item.get("_tmdb_id") or 0)
+
+            # Quality-aware adjustment
+            vc = int(item.get("vote_count") or 0)
+            q_mult = 1.0
+            if vc < 50:
+                q_mult *= 0.6
+            elif vc < 150:
+                q_mult *= 0.85
+            if wr < 5.5:
+                q_mult *= 0.5
+            elif wr < 6.0:
+                q_mult *= 0.7
+            elif wr >= 7.0 and vc >= 500:
+                q_mult *= 1.10
+
+            score = base * q_mult
+
+            # Collection/cast suppression
+            penalty = 0.0
+            coll_id = item.get("_collection_id")
+            if isinstance(coll_id, int) and coll_id in used_collections:
+                penalty += 0.05
+            cast_ids = set(item.get("_top_cast_ids", []) or [])
+            overlap = len(cast_ids & used_cast)
+            if overlap:
+                penalty += min(0.03 * overlap, 0.09)
+            score *= 1.0 - penalty
+            item["_adjusted_score"] = score
             final_items.append(item)
 
-        return final_items
+        # Sort by adjusted score descending
+        final_items.sort(key=lambda x: x.get("_adjusted_score", 0.0), reverse=True)
+
+        # Update used sets for next requests (implicit) and cleanup internal fields
+        ordered = []
+        for it in final_items:
+            coll = it.pop("_collection_id", None)
+            if isinstance(coll, int):
+                used_collections.add(coll)
+            for cid in it.pop("_top_cast_ids", []) or []:
+                try:
+                    used_cast.add(int(cid))
+                except Exception:
+                    pass
+            it.pop("_external_ids", None)
+            it.pop("_tmdb_id", None)
+            it.pop("_adjusted_score", None)
+            ordered.append(it)
+
+        # Enforce max_results limit
+        if len(ordered) > max_results:
+            ordered = ordered[:max_results]
+
+        return ordered

@@ -2,21 +2,6 @@ from pydantic import BaseModel, Field
 
 
 class SparseVector(BaseModel):
-    """
-    Represents a sparse vector where keys are feature IDs and values are weights.
-    For countries, keys can be string codes (hashed or mapped to int if strictly int keys needed,
-    but let's check if we can use str keys or if we stick to int.
-    Original SparseVector uses `dict[int, float]`.
-    TMDB country codes are strings (e.g. "US").
-    We can either map them to ints or change the model to support str keys.
-    Let's update the model to support string keys for versatility, or keep int and hash strings.
-    However, for Pydantic and JSON, string keys are native.
-    Let's change keys to string/int union or just strings (since ints are valid dict keys too).
-    Actually, since `genres` IDs are ints, let's allow both or specific types.
-    For simplicity, let's stick to `dict[str, float]` since JSON keys are strings anyway.
-    But wait, existing code uses ints for IDs.
-    Let's make a separate StringSparseVector or just genericize it.
-    """
 
     values: dict[int, float] = Field(default_factory=dict)
 
@@ -67,6 +52,8 @@ class UserTasteProfile(BaseModel):
     crew: SparseVector = Field(default_factory=SparseVector)
     years: SparseVector = Field(default_factory=SparseVector)
     countries: StringSparseVector = Field(default_factory=StringSparseVector)
+    # Free-text/topic tokens from titles/overviews/keyword names
+    topics: StringSparseVector = Field(default_factory=StringSparseVector)
 
     def normalize_all(self):
         """Normalize all component vectors."""
@@ -76,6 +63,7 @@ class UserTasteProfile(BaseModel):
         self.crew.normalize()
         self.years.normalize()
         self.countries.normalize()
+        self.topics.normalize()
 
     def get_top_genres(self, limit: int = 3) -> list[tuple[int, float]]:
         return self.genres.get_top_features(limit)
