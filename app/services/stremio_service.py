@@ -45,6 +45,9 @@ class StremioService:
         # Reuse HTTP client for connection pooling and better performance
         self._client: httpx.AsyncClient | None = None
         self._likes_client: httpx.AsyncClient | None = None
+        # lightweight per-instance cache for library fetch
+        self._library_cache: dict | None = None
+        self._library_cache_expiry: float = 0.0
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create the main Stremio API client."""
@@ -212,11 +215,16 @@ class StremioService:
         user_info = await self.get_user_info()
         return user_info.get("email", "")
 
-    async def get_library_items(self) -> dict[str, list[dict]]:
+    async def get_library_items(self, use_cache: bool = True, cache_ttl_seconds: int = 30) -> dict[str, list[dict]]:
         """
         Fetch library items from Stremio once and return both watched and loved items.
         Returns a dict with 'watched' and 'loved' keys.
         """
+        import time
+
+        if use_cache and self._library_cache and time.time() < self._library_cache_expiry:
+            return self._library_cache
+
         if not self._auth_key:
             logger.warning("Stremio auth key not configured")
             return {"watched": [], "loved": []}
@@ -318,13 +326,18 @@ class StremioService:
                 added_items.append(item)
 
             logger.info(f"Found {len(added_items)} added (unwatched) and {len(removed_items)} removed library items")
-            # Return raw items; ScoringService will handle Pydantic conversion
-            return {
+            # Prepare result
+            result = {
                 "watched": watched_items,
                 "loved": loved_items,
                 "added": added_items,
                 "removed": removed_items,
             }
+            # cache
+            if use_cache and cache_ttl_seconds > 0:
+                self._library_cache = result
+                self._library_cache_expiry = time.time() + cache_ttl_seconds
+            return result
         except Exception as e:
             logger.error(f"Error fetching library items: {e}", exc_info=True)
             return {"watched": [], "loved": []}

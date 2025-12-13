@@ -64,6 +64,7 @@ class RecommendationService:
         language: str = "en-US",
         user_settings: UserSettings | None = None,
         token: str | None = None,
+        library_data: dict | None = None,
     ):
         if stremio_service is None:
             raise ValueError("StremioService instance is required for personalized recommendations")
@@ -76,6 +77,8 @@ class RecommendationService:
         self.user_settings = user_settings
         # Stable seed for tie-breaking and per-token caching
         self.stable_seed = token or ""
+        # Optional pre-fetched library payload (reuse within the request)
+        self._library_data: dict | None = library_data
 
     def _stable_epsilon(self, tmdb_id: int) -> float:
         if not self.stable_seed:
@@ -211,8 +214,10 @@ class RecommendationService:
         Note: We no longer exclude 'added' items to avoid over-thinning the pool.
         Returns (watched_imdb_ids, watched_tmdb_ids)
         """
-        # Always fetch fresh library to ensure we don't recommend what was just watched
-        library_data = await self.stremio_service.get_library_items()
+        # Use cached/pre-fetched library data when available
+        if self._library_data is None:
+            self._library_data = await self.stremio_service.get_library_items()
+        library_data = self._library_data
         # Combine loved, watched, added, and removed (added/removed treated as exclude-only)
         all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("removed", [])
 
@@ -425,7 +430,9 @@ class RecommendationService:
 
         # Build user profile (for genre whitelist)
         try:
-            library_data = await self.stremio_service.get_library_items()
+            if self._library_data is None:
+                self._library_data = await self.stremio_service.get_library_items()
+            library_data = self._library_data
             all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("added", [])
             # Filter by type
             typed = [it for it in all_items if it.get("type") == ("tv" if media_type in ("tv", "series") else "movie")]
@@ -831,7 +838,9 @@ class RecommendationService:
         logger.info(f"Starting Hybrid Recommendation Pipeline for {content_type}")
 
         # Step 1: Fetch & Score User Library
-        library_data = await self.stremio_service.get_library_items()
+        if self._library_data is None:
+            self._library_data = await self.stremio_service.get_library_items()
+        library_data = self._library_data
         all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("added", [])
         logger.info(f"processing {len(all_items)} Items.")
         # Cold-start fallback remains (redundant safety)

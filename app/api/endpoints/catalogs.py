@@ -54,11 +54,14 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
 
         # Create services with credentials
         stremio_service = StremioService(auth_key=credentials.get("authKey"))
+        # Fetch library once per request and reuse across recommendation paths
+        library_items = await stremio_service.get_library_items()
         recommendation_service = RecommendationService(
             stremio_service=stremio_service,
             language=language,
             user_settings=user_settings,
             token=token,
+            library_data=library_items,
         )
 
         # Handle item-based recommendations
