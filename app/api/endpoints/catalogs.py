@@ -89,8 +89,9 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
         # Cache catalog responses for 4 hours
-        # response.headers["Cache-Control"] = "public, max-age=14400" if len(recommendations) > 0 else "no-cache"
-        response.headers["Cache-Control"] = "no-cache"
+        response.headers["Cache-Control"] = (
+            "public, max-age=14400" if len(recommendations) > 0 else "public, max-age=7200"
+        )
         return {"metas": recommendations}
 
     except HTTPException:

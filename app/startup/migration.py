@@ -223,7 +223,7 @@ async def migrate_tokens():
     failed_tokens = 0
     success_tokens = 0
     try:
-        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True, encoding="utf-8")
+        redis_client = await token_store._get_client()
     except (redis.RedisError, OSError) as exc:
         logger.warning(f"Failed to connect to Redis: {exc}")
         return

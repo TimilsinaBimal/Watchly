@@ -3,7 +3,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.api.main import api_router
 from app.services.catalog_updater import BackgroundCatalogUpdater
+from app.services.token_store import token_store
 from app.startup.migration import migrate_tokens
 
 from .config import settings
@@ -81,6 +82,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Middleware to track per-request Redis calls and attach as response header for diagnostics
+@app.middleware("http")
+async def redis_calls_middleware(request: Request, call_next):
+    try:
+        token_store.reset_call_counter()
+    except Exception:
+        pass
+    response = await call_next(request)
+    try:
+        count = token_store.get_call_count()
+        response.headers["X-Redis-Calls"] = str(count)
+    except Exception:
+        pass
+    return response
+
 
 # Serve static files
 # Static directory is at project root (3 levels up from app/core/app.py)

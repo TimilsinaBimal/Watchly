@@ -96,7 +96,7 @@ def get_config_id(catalog) -> str | None:
 
 
 async def _manifest_handler(response: Response, token: str):
-    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Cache-Control"] = "public, max-age=7200"
 
     if not token:
         raise HTTPException(status_code=401, detail="Missing token. Please reconfigure the addon.")
