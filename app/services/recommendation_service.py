@@ -3,7 +3,6 @@ import hashlib
 import math
 from urllib.parse import unquote
 
-from cachetools import TTLCache
 from loguru import logger
 
 from app.core.settings import UserSettings
@@ -11,7 +10,7 @@ from app.services.discovery import DiscoveryEngine
 from app.services.rpdb import RPDBService
 from app.services.scoring import ScoringService
 from app.services.stremio_service import StremioService
-from app.services.tmdb_service import TMDBService
+from app.services.tmdb_service import get_tmdb_service
 from app.services.user_profile import TOP_GENRE_WHITELIST_LIMIT, UserProfileService
 
 # Diversification: cap per-genre share in final results (e.g., 0.4 => max 40% per genre)
@@ -68,20 +67,15 @@ class RecommendationService:
     ):
         if stremio_service is None:
             raise ValueError("StremioService instance is required for personalized recommendations")
-        self.tmdb_service = TMDBService(language=language)
+        self.tmdb_service = get_tmdb_service(language=language)
         self.stremio_service = stremio_service
         self.scoring_service = ScoringService()
-        self.user_profile_service = UserProfileService()
-        self.discovery_engine = DiscoveryEngine()
+        self.user_profile_service = UserProfileService(language=language)
+        self.discovery_engine = DiscoveryEngine(language=language)
         self.per_item_limit = 20
         self.user_settings = user_settings
         # Stable seed for tie-breaking and per-token caching
         self.stable_seed = token or ""
-        # Short-TTL in-memory cache per process
-        # key: tuple -> value: list[dict]
-        if not hasattr(RecommendationService, "_cache"):
-            RecommendationService._cache = TTLCache(maxsize=1000, ttl=300)
-        self._cache: TTLCache = RecommendationService._cache
 
     def _stable_epsilon(self, tmdb_id: int) -> float:
         if not self.stable_seed:
@@ -109,18 +103,6 @@ class RecommendationService:
         except Exception:
             R, v = 0.0, 0
         return ((v / (v + m)) * R) + ((m / (v + m)) * C)
-
-    def _cache_get(self, key):
-        try:
-            return self._cache.get(key)
-        except Exception:
-            return None
-
-    def _cache_set(self, key, value):
-        try:
-            self._cache[key] = value
-        except Exception:
-            pass
 
     # ---------------- Recency preference (AUTO, sigmoid intensity) ----------------
     def _get_recency_multiplier_fn(self, profile, candidate_decades: set[int] | None = None):

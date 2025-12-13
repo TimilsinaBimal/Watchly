@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from app.models.profile import UserTasteProfile
 from app.models.scoring import ScoredItem
-from app.services.tmdb_service import TMDBService
+from app.services.tmdb_service import get_tmdb_service
 
 # TODO: Make these weights dynamic based on user's preferences.
 GENRES_WEIGHT = 0.20
@@ -39,8 +39,8 @@ class UserProfileService:
     a single 'User Vector' representing their taste.
     """
 
-    def __init__(self):
-        self.tmdb_service = TMDBService()
+    def __init__(self, language: str = "en-US"):
+        self.tmdb_service = get_tmdb_service(language=language)
 
     async def build_user_profile(
         self,

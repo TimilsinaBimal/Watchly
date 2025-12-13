@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import random
 
 import httpx
@@ -196,3 +197,9 @@ class TMDBService:
         params = {"page": page}
         endpoint = f"/{mt}/top_rated"
         return await self._make_request(endpoint, params=params)
+
+
+# Singleton factory to reuse clients and async caches per language
+@functools.lru_cache(maxsize=16)
+def get_tmdb_service(language: str = "en-US") -> TMDBService:
+    return TMDBService(language=language)

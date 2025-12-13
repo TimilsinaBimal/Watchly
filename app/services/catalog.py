@@ -4,7 +4,7 @@ from app.core.settings import CatalogConfig, UserSettings
 from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
 from app.services.stremio_service import StremioService
-from app.services.tmdb_service import TMDBService
+from app.services.tmdb_service import get_tmdb_service
 from app.services.user_profile import UserProfileService
 
 
@@ -13,11 +13,11 @@ class DynamicCatalogService:
     Generates dynamic catalog rows based on user library and preferences.
     """
 
-    def __init__(self, stremio_service: StremioService):
+    def __init__(self, stremio_service: StremioService, language: str = "en-US"):
         self.stremio_service = stremio_service
-        self.tmdb_service = TMDBService()
+        self.tmdb_service = get_tmdb_service(language=language)
         self.scoring_service = ScoringService()
-        self.user_profile_service = UserProfileService()
+        self.user_profile_service = UserProfileService(language=language)
         self.row_generator = RowGeneratorService(tmdb_service=self.tmdb_service)
 
     @staticmethod
