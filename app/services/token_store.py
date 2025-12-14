@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import redis.asyncio as redis
+from async_lru import alru_cache
 from cachetools import TTLCache
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
@@ -22,9 +23,9 @@ class TokenStore:
 
     def __init__(self) -> None:
         self._client: redis.Redis | None = None
-        # Cache decrypted payloads for 1 day (86400s) to reduce Redis hits
-        # Max size 5000 allows many active users without eviction
-        self._payload_cache: TTLCache = TTLCache(maxsize=5000, ttl=86400)
+        # Negative cache for missing tokens to avoid repeated Redis GETs
+        # when external probes request non-existent tokens.
+        self._missing_tokens: TTLCache = TTLCache(maxsize=10000, ttl=3600)
         # per-request redis call counter (context-local)
         self._redis_calls_var: contextvars.ContextVar[int] = contextvars.ContextVar("watchly_redis_calls", default=0)
 
@@ -66,14 +67,58 @@ class TokenStore:
     async def _get_client(self) -> redis.Redis:
         if self._client is None:
             # Add socket timeouts to avoid hanging on Redis operations
+            import traceback
+
+            logger.info("Creating shared Redis client")
+            # Limit the number of pooled connections to avoid unbounded growth
+            # `max_connections` is forwarded to ConnectionPool.from_url
             self._client = redis.from_url(
                 settings.REDIS_URL,
                 decode_responses=True,
                 encoding="utf-8",
                 socket_connect_timeout=5,
                 socket_timeout=5,
+                max_connections=getattr(settings, "REDIS_MAX_CONNECTIONS", 100),
+                health_check_interval=30,
+                socket_keepalive=True,
             )
+            # If _get_client is called multiple times in different contexts it
+            # could indicate multiple processes/threads or a bug opening
+            # additional clients; log a stacktrace for debugging.
+            if getattr(self, "_creation_count", None) is None:
+                self._creation_count = 1
+            else:
+                self._creation_count += 1
+                logger.warning(
+                    f"Redis client creation invoked again (count={self._creation_count})."
+                    f" Stack:\n{''.join(traceback.format_stack())}"
+                )
         return self._client
+
+    async def close(self) -> None:
+        """Close and disconnect the shared Redis client (call on shutdown)."""
+        if self._client is None:
+            return
+        try:
+            logger.info("Closing shared Redis client")
+            # Close client and disconnect underlying pool
+            try:
+                await self._client.close()
+            except Exception:
+                pass
+            try:
+                pool = getattr(self._client, "connection_pool", None)
+                if pool is not None:
+                    # connection_pool.disconnect may be a coroutine in some redis implementations
+                    disconnect = getattr(pool, "disconnect", None)
+                    if disconnect:
+                        res = disconnect()
+                        if hasattr(res, "__await__"):
+                            await res
+            except Exception:
+                pass
+        finally:
+            self._client = None
 
     def _format_key(self, token: str) -> str:
         """Format Redis key from token."""
@@ -109,30 +154,49 @@ class TokenStore:
             self._incr_calls()
             await client.set(key, json_str)
 
-        # Update cache with the payload
-        self._payload_cache[token] = payload
+        # Invalidate async LRU cached reads so future reads use the updated payload
+        try:
+            self.get_user_data.cache_clear()
+        except Exception:
+            pass
+
+        # Ensure we remove from negative cache so new value is read next time
+        try:
+            if token in self._missing_tokens:
+                del self._missing_tokens[token]
+        except Exception:
+            pass
 
         return token
 
+    @alru_cache(maxsize=5000)
     async def get_user_data(self, token: str) -> dict[str, Any] | None:
-        if token in self._payload_cache:
-            logger.info(f"[REDIS] Using cached redis data {token}")
-            return self._payload_cache[token]
-        logger.info(f"[REDIS]Caching Failed. Fetching data from redis for {token}")
+        # Short-circuit for tokens known to be missing
+        try:
+            if token in self._missing_tokens:
+                logger.debug(f"[REDIS] Negative cache hit for missing token {token}")
+                return None
+        except Exception:
+            pass
 
+        logger.debug(f"[REDIS] Cache miss. Fetching data from redis for {token}")
         key = self._format_key(token)
         client = await self._get_client()
         self._incr_calls()
         data_raw = await client.get(key)
 
         if not data_raw:
+            # remember negative result briefly
+            try:
+                self._missing_tokens[token] = True
+            except Exception:
+                pass
             return None
 
         try:
             data = json.loads(data_raw)
             if data.get("authKey"):
                 data["authKey"] = self.decrypt_token(data["authKey"])
-            self._payload_cache[token] = data
             return data
         except (json.JSONDecodeError, InvalidToken):
             return None
@@ -147,9 +211,17 @@ class TokenStore:
         self._incr_calls()
         await client.delete(key)
 
-        # Invalidate local cache
-        if token and token in self._payload_cache:
-            del self._payload_cache[token]
+        # Invalidate async LRU cached reads
+        try:
+            self.get_user_data.cache_clear()
+        except Exception:
+            pass
+        # Remove from negative cache as token is deleted
+        try:
+            if token and token in self._missing_tokens:
+                del self._missing_tokens[token]
+        except Exception:
+            pass
 
     async def iter_payloads(self, batch_size: int = 200) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         try:
@@ -185,9 +257,8 @@ class TokenStore:
                                 payload["authKey"] = self.decrypt_token(payload["authKey"])
                         except Exception:
                             pass
-                        # Update L1 cache (token only)
+                        # Token payload ready for consumer
                         tok = k[len(self.KEY_PREFIX) :] if k.startswith(self.KEY_PREFIX) else k  # noqa
-                        self._payload_cache[tok] = payload
                         yield k, payload
                     buffer.clear()
 
@@ -213,7 +284,6 @@ class TokenStore:
                     except Exception:
                         pass
                     tok = k[len(self.KEY_PREFIX) :] if k.startswith(self.KEY_PREFIX) else k  # noqa
-                    self._payload_cache[tok] = payload
                     yield k, payload
         except (redis.RedisError, OSError) as exc:
             logger.warning(f"Failed to scan credential tokens: {exc}")

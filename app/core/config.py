@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     ADDON_ID: str = "com.bimal.watchly"
     ADDON_NAME: str = "Watchly"
     REDIS_URL: str = "redis://redis:6379/0"
+    # Maximum number of connections Redis client will open per process
+    # Set conservatively to avoid unbounded connection growth under high concurrency
+    REDIS_MAX_CONNECTIONS: int = 20
+    # If total connected clients reported by Redis exceeds this, background
+    # Redis-heavy jobs will back off. Tune according to your Redis capacity.
+    REDIS_CONNECTIONS_THRESHOLD: int = 100
     REDIS_TOKEN_KEY: str = "watchly:token:"
     TOKEN_SALT: str = "change-me"
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire

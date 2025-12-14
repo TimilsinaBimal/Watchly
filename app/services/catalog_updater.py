@@ -143,6 +143,21 @@ class BackgroundCatalogUpdater:
                     logger.error(f"Background refresh failed for {redact_token(key)}: {exc}", exc_info=True)
 
         try:
+            # Check Redis connected clients and back off if overloaded
+            try:
+                client = await token_store._get_client()
+                info = await client.info(section="clients")
+                connected = int(info.get("connected_clients", 0))
+                threshold = getattr(settings, "REDIS_CONNECTIONS_THRESHOLD", 1000)
+                if connected > threshold:
+                    logger.warning(
+                        f"Redis connected clients {connected} exceed threshold {threshold}; skipping"
+                        "background refresh."
+                    )
+                    return
+            except Exception as exc:
+                logger.warning(f"Failed to check Redis client info before refresh: {exc}")
+
             async for key, payload in token_store.iter_payloads():
                 # Extract token from redis key prefix
                 prefix = token_store.KEY_PREFIX
