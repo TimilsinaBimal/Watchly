@@ -464,6 +464,21 @@ class RecommendationService:
                     "genre_ids": genre_ids,
                 }
 
+                # Production countries (ISO codes) for user-selected-country filtering
+                prod_countries = []
+                if details.get("production_countries"):
+                    prod_countries = [
+                        c.get("iso_3166_1") for c in details.get("production_countries", []) if c.get("iso_3166_1")
+                    ]
+                # Also allow origin_country present in some responses
+                if not prod_countries and details.get("origin_country"):
+                    try:
+                        prod_countries = [c for c in details.get("origin_country") if isinstance(c, str) and c]
+                    except Exception:
+                        prod_countries = []
+
+                meta_data["production_countries"] = prod_countries
+
                 # Add runtime if available (Movie) or episode run time (TV)
                 runtime = details.get("runtime")
                 if not runtime and details.get("episode_run_time"):
@@ -494,6 +509,37 @@ class RecommendationService:
                     break
 
         return final_results
+
+    def _matches_selected_countries(self, meta: dict) -> bool:
+        """
+        Return True if the item metadata matches the user's selected production countries (if any).
+        Meta can contain `production_countries` (list of ISO codes) or `origin_country`.
+        """
+        if not self.user_settings:
+            return True
+        sel = getattr(self.user_settings, "selected_countries", None) or []
+        if not sel:
+            return True
+        try:
+            sel_set = {c.upper() for c in sel if isinstance(c, str) and c}
+        except Exception:
+            sel_set = set()
+        if not sel_set:
+            return True
+
+        item_countries = set()
+        pcs = meta.get("production_countries") or meta.get("origin_country") or []
+        for c in pcs:
+            if not c:
+                continue
+            if isinstance(c, str):
+                item_countries.add(c.upper())
+            elif isinstance(c, dict):
+                code = c.get("iso_3166_1")
+                if code:
+                    item_countries.add(code.upper())
+
+        return bool(item_countries & sel_set)
 
     async def get_recommendations_for_item(self, item_id: str) -> list[dict]:
         """
@@ -588,6 +634,10 @@ class RecommendationService:
             if not _passes_top_genre(item.get("genre_ids")):
                 continue
 
+            # Enforce user's selected production countries if provided
+            if not self._matches_selected_countries(item):
+                continue
+
             # Clean up internal fields
             item.pop("_external_ids", None)
             final_items.append(item)
@@ -643,6 +693,16 @@ class RecommendationService:
         # Default Sort
         if "sort_by" not in params:
             params["sort_by"] = "popularity.desc"
+
+        # If user has selected countries, and theme did not explicitly set a country, apply it
+        if self.user_settings and getattr(self.user_settings, "selected_countries", None):
+            if "with_origin_country" not in params:
+                try:
+                    codes = [c.upper() for c in self.user_settings.selected_countries if isinstance(c, str) and c]
+                    if codes:
+                        params["with_origin_country"] = "|".join(codes)
+                except Exception:
+                    pass
 
         # Apply Excluded Genres but don't conflict with explicit with_genres from theme
         excluded_ids = self._get_excluded_genre_ids(content_type)
@@ -719,6 +779,9 @@ class RecommendationService:
                 continue
             # Apply whitelist again on enriched metadata
             if not _passes_top_genre(item.get("genre_ids")):
+                continue
+            # Enforce user's selected production countries if provided
+            if not self._matches_selected_countries(item):
                 continue
             item.pop("_external_ids", None)
             final_items.append(item)
@@ -1123,6 +1186,9 @@ class RecommendationService:
                 continue
             # Apply top-genre whitelist again using enriched genre_ids if present
             if not _passes_top_genre(item.get("genre_ids")):
+                continue
+            # Enforce user's selected production countries if provided
+            if not self._matches_selected_countries(item):
                 continue
 
             try:

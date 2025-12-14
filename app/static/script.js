@@ -27,6 +27,7 @@ const submitBtn = document.getElementById('submitBtn');
 const stremioLoginBtn = document.getElementById('stremioLoginBtn');
 const stremioLoginText = document.getElementById('stremioLoginText');
 const languageSelect = document.getElementById('languageSelect');
+const countrySelect = document.getElementById('countrySelect');
 const configNextBtn = document.getElementById('configNextBtn');
 const catalogsNextBtn = document.getElementById('catalogsNextBtn');
 const successResetBtn = document.getElementById('successResetBtn');
@@ -64,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lockNavigationForLoggedOut();
     initializeCatalogList();
     initializeLanguageSelect();
+    initializeCountrySelect();
     initializeMobileNav();
     initializeGenreLists();
     initializeFormSubmission();
@@ -276,6 +278,21 @@ async function fetchStremioIdentity(authKey) {
             const s = data.settings;
             if (s.language && languageSelect) languageSelect.value = s.language;
             if (s.rpdb_key && document.getElementById('rpdbKey')) document.getElementById('rpdbKey').value = s.rpdb_key;
+            if (s.selected_countries && countrySelect) {
+                // Wait until countries are loaded; set later in populateSelectedCountries
+                window._prefillSelectedCountries = s.selected_countries;
+                try {
+                    // If countries already loaded, apply immediately
+                    const setCodes = new Set(s.selected_countries.map(x => (x || '').toUpperCase()));
+                    Array.from(countrySelect.options).forEach(opt => {
+                        if (setCodes.has(opt.value.toUpperCase())) opt.selected = true;
+                    });
+                    // clear prefill marker
+                    delete window._prefillSelectedCountries;
+                } catch (err) {
+                    // ignore
+                }
+            }
 
             // Genres (Checked = Excluded)
             document.querySelectorAll('input[name="movie-genre"]').forEach(cb => cb.checked = false);
@@ -444,6 +461,7 @@ async function initializeFormSubmission() {
                 rpdb_key: rpdbKey,
                 excluded_movie_genres: excludedMovieGenres,
                 excluded_series_genres: excludedSeriesGenres
+                , selected_countries: Array.from(document.querySelectorAll('#countrySelect option:checked')).map(o => o.value)
             };
 
             const response = await fetch("/tokens/", {
@@ -511,6 +529,32 @@ async function initializeLanguageSelect() {
         }).join('');
     } catch (err) {
         languageSelect.innerHTML = '<option value="en">English</option>';
+    }
+}
+
+
+// Country Selection: fetch list from backend and populate multi-select
+async function initializeCountrySelect() {
+    if (!countrySelect) return;
+    try {
+        const res = await fetch('/api/countries');
+        if (!res.ok) throw new Error('Failed to fetch countries');
+        const countries = await res.json();
+        // countries are objects like {iso_3166_1: 'US', english_name: 'United States of America'}
+        countries.sort((a, b) => a.english_name.localeCompare(b.english_name));
+        countrySelect.innerHTML = countries.map(c => `<option value="${c.iso_3166_1}">${c.english_name} (${c.iso_3166_1})</option>`).join('');
+
+        // If prefill requested by identity fetch, apply it
+        if (window._prefillSelectedCountries && Array.isArray(window._prefillSelectedCountries)) {
+            const setCodes = new Set(window._prefillSelectedCountries.map(s => (s || '').toUpperCase()));
+            Array.from(countrySelect.options).forEach(opt => {
+                if (setCodes.has(opt.value.toUpperCase())) opt.selected = true;
+            });
+            delete window._prefillSelectedCountries;
+        }
+    } catch (err) {
+        // Fallback: leave empty
+        countrySelect.innerHTML = '';
     }
 }
 

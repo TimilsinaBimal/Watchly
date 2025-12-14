@@ -13,6 +13,7 @@ class UserSettings(BaseModel):
     rpdb_key: str | None = None
     excluded_movie_genres: list[str] = Field(default_factory=list)
     excluded_series_genres: list[str] = Field(default_factory=list)
+    selected_countries: list[str] = Field(default_factory=list)
 
 
 def get_default_settings() -> UserSettings:
@@ -24,6 +25,10 @@ def get_default_settings() -> UserSettings:
             CatalogConfig(id="watchly.watched", name="Because you watched", enabled=True),
             CatalogConfig(id="watchly.theme", name="Genre & Keyword Catalogs", enabled=True),
         ],
+        rpdb_key=None,
+        excluded_movie_genres=[],
+        excluded_series_genres=[],
+        selected_countries=[],
     )
 
 

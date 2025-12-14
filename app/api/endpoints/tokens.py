@@ -20,6 +20,9 @@ class TokenRequest(BaseModel):
     rpdb_key: str | None = Field(default=None, description="Optional RPDB API Key")
     excluded_movie_genres: list[str] = Field(default_factory=list, description="List of movie genre IDs to exclude")
     excluded_series_genres: list[str] = Field(default_factory=list, description="List of series genre IDs to exclude")
+    selected_countries: list[str] = Field(
+        default_factory=list, description="List of selected production country ISO codes"
+    )
 
 
 class TokenResponse(BaseModel):
@@ -104,6 +107,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         rpdb_key=rpdb_key,
         excluded_movie_genres=payload.excluded_movie_genres,
         excluded_series_genres=payload.excluded_series_genres,
+        selected_countries=payload.selected_countries,
     )
 
     is_new_account = not existing_data

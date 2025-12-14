@@ -29,3 +29,27 @@ async def get_languages():
     finally:
         # shared client: no explicit close
         pass
+
+
+@alru_cache(maxsize=1, ttl=24 * 60 * 60)
+async def _cached_countries():
+    tmdb = get_tmdb_service()
+    return await tmdb._make_request("/configuration/countries")
+
+
+@router.get("/api/countries")
+async def get_countries():
+    """
+    Proxy endpoint to fetch production/origin countries from TMDB.
+    Returns list of {iso_3166_1, english_name}
+    """
+    try:
+        countries = await _cached_countries()
+        if not countries:
+            return []
+        return countries
+    except Exception as e:
+        logger.error(f"Failed to fetch countries: {e}")
+        raise HTTPException(status_code=502, detail="Failed to fetch countries from TMDB")
+    finally:
+        pass
