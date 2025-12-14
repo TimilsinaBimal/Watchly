@@ -40,16 +40,18 @@ async def lifespan(app: FastAPI):
     Manage application lifespan events (startup/shutdown).
     """
     global catalog_updater
-    task = asyncio.create_task(migrate_tokens())
 
-    # Ensure background exceptions are surfaced in logs
-    def _on_done(t: asyncio.Task):
-        try:
-            t.result()
-        except Exception as exc:
-            logger.error(f"migrate_tokens background task failed: {exc}")
+    if settings.HOST_NAME.lower() != "https://1ccea4301587-watchly.baby-beamup.club":
+        task = asyncio.create_task(migrate_tokens())
 
-    task.add_done_callback(_on_done)
+        # Ensure background exceptions are surfaced in logs
+        def _on_done(t: asyncio.Task):
+            try:
+                t.result()
+            except Exception as exc:
+                logger.error(f"migrate_tokens background task failed: {exc}")
+
+        task.add_done_callback(_on_done)
 
     # Startup
     if settings.AUTO_UPDATE_CATALOGS:
@@ -118,22 +120,6 @@ async def block_missing_token_middleware(request: Request, call_next):
     except Exception:
         pass
     return await call_next(request)
-
-
-# Middleware to track per-request Redis calls and attach as response header for diagnostics
-@app.middleware("http")
-async def redis_calls_middleware(request: Request, call_next):
-    try:
-        token_store.reset_call_counter()
-    except Exception:
-        pass
-    response = await call_next(request)
-    try:
-        count = token_store.get_call_count()
-        response.headers["X-Redis-Calls"] = str(count)
-    except Exception:
-        pass
-    return response
 
 
 # Serve static files

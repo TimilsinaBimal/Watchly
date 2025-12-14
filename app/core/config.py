@@ -32,10 +32,7 @@ class Settings(BaseSettings):
     ANNOUNCEMENT_HTML: str = ""
     AUTO_UPDATE_CATALOGS: bool = True
     CATALOG_UPDATE_MODE: Literal["cron", "interval"] = "cron"  # "cron" for fixed times, "interval" for periodic
-    CATALOG_UPDATE_CRON_SCHEDULES: list[dict] = (
-        {"hour": 12, "minute": 0, "id": "catalog_refresh_noon"},
-        {"hour": 0, "minute": 0, "id": "catalog_refresh_midnight"},
-    )
+    CATALOG_UPDATE_CRON_SCHEDULES: list[dict] = ({"hour": 0, "minute": 0, "id": "catalog_refresh_midnight"},)
     CATALOG_REFRESH_INTERVAL_SECONDS: int = 6 * 60 * 60  # 6 hours (used when CATALOG_UPDATE_MODE="interval")
     APP_ENV: Literal["development", "production", "vercel"] = "development"
     HOST_NAME: str = "https://1ccea4301587-watchly.baby-beamup.club"

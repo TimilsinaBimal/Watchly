@@ -215,15 +215,11 @@ class StremioService:
         user_info = await self.get_user_info()
         return user_info.get("email", "")
 
-    async def get_library_items(self, use_cache: bool = True, cache_ttl_seconds: int = 30) -> dict[str, list[dict]]:
+    async def get_library_items(self) -> dict[str, list[dict]]:
         """
         Fetch library items from Stremio once and return both watched and loved items.
         Returns a dict with 'watched' and 'loved' keys.
         """
-        import time
-
-        if use_cache and self._library_cache and time.time() < self._library_cache_expiry:
-            return self._library_cache
 
         if not self._auth_key:
             logger.warning("Stremio auth key not configured")
@@ -333,10 +329,6 @@ class StremioService:
                 "added": added_items,
                 "removed": removed_items,
             }
-            # cache
-            if use_cache and cache_ttl_seconds > 0:
-                self._library_cache = result
-                self._library_cache_expiry = time.time() + cache_ttl_seconds
             return result
         except Exception as e:
             logger.error(f"Error fetching library items: {e}", exc_info=True)

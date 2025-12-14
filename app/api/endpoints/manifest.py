@@ -1,4 +1,3 @@
-from async_lru import alru_cache
 from fastapi import HTTPException, Response
 from fastapi.routing import APIRouter
 
@@ -55,29 +54,14 @@ def get_base_manifest(user_settings: UserSettings | None = None):
     }
 
 
-# Cache catalog definitions for 1 hour (3600s)
-@alru_cache(maxsize=1000, ttl=3600)
-async def fetch_catalogs(token: str):
-    credentials = await token_store.get_user_data(token)
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
-
-    if credentials.get("settings"):
-        user_settings = UserSettings(**credentials["settings"])
-    else:
-        user_settings = get_default_settings()
-
-    stremio_service = StremioService(auth_key=credentials.get("authKey"))
-
-    # Note: get_library_items is expensive, but we need it to determine *which* genre catalogs to show.
+async def build_dynamic_catalogs(stremio_service: StremioService, user_settings: UserSettings) -> list[dict]:
+    # Note: get_library_items is the heavy call; StremioService has its own short cache.
     library_items = await stremio_service.get_library_items()
-    dynamic_catalog_service = DynamicCatalogService(stremio_service=stremio_service, language=user_settings.language)
-
-    # Base catalogs are already in manifest, these are *extra* dynamic ones
-    # Pass user_settings to filter/rename
-    catalogs = await dynamic_catalog_service.get_dynamic_catalogs(library_items, user_settings)
-
-    return catalogs
+    dynamic_catalog_service = DynamicCatalogService(
+        stremio_service=stremio_service,
+        language=user_settings.language,
+    )
+    return await dynamic_catalog_service.get_dynamic_catalogs(library_items, user_settings)
 
 
 def get_config_id(catalog) -> str | None:
@@ -111,7 +95,9 @@ async def _manifest_handler(response: Response, token: str):
 
     base_manifest = get_base_manifest(user_settings)
 
-    fetched_catalogs = await fetch_catalogs(token)
+    # Build dynamic catalogs using the already-fetched credentials
+    stremio_service = StremioService(auth_key=creds.get("authKey"))
+    fetched_catalogs = await build_dynamic_catalogs(stremio_service, user_settings or get_default_settings())
 
     all_catalogs = [c.copy() for c in base_manifest["catalogs"]] + [c.copy() for c in fetched_catalogs]
 
