@@ -49,6 +49,31 @@ const sections = {
     success: document.getElementById('sect-success')
 };
 
+// Main scroll container
+const mainEl = document.querySelector('main');
+const sidebarEl = document.getElementById('mainSidebar');
+const headerEl = document.getElementById('mobileHeader');
+
+function updateMobileLayout() {
+    try {
+        const isMobile = window.matchMedia('(max-width: 767.98px)').matches;
+        const header = headerEl;
+        if (!header || !mainEl || !sidebarEl) return;
+        const h = header.offsetHeight || 0;
+        document.documentElement.style.setProperty('--mobile-header', `${h}px`);
+
+        if (isMobile) {
+            mainEl.style.paddingTop = `${h}px`;
+            sidebarEl.style.top = `${h}px`;
+            sidebarEl.style.height = `calc(100dvh - ${h}px)`;
+        } else {
+            mainEl.style.paddingTop = '';
+            sidebarEl.style.top = '';
+            sidebarEl.style.height = '';
+        }
+    } catch (e) { /* noop */ }
+}
+
 // Welcome Elements
 const btnGetStarted = document.getElementById('btn-get-started');
 
@@ -72,6 +97,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeFooter();
     initializeKofi();
     initializeAnnouncement();
+
+    // Layout adjustments for fixed mobile header
+    updateMobileLayout();
+    window.addEventListener('resize', updateMobileLayout);
+    window.addEventListener('orientationchange', updateMobileLayout);
 
     // Next Buttons
     if (configNextBtn) configNextBtn.addEventListener('click', () => switchSection('catalogs'));
@@ -137,15 +167,28 @@ function initializeMobileNav() {
         sidebar.classList.add('translate-x-0');
         backdrop.classList.remove('hidden');
         document.body.classList.add('overflow-hidden');
+        // Animate hamburger to X
+        mobileToggle.classList.add('is-active');
+        mobileToggle.setAttribute('aria-expanded', 'true');
+        mobileToggle.setAttribute('aria-label', 'Close navigation');
     };
     const closeNav = () => {
         sidebar.classList.remove('translate-x-0');
         sidebar.classList.add('-translate-x-full');
         backdrop.classList.add('hidden');
         document.body.classList.remove('overflow-hidden');
+        // Reset hamburger
+        mobileToggle.classList.remove('is-active');
+        mobileToggle.setAttribute('aria-expanded', 'false');
+        mobileToggle.setAttribute('aria-label', 'Open navigation');
     };
 
-    mobileToggle.addEventListener('click', (e) => { e.preventDefault(); openNav(); });
+    mobileToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        // Toggle open/close for convenience
+        const isOpen = sidebar.classList.contains('translate-x-0');
+        if (isOpen) closeNav(); else openNav();
+    });
     backdrop.addEventListener('click', closeNav);
 
     // Auto-close when a nav item is selected (mobile)
@@ -176,6 +219,16 @@ function switchSection(sectionKey) {
     if (navItems[sectionKey]) {
         navItems[sectionKey].classList.add('active');
     }
+
+    // Ensure new section starts at top in the scroll container
+    try {
+        if (mainEl) {
+            // Using scrollTo with behavior auto to avoid jank on iOS toolbars
+            mainEl.scrollTo({ top: 0, behavior: 'auto' });
+        } else {
+            window.scrollTo({ top: 0, behavior: 'auto' });
+        }
+    } catch (e) { /* noop */ }
 }
 
 
