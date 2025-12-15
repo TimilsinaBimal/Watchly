@@ -37,7 +37,7 @@ class TokenStore:
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
             logger.error("Refusing to store credentials because TOKEN_SALT is unset or using the insecure default.")
             raise RuntimeError(
-                "Server misconfiguration: TOKEN_SALT must be set to a non-default value before storing credentials."
+                "Server misconfiguration: TOKEN_SALT must be set to a non-default value before storing" " credentials."
             )
 
     def _get_cipher(self) -> Fernet:
@@ -145,6 +145,20 @@ class TokenStore:
         else:
             await client.set(key, json_str)
 
+        # Invalidate async LRU cache for fresh reads on subsequent requests
+        try:
+            # bound method supports targeted invalidation by argument(s)
+            self.get_user_data.cache_invalidate(token)
+        except KeyError:
+            # The token was not in the cache, no action needed.
+            pass
+        except Exception as e:
+            logger.warning(f"Targeted cache invalidation failed: {e}. Falling back to clearing cache.")
+            try:
+                self.get_user_data.cache_clear()
+            except Exception as e_clear:
+                logger.error(f"Error while clearing cache: {e_clear}")
+
         # Ensure we remove from negative cache so new value is read next time
         try:
             if token in self._missing_tokens:
@@ -193,6 +207,19 @@ class TokenStore:
 
         client = await self._get_client()
         await client.delete(key)
+
+        # Invalidate async LRU cache so future reads reflect deletion
+        try:
+            if token:
+                self.get_user_data.cache_invalidate(token)
+            else:
+                # If only key is provided, clear cache entirely to be safe
+                self.get_user_data.cache_clear()
+        except KeyError:
+            # The token was not in the cache, no action needed.
+            pass
+        except Exception as e:
+            logger.warning(f"Failed to invalidate user data cache during token deletion: {e}")
 
         # Remove from negative cache as token is deleted
         try:
