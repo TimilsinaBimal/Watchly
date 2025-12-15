@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Watchly - Personalized Stremio Recommendations</title>
     <meta name="description"
         content="Stremio catalog addon that provides personalized movie and series recommendations based on your library.">
@@ -20,7 +20,6 @@
                             850: '#151f32',
                             900: '#0f172a',
                             950: '#020617'
-                        },
                         },
                         stremio: {
                             DEFAULT: '#3b2667',
@@ -74,11 +73,15 @@
         }
 
         .nav-item.active {
-            @apply bg-white/10 text-white border-l-2 border-white;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-left: 2px solid #ffffff;
         }
 
         .nav-item.disabled {
-            @apply opacity-50 cursor-not-allowed pointer-events-none;
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
         }
 
         /* Announcement link styling to ensure visibility (neutral theme) */
@@ -91,27 +94,63 @@
             color: #ffffff;
             text-decoration: underline;
         }
+
+        /* Improve mobile scrolling behavior */
+        main {
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
+        /* Animated hamburger icon */
+        .hamburger {
+            position: relative;
+            width: 40px;
+            height: 40px;
+        }
+        .hamburger .bar {
+            position: absolute;
+            left: 9px;
+            right: 9px;
+            height: 2px;
+            background: #e5e7eb; /* slate-200 */
+            border-radius: 2px;
+            transform-origin: center;
+            transition: transform 200ms ease, opacity 180ms ease;
+        }
+        .hamburger .bar.top { top: 12px; }
+        .hamburger .bar.middle { top: 19px; }
+        .hamburger .bar.bottom { top: 26px; }
+
+        .hamburger.is-active .bar.top { transform: translateY(7px) rotate(45deg); }
+        .hamburger.is-active .bar.middle { opacity: 0; }
+        .hamburger.is-active .bar.bottom { transform: translateY(-7px) rotate(-45deg); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .hamburger .bar { transition: none; }
+        }
     </style>
 </head>
 
-<body class="min-h-screen text-slate-200 font-sans antialiased overflow-hidden flex flex-col md:flex-row">
+<body class="min-h-screen text-slate-200 font-sans antialiased overflow-x-hidden flex flex-col md:flex-row">
 
     <!-- Mobile Header -->
-    <div class="md:hidden p-4 bg-neutral-950 border-b border-slate-800 flex items-center gap-3">
-        <button id="mobileNavToggle" aria-label="Open navigation" class="p-2 rounded-md hover:bg-slate-800/50">
-            <svg class="w-6 h-6 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
+    <div id="mobileHeader"
+        class="md:hidden fixed top-0 left-0 right-0 z-50 px-4 py-3 bg-neutral-950 border-b border-slate-800 flex items-center gap-4">
+        <button id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false"
+            class="hamburger p-2 rounded-md hover:bg-slate-800/50">
+            <span class="bar top"></span>
+            <span class="bar middle"></span>
+            <span class="bar bottom"></span>
         </button>
         <img src="/app/static/logo.png" alt="Watchly" class="w-8 h-8 rounded-lg ring-1 ring-white/15 bg-black">
-        <h1 class="font-bold text-lg text-white">Watchly</h1>
+        <h1 class="font-bold text-xl text-white">Watchly</h1>
 
     </div>
     <!-- Mobile Nav Backdrop -->
     <div id="mobileNavBackdrop" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"></div>
     <!-- Sidebar Navigation -->
     <aside id="mainSidebar"
-        class="fixed inset-y-0 left-0 z-40 w-72 transform -translate-x-full transition-transform duration-300 ease-out bg-neutral-950/50 backdrop-blur-xl border-b md:border-b-0 md:border-r border-slate-800 flex flex-col flex-shrink-0 md:relative md:translate-x-0 md:flex">
+        class="fixed inset-y-0 left-0 z-40 w-72 transform -translate-x-full transition-transform duration-300 ease-out bg-neutral-950/50 backdrop-blur-xl border-b md:border-b-0 md:border-r border-slate-800 flex flex-col flex-shrink-0 md:relative md:translate-x-0 md:flex pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <div class="p-6 md:p-8 flex-col items-start gap-4 hidden md:flex">
             <div class="flex items-center gap-3">
                 <img src="/app/static/logo.png" alt="Watchly"
@@ -235,8 +274,8 @@
     </aside>
 
     <!-- Main Content Area -->
-    <main class="flex-grow h-screen overflow-y-auto relative no-scrollbar">
-        <div class="max-w-2xl mx-auto px-4 py-8 md:py-16 pb-32">
+    <main class="flex-grow min-h-[100dvh] overflow-y-auto relative no-scrollbar">
+        <div class="max-w-2xl mx-auto px-4 py-8 md:py-16 pb-[calc(env(safe-area-inset-bottom)+8rem)]">
 
             <form id="configForm">
                 <!-- SECTION 0: WELCOME -->
@@ -414,7 +453,7 @@
                                     <path
                                         d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387 0.6.111 0.82-.25 0.82-.557 0-.276-0.01-1.003-0.015-1.972-3.337 0.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-0.744 0.084-0.73 0.084-0.73 1.205 0.084 1.838 1.237 1.838 1.237 1.07 1.835 2.809 1.305 3.492 0.998 0.108-0.776 0.419-1.305 0.762-1.604-2.665-0.3-5.466-1.332-5.466-5.93 0-1.31 0.465-2.38 1.235-3.221-0.135-0.303-0.54-1.523 0.116-3.176 0 0 1.008-0.322 3.301 1.23A11.026 11.026 0 0112 5.86c1.02 0 2.047 0.137 3.013 0.403 2.291-1.552 3.297-1.23 3.297-1.23 0.656 1.653 0.24 2.873 0.116 3.176 0.77 0.84 1.235 1.91 1.235 3.221 0 4.61-2.805 5.621-5.476 5.922 0.43 0.37 0.81 1.096 0.81 2.22 0 1.606-0.015 2.899-0.015 3.286 0 0.308 0.219 0.678 0.825 0.557C20.565 21.79 24 17.29 24 12c0-6.627-5.372-12-12-12z" />
                                 </svg>
-                                <span class="font-medium">View Source Code</span>
+                                <span class="font-medium">Source Code</span>
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
