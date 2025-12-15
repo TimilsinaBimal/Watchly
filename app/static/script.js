@@ -1,9 +1,9 @@
 // Default catalog configurations
 const defaultCatalogs = [
-    { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, description: 'Personalized recommendations based on your library' },
-    { id: 'watchly.loved', name: 'More Like', enabled: true, description: 'Recommendations similar to content you explicitly loved' },
-    { id: 'watchly.watched', name: 'Because You Watched', enabled: true, description: 'Recommendations based on your recent watch history' },
-    { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
+    { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, minItems: 20, maxItems: 24, description: 'Personalized recommendations based on your library' },
+    { id: 'watchly.loved', name: 'More Like', enabled: true, minItems: 20, maxItems: 24, description: 'Recommendations similar to content you explicitly loved' },
+    { id: 'watchly.watched', name: 'Because You Watched', enabled: true, minItems: 20, maxItems: 24, description: 'Recommendations based on your recent watch history' },
+    { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, minItems: 20, maxItems: 24, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
 ];
 
 let catalogs = JSON.parse(JSON.stringify(defaultCatalogs));
@@ -350,6 +350,8 @@ async function fetchStremioIdentity(authKey) {
                     if (local) {
                         local.enabled = remote.enabled;
                         if (remote.name) local.name = remote.name;
+                        if (typeof remote.min_items === 'number') local.minItems = remote.min_items;
+                        if (typeof remote.max_items === 'number') local.maxItems = remote.max_items;
                     }
                 });
                 renderCatalogList();
@@ -472,10 +474,19 @@ async function initializeFormSubmission() {
             const enabled = toggle.checked;
             const originalCatalog = catalogs.find(c => c.id === catalogId);
             if (originalCatalog) {
+                let minV = parseInt(originalCatalog.minItems ?? 20, 10);
+                let maxV = parseInt(originalCatalog.maxItems ?? 32, 10);
+                if (Number.isNaN(minV)) minV = 20;
+                if (Number.isNaN(maxV)) maxV = 32;
+                // Enforce server policy: min <= 20, max <= 32, and max >= min
+                minV = Math.max(1, Math.min(20, minV));
+                maxV = Math.max(minV, Math.min(32, maxV));
                 catalogsToSend.push({
                     id: catalogId,
                     name: originalCatalog.name,
-                    enabled: enabled
+                    enabled: enabled,
+                    min_items: minV,
+                    max_items: maxV,
                 });
             }
         });
@@ -610,6 +621,7 @@ function createCatalogItem(cat, index) {
     const disabledClass = !cat.enabled ? 'opacity-50' : '';
     // Modern neutral glass card to match new theme
     item.className = `catalog-item group bg-neutral-900/60 border border-white/10 rounded-xl p-4 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-neutral-900/70 hover:shadow-lg hover:shadow-black/20 ${disabledClass}`;
+    item.setAttribute('data-id', cat.id);
     item.setAttribute('data-index', index);
 
     const isRenamable = cat.id !== 'watchly.theme';
@@ -637,6 +649,24 @@ function createCatalogItem(cat, index) {
             </label>
         </div>
         <div class="catalog-desc hidden sm:block text-xs text-slate-500 mt-2 ml-8 pl-1">${escapeHtml(cat.description || '')}</div>
+        <div class="mt-3 grid grid-cols-2 gap-3 ml-8">
+            <div class="text-xs text-slate-400 flex items-center gap-2">
+                <span class="whitespace-nowrap">Min items</span>
+                <div class="flex items-center gap-2 bg-neutral-950 border border-white/10 rounded-lg px-2 py-1">
+                    <button type="button" class="btn-minus step-btn text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1" aria-label="Decrease minimum">−</button>
+                    <input type="number" name="min-items" min="1" max="20" value="${(cat.minItems ?? 20)}" class="stepper-input w-16 bg-transparent outline-none text-white text-sm text-center" />
+                    <button type="button" class="btn-plus step-btn text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1" aria-label="Increase minimum">+</button>
+                </div>
+            </div>
+            <div class="text-xs text-slate-400 flex items-center gap-2">
+                <span class="whitespace-nowrap">Max items</span>
+                <div class="flex items-center gap-2 bg-neutral-950 border border-white/10 rounded-lg px-2 py-1">
+                    <button type="button" class="btn-minus-max step-btn text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1" aria-label="Decrease maximum">−</button>
+                    <input type="number" name="max-items" min="1" max="32" value="${(cat.maxItems ?? 24)}" class="stepper-input w-16 bg-transparent outline-none text-white text-sm text-center" />
+                    <button type="button" class="btn-plus-max step-btn text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1" aria-label="Increase maximum">+</button>
+                </div>
+            </div>
+        </div>
     `;
 
     if (isRenamable) setupRenameLogic(item, cat);
@@ -650,6 +680,36 @@ function createCatalogItem(cat, index) {
 
     item.querySelector('.move-up').addEventListener('click', (e) => { e.preventDefault(); moveCatalogUp(index); });
     item.querySelector('.move-down').addEventListener('click', (e) => { e.preventDefault(); moveCatalogDown(index); });
+
+    // keep min/max in model
+    const minEl = item.querySelector("input[name='min-items']");
+    const maxEl = item.querySelector("input[name='max-items']");
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const sync = () => {
+        let minV = parseInt(minEl.value || '20', 10);
+        let maxV = parseInt(maxEl.value || '32', 10);
+        if (Number.isNaN(minV)) minV = 20;
+        if (Number.isNaN(maxV)) maxV = 32;
+        minV = clamp(minV, 1, 20);
+        maxV = clamp(maxV, 1, 32);
+        if (maxV < minV) maxV = minV;
+        minEl.value = String(minV);
+        maxEl.value = String(maxV);
+        cat.minItems = minV;
+        cat.maxItems = maxV;
+    };
+    minEl.addEventListener('change', sync);
+    maxEl.addEventListener('change', sync);
+
+    const inc = (el, delta) => { el.value = String((parseInt(el.value || '0', 10) || 0) + delta); sync(); };
+    const btnMinMinus = item.querySelector('.btn-minus');
+    const btnMinPlus = item.querySelector('.btn-plus');
+    const btnMaxMinus = item.querySelector('.btn-minus-max');
+    const btnMaxPlus = item.querySelector('.btn-plus-max');
+    btnMinMinus.addEventListener('click', () => inc(minEl, -1));
+    btnMinPlus.addEventListener('click', () => inc(minEl, +1));
+    btnMaxMinus.addEventListener('click', () => inc(maxEl, -1));
+    btnMaxPlus.addEventListener('click', () => inc(maxEl, +1));
 
     return item;
 }

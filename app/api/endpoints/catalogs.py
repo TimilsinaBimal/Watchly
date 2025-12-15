@@ -3,6 +3,7 @@ import re
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
+from app.api.endpoints.manifest import get_config_id
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
@@ -11,6 +12,8 @@ from app.services.stremio_service import StremioService
 from app.services.token_store import token_store
 
 MAX_RESULTS = 50
+DEFAULT_MIN_ITEMS = 20
+DEFAULT_MAX_ITEMS = 32
 SOURCE_ITEMS_LIMIT = 10
 
 router = APIRouter()
@@ -30,7 +33,14 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
 
     # Supported IDs now include dynamic themes and item-based rows
     if id != "watchly.rec" and not any(
-        id.startswith(p) for p in ("tt", "watchly.theme.", "watchly.item.", "watchly.loved.", "watchly.watched.")
+        id.startswith(p)
+        for p in (
+            "tt",
+            "watchly.theme.",
+            "watchly.item.",
+            "watchly.loved.",
+            "watchly.watched.",
+        )
     ):
         logger.warning(f"Invalid id: {id}")
         raise HTTPException(
@@ -64,32 +74,77 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
             library_data=library_items,
         )
 
+        # Resolve per-catalog limits (min/max)
+        def _get_limits() -> tuple[int, int]:
+            try:
+                cfg_id = get_config_id({"id": id})
+            except Exception:
+                cfg_id = id
+            try:
+                cfg = next((c for c in user_settings.catalogs if c.id == cfg_id), None)
+                if cfg and hasattr(cfg, "min_items") and hasattr(cfg, "max_items"):
+                    return int(cfg.min_items or DEFAULT_MIN_ITEMS), int(cfg.max_items or DEFAULT_MAX_ITEMS)
+            except Exception:
+                pass
+            return DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
+
+        min_items, max_items = _get_limits()
+        # Enforce caps: min_items <= 20, max_items <= 50 and max >= min
+        try:
+            min_items = max(1, min(DEFAULT_MIN_ITEMS, int(min_items)))
+            max_items = max(min_items, min(DEFAULT_MAX_ITEMS, int(max_items)))
+        except Exception:
+            min_items, max_items = DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
+
         # Handle item-based recommendations
         if id.startswith("tt"):
+            try:
+                recommendation_service.per_item_limit = max_items
+            except Exception:
+                pass
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
+            if len(recommendations) < min_items:
+                recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
 
-        elif id.startswith("watchly.item.") or id.startswith("watchly.loved.") or id.startswith("watchly.watched."):
+        elif any(
+            id.startswith(p)
+            for p in (
+                "watchly.item.",
+                "watchly.loved.",
+                "watchly.watched.",
+            )
+        ):
             # Extract actual item ID (tt... or tmdb:...)
             item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", id)
+            try:
+                recommendation_service.per_item_limit = max_items
+            except Exception:
+                pass
             recommendations = await recommendation_service.get_recommendations_for_item(item_id=item_id)
+            if len(recommendations) < min_items:
+                recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
 
         elif id.startswith("watchly.theme."):
-            recommendations = await recommendation_service.get_recommendations_for_theme(theme_id=id, content_type=type)
+            recommendations = await recommendation_service.get_recommendations_for_theme(
+                theme_id=id, content_type=type, limit=max_items
+            )
+            if len(recommendations) < min_items:
+                recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for theme {id}")
 
         else:
             recommendations = await recommendation_service.get_recommendations(
-                content_type=type, source_items_limit=SOURCE_ITEMS_LIMIT, max_results=MAX_RESULTS
+                content_type=type, source_items_limit=SOURCE_ITEMS_LIMIT, max_results=max_items
             )
+            if len(recommendations) < min_items:
+                recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for {type}")
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
-        # Cache catalog responses for 4 hours
-        response.headers["Cache-Control"] = (
-            "public, max-age=14400" if len(recommendations) > 0 else "public, max-age=7200"
-        )
+        # Avoid serving stale results; revalidate on each request
+        response.headers["Cache-Control"] = "no-cache"
         return {"metas": recommendations}
 
     except HTTPException:

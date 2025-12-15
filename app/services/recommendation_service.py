@@ -598,6 +598,95 @@ class RecommendationService:
         logger.info(f"Found {len(final_items)} valid recommendations for {item_id}")
         return final_items
 
+    async def pad_to_min(self, content_type: str, existing: list[dict], min_items: int) -> list[dict]:
+        """Pad results with trending/top-rated to satisfy a minimum count.
+        Returns a new list with extra items appended (deduped).
+        """
+        try:
+            need = max(0, int(min_items) - len(existing))
+        except Exception:
+            need = 0
+        if need <= 0:
+            return existing
+
+        # Build exclusion and whitelist
+        watched_imdb, watched_tmdb = await self._get_exclusion_sets()
+        excluded_ids = set(self._get_excluded_genre_ids(content_type))
+        whitelist = await self._get_top_genre_whitelist(content_type)
+
+        def _passes(item: dict) -> bool:
+            gids = set(item.get("genre_ids") or [])
+            if gids and excluded_ids and excluded_ids.intersection(gids):
+                return False
+            if whitelist:
+                if 16 in gids and 16 not in whitelist:
+                    return False
+                if gids and not (gids & whitelist):
+                    return False
+            return True
+
+        # Seed pool from trending and top rated
+        mtype = "tv" if content_type in ("tv", "series") else "movie"
+        pool = []
+        try:
+            tr = await self.tmdb_service.get_trending(mtype, time_window="week")
+            pool.extend(tr.get("results", [])[:60])
+        except Exception:
+            pass
+        try:
+            tr2 = await self.tmdb_service.get_top_rated(mtype)
+            pool.extend(tr2.get("results", [])[:60])
+        except Exception:
+            pass
+
+        # Filter and dedup by tmdb id
+        existing_tmdb = set()
+        for it in existing:
+            tid = it.get("_tmdb_id") or it.get("tmdb_id") or it.get("id")
+            try:
+                if isinstance(tid, str) and tid.startswith("tmdb:"):
+                    tid = int(tid.split(":")[1])
+                tid = int(tid)
+                existing_tmdb.add(tid)
+            except Exception:
+                pass
+
+        dedup = {}
+        for it in pool:
+            tid = it.get("id")
+            if not tid or tid in existing_tmdb or tid in watched_tmdb:
+                continue
+            if not _passes(it):
+                continue
+            # quality gate
+            va = float(it.get("vote_average") or 0.0)
+            vc = int(it.get("vote_count") or 0)
+            if vc < 100 or va < 6.2:
+                continue
+            dedup[tid] = it
+            if len(dedup) >= need * 3:
+                break
+
+        if not dedup:
+            return existing
+
+        # Fetch metadata to convert to enriched items and IMDB ids
+        meta = await self._fetch_metadata_for_items(list(dedup.values()), content_type, target_count=need * 2)
+
+        # Filter out watched/duplicates after enrichment
+        extra = []
+        existing_ids = {it.get("id") for it in existing}
+        for it in meta:
+            if it.get("id") in existing_ids:
+                continue
+            if it.get("id") in watched_imdb:
+                continue
+            if len(extra) >= need:
+                break
+            extra.append(it)
+
+        return existing + extra
+
     def _get_excluded_genre_ids(self, content_type: str) -> list[int]:
         if not self.user_settings:
             return []
@@ -823,7 +912,9 @@ class RecommendationService:
         if self._library_data is None:
             self._library_data = await self.stremio_service.get_library_items()
         library_data = self._library_data
-        all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("added", [])
+        all_items = library_data.get("loved", [])
+        all_items += library_data.get("watched", [])
+        all_items += library_data.get("added", [])
         logger.info(f"processing {len(all_items)} Items.")
         # Cold-start fallback remains (redundant safety)
         if not all_items:

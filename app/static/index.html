@@ -101,6 +101,26 @@
             overscroll-behavior: contain;
         }
 
+        /* High-contrast text selection to avoid blending with blue OS highlight */
+        ::selection {
+            background: rgba(59, 130, 246, 0.35); /* blue-500 @ 35% */
+            color: #ffffff;
+        }
+        ::-moz-selection {
+            background: rgba(59, 130, 246, 0.35);
+            color: #ffffff;
+        }
+        input::selection, textarea::selection {
+            background: rgba(59, 130, 246, 0.45);
+            color: #ffffff;
+        }
+        input::-moz-selection, textarea::-moz-selection {
+            background: rgba(59, 130, 246, 0.45);
+            color: #ffffff;
+        }
+        /* Ensure caret is visible on dark inputs */
+        input, textarea { caret-color: #ffffff; }
+
         /* Animated hamburger icon */
         .hamburger {
             position: relative;
@@ -127,6 +147,16 @@
 
         @media (prefers-reduced-motion: reduce) {
             .hamburger .bar { transition: none; }
+        }
+
+        /* Number input: hide native spinners; we provide custom +/- */
+        input.stepper-input[type=number]::-webkit-outer-spin-button,
+        input.stepper-input[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input.stepper-input[type=number] {
+            -moz-appearance: textfield;
         }
     </style>
 </head>

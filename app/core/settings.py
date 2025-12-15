@@ -5,6 +5,8 @@ class CatalogConfig(BaseModel):
     id: str  # "watchly.rec", "watchly.theme", "watchly.item"
     name: str | None = None
     enabled: bool = True
+    min_items: int = Field(default=20, ge=1, le=20)
+    max_items: int = Field(default=24, ge=1, le=32)
 
 
 class UserSettings(BaseModel):
