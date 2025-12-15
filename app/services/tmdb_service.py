@@ -67,9 +67,7 @@ class TMDBService:
                 try:
                     return response.json()
                 except ValueError as e:
-                    logger.error(
-                        f"TMDB API returned invalid JSON for {endpoint}: {e}. Response: {response.text[:200]}"
-                    )
+                    logger.error(f"TMDB API returned invalid JSON for {endpoint}: {e}. Response: {response.text[:200]}")
                     return {}
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code

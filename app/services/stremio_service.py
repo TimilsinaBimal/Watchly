@@ -422,9 +422,7 @@ class StremioService:
             except httpx.RequestError as e:
                 attempts += 1
                 backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
-                logger.warning(
-                    f"Stremio POST {url} request error: {e}; retry {attempts}/{max_tries} in {backoff:.2f}s"
-                )
+                logger.warning(f"Stremio POST {url} request error: {e}; retry {attempts}/{max_tries} in {backoff:.2f}s")
                 await asyncio.sleep(backoff)
                 last_exc = e
                 continue

@@ -76,9 +76,7 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
 
         elif id.startswith("watchly.theme."):
-            recommendations = await recommendation_service.get_recommendations_for_theme(
-                theme_id=id, content_type=type
-            )
+            recommendations = await recommendation_service.get_recommendations_for_theme(theme_id=id, content_type=type)
             logger.info(f"Found {len(recommendations)} recommendations for theme {id}")
 
         else:

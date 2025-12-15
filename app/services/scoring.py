@@ -37,9 +37,7 @@ class ScoringService:
             source_type="loved" if item.is_loved else ("liked" if item.is_liked else "watched"),
         )
 
-    def calculate_score(
-        self, item: dict | StremioLibraryItem, is_loved: bool = False, is_liked: bool = False
-    ) -> float:
+    def calculate_score(self, item: dict | StremioLibraryItem, is_loved: bool = False, is_liked: bool = False) -> float:
         """
         Backwards compatible method to just get the float score.
         Accepts either a raw dict or a StremioLibraryItem.
