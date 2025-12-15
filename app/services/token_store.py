@@ -215,6 +215,9 @@ class TokenStore:
             else:
                 # If only key is provided, clear cache entirely to be safe
                 self.get_user_data.cache_clear()
+        except KeyError:
+            # The token was not in the cache, no action needed.
+            pass
         except Exception as e:
             logger.warning(f"Failed to invalidate user data cache during token deletion: {e}")
 
