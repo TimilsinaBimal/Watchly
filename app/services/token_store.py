@@ -149,11 +149,12 @@ class TokenStore:
         try:
             # bound method supports targeted invalidation by argument(s)
             self.get_user_data.cache_invalidate(token)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Targeted cache invalidation failed: {e}. Falling back to clearing cache.")
             try:
                 self.get_user_data.cache_clear()
-            except Exception as e:
-                logger.error(f"Error while clearing cache: {e}")
+            except Exception as e_clear:
+                logger.error(f"Error while clearing cache: {e_clear}")
 
         # Ensure we remove from negative cache so new value is read next time
         try:
