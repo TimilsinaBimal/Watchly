@@ -149,6 +149,9 @@ class TokenStore:
         try:
             # bound method supports targeted invalidation by argument(s)
             self.get_user_data.cache_invalidate(token)
+        except KeyError:
+            # The token was not in the cache, no action needed.
+            pass
         except Exception as e:
             logger.warning(f"Targeted cache invalidation failed: {e}. Falling back to clearing cache.")
             try:
