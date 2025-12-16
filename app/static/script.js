@@ -475,9 +475,9 @@ async function initializeFormSubmission() {
             const originalCatalog = catalogs.find(c => c.id === catalogId);
             if (originalCatalog) {
                 let minV = parseInt(originalCatalog.minItems ?? 20, 10);
-                let maxV = parseInt(originalCatalog.maxItems ?? 32, 10);
+                let maxV = parseInt(originalCatalog.maxItems ?? 24, 10);
                 if (Number.isNaN(minV)) minV = 20;
-                if (Number.isNaN(maxV)) maxV = 32;
+                if (Number.isNaN(maxV)) maxV = 24;
                 // Enforce server policy: min <= 20, max <= 32, and max >= min
                 minV = Math.max(1, Math.min(20, minV));
                 maxV = Math.max(minV, Math.min(32, maxV));
