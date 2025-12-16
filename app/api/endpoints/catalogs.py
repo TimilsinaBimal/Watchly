@@ -89,11 +89,12 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
             return DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
 
         min_items, max_items = _get_limits()
-        # Enforce caps: min_items <= 20, max_items <= 50 and max >= min
+        # Enforce caps: min_items <= 20, max_items <= 32 and max >= min
         try:
             min_items = max(1, min(DEFAULT_MIN_ITEMS, int(min_items)))
             max_items = max(min_items, min(DEFAULT_MAX_ITEMS, int(max_items)))
-        except Exception:
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid min/max items values. Falling back to defaults. min_items={min_items}, max_items={max_items}")
             min_items, max_items = DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
 
         # Handle item-based recommendations
