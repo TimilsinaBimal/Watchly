@@ -1,5 +1,6 @@
 from async_lru import alru_cache
 from fastapi import APIRouter, HTTPException
+from httpx import AsyncClient, HTTPStatusError
 from loguru import logger
 
 from app.services.tmdb_service import get_tmdb_service
@@ -29,3 +30,23 @@ async def get_languages():
     finally:
         # shared client: no explicit close
         pass
+
+
+@router.get("rpdb/validation")
+async def validate_rpdb_key(api_key: str) -> bool:
+    base_url = f"https://api.ratingposterdb.com/{api_key}/imdb/poster-default/tt22202452.jpg?fallback=true"  # pluribus
+
+    async with AsyncClient(timeout=10) as client:
+        try:
+            req = await client.get(base_url)
+            req.raise_for_status()
+            return True
+        except HTTPStatusError as e:
+            logger.warning(f"Invalid API Key: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error while validations rpdb key: {e}")
+        return False
+
+
+# @router.get("/top-posters/validate")
+# async def validate_top_posters_key(api_key: str):
