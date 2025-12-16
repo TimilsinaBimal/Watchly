@@ -687,9 +687,9 @@ function createCatalogItem(cat, index) {
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const sync = () => {
         let minV = parseInt(minEl.value || '20', 10);
-        let maxV = parseInt(maxEl.value || '32', 10);
+        let maxV = parseInt(maxEl.value || '24', 10);
         if (Number.isNaN(minV)) minV = 20;
-        if (Number.isNaN(maxV)) maxV = 32;
+        if (Number.isNaN(maxV)) maxV = 24;
         minV = clamp(minV, 1, 20);
         maxV = clamp(maxV, 1, 32);
         if (maxV < minV) maxV = minV;
