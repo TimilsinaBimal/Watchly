@@ -631,13 +631,13 @@ class RecommendationService:
         try:
             tr = await self.tmdb_service.get_trending(mtype, time_window="week")
             pool.extend(tr.get("results", [])[:60])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch trending items for padding: {e}")
         try:
             tr2 = await self.tmdb_service.get_top_rated(mtype)
             pool.extend(tr2.get("results", [])[:60])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch top rated items for padding: {e}")
 
         # Filter and dedup by tmdb id
         existing_tmdb = set()
