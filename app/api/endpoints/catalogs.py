@@ -19,6 +19,29 @@ SOURCE_ITEMS_LIMIT = 10
 router = APIRouter()
 
 
+def _clean_meta(meta: dict) -> dict:
+    """Return a sanitized Stremio meta object without internal fields.
+
+    Keeps only public keys and drops internal scoring/IDs/keywords/cast, etc.
+    """
+    allowed = {
+        "id",
+        "type",
+        "name",
+        "poster",
+        "background",
+        "description",
+        "releaseInfo",
+        "imdbRating",
+        "genres",
+        "runtime",
+    }
+    cleaned = {k: v for k, v in meta.items() if k in allowed}
+    # Drop empty values
+    cleaned = {k: v for k, v in cleaned.items() if v not in (None, "", [], {}, ())}
+    return cleaned
+
+
 @router.get("/{token}/catalog/{type}/{id}.json")
 async def get_catalog(type: str, id: str, response: Response, token: str):
     if not token:
@@ -62,8 +85,17 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         user_settings = UserSettings(**settings_dict) if settings_dict else get_default_settings()
         language = user_settings.language if user_settings else "en-US"
 
-        # Create services with credentials
-        stremio_service = StremioService(auth_key=credentials.get("authKey"))
+        # Create services with credentials (prefer fresh login with email/password)
+        if credentials.get("password") and credentials.get("email"):
+            stremio_service = StremioService(
+                username=credentials.get("email", ""), password=credentials.get("password", "")
+            )
+            try:
+                await stremio_service._login_for_auth_key()
+            except Exception:
+                stremio_service = StremioService(auth_key=credentials.get("authKey"))
+        else:
+            stremio_service = StremioService(auth_key=credentials.get("authKey"))
         # Fetch library once per request and reuse across recommendation paths
         library_items = await stremio_service.get_library_items()
         recommendation_service = RecommendationService(
@@ -95,7 +127,8 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
             max_items = max(min_items, min(DEFAULT_MAX_ITEMS, int(max_items)))
         except (ValueError, TypeError):
             logger.warning(
-                f"Invalid min/max items values. Falling back to defaults. min_items={min_items}, max_items={max_items}"
+                "Invalid min/max items values. Falling back to defaults. "
+                f"min_items={min_items}, max_items={max_items}"
             )
             min_items, max_items = DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
 
@@ -148,7 +181,8 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         logger.info(f"Returning {len(recommendations)} items for {type}")
         # Avoid serving stale results; revalidate on each request
         response.headers["Cache-Control"] = "no-cache"
-        return {"metas": recommendations}
+        cleaned = [_clean_meta(m) for m in recommendations]
+        return {"metas": cleaned}
 
     except HTTPException:
         raise

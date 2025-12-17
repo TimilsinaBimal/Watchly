@@ -26,6 +26,9 @@ const errorMessage = document.getElementById('errorMessage');
 const submitBtn = document.getElementById('submitBtn');
 const stremioLoginBtn = document.getElementById('stremioLoginBtn');
 const stremioLoginText = document.getElementById('stremioLoginText');
+const emailInput = document.getElementById('emailInput');
+const passwordInput = document.getElementById('passwordInput');
+const emailPwdContinueBtn = document.getElementById('emailPwdContinueBtn');
 const languageSelect = document.getElementById('languageSelect');
 const configNextBtn = document.getElementById('configNextBtn');
 const catalogsNextBtn = document.getElementById('catalogsNextBtn');
@@ -94,6 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeFormSubmission();
     initializeSuccessActions();
     initializeStremioLogin();
+    initializeEmailPasswordLogin();
+    initializePasswordToggles();
     initializeFooter();
     initializeKofi();
     initializeAnnouncement();
@@ -304,10 +309,17 @@ async function initializeStremioLogin() {
 }
 
 async function fetchStremioIdentity(authKey) {
+    const payload = {};
+    if (authKey) {
+        payload.authKey = authKey;
+    } else if (emailInput?.value && passwordInput?.value) {
+        payload.email = emailInput.value.trim();
+        payload.password = passwordInput.value;
+    }
     const res = await fetch('/tokens/stremio-identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authKey })
+        body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
@@ -380,6 +392,72 @@ async function fetchStremioIdentity(authKey) {
     }
 }
 
+// Email/Password login flow
+function initializeEmailPasswordLogin() {
+    if (!emailPwdContinueBtn) return;
+    emailPwdContinueBtn.addEventListener('click', async () => {
+        clearErrors();
+        showEmailPwdError('');
+        const email = emailInput?.value.trim();
+        const pwd = passwordInput?.value;
+        if (!email || !pwd) {
+            showEmailPwdError('Please enter email and password.');
+            return;
+        }
+        if (!isValidEmail(email)) {
+            showEmailPwdError('Please enter a valid email address.');
+            try { emailInput?.focus(); } catch (e) {}
+            return;
+        }
+        try {
+            setEmailPwdLoading(true);
+            // Reuse the shared identity handler to populate settings if account exists
+            await fetchStremioIdentity(null);
+            // Mark as logged-in (disables inputs and flips button to Logout)
+            setStremioLoggedInState('');
+            // Proceed to config
+            unlockNavigation();
+            switchSection('config');
+        } catch (e) {
+            showEmailPwdError(e.message || 'Login failed');
+            // Preserve email, clear only password
+            if (passwordInput) passwordInput.value = '';
+        } finally {
+            setEmailPwdLoading(false);
+        }
+    });
+}
+
+function setEmailPwdLoading(loading) {
+    try {
+        if (!emailPwdContinueBtn) return;
+        const t = emailPwdContinueBtn.querySelector('.btn-text');
+        const l = emailPwdContinueBtn.querySelector('.loader');
+        emailPwdContinueBtn.disabled = loading;
+        if (t) t.classList.toggle('hidden', loading);
+        if (l) l.classList.toggle('hidden', !loading);
+        if (emailInput) emailInput.disabled = loading;
+        if (passwordInput) passwordInput.disabled = loading;
+    } catch (e) { /* noop */ }
+}
+
+function showEmailPwdError(message) {
+    const el = document.getElementById('emailPwdError');
+    if (!el) return;
+    if (message && message.trim()) {
+        el.textContent = message;
+        el.classList.remove('hidden');
+    } else {
+        el.textContent = '';
+        el.classList.add('hidden');
+    }
+}
+
+function isValidEmail(value) {
+    // Basic email pattern sufficient for UI validation (server still verifies)
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function setStremioLoggedInState(authKey) {
     if (!stremioLoginBtn) return;
     stremioLoginText.textContent = 'Logout';
@@ -392,6 +470,16 @@ function setStremioLoggedInState(authKey) {
     // Pre-fill hidden AuthKey for submission
     const authKeyInput = document.getElementById('authKey');
     if (authKeyInput) authKeyInput.value = authKey;
+
+    // Hide email/password login block and its disclaimer; keep only Logout button visible
+    try {
+        const emailPwdSection = document.getElementById('emailPwdSection');
+        const disclaimer = document.getElementById('emailPwdDisclaimer');
+        const divider = document.getElementById('emailPwdDivider');
+        if (emailPwdSection) emailPwdSection.classList.add('hidden');
+        if (disclaimer) disclaimer.classList.add('hidden');
+        if (divider) divider.classList.add('hidden');
+    } catch (e) { /* noop */ }
 }
 
 function setStremioLoggedOutState() {
@@ -407,6 +495,27 @@ function setStremioLoggedOutState() {
 
     // Hide user profile
     hideUserProfile();
+
+    // Restore email/password login block visibility and clear inputs
+    try {
+        const emailPwdSection = document.getElementById('emailPwdSection');
+        const disclaimer = document.getElementById('emailPwdDisclaimer');
+        const divider = document.getElementById('emailPwdDivider');
+        if (emailPwdSection) emailPwdSection.classList.remove('hidden');
+        if (disclaimer) disclaimer.classList.remove('hidden');
+        if (divider) divider.classList.remove('hidden');
+        if (emailInput) { emailInput.value = ''; }
+        if (passwordInput) { passwordInput.value = ''; }
+        // Reset password toggle button state to hidden
+        const toggleBtn = document.querySelector('.toggle-btn[data-target="passwordInput"]');
+        const pwd = document.getElementById('passwordInput');
+        if (toggleBtn && pwd) {
+            pwd.type = 'password';
+            toggleBtn.setAttribute('title', 'Show');
+            toggleBtn.setAttribute('aria-label', 'Show password');
+            toggleBtn.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+        }
+    } catch (e) { /* noop */ }
 }
 
 // User Profile Functions
@@ -462,7 +571,9 @@ async function initializeFormSubmission() {
         e.preventDefault();
         clearErrors();
 
-        const sAuthKey = document.getElementById("authKey").value.trim();
+        const sAuthKey = (document.getElementById("authKey").value || '').trim();
+        const email = emailInput?.value.trim();
+        const password = passwordInput?.value;
         const language = languageSelect.value;
         const rpdbKey = document.getElementById("rpdbKey").value.trim();
         const excludedMovieGenres = Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value);
@@ -492,8 +603,8 @@ async function initializeFormSubmission() {
         });
 
         // Validation
-        if (!sAuthKey) {
-            showError("generalError", "Stremio authorization missing. Please login with Stremio.");
+        if (!sAuthKey && !(email && password)) {
+            showError("generalError", "Please login with Stremio or enter email & password.");
             switchSection('login');
             return;
         }
@@ -502,7 +613,9 @@ async function initializeFormSubmission() {
 
         try {
             const payload = {
-                authKey: sAuthKey,
+                authKey: sAuthKey || undefined,
+                email: email || undefined,
+                password: password || undefined,
                 catalogs: catalogsToSend,
                 language: language,
                 rpdb_key: rpdbKey,
@@ -584,9 +697,20 @@ function initializePasswordToggles() {
         btn.addEventListener('click', () => {
             const targetId = btn.getAttribute('data-target');
             const input = document.getElementById(targetId);
-            if (input) {
-                input.type = input.type === 'password' ? 'text' : 'password';
-                btn.textContent = input.type === 'password' ? 'Show' : 'Hide';
+            if (!input) return;
+            const isHidden = input.type === 'password';
+            input.type = isHidden ? 'text' : 'password';
+            // Swap icon and labels
+            if (isHidden) {
+                // Now visible: show eye-off icon
+                btn.setAttribute('title', 'Hide');
+                btn.setAttribute('aria-label', 'Hide password');
+                btn.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31"/><path d="M1 1l22 22"/><path d="M14.12 14.12A3 3 0 0 1 9.88 9.88"/></svg>';
+            } else {
+                // Now hidden: show eye icon
+                btn.setAttribute('title', 'Show');
+                btn.setAttribute('aria-label', 'Show password');
+                btn.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
             }
         });
     });
@@ -800,17 +924,19 @@ function initializeSuccessActions() {
 
             if (!confirmed) return;
 
-            const sAuthKey = document.getElementById("authKey").value.trim();
+            const sAuthKey = (document.getElementById("authKey").value || '').trim();
+            const email = emailInput?.value.trim();
+            const password = passwordInput?.value;
 
-            if (!sAuthKey) {
-                showError('generalError', "Please login with Stremio to delete your account.");
+            if (!sAuthKey && !(email && password)) {
+                showError('generalError', "Provide Stremio auth key or email & password to delete your account.");
                 switchSection('login');
                 return;
             }
 
             setLoading(true);
             try {
-                const payload = { authKey: sAuthKey };
+                const payload = { authKey: sAuthKey || undefined, email: email || undefined, password: password || undefined };
                 const res = await fetch('/tokens/', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!res.ok) throw new Error((await res.json()).detail || 'Failed to delete');
                 showToast('Account deleted successfully.', 'success');

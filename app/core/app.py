@@ -1,4 +1,3 @@
-import asyncio
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,22 +12,9 @@ from loguru import logger
 from app.api.main import api_router
 from app.services.catalog_updater import BackgroundCatalogUpdater
 from app.services.token_store import token_store
-from app.startup.migration import migrate_tokens
 
 from .config import settings
 from .version import __version__
-
-# class InterceptHandler(logging.Handler):
-#     def emit(self, record):
-#         try:
-#             level = logger.level(record.levelname).name
-#         except Exception:
-#             level = record.levelno
-
-#         logger.opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
-
-
-# logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
 
 # Global catalog updater instance
 catalog_updater: BackgroundCatalogUpdater | None = None
@@ -40,19 +26,6 @@ async def lifespan(app: FastAPI):
     Manage application lifespan events (startup/shutdown).
     """
     global catalog_updater
-
-    if settings.HOST_NAME.lower() != "https://1ccea4301587-watchly.baby-beamup.club":
-        task = asyncio.create_task(migrate_tokens())
-
-        # Ensure background exceptions are surfaced in logs
-        def _on_done(t: asyncio.Task):
-            try:
-                t.result()
-            except Exception as exc:
-                logger.error(f"migrate_tokens background task failed: {exc}")
-
-        task.add_done_callback(_on_done)
-
     # Startup
     if settings.AUTO_UPDATE_CATALOGS:
         catalog_updater = BackgroundCatalogUpdater()
