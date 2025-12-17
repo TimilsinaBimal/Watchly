@@ -6,7 +6,7 @@ from typing import Any
 import redis.asyncio as redis
 from async_lru import alru_cache
 from cachetools import TTLCache
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
@@ -134,8 +134,17 @@ class TokenStore:
         # Store user_id in payload for convenience
         storage_data["user_id"] = user_id
 
-        # if storage_data.get("authKey"):
-        #     storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
+        if storage_data.get("authKey"):
+            storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
+
+        # Securely store password if provided (primary login mode)
+        if storage_data.get("password"):
+            try:
+                storage_data["password"] = self.encrypt_token(storage_data["password"])
+            except Exception as exc:
+                logger.error(f"Password encryption failed for {redact_token(user_id)}: {exc}")
+                # Do not store plaintext passwords
+                raise RuntimeError("PASSWORD_ENCRYPT_FAILED")
 
         client = await self._get_client()
         json_str = json.dumps(storage_data)
@@ -193,11 +202,23 @@ class TokenStore:
 
         try:
             data = json.loads(data_raw)
-            if data.get("authKey"):
-                data["authKey"] = self.decrypt_token(data["authKey"])
-            return data
-        except (json.JSONDecodeError, InvalidToken):
+        except json.JSONDecodeError:
             return None
+
+        # Decrypt fields individually; do not fail entire record on decryption errors
+        if data.get("authKey"):
+            try:
+                data["authKey"] = self.decrypt_token(data["authKey"])
+            except Exception:
+                # Leave as-is (legacy plaintext or previous failure)
+                pass
+        if data.get("password"):
+            try:
+                data["password"] = self.decrypt_token(data["password"])
+            except Exception:
+                # require re-login path when needed
+                data["password"] = None
+        return data
 
     async def delete_token(self, token: str = None, key: str = None) -> None:
         if not token and not key:

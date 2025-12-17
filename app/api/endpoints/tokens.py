@@ -15,6 +15,8 @@ router = APIRouter(prefix="/tokens", tags=["tokens"])
 
 class TokenRequest(BaseModel):
     authKey: str | None = Field(default=None, description="Stremio auth key")
+    email: str | None = Field(default=None, description="Stremio account email")
+    password: str | None = Field(default=None, description="Stremio account password (stored securely)")
     catalogs: list[CatalogConfig] | None = Field(default=None, description="Optional catalog configuration")
     language: str = Field(default="en-US", description="Language for TMDB API")
     rpdb_key: str | None = Field(default=None, description="Optional RPDB API Key")
@@ -69,27 +71,44 @@ async def _verify_credentials_or_raise(payload: dict) -> str:
 
 @router.post("/", response_model=TokenResponse)
 async def create_token(payload: TokenRequest, request: Request) -> TokenResponse:
-    stremio_auth_key = payload.authKey.strip() if payload.authKey else None
+    # Prefer email+password if provided; else require authKey
+    email = (payload.email or "").strip() or None
+    password = (payload.password or "").strip() or None
+    stremio_auth_key = (payload.authKey or "").strip() or None
 
-    if not stremio_auth_key:
-        raise HTTPException(status_code=400, detail="Stremio auth key is required.")
+    if not (email and password) and not stremio_auth_key:
+        raise HTTPException(status_code=400, detail="Provide email+password or a valid Stremio auth key.")
 
-    # Remove quotes if present
-    if stremio_auth_key.startswith('"') and stremio_auth_key.endswith('"'):
+    # Remove quotes if present for authKey
+    if stremio_auth_key and stremio_auth_key.startswith('"') and stremio_auth_key.endswith('"'):
         stremio_auth_key = stremio_auth_key[1:-1].strip()
 
     rpdb_key = payload.rpdb_key.strip() if payload.rpdb_key else None
 
-    # 1. Fetch user info from Stremio (user_id and email)
-    stremio_service = StremioService(auth_key=stremio_auth_key)
-    try:
-        user_info = await stremio_service.get_user_info()
-        user_id = user_info["user_id"]
-        email = user_info.get("email", "")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to verify Stremio identity: {e}")
-    finally:
-        await stremio_service.close()
+    # 1. Establish a valid auth key and fetch user info
+    if email and password:
+        stremio_service = StremioService(username=email, password=password)
+        try:
+            # Always get a fresh key
+            fresh_key = await stremio_service._login_for_auth_key()
+            stremio_auth_key = fresh_key
+            user_info = await stremio_service.get_user_info()
+            user_id = user_info["user_id"]
+            resolved_email = user_info.get("email", email)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to verify Stremio identity: {e}")
+        finally:
+            await stremio_service.close()
+    else:
+        stremio_service = StremioService(auth_key=stremio_auth_key)
+        try:
+            user_info = await stremio_service.get_user_info()
+            user_id = user_info["user_id"]
+            resolved_email = user_info.get("email", "")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to verify Stremio identity: {e}")
+        finally:
+            await stremio_service.close()
 
     # 2. Check if user already exists
     token = token_store.get_token_from_user_id(user_id)
@@ -109,20 +128,30 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     is_new_account = not existing_data
 
     # 4. Verify Stremio connection
-    verified_auth_key = await _verify_credentials_or_raise({"authKey": stremio_auth_key})
+    # Already verified above. For authKey path, still validate to catch expired keys
+    if not (email and password):
+        verified_auth_key = await _verify_credentials_or_raise({"authKey": stremio_auth_key})
+    else:
+        verified_auth_key = stremio_auth_key
 
     # 5. Prepare payload to store
     payload_to_store = {
         "authKey": verified_auth_key,
-        "email": email,
+        "email": resolved_email or email or "",
         "settings": user_settings.model_dump(),
     }
+    # Store password if provided so we can refresh authKey later without user action
+    if email and password:
+        payload_to_store["password"] = password
 
     # 6. Store user data
     try:
         token = await token_store.store_user_data(user_id, payload_to_store)
         logger.info(f"[{redact_token(token)}] Account {'created' if is_new_account else 'updated'} for user {user_id}")
     except RuntimeError as exc:
+        # Surface a clear message when secure storage fails
+        if "PASSWORD_ENCRYPT_FAILED" in str(exc):
+            raise HTTPException(status_code=500, detail="Secure storage failed. Please log in again.") from exc
         raise HTTPException(status_code=500, detail="Server configuration error.") from exc
     except (redis_exceptions.RedisError, OSError) as exc:
         raise HTTPException(status_code=503, detail="Storage temporarily unavailable.") from exc
@@ -139,27 +168,38 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
 
 
 async def get_stremio_user_data(payload: TokenRequest) -> tuple[str, str]:
-    auth_key = payload.authKey.strip() if payload.authKey else None
+    email = (payload.email or "").strip() or None
+    password = (payload.password or "").strip() or None
+    auth_key = (payload.authKey or "").strip() or None
 
-    if not auth_key:
-        raise HTTPException(status_code=400, detail="Auth Key required.")
-
-    if auth_key.startswith('"') and auth_key.endswith('"'):
-        auth_key = auth_key[1:-1].strip()
-
-    stremio_service = StremioService(auth_key=auth_key)
-    try:
-        user_info = await stremio_service.get_user_info()
-        user_id = user_info["user_id"]
-        email = user_info.get("email", "")
-        return user_id, email
-    except Exception as e:
-        logger.error(f"Stremio identity check failed: {e}")
-        raise HTTPException(
-            status_code=400, detail="Failed to verify Stremio identity. Your auth key might be invalid or expired."
-        )
-    finally:
-        await stremio_service.close()
+    if email and password:
+        svc = StremioService(username=email, password=password)
+        try:
+            await svc._login_for_auth_key()
+            user_info = await svc.get_user_info()
+            return user_info["user_id"], user_info.get("email", email)
+        except Exception as e:
+            logger.error(f"Stremio identity check failed (email/password): {e}")
+            raise HTTPException(status_code=400, detail="Failed to verify Stremio identity with email/password.")
+        finally:
+            await svc.close()
+    elif auth_key:
+        if auth_key.startswith('"') and auth_key.endswith('"'):
+            auth_key = auth_key[1:-1].strip()
+        svc = StremioService(auth_key=auth_key)
+        try:
+            user_info = await svc.get_user_info()
+            return user_info["user_id"], user_info.get("email", "")
+        except Exception as e:
+            logger.error(f"Stremio identity check failed: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to verify Stremio identity. Your auth key might be invalid or expired.",
+            )
+        finally:
+            await svc.close()
+    else:
+        raise HTTPException(status_code=400, detail="Provide email+password or auth key.")
 
 
 @router.post("/stremio-identity", status_code=200)
