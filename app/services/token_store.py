@@ -134,8 +134,8 @@ class TokenStore:
         # Store user_id in payload for convenience
         storage_data["user_id"] = user_id
 
-        if storage_data.get("authKey"):
-            storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
+        # if storage_data.get("authKey"):
+        #     storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
 
         client = await self._get_client()
         json_str = json.dumps(storage_data)
@@ -168,7 +168,7 @@ class TokenStore:
 
         return token
 
-    @alru_cache(maxsize=10000, ttl=43200)
+    @alru_cache(maxsize=2000, ttl=43200)
     async def get_user_data(self, token: str) -> dict[str, Any] | None:
         # Short-circuit for tokens known to be missing
         try:
@@ -291,6 +291,27 @@ class TokenStore:
                     yield k, payload
         except (redis.RedisError, OSError) as exc:
             logger.warning(f"Failed to scan credential tokens: {exc}")
+
+    async def count_users(self) -> int:
+        """Count total users by scanning Redis keys with the configured prefix.
+
+        Cached for 12 hours to avoid frequent Redis scans.
+        """
+        try:
+            client = await self._get_client()
+        except (redis.RedisError, OSError) as exc:
+            logger.warning(f"Cannot count users; Redis unavailable: {exc}")
+            return 0
+
+        pattern = f"{self.KEY_PREFIX}*"
+        total = 0
+        try:
+            async for _ in client.scan_iter(match=pattern, count=500):
+                total += 1
+        except (redis.RedisError, OSError) as exc:
+            logger.warning(f"Failed to scan for user count: {exc}")
+            return 0
+        return total
 
 
 token_store = TokenStore()

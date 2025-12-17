@@ -183,7 +183,7 @@ async def check_stremio_identity(payload: TokenRequest):
 
 
 @router.delete("/", status_code=200)
-async def delete_token(payload: TokenRequest):
+async def delete_redis_token(payload: TokenRequest):
     """Delete a token based on Stremio auth key."""
     try:
         user_id, _ = await get_stremio_user_data(payload)
