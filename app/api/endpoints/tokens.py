@@ -89,10 +89,9 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     if email and password:
         stremio_service = StremioService(username=email, password=password)
         try:
-            # Always get a fresh key
-            fresh_key = await stremio_service._login_for_auth_key()
-            stremio_auth_key = fresh_key
-            user_info = await stremio_service.get_user_info()
+            # Centralized key retrieval (validates/refreshes)
+            stremio_auth_key = await stremio_service.get_auth_key()
+            user_info = await stremio_service.get_user_info(stremio_auth_key)
             user_id = user_info["user_id"]
             resolved_email = user_info.get("email", email)
         except Exception as e:
@@ -102,7 +101,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     else:
         stremio_service = StremioService(auth_key=stremio_auth_key)
         try:
-            user_info = await stremio_service.get_user_info()
+            user_info = await stremio_service.get_user_info(stremio_auth_key)
             user_id = user_info["user_id"]
             resolved_email = user_info.get("email", "")
         except Exception as e:
@@ -147,7 +146,12 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     # 6. Store user data
     try:
         token = await token_store.store_user_data(user_id, payload_to_store)
-        logger.info(f"[{redact_token(token)}] Account {'created' if is_new_account else 'updated'} for user {user_id}")
+        logger.info(
+            "[%s] Account %s for user %s",
+            redact_token(token),
+            "created" if is_new_account else "updated",
+            user_id,
+        )
     except RuntimeError as exc:
         # Surface a clear message when secure storage fails
         if "PASSWORD_ENCRYPT_FAILED" in str(exc):
@@ -175,12 +179,15 @@ async def get_stremio_user_data(payload: TokenRequest) -> tuple[str, str]:
     if email and password:
         svc = StremioService(username=email, password=password)
         try:
-            await svc._login_for_auth_key()
-            user_info = await svc.get_user_info()
+            auth_key = await svc.get_auth_key()
+            user_info = await svc.get_user_info(auth_key)
             return user_info["user_id"], user_info.get("email", email)
         except Exception as e:
             logger.error(f"Stremio identity check failed (email/password): {e}")
-            raise HTTPException(status_code=400, detail="Failed to verify Stremio identity with email/password.")
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to verify Stremio identity with email/password.",
+            )
         finally:
             await svc.close()
     elif auth_key:
@@ -188,7 +195,7 @@ async def get_stremio_user_data(payload: TokenRequest) -> tuple[str, str]:
             auth_key = auth_key[1:-1].strip()
         svc = StremioService(auth_key=auth_key)
         try:
-            user_info = await svc.get_user_info()
+            user_info = await svc.get_user_info(auth_key)
             return user_info["user_id"], user_info.get("email", "")
         except Exception as e:
             logger.error(f"Stremio identity check failed: {e}")

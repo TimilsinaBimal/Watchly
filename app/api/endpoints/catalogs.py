@@ -85,17 +85,12 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         user_settings = UserSettings(**settings_dict) if settings_dict else get_default_settings()
         language = user_settings.language if user_settings else "en-US"
 
-        # Create services with credentials (prefer fresh login with email/password)
-        if credentials.get("password") and credentials.get("email"):
-            stremio_service = StremioService(
-                username=credentials.get("email", ""), password=credentials.get("password", "")
-            )
-            try:
-                await stremio_service._login_for_auth_key()
-            except Exception:
-                stremio_service = StremioService(auth_key=credentials.get("authKey"))
-        else:
-            stremio_service = StremioService(auth_key=credentials.get("authKey"))
+        # Create a single service; get_auth_key() will validate/refresh as needed
+        stremio_service = StremioService(
+            username=credentials.get("email", ""),
+            password=credentials.get("password", ""),
+            auth_key=credentials.get("authKey"),
+        )
         # Fetch library once per request and reuse across recommendation paths
         library_items = await stremio_service.get_library_items()
         recommendation_service = RecommendationService(

@@ -96,17 +96,12 @@ async def _manifest_handler(response: Response, token: str):
 
     base_manifest = get_base_manifest(user_settings)
 
-    # Build dynamic catalogs using the already-fetched credentials
-    # Build Stremio service with fresh auth when possible
-    if creds.get("password") and creds.get("email"):
-        stremio_service = StremioService(username=creds.get("email", ""), password=creds.get("password", ""))
-        try:
-            await stremio_service._login_for_auth_key()
-        except Exception:
-            # fallback to stored authKey if login fails
-            stremio_service = StremioService(auth_key=creds.get("authKey"))
-    else:
-        stremio_service = StremioService(auth_key=creds.get("authKey"))
+    # Build dynamic catalogs using a single service; get_auth_key() handles validation/refresh
+    stremio_service = StremioService(
+        username=creds.get("email", ""),
+        password=creds.get("password", ""),
+        auth_key=creds.get("authKey"),
+    )
     try:
         fetched_catalogs = await build_dynamic_catalogs(
             stremio_service,

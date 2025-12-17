@@ -121,9 +121,43 @@ class StremioService:
             raise
 
     async def get_auth_key(self) -> str:
-        """Return the cached auth key."""
+        """Return a valid auth key; refresh transparently if expired and credentials exist."""
+        # If we have a key, validate it via GetUser
+        if self._auth_key:
+            try:
+                await self.get_user_info(self._auth_key)
+                return self._auth_key
+            except Exception:
+                # fall through to attempt refresh
+                pass
+
+        # Refresh using username/password if available
+        if self.username and self.password:
+            fresh_key = await self._login_for_auth_key()
+
+            # Persist refreshed key back to Redis, best-effort
+            try:
+                from app.services.token_store import token_store  # lazy import to avoid cycles
+
+                try:
+                    info = await self.get_user_info(fresh_key)
+                    uid = info.get("user_id")
+                except Exception:
+                    uid = None
+                if uid:
+                    existing = await token_store.get_user_data(uid)
+                    if existing:
+                        updated = existing.copy()
+                        updated["authKey"] = fresh_key
+                        await token_store.store_user_data(uid, updated)
+            except Exception:
+                pass
+
+            return fresh_key
+
+        # No credentials to refresh; if we still have no key, error
         if not self._auth_key:
-            raise ValueError("Stremio auth key is missing.")
+            raise ValueError("Stremio auth key is missing and cannot be refreshed.")
         return self._auth_key
 
     async def is_loved(self, auth_key: str, imdb_id: str, media_type: str) -> tuple[bool, bool]:
@@ -176,15 +210,16 @@ class StremioService:
             logger.warning(f"Failed to fetch liked items: {e}")
             return []
 
-    async def get_user_info(self) -> dict[str, str]:
-        """Fetch user ID and email using the auth key."""
-        if not self._auth_key:
+    async def get_user_info(self, auth_key: str | None = None) -> dict[str, str]:
+        """Fetch user ID and email using the provided auth key (or self._auth_key)."""
+        key = auth_key or self._auth_key
+        if not key:
             raise ValueError("Stremio auth key is missing.")
 
         url = f"{self.base_url}/api/getUser"
         payload = {
             "type": "GetUser",
-            "authKey": self._auth_key,
+            "authKey": key,
         }
 
         try:
@@ -212,7 +247,8 @@ class StremioService:
 
     async def get_user_email(self) -> str:
         """Fetch user email using the auth key."""
-        user_info = await self.get_user_info()
+        auth_key = await self.get_auth_key()
+        user_info = await self.get_user_info(auth_key)
         return user_info.get("email", "")
 
     async def get_library_items(self) -> dict[str, list[dict]]:
@@ -220,10 +256,6 @@ class StremioService:
         Fetch library items from Stremio once and return both watched and loved items.
         Returns a dict with 'watched' and 'loved' keys.
         """
-
-        if not self._auth_key:
-            logger.warning("Stremio auth key not configured")
-            return {"watched": [], "loved": []}
 
         try:
             # Get auth token
@@ -321,7 +353,11 @@ class StremioService:
 
                 added_items.append(item)
 
-            logger.info(f"Found {len(added_items)} added (unwatched) and {len(removed_items)} removed library items")
+            logger.info(
+                "Found %s added (unwatched) and %s removed library items",
+                len(added_items),
+                len(removed_items),
+            )
             # Prepare result
             result = {
                 "watched": watched_items,
@@ -413,7 +449,12 @@ class StremioService:
                     attempts += 1
                     backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
                     logger.warning(
-                        f"Stremio POST {url} failed with {status}; retry {attempts}/{max_tries} in" f" {backoff:.2f}s"
+                        "Stremio POST %s failed with %s; retry %s/%s in %.2fs",
+                        url,
+                        status,
+                        attempts,
+                        max_tries,
+                        backoff,
                     )
                     await asyncio.sleep(backoff)
                     last_exc = e
@@ -422,7 +463,14 @@ class StremioService:
             except httpx.RequestError as e:
                 attempts += 1
                 backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
-                logger.warning(f"Stremio POST {url} request error: {e}; retry {attempts}/{max_tries} in {backoff:.2f}s")
+                logger.warning(
+                    "Stremio POST %s request error: %s; retry %s/%s in %.2fs",
+                    url,
+                    e,
+                    attempts,
+                    max_tries,
+                    backoff,
+                )
                 await asyncio.sleep(backoff)
                 last_exc = e
                 continue
@@ -446,7 +494,12 @@ class StremioService:
                     attempts += 1
                     backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
                     logger.warning(
-                        f"Stremio GET {url} failed with {status}; retry {attempts}/{max_tries} in" f" {backoff:.2f}s"
+                        "Stremio GET %s failed with %s; retry %s/%s in %.2fs",
+                        url,
+                        status,
+                        attempts,
+                        max_tries,
+                        backoff,
                     )
                     await asyncio.sleep(backoff)
                     last_exc = e
@@ -455,7 +508,14 @@ class StremioService:
             except httpx.RequestError as e:
                 attempts += 1
                 backoff = (2 ** (attempts - 1)) + random.uniform(0, 0.25)
-                logger.warning(f"Stremio GET {url} request error: {e}; retry {attempts}/{max_tries} in {backoff:.2f}s")
+                logger.warning(
+                    "Stremio GET %s request error: %s; retry %s/%s in %.2fs",
+                    url,
+                    e,
+                    attempts,
+                    max_tries,
+                    backoff,
+                )
                 await asyncio.sleep(backoff)
                 last_exc = e
                 continue
