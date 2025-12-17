@@ -156,8 +156,8 @@ async def _manifest_handler(response: Response, token: str):
         response.headers["X-Base-Catalogs"] = str(len(get_base_manifest(user_settings)["catalogs"]))
         response.headers["X-Dynamic-Catalogs"] = str(len(fetched_catalogs))
         response.headers["X-Final-Catalogs"] = str(len(base_manifest.get("catalogs", [])))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to set debug headers: {e}")
 
     return base_manifest
 
