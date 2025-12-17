@@ -1,5 +1,6 @@
 from fastapi import HTTPException, Response
 from fastapi.routing import APIRouter
+from loguru import logger
 
 from app.core.config import settings
 from app.core.settings import UserSettings, get_default_settings
@@ -97,7 +98,14 @@ async def _manifest_handler(response: Response, token: str):
 
     # Build dynamic catalogs using the already-fetched credentials
     stremio_service = StremioService(auth_key=creds.get("authKey"))
-    fetched_catalogs = await build_dynamic_catalogs(stremio_service, user_settings or get_default_settings())
+    try:
+        fetched_catalogs = await build_dynamic_catalogs(
+            stremio_service,
+            user_settings or get_default_settings(),
+        )
+    except Exception as e:
+        logger.warning(f"Dynamic catalog build failed: {e}")
+        fetched_catalogs = []
 
     all_catalogs = [c.copy() for c in base_manifest["catalogs"]] + [c.copy() for c in fetched_catalogs]
 
@@ -107,7 +115,11 @@ async def _manifest_handler(response: Response, token: str):
     if user_settings and user_settings.language:
         for cat in all_catalogs:
             if cat.get("name"):
-                cat["name"] = await translation_service.translate(cat["name"], user_settings.language)
+                try:
+                    cat["name"] = await translation_service.translate(cat["name"], user_settings.language)
+                except Exception:
+                    # On translation failure, keep original name
+                    pass
                 translated_catalogs.append(cat)
     else:
         translated_catalogs = all_catalogs
@@ -116,7 +128,27 @@ async def _manifest_handler(response: Response, token: str):
         order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
         translated_catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
 
-    base_manifest["catalogs"] = translated_catalogs
+    # Safety fallback respecting user settings:
+    # - If the final list is empty AND user's base config allows 'watchly.rec',
+    #   expose the base recommendation rows (so users don't see an empty addon).
+    # - If the user explicitly disabled 'watchly.rec' (or disabled all rows),
+    #   DO NOT add fallback rows; keep it empty to honor their choice.
+    if not translated_catalogs:
+        fallback_base = get_base_manifest(user_settings)
+        if fallback_base.get("catalogs"):
+            base_manifest["catalogs"] = fallback_base["catalogs"]
+        else:
+            base_manifest["catalogs"] = []
+    else:
+        base_manifest["catalogs"] = translated_catalogs
+
+    # Debug headers (counts) to help diagnose empty-manifest issues in production
+    try:
+        response.headers["X-Base-Catalogs"] = str(len(get_base_manifest(user_settings)["catalogs"]))
+        response.headers["X-Dynamic-Catalogs"] = str(len(fetched_catalogs))
+        response.headers["X-Final-Catalogs"] = str(len(base_manifest.get("catalogs", [])))
+    except Exception:
+        pass
 
     return base_manifest
 
