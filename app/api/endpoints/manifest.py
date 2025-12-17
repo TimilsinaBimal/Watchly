@@ -126,9 +126,9 @@ async def _manifest_handler(response: Response, token: str):
             if cat.get("name"):
                 try:
                     cat["name"] = await translation_service.translate(cat["name"], user_settings.language)
-                except Exception:
-                    # On translation failure, keep original name
-                    pass
+                except Exception as e:
+                    # On translation failure, keep original name and log the error
+                    logger.warning(f"Failed to translate catalog name '{cat.get('name')}': {e}")
                 translated_catalogs.append(cat)
     else:
         translated_catalogs = all_catalogs
@@ -156,8 +156,8 @@ async def _manifest_handler(response: Response, token: str):
         response.headers["X-Base-Catalogs"] = str(len(get_base_manifest(user_settings)["catalogs"]))
         response.headers["X-Dynamic-Catalogs"] = str(len(fetched_catalogs))
         response.headers["X-Final-Catalogs"] = str(len(base_manifest.get("catalogs", [])))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to set debug headers: {e}")
 
     return base_manifest
 
