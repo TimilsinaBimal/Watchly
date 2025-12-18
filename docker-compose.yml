@@ -7,6 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    platform: linux/amd64  # Or linux/arm64, depending on your architecture
     container_name: watchly
     restart: unless-stopped
     ports:
