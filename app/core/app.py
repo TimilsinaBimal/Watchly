@@ -2,8 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from cachetools import TTLCache
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -40,9 +39,12 @@ async def lifespan(app: FastAPI):
     # Close shared token store Redis client
     try:
         await token_store.close()
-        logger.info("TokenStore Redis client closed")
+        from app.core.cache import cache
+
+        await cache.close()
+        logger.info("Redis client closed")
     except Exception as exc:
-        logger.warning(f"Failed to close TokenStore Redis client: {exc}")
+        logger.warning(f"Failed to close Redis client: {exc}")
 
 
 if settings.APP_ENV != "development":
@@ -61,38 +63,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# Simple IP-based rate limiter for repeated probes of missing tokens.
-# Tracks recent failure counts per IP to avoid expensive repeated requests.
-_ip_failure_cache: TTLCache = TTLCache(maxsize=10000, ttl=600)
-_IP_FAILURE_THRESHOLD = 8
-
-
-@app.middleware("http")
-async def block_missing_token_middleware(request: Request, call_next):
-    # Extract first path segment which is commonly the token in addon routes
-    path = request.url.path.lstrip("/")
-    seg = path.split("/", 1)[0] if path else ""
-    try:
-        # If token is known-missing, short-circuit and track IP failures
-        if seg and seg in token_store._missing_tokens:
-            ip = request.client.host if request.client else "unknown"
-            try:
-                _ip_failure_cache[ip] = _ip_failure_cache.get(ip, 0) + 1
-            except Exception:
-                pass
-            if _ip_failure_cache.get(ip, 0) > _IP_FAILURE_THRESHOLD:
-                return HTMLResponse(content="Too many requests", status_code=429)
-            return HTMLResponse(content="Invalid token", status_code=401)
-    except Exception:
-        pass
-    return await call_next(request)
+# Static file serving and route mounting follow below
 
 
 # Serve static files

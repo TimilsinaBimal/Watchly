@@ -7,8 +7,8 @@ from app.api.endpoints.manifest import get_config_id
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
-from app.services.recommendation_service import RecommendationService
-from app.services.stremio_service import StremioService
+from app.services.recommendation import RecommendationService
+from app.services.stremio import StremioService
 from app.services.token_store import token_store
 
 MAX_RESULTS = 50

@@ -9,53 +9,45 @@ from app.core.config import settings
 class GeminiService:
     def __init__(self, model: str = settings.DEFAULT_GEMINI_MODEL):
         self.model = model
-        self.client = None
-        if api_key := settings.GEMINI_API_KEY:
-            try:
-                self.client = genai.Client(api_key=api_key)
-            except Exception as e:
-                logger.warning(f"Failed to initialize Gemini client: {e}")
-        else:
-            logger.warning("GEMINI_API_KEY not set. Gemini features will be disabled.")
+        self.client = self._init_client()
 
-    @staticmethod
-    def get_prompt():
+    def _init_client(self):
+        if not settings.GEMINI_API_KEY:
+            logger.warning("GEMINI_API_KEY missing. Features disabled.")
+            return None
+        try:
+            return genai.Client(api_key=settings.GEMINI_API_KEY)
+        except Exception as e:
+            logger.warning(f"Gemini init failed: {e}")
+            return None
+
+    def get_system_prompt(self):
         return """
         You are a content catalog naming expert.
-        Given filters like genre, keywords, countries, or years, generate natural,
-        engaging catalog row titles that streaming platforms would use.
-
+        Generate short, engaging streaming catalog titles (2-5 words) given input filters.
         Examples:
         - Genre: Action, Country: South Korea → "Korean Action Thrillers"
         - Keyword: "space", Genre: Sci-Fi → "Space Exploration Adventures"
-        - Genre: Drama, Country: France → "Acclaimed French Cinema"
-        - Country: "USA" + Genre: "Sci-Fi and Fantasy" → "Hollywood Sci-Fi and Fantasy"
-        - Keywords: "revenge" + "martial arts" → "Revenge & Martial Arts"
-
-        Keep titles:
-        - Short (2-5 words)
-        - Natural and engaging
-        - Focused on what makes the content appealing
-        - Only return a single best title and nothing else.
+        Return ONLY the title.
         """
 
-    def generate_content(self, prompt: str) -> str:
-        system_prompt = self.get_prompt()
+    def generate_content(self, input_text: str) -> str:
         if not self.client:
-            logger.warning("Gemini client not initialized. Gemini features will be disabled.")
             return ""
         try:
+            # Note: Assuming synchronous client call based on original code usage
             response = self.client.models.generate_content(
                 model=self.model,
-                contents=system_prompt + "\n\n" + prompt,
+                contents=f"{self.get_system_prompt()}\n\n{input_text}",
             )
             return response.text.strip()
         except Exception as e:
-            logger.error(f"Error generating content: {e}")
+            logger.error(f"Generate content failed: {e}")
             return ""
 
     async def generate_content_async(self, prompt: str) -> str:
-        """Async wrapper to avoid blocking the event loop during network calls."""
+        if not self.client:
+            return ""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, lambda: self.generate_content(prompt))
 

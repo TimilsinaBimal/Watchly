@@ -1,9 +1,12 @@
+from typing import Generic, TypeVar
+
 from pydantic import BaseModel, Field
 
+T = TypeVar("T")
 
-class SparseVector(BaseModel):
 
-    values: dict[int, float] = Field(default_factory=dict)
+class BaseSparseVector(BaseModel, Generic[T]):
+    values: dict[T, float] = Field(default_factory=dict)
 
     def normalize(self):
         """Normalize values to 0-1 range based on the maximum value."""
@@ -15,30 +18,22 @@ class SparseVector(BaseModel):
             for k in self.values:
                 self.values[k] = round(self.values[k] / max_val, 4)
 
-    def get_top_features(self, limit: int = 5) -> list[tuple[int, float]]:
+    def get_top_features(self, limit: int = 5) -> list[tuple[T, float]]:
         """Return top N features by weight."""
         sorted_items = sorted(self.values.items(), key=lambda x: x[1], reverse=True)
         return sorted_items[:limit]
 
 
-class StringSparseVector(BaseModel):
-    """
-    Sparse vector for string-based features (like Country Codes).
-    """
+class SparseVector(BaseSparseVector[int]):
+    """Sparse vector for integer-based features (ID)."""
 
-    values: dict[str, float] = Field(default_factory=dict)
+    pass
 
-    def normalize(self):
-        if not self.values:
-            return
-        max_val = max(self.values.values())
-        if max_val > 0:
-            for k in self.values:
-                self.values[k] = round(self.values[k] / max_val, 4)
 
-    def get_top_features(self, limit: int = 5) -> list[tuple[str, float]]:
-        sorted_items = sorted(self.values.items(), key=lambda x: x[1], reverse=True)
-        return sorted_items[:limit]
+class StringSparseVector(BaseSparseVector[str]):
+    """Sparse vector for string-based features (Code/Tag)."""
+
+    pass
 
 
 class UserTasteProfile(BaseModel):

@@ -7,7 +7,7 @@ from redis import exceptions as redis_exceptions
 from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import CatalogConfig, UserSettings, get_default_settings
-from app.services.stremio_service import StremioService
+from app.services.stremio import StremioService
 from app.services.token_store import token_store
 
 router = APIRouter(prefix="/tokens", tags=["tokens"])

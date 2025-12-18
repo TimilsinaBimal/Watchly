@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.settings import UserSettings, get_default_settings
 from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
-from app.services.stremio_service import StremioService
+from app.services.stremio import StremioService
 from app.services.token_store import token_store
 from app.services.translation import translation_service
 

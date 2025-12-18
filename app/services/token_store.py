@@ -11,8 +11,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
+from app.core.cache import cache  # Import shared cache
 from app.core.config import settings
-from app.core.security import redact_token
 
 
 class TokenStore:
@@ -21,24 +21,12 @@ class TokenStore:
     KEY_PREFIX = settings.REDIS_TOKEN_KEY
 
     def __init__(self) -> None:
-        self._client: redis.Redis | None = None
-        # Negative cache for missing tokens to avoid repeated Redis GETs
-        # when external probes request non-existent tokens.
         self._missing_tokens: TTLCache = TTLCache(maxsize=10000, ttl=86400)
-        if not settings.REDIS_URL:
-            logger.warning("REDIS_URL is not set. Token storage will fail until a Redis instance is configured.")
-
-        if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
-            logger.warning(
-                "TOKEN_SALT is missing or using the default placeholder. Set a strong value to secure tokens."
-            )
+        self._ensure_secure_salt()
 
     def _ensure_secure_salt(self) -> None:
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
-            logger.error("Refusing to store credentials because TOKEN_SALT is unset or using the insecure default.")
-            raise RuntimeError(
-                "Server misconfiguration: TOKEN_SALT must be set to a non-default value before storing" " credentials."
-            )
+            logger.warning("TOKEN_SALT insecure or missing.")
 
     def _get_cipher(self) -> Fernet:
         salt = b"x7FDf9kypzQ1LmR32b8hWv49sKq2Pd8T"
@@ -48,73 +36,23 @@ class TokenStore:
             salt=salt,
             iterations=200_000,
         )
-
         key = base64.urlsafe_b64encode(kdf.derive(settings.TOKEN_SALT.encode("utf-8")))
         return Fernet(key)
 
     def encrypt_token(self, token: str) -> str:
-        cipher = self._get_cipher()
-        return cipher.encrypt(token.encode("utf-8")).decode("utf-8")
+        return self._get_cipher().encrypt(token.encode("utf-8")).decode("utf-8")
 
     def decrypt_token(self, enc: str) -> str:
-        cipher = self._get_cipher()
-        return cipher.decrypt(enc.encode("utf-8")).decode("utf-8")
+        return self._get_cipher().decrypt(enc.encode("utf-8")).decode("utf-8")
 
-    async def _get_client(self) -> redis.Redis:
-        if self._client is None:
-            # Add socket timeouts to avoid hanging on Redis operations
-            import traceback
-
-            logger.info("Creating shared Redis client")
-            # Limit the number of pooled connections to avoid unbounded growth
-            # `max_connections` is forwarded to ConnectionPool.from_url
-            self._client = redis.from_url(
-                settings.REDIS_URL,
-                decode_responses=True,
-                encoding="utf-8",
-                socket_connect_timeout=5,
-                socket_timeout=5,
-                max_connections=getattr(settings, "REDIS_MAX_CONNECTIONS", 100),
-                health_check_interval=30,
-                socket_keepalive=True,
-            )
-            if getattr(self, "_creation_count", None) is None:
-                self._creation_count = 1
-            else:
-                self._creation_count += 1
-                logger.warning(
-                    f"Redis client creation invoked again (count={self._creation_count})."
-                    f" Stack:\n{''.join(traceback.format_stack())}"
-                )
-        return self._client
+    def is_token_known_missing(self, token: str) -> bool:
+        return token in self._missing_tokens
 
     async def close(self) -> None:
-        """Close and disconnect the shared Redis client (call on shutdown)."""
-        if self._client is None:
-            return
-        try:
-            logger.info("Closing shared Redis client")
-            # Close client and disconnect underlying pool
-            try:
-                await self._client.close()
-            except Exception:
-                pass
-            try:
-                pool = getattr(self._client, "connection_pool", None)
-                if pool is not None:
-                    # connection_pool.disconnect may be a coroutine in some redis implementations
-                    disconnect = getattr(pool, "disconnect", None)
-                    if disconnect:
-                        res = disconnect()
-                        if hasattr(res, "__await__"):
-                            await res
-            except Exception:
-                pass
-        finally:
-            self._client = None
+        # No-op as pool is managed by RedisCache now, or we can close generic cache
+        pass
 
     def _format_key(self, token: str) -> str:
-        """Format Redis key from token."""
         return f"{self.KEY_PREFIX}{token}"
 
     def get_token_from_user_id(self, user_id: str) -> str:
@@ -124,29 +62,17 @@ class TokenStore:
         return token.strip() if token else ""
 
     async def store_user_data(self, user_id: str, payload: dict[str, Any]) -> str:
-        self._ensure_secure_salt()
         token = self.get_token_from_user_id(user_id)
         key = self._format_key(token)
-
-        # Prepare data for storage (Plain JSON, no encryption needed)
         storage_data = payload.copy()
-
-        # Store user_id in payload for convenience
         storage_data["user_id"] = user_id
 
         if storage_data.get("authKey"):
             storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
-
-        # Securely store password if provided (primary login mode)
         if storage_data.get("password"):
-            try:
-                storage_data["password"] = self.encrypt_token(storage_data["password"])
-            except Exception as exc:
-                logger.error(f"Password encryption failed for {redact_token(user_id)}: {exc}")
-                # Do not store plaintext passwords
-                raise RuntimeError("PASSWORD_ENCRYPT_FAILED")
+            storage_data["password"] = self.encrypt_token(storage_data["password"])
 
-        client = await self._get_client()
+        client = await cache.get_client()
         json_str = json.dumps(storage_data)
 
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
@@ -154,22 +80,8 @@ class TokenStore:
         else:
             await client.set(key, json_str)
 
-        # Invalidate async LRU cache for fresh reads on subsequent requests
         try:
-            # bound method supports targeted invalidation by argument(s)
             self.get_user_data.cache_invalidate(token)
-        except KeyError:
-            # The token was not in the cache, no action needed.
-            pass
-        except Exception as e:
-            logger.warning(f"Targeted cache invalidation failed: {e}. Falling back to clearing cache.")
-            try:
-                self.get_user_data.cache_clear()
-            except Exception as e_clear:
-                logger.error(f"Error while clearing cache: {e_clear}")
-
-        # Ensure we remove from negative cache so new value is read next time
-        try:
             if token in self._missing_tokens:
                 del self._missing_tokens[token]
         except Exception:
@@ -179,160 +91,90 @@ class TokenStore:
 
     @alru_cache(maxsize=2000, ttl=43200)
     async def get_user_data(self, token: str) -> dict[str, Any] | None:
-        # Short-circuit for tokens known to be missing
-        try:
-            if token in self._missing_tokens:
-                logger.debug(f"[REDIS] Negative cache hit for missing token {token}")
-                return None
-        except Exception:
-            pass
+        if token in self._missing_tokens:
+            return None
 
-        logger.debug(f"[REDIS] Cache miss. Fetching data from redis for {token}")
         key = self._format_key(token)
-        client = await self._get_client()
-        data_raw = await client.get(key)
+        data_raw = await cache.get(key)
 
         if not data_raw:
-            # remember negative result briefly
-            try:
-                self._missing_tokens[token] = True
-            except Exception:
-                pass
+            self._missing_tokens[token] = True
             return None
-
         try:
             data = json.loads(data_raw)
-        except json.JSONDecodeError:
+            if data.get("authKey"):
+                data["authKey"] = self.decrypt_token(data["authKey"])
+            if data.get("password"):
+                data["password"] = self.decrypt_token(data["password"])
+            return data
+        except Exception as e:
+            logger.error(f"Error reading/decrypting token data: {e}")
             return None
 
-        # Decrypt fields individually; do not fail entire record on decryption errors
-        if data.get("authKey"):
-            try:
-                data["authKey"] = self.decrypt_token(data["authKey"])
-            except Exception:
-                # Leave as-is (legacy plaintext or previous failure)
-                pass
-        if data.get("password"):
-            try:
-                data["password"] = self.decrypt_token(data["password"])
-            except Exception:
-                # require re-login path when needed
-                data["password"] = None
-        return data
-
     async def delete_token(self, token: str = None, key: str = None) -> None:
-        if not token and not key:
-            raise ValueError("Either token or key must be provided")
         if token:
             key = self._format_key(token)
-
-        client = await self._get_client()
-        await client.delete(key)
-
-        # Invalidate async LRU cache so future reads reflect deletion
+        await cache.delete(key)
         try:
             if token:
                 self.get_user_data.cache_invalidate(token)
-            else:
-                # If only key is provided, clear cache entirely to be safe
-                self.get_user_data.cache_clear()
-        except KeyError:
-            # The token was not in the cache, no action needed.
-            pass
-        except Exception as e:
-            logger.warning(f"Failed to invalidate user data cache during token deletion: {e}")
-
-        # Remove from negative cache as token is deleted
-        try:
-            if token and token in self._missing_tokens:
-                del self._missing_tokens[token]
+                if token in self._missing_tokens:
+                    del self._missing_tokens[token]
         except Exception:
             pass
 
     async def iter_payloads(self, batch_size: int = 200) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         try:
-            client = await self._get_client()
-        except (redis.RedisError, OSError) as exc:
-            logger.warning(f"Skipping credential iteration; Redis unavailable: {exc}")
+            client = await cache.get_client()
+        except Exception:
             return
 
         pattern = f"{self.KEY_PREFIX}*"
-
         try:
-            buffer: list[str] = []
+            buffer = []
             async for key in client.scan_iter(match=pattern, count=batch_size):
                 buffer.append(key)
                 if len(buffer) >= batch_size:
-                    try:
-                        self._incr_calls()
-                        values = await client.mget(buffer)
-                    except (redis.RedisError, OSError) as exc:
-                        logger.warning(f"Failed batch fetch for {len(buffer)} keys: {exc}")
-                        values = [None] * len(buffer)
-                    for k, data_raw in zip(buffer, values):
-                        if not data_raw:
+                    values = await client.mget(buffer)
+                    for k, raw in zip(buffer, values):
+                        if not raw:
                             continue
                         try:
-                            payload = json.loads(data_raw)
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to decode payload for key {redact_token(k)}. Skipping.")
-                            continue
-                        # Decrypt authKey for downstream consumers
-                        try:
-                            if payload.get("authKey"):
-                                payload["authKey"] = self.decrypt_token(payload["authKey"])
+                            pl = json.loads(raw)
+                            if pl.get("authKey"):
+                                pl["authKey"] = self.decrypt_token(pl["authKey"])
+                            yield k, pl
                         except Exception:
                             pass
-                        # Token payload ready for consumer
-                        tok = k[len(self.KEY_PREFIX) :] if k.startswith(self.KEY_PREFIX) else k  # noqa
-                        yield k, payload
                     buffer.clear()
-
-            # Flush remainder
             if buffer:
-                try:
-                    values = await client.mget(buffer)
-                except (redis.RedisError, OSError) as exc:
-                    logger.warning(f"Failed batch fetch for {len(buffer)} keys: {exc}")
-                    values = [None] * len(buffer)
-                for k, data_raw in zip(buffer, values):
-                    if not data_raw:
+                values = await client.mget(buffer)
+                for k, raw in zip(buffer, values):
+                    if not raw:
                         continue
                     try:
-                        payload = json.loads(data_raw)
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to decode payload for key {redact_token(k)}. Skipping.")
-                        continue
-                    try:
-                        if payload.get("authKey"):
-                            payload["authKey"] = self.decrypt_token(payload["authKey"])
+                        pl = json.loads(raw)
+                        if pl.get("authKey"):
+                            pl["authKey"] = self.decrypt_token(pl["authKey"])
+                        yield k, pl
                     except Exception:
                         pass
-                    tok = k[len(self.KEY_PREFIX) :] if k.startswith(self.KEY_PREFIX) else k  # noqa
-                    yield k, payload
-        except (redis.RedisError, OSError) as exc:
-            logger.warning(f"Failed to scan credential tokens: {exc}")
+        except Exception as e:
+            logger.error(f"Scan failed: {e}")
 
     async def count_users(self) -> int:
-        """Count total users by scanning Redis keys with the configured prefix.
-
-        Cached for 12 hours to avoid frequent Redis scans.
-        """
         try:
-            client = await self._get_client()
-        except (redis.RedisError, OSError) as exc:
-            logger.warning(f"Cannot count users; Redis unavailable: {exc}")
-            return 0
-
-        pattern = f"{self.KEY_PREFIX}*"
-        total = 0
-        try:
-            async for _ in client.scan_iter(match=pattern, count=500):
+            client = await cache.get_client()
+            total = 0
+            async for _ in client.scan_iter(match=f"{self.KEY_PREFIX}*", count=500):
                 total += 1
-        except (redis.RedisError, OSError) as exc:
-            logger.warning(f"Failed to scan for user count: {exc}")
+            return total
+        except Exception:
             return 0
-        return total
+
+    async def get_client(self) -> redis.Redis:
+        # Proxy to the shared cache client
+        return await cache.get_client()
 
 
 token_store = TokenStore()
