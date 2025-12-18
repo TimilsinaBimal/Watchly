@@ -48,7 +48,7 @@ class DiscoveryEngine:
         top_countries = profile.get_top_countries(limit=2) if use_countries else []
         top_year = profile.get_top_year(limit=1) if use_year else []
 
-        if not top_genres and not top_keywords and not top_cast:
+        if not top_genres and not top_keywords and not top_cast and not top_crew:
             # Fallback if profile is empty
             return []
 
@@ -97,32 +97,32 @@ class DiscoveryEngine:
                 tasks.append(self._fetch_discovery(content_type, params_rating_kw))
 
         # Query 3: Top Actors
+        is_tv = content_type in ("tv", "series")
         for actor in top_cast:
             actor_id = actor[0]
             params_actor = {
-                "with_cast": str(actor_id),
                 "sort_by": "popularity.desc",
                 "vote_count.gte": 500,
                 **base_params,
             }
+            if is_tv:
+                params_actor["with_people"] = str(actor_id)
+            else:
+                params_actor["with_cast"] = str(actor_id)
             tasks.append(self._fetch_discovery(content_type, params_actor))
-            # params_rating = {
-            #     "with_cast": str(actor_id),
-            #     "sort_by": "vote_average.desc",
-            #     "vote_count.gte": 500,
-            #     **base_params,
-            # }
-            # tasks.append(self._fetch_discovery(content_type, params_rating))
 
         # Query 4: Top Director
         if top_crew:
             director_id = top_crew[0][0]
             params_director = {
-                "with_crew": str(director_id),
-                "sort_by": "vote_average.desc",  # Directors imply quality preference
+                "sort_by": "vote_average.desc",
                 "vote_count.gte": 500,
                 **base_params,
             }
+            if is_tv:
+                params_director["with_people"] = str(director_id)
+            else:
+                params_director["with_crew"] = str(director_id)
             tasks.append(self._fetch_discovery(content_type, params_director))
 
         # Query 5: Top Countries
@@ -135,28 +135,24 @@ class DiscoveryEngine:
                 **base_params,
             }
             tasks.append(self._fetch_discovery(content_type, params_country))
-            # params_rating = {
-            #     "with_origin_country": country_ids,
-            #     "sort_by": "vote_average.desc",
-            #     "vote_count.gte": 300,
-            #     **base_params,
-            # }
-            # tasks.append(self._fetch_discovery(content_type, params_rating))
 
         # query 6: Top year
         if top_year:
             year = top_year[0][0]
-            # we store year in 10 years bucket
             start_year = f"{year}-01-01"
             end_year = f"{int(year) + 9}-12-31"
-            params_rating = {
-                "primary_release_date.gte": start_year,
-                "primary_release_date.lte": end_year,
+            params_year = {
                 "sort_by": "vote_average.desc",
                 "vote_count.gte": 500,
                 **base_params,
             }
-            tasks.append(self._fetch_discovery(content_type, params_rating))
+            if is_tv:
+                params_year["first_air_date.gte"] = start_year
+                params_year["first_air_date.lte"] = end_year
+            else:
+                params_year["primary_release_date.gte"] = start_year
+                params_year["primary_release_date.lte"] = end_year
+            tasks.append(self._fetch_discovery(content_type, params_year))
 
         # 3. Execute Phase 1
         results_batches = await asyncio.gather(*tasks, return_exceptions=True)
@@ -203,18 +199,17 @@ class DiscoveryEngine:
                 )
             for actor in top_cast[:1]:
                 actor_id = actor[0]
-                tasks2.append(
-                    self._fetch_discovery(
-                        content_type,
-                        {
-                            "with_cast": str(actor_id),
-                            "sort_by": "vote_average.desc",
-                            "vote_count.gte": 400,
-                            "page": 2,
-                            **base_params,
-                        },
-                    )
-                )
+                params_actor_2 = {
+                    "sort_by": "vote_average.desc",
+                    "vote_count.gte": 400,
+                    "page": 2,
+                    **base_params,
+                }
+                if is_tv:
+                    params_actor_2["with_people"] = str(actor_id)
+                else:
+                    params_actor_2["with_cast"] = str(actor_id)
+                tasks2.append(self._fetch_discovery(content_type, params_actor_2))
 
             if tasks2:
                 results_batches2 = await asyncio.gather(*tasks2, return_exceptions=True)
