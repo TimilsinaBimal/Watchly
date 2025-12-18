@@ -63,6 +63,11 @@ class StremioLibraryService:
             added: list[dict] = []
             removed: list[dict] = []
 
+            # Create sets for faster lookup
+            loved_set = set(loved_movies + loved_series)
+            liked_set = set(liked_movies + liked_series)
+            all_loved_ids = loved_set.union(liked_set)
+
             for item in all_raw_items:
                 # Basic validation
                 if item.get("type") not in ["movie", "series"]:
@@ -74,7 +79,7 @@ class StremioLibraryService:
                 # Check Watched status
                 state = item.get("state", {}) or {}
                 times_watched = int(state.get("timesWatched") or 0)
-                flagged_watched = int(state.get("flaggedWatched") or 0)
+                flagged_watched = int(state.get("flagged_watched") or state.get("flaggedWatched") or 0)
                 duration = int(state.get("duration") or 0)
                 time_watched = int(state.get("timeWatched") or 0)
 
@@ -82,16 +87,28 @@ class StremioLibraryService:
                 is_watched = times_watched > 0 or flagged_watched > 0 or is_completion_high
 
                 if is_watched:
+                    # Set flags for recommendation engine compatibility
+                    is_item_loved = False
+                    if item_id in loved_set:
+                        item["_is_loved"] = True
+                        is_item_loved = True
+                    if item_id in liked_set:
+                        item["_is_liked"] = True
+                        is_item_loved = True
+
                     watched.append(item)
-                    if item_id in all_loved_ids:
+                    if is_item_loved:
                         loved.append(item)
-                elif item_id in all_loved_ids:
-                    # Rare but possible: loved without being "watched" by Stremio's metric
-                    loved.append(item)
-                elif not item.get("removed") and not item.get("temp"):
-                    added.append(item)
-                elif item.get("removed"):
-                    removed.append(item)
+                else:
+                    # Item is NOT considered watched
+                    if item_id in all_loved_ids:
+                        # Loved but not watched - in legacy code, these were EXCLUDED from the loved list
+                        # and EXCLUDED from the added list (unless it's in all_raw_items check below)
+                        pass
+                    elif not item.get("removed") and not item.get("temp"):
+                        added.append(item)
+                    elif item.get("removed"):
+                        removed.append(item)
 
             # 4. Sort watched items by recency
             def sort_by_recency(x: dict):
