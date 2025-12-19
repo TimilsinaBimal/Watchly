@@ -41,6 +41,9 @@ class TMDBService:
     async def get_top_rated(self, media_type: str, page: int = 1) -> dict[str, Any]:
         return await self._service.get_top_rated(media_type, page)
 
+    async def get_keyword_details(self, keyword_id: int) -> dict[str, Any]:
+        return await self._service.get_keyword_details(keyword_id)
+
 
 @functools.lru_cache(maxsize=16)
 def get_tmdb_service(language: str = "en-US") -> TMDBService:

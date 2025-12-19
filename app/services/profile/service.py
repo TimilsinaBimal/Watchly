@@ -47,35 +47,43 @@ class UserProfileService:
         }
 
         async def _process_item(item: ScoredItem):
-            # 1. Filter by content type (movie/series)
-            if content_type and item.item.type != content_type:
+            try:
+                # 1. Filter by content type (movie/series)
+                if content_type and item.item.type != content_type:
+                    return None
+
+                # 2. Resolve TMDB ID
+                tmdb_id = await self._resolve_tmdb_id(item.item.id)
+                if not tmdb_id:
+                    return None
+
+                # 3. Fetch detailed metadata
+                meta = await self._fetch_full_metadata(tmdb_id, item.item.type)
+                if not meta:
+                    return None
+
+                # 4. Vectorize item
+                item_vector = ProfileVectorizer.vectorize_item(meta)
+                if not item_vector:
+                    return None
+
+                # 5. Scale by interest score
+                interest_weight = item.score / 100.0
+
+                return item_vector, interest_weight
+            except Exception as e:
+                from loguru import logger
+
+                logger.warning(f"Failed to process profile item {item.item.id}: {e}")
                 return None
-
-            # 2. Resolve TMDB ID
-            tmdb_id = await self._resolve_tmdb_id(item.item.id)
-            if not tmdb_id:
-                return None
-
-            # 3. Fetch detailed metadata
-            meta = await self._fetch_full_metadata(tmdb_id, item.item.type)
-            if not meta:
-                return None
-
-            # 4. Vectorize item
-            item_vector = ProfileVectorizer.vectorize_item(meta)
-
-            # 5. Scale by interest score
-            interest_weight = item.score / 100.0
-
-            return item_vector, interest_weight
 
         # Process all items in parallel
         tasks = [_process_item(item) for item in scored_items]
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Merge results into the profile
         for res in results:
-            if res:
+            if res and not isinstance(res, Exception):
                 item_vector, weight = res
                 self._merge_vector(profile_data, item_vector, weight, excluded_genres)
 

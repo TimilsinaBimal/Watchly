@@ -23,6 +23,8 @@ class TMDBClient(BaseClient):
     async def _request(self, method: str, url: str, **kwargs) -> Any:
         """Override request to always include API key and language."""
         params = kwargs.get("params", {})
+        if params is None:
+            params = {}
         params["api_key"] = self.api_key
         params["language"] = self.language
         kwargs["params"] = params

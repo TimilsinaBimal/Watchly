@@ -40,11 +40,11 @@ class RecommendationService:
             content_type=content_type, source_items_limit=source_items_limit, max_results=max_results
         )
 
-    async def get_recommendations_for_item(self, item_id: str) -> list[dict]:
+    async def get_recommendations_for_item(self, item_id: str, media_type: str = "movie") -> list[dict]:
         """
         Get recommendations for a specific item by identifier.
         """
-        return await self._engine.get_recommendations_for_item(item_id)
+        return await self._engine.get_recommendations_for_item(item_id, media_type)
 
     async def get_recommendations_for_theme(self, theme_id: str, content_type: str, limit: int = 20) -> list[dict]:
         """

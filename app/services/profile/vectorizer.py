@@ -103,45 +103,63 @@ class ProfileVectorizer:
         """
         Converts raw TMDB metadata into a sparse vector format.
         """
-        # Extract keywords
-        keywords = meta.get("keywords", {}).get("keywords", [])
-        if not keywords:
-            keywords = meta.get("keywords", {}).get("results", [])
+        if not meta or not isinstance(meta, dict):
+            return {}
 
-        # Extract countries
+        # 1. Robust Keyword Extraction (Movies use 'keywords', TV uses 'results' key)
+        keywords_obj = meta.get("keywords")
+        raw_keywords = []
+        if isinstance(keywords_obj, dict):
+            raw_keywords = keywords_obj.get("keywords") or keywords_obj.get("results") or []
+        elif isinstance(keywords_obj, list):
+            raw_keywords = keywords_obj
+
+        # 2. Extract countries
         countries = []
-        if "production_countries" in meta:
-            countries = [c.get("iso_3166_1") for c in meta.get("production_countries", []) if c.get("iso_3166_1")]
-        elif "origin_country" in meta:
-            countries = meta.get("origin_country", [])
+        prod_countries = meta.get("production_countries")
+        if isinstance(prod_countries, list):
+            countries = [c.get("iso_3166_1") for c in prod_countries if isinstance(c, dict) and c.get("iso_3166_1")]
 
-        # Genres
+        if not countries:
+            origin = meta.get("origin_country")
+            if isinstance(origin, list):
+                countries = origin
+            elif isinstance(origin, str):
+                countries = [origin]
+
+        # 3. Genres
         genre_ids = meta.get("genre_ids") or []
         if not genre_ids:
-            genres_src = meta.get("genres") or []
-            if genres_src and isinstance(genres_src, list) and isinstance(genres_src[0], dict):
+            genres_src = meta.get("genres")
+            if isinstance(genres_src, list):
                 genre_ids = [g.get("id") for g in genres_src if isinstance(g, dict) and g.get("id") is not None]
 
-        # Topics (Title + Overview + Keyword Names)
+        # 4. Topics (Title + Overview + Keyword Names)
         title_text = meta.get("name") or meta.get("title") or meta.get("original_title") or ""
         overview_text = meta.get("description") or meta.get("overview") or ""
-        kw_names = [k.get("name") for k in keywords if isinstance(k, dict) and k.get("name")]
+
+        kw_names = []
+        if isinstance(raw_keywords, list):
+            kw_names = [k.get("name") for k in raw_keywords if isinstance(k, dict) and k.get("name")]
 
         topics_tokens: list[str] = []
-        topics_tokens.extend(cls.tokenize(title_text))
-        topics_tokens.extend(cls.tokenize(overview_text))
+        if title_text:
+            topics_tokens.extend(cls.tokenize(title_text))
+        if overview_text:
+            topics_tokens.extend(cls.tokenize(overview_text))
         for nm in kw_names:
             topics_tokens.extend(cls.tokenize(nm))
 
-        # Build Vector
-        cast = meta.get("credits", {}).get("cast", [])
-        crew = meta.get("credits", {}).get("crew", [])
+        # 5. Build Final Vector
+        credits = meta.get("credits") or {}
+        cast = credits.get("cast") or []
+        crew = credits.get("crew") or []
 
         vector = {
-            "genres": genre_ids,
-            "keywords": [k["id"] for k in keywords if isinstance(k, dict) and "id" in k],
-            "cast": [c["id"] for c in cast[:3] if isinstance(c, dict) and "id" in c],
-            "crew": [c["id"] for c in crew if isinstance(c, dict) and c.get("job") == "Director"],
+            "genres": [int(g) for g in genre_ids if g is not None],
+            "keywords": [int(k["id"]) for k in raw_keywords if isinstance(k, dict) and k.get("id") is not None],
+            "cast": [int(c["id"]) for c in cast[:5] if isinstance(c, dict) and c.get("id") is not None],
+            "crew": [int(c["id"]) for c in crew if isinstance(c, dict) and c.get("job") == "Director"],
             "year": None,
             "countries": countries,
             "topics": topics_tokens,
@@ -149,7 +167,7 @@ class ProfileVectorizer:
 
         # Year Bucket (Decades)
         date_str = meta.get("release_date") or meta.get("first_air_date")
-        if date_str:
+        if date_str and isinstance(date_str, str):
             try:
                 year = int(date_str[:4])
                 vector["year"] = (year // 10) * 10

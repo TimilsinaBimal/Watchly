@@ -181,7 +181,7 @@ class RecommendationEngine:
 
         return final_items
 
-    async def get_recommendations_for_item(self, item_id: str) -> list[dict[str, Any]]:
+    async def get_recommendations_for_item(self, item_id: str, media_type: str = "movie") -> list[dict[str, Any]]:
         """Get recommendations for a specific item, strictly excluding watched content."""
         watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
             self.stremio_service, self._library_data
@@ -196,20 +196,10 @@ class RecommendationEngine:
             except Exception:
                 pass
 
-        # Detect media type from ID
-        mtype = "movie"
-        # tmdb_id = None
-        if item_id.startswith("tt"):
-            tmdb_id, detected_type = await self.tmdb_service.find_by_imdb_id(item_id)
-            if detected_type:
-                mtype = detected_type
-        # elif item_id.startswith("tmdb:"):
-        #     try:
-        #         tmdb_id = int(item_id.split(":")[1])
-        #     except Exception:
-        #         pass
+        # Use the provided media_type (series/movie -> tv/movie)
+        mtype = "tv" if media_type in ("tv", "series") else "movie"
 
-        # Fetch candidates using detected type
+        # Fetch candidates using the known type
         candidates = await self._fetch_raw_recommendations(item_id, mtype, limit=40)
 
         # Build whitelist
@@ -502,8 +492,10 @@ class RecommendationEngine:
             elif part.startswith("y"):
                 try:
                     year = int(part[1:])
-                    params["primary_release_date.gte"] = f"{year}-01-01"
-                    params["primary_release_date.lte"] = f"{year+9}-12-31"
+                    is_tv = content_type in ("tv", "series")
+                    prefix = "first_air_date" if is_tv else "primary_release_date"
+                    params[f"{prefix}.gte"] = f"{year}-01-01"
+                    params[f"{prefix}.lte"] = f"{year+9}-12-31"
                 except Exception:
                     pass
             elif part == "sort-vote":

@@ -89,6 +89,11 @@ class TMDBService:
         params.update(kwargs)
         return await self.client.get(f"/discover/{mt}", params=params)
 
+    @alru_cache(maxsize=1000)
+    async def get_keyword_details(self, keyword_id: int) -> dict[str, Any]:
+        """Get details of a specific keyword."""
+        return await self.client.get(f"/keyword/{keyword_id}")
+
     @alru_cache(maxsize=500, ttl=3600)  # 1 hour
     async def get_trending(self, media_type: str, time_window: str = "week", page: int = 1) -> dict[str, Any]:
         """Get trending content."""

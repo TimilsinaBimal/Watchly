@@ -47,11 +47,16 @@ def get_base_manifest(user_settings: UserSettings | None = None):
         "name": settings.ADDON_NAME,
         "description": "Movie and series recommendations based on your Stremio library",
         "logo": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/app/static/logo.png",
-        "resources": [{"name": "catalog", "types": ["movie", "series"], "idPrefixes": ["tt"]}],
+        "background": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/app/static/cover.png",
+        "resources": ["catalog"],
         "types": ["movie", "series"],
         "idPrefixes": ["tt"],
         "catalogs": catalogs,
         "behaviorHints": {"configurable": True, "configurationRequired": False},
+        "stremioAddonsConfig": {
+            "issuer": "https://stremio-addons.net",
+            "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..ycLGL5WUjggv7PxKPqMLYQ.Y_cD-8wqoXqENdXbFmR1-Si39NtqBlsxEDdrEO0deciilBsWWAlPIglx85XFE4ScSfSqzNxrCZUjHjWWIb2LdcFuvE1RVBrFsUBXgbs5eQknnEL617pFtCWNh0bi37Xv.zYhJ87ZqcYZMRfxLY0bSGQ",  # noqa
+        },
     }
 
 

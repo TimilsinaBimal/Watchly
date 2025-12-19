@@ -1,5 +1,6 @@
 import random
 
+from loguru import logger
 from pydantic import BaseModel
 
 from app.models.profile import UserTasteProfile
@@ -166,7 +167,8 @@ class RowGeneratorService:
 
     async def _get_keyword_name(self, keyword_id: int) -> str | None:
         try:
-            data = await self.tmdb_service._make_request(f"/keyword/{keyword_id}")
+            data = await self.tmdb_service.get_keyword_details(keyword_id)
             return data.get("name")
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to fetch keyword name: {e}", exc_info=True)
             return None

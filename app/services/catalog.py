@@ -19,6 +19,7 @@ class DynamicCatalogService:
         self.scoring_service = ScoringService()
         self.user_profile_service = UserProfileService(language=language)
         self.row_generator = RowGeneratorService(tmdb_service=self.tmdb_service)
+        self.HISTORY_LIMIT = 30
 
     @staticmethod
     def normalize_type(type_):
@@ -60,8 +61,11 @@ class DynamicCatalogService:
         scored_objects = []
 
         # Use only recent history for freshness
-        sorted_history = sorted(unique_items.values(), key=lambda x: x.get("_mtime", ""), reverse=True)
-        recent_history = sorted_history[:30]
+        # sort using lastWatched...
+        sorted_history = sorted(
+            unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched", ""), reverse=True
+        )
+        recent_history = sorted_history[: self.HISTORY_LIMIT]
 
         for item_data in recent_history:
             scored_obj = self.scoring_service.process_item(item_data)

@@ -133,7 +133,7 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
                 recommendation_service.per_item_limit = max_items
             except Exception:
                 pass
-            recommendations = await recommendation_service.get_recommendations_for_item(item_id=id)
+            recommendations = await recommendation_service.get_recommendations_for_item(item_id=id, media_type=type)
             if len(recommendations) < min_items:
                 recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
@@ -152,7 +152,9 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
                 recommendation_service.per_item_limit = max_items
             except Exception:
                 pass
-            recommendations = await recommendation_service.get_recommendations_for_item(item_id=item_id)
+            recommendations = await recommendation_service.get_recommendations_for_item(
+                item_id=item_id, media_type=type
+            )
             if len(recommendations) < min_items:
                 recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
