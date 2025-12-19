@@ -38,6 +38,11 @@ repos:
     hooks:
       - id: flake8
 
+  - repo: https://github.com/google/yamlfmt
+    rev: v0.11.0
+    hooks:
+      - id: yamlfmt
+
 # sets up .pre-commit-ci.yaml to ensure pre-commit dependencies stay up to date
 ci:
   autoupdate_schedule: weekly
