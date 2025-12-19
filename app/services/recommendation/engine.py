@@ -183,6 +183,9 @@ class RecommendationEngine:
 
     async def get_recommendations_for_item(self, item_id: str) -> list[dict[str, Any]]:
         """Get recommendations for a specific item, strictly excluding watched content."""
+        if self._library_data is None:
+            self._library_data = await self.stremio_service.get_library_items()
+
         watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
             self.stremio_service, self._library_data
         )
@@ -214,7 +217,7 @@ class RecommendationEngine:
 
         # Build whitelist
         stremio_mtype = "series" if mtype == "tv" else "movie"
-        whitelist = self._whitelist_cache.get(stremio_mtype, set())
+        whitelist = await self._get_genre_whitelist(stremio_mtype)
 
         # Process candidates
         filtered = []
@@ -226,9 +229,16 @@ class RecommendationEngine:
                 continue
             filtered.append(it)
 
+        # Freshness injection for related items (threshold 40)
+        excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, stremio_mtype)
+        if len(filtered) < 40:
+            tmp_pool = {it["id"]: it for it in filtered}
+            await self._inject_freshness(tmp_pool, mtype, watched_tmdb, set(excluded_ids), whitelist, 20)
+            filtered = list(tmp_pool.values())
+
         # Enrichment
         enriched = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, filtered, stremio_mtype, target_count=20, user_settings=self.user_settings
+            self.tmdb_service, filtered, stremio_mtype, target_count=40, user_settings=self.user_settings
         )
 
         # Strict final filtering
@@ -238,6 +248,10 @@ class RecommendationEngine:
                 continue
             if it.get("_external_ids", {}).get("imdb_id") in watched_imdb:
                 continue
+            # apply whitelist again
+            if not RecommendationFiltering.passes_top_genre_whitelist(it.get("genre_ids"), whitelist):
+                continue
+
             it.pop("_external_ids", None)
             final.append(it)
             if len(final) >= 20:
@@ -276,27 +290,53 @@ class RecommendationEngine:
             if len(combined) >= limit:
                 break
 
-        if len(combined) < 10:
-            res = await self.tmdb_service.get_similar(tmdb_id, mtype, page=1)
-            for it in res.get("results", []):
-                if it.get("id"):
-                    combined[it["id"]] = it
+        if len(combined) < max(20, limit // 2):
+            try:
+                for p in [1, 2]:
+                    res = await self.tmdb_service.get_similar(tmdb_id, mtype, page=p)
+                    for it in res.get("results", []):
+                        if it.get("id"):
+                            combined[it["id"]] = it
+                    if len(combined) >= limit:
+                        break
+            except Exception:
+                pass
 
         return list(combined.values())
 
-    async def _get_genre_whitelist(self, content_type: str, scored_objects: list) -> set[int]:
+    async def _get_genre_whitelist(self, content_type: str, scored_objects: list | None = None) -> set[int]:
         if content_type in self._whitelist_cache:
             return self._whitelist_cache[content_type]
 
         # Logic from _get_top_genre_whitelist
         try:
+            if scored_objects is None:
+                if self._library_data is None:
+                    self._library_data = await self.stremio_service.get_library_items()
+
+                all_lib = (
+                    self._library_data.get("loved", [])
+                    + self._library_data.get("watched", [])
+                    + self._library_data.get("added", [])
+                )
+                typed = [
+                    it
+                    for it in all_lib
+                    if it.get("type") == content_type or (content_type == "series" and it.get("type") == "tv")
+                ]
+                sorted_hist = sorted(
+                    {it["_id"]: it for it in typed}.values(),
+                    key=lambda x: x.get("state", {}).get("lastWatched") or "",
+                    reverse=True,
+                )
+                scored_objects = [self.scoring_service.process_item(it) for it in sorted_hist[:10]]
+
             prof_type = "series" if content_type in ("tv", "series") else "movie"
-            temp_profile = await self.user_profile_service.build_user_profile(
-                scored_objects[:10], content_type=prof_type
-            )
+            temp_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type=prof_type)
             top_pairs = temp_profile.get_top_genres(limit=TOP_GENRE_WHITELIST_LIMIT)
             whitelist = {int(gid) for gid, _ in top_pairs}
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to build whitelist for {content_type}: {e}")
             whitelist = set()
 
         self._whitelist_cache[content_type] = whitelist
@@ -346,7 +386,7 @@ class RecommendationEngine:
         enriched: list,
         profile: Any,
         whitelist: set,
-        rec_fn: callable,
+        rec_fn: Any,
         rec_alpha: float,
         watched_imdb: set,
         watched_tmdb: set,
@@ -381,24 +421,29 @@ class RecommendationEngine:
             if not RecommendationFiltering.passes_top_genre_whitelist(it.get("genre_ids"), whitelist):
                 continue
 
-            sim_score, _ = self.user_profile_service.calculate_simple_overlap_with_breakdown(profile, it)
+            sim_score, bd = self.user_profile_service.calculate_simple_overlap_with_breakdown(profile, it)
+            it["_sim_breakdown"] = bd
+
             wr = RecommendationScoring.weighted_rating(
                 it.get("vote_average"), it.get("vote_count"), C=7.2 if it.get("type") == "series" else 6.8
             )
             v_score = RecommendationScoring.normalize(wr)
-            p_score = RecommendationScoring.normalize(float(it.get("popularity") or 0.0), max_v=1000.0)
+            pop_val = float(it.get("popularity") or 0.0)
+            p_score = RecommendationScoring.normalize(pop_val, max_v=1000.0)
 
             base = (sim_score * 0.55) + (v_score * 0.35) + (p_score * 0.10)
             year = RecommendationMetadata.extract_year(it)
             q_mult = (1.0 - rec_alpha) + (rec_alpha * rec_fn(year))
 
-            vc = int(it.get("vote_count") or 0)
-            if vc < 150:
-                q_mult *= 0.85
-            if wr >= 7.0 and vc >= 500:
-                q_mult *= 1.10
-
-            score = (base + RecommendationScoring.stable_epsilon(it.get("_tmdb_id", 0), self.stable_seed)) * q_mult
+            # Final Pass: Consistent quality adjustments (Enhanced: preserve source boosts)
+            score = base + RecommendationScoring.stable_epsilon(it.get("_tmdb_id", 0), self.stable_seed)
+            score = RecommendationScoring.apply_quality_adjustments(
+                score * q_mult,
+                wr,
+                int(it.get("vote_count") or 0),
+                is_ranked=bool(it.get("_ranked_candidate")),
+                is_fresh=bool(it.get("_fresh_boost")),
+            )
 
             # Simple static suppression
             penalty = 0.0
@@ -478,6 +523,16 @@ class RecommendationEngine:
             if d is not None:
                 decade_counts[d] += 1
 
+            # Update used sets (match monolith cleanup loop)
+            coll = it.pop("_collection_id", None)
+            if isinstance(coll, int):
+                used_collections.add(coll)
+            for cid in it.pop("_top_cast_ids", []) or []:
+                try:
+                    used_cast.add(int(cid))
+                except Exception:
+                    pass
+
             # Clean internal
             it.pop("_external_ids", None)
             it.pop("_tmdb_id", None)
@@ -523,7 +578,7 @@ class RecommendationEngine:
             if final_without:
                 params["without_genres"] = "|".join(str(g) for g in final_without)
 
-        whitelist = self._whitelist_cache.get(content_type, set())
+        whitelist = await self._get_genre_whitelist(content_type)
         candidates = []
         try:
             for p in [1, 2, 3]:
@@ -548,9 +603,10 @@ class RecommendationEngine:
             filtered.append(it)
 
         if len(filtered) < limit * 2:
-            await self._inject_freshness(
-                {it["id"]: it for it in filtered}, content_type, watched_tmdb, set(excluded_ids), whitelist, limit
-            )
+            # Modify temporary dict then extract back to list
+            tmp_pool = {it["id"]: it for it in filtered}
+            await self._inject_freshness(tmp_pool, content_type, watched_tmdb, set(excluded_ids), whitelist, limit)
+            filtered = list(tmp_pool.values())
 
         meta = await RecommendationMetadata.fetch_batch(
             self.tmdb_service, filtered, content_type, target_count=limit * 2, user_settings=self.user_settings
@@ -581,7 +637,7 @@ class RecommendationEngine:
             self.stremio_service, self._library_data
         )
         excluded_ids = set(RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type))
-        whitelist = self._whitelist_cache.get(content_type, set())
+        whitelist = await self._get_genre_whitelist(content_type)
 
         mtype = "tv" if content_type in ("tv", "series") else "movie"
         pool = []

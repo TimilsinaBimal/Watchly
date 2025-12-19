@@ -89,9 +89,17 @@ class RecommendationScoring:
         return m_raw, alpha
 
     @staticmethod
-    def apply_quality_adjustments(score: float, wr: float, vote_count: int, is_ranked: bool, is_fresh: bool) -> float:
+    def apply_quality_adjustments(
+        score: float,
+        wr: float,
+        vote_count: int,
+        is_ranked: bool = False,
+        is_fresh: bool = False,
+    ) -> float:
         """Apply multiplicative adjustments based on item quality and source."""
         q_mult = 1.0
+
+        # 1. Base Quality Gate
         if vote_count < 50:
             q_mult *= 0.6
         elif vote_count < 150:
@@ -104,13 +112,16 @@ class RecommendationScoring:
         elif wr >= 7.0 and vote_count >= 500:
             q_mult *= 1.10
 
+        # 2. Source-specific Boosts
         if is_ranked:
+            # Collaborative filtering recommendation boost
             if wr >= 6.5 and vote_count >= 200:
                 q_mult *= 1.25
             elif wr >= 6.0 and vote_count >= 100:
                 q_mult *= 1.10
 
         if is_fresh and wr >= 7.0 and vote_count >= 300:
+            # Trending/Top-rated injection boost
             q_mult *= 1.10
 
         return score * q_mult

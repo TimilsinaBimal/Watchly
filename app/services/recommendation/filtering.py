@@ -41,6 +41,7 @@ class RecommendationFiltering:
         if library_data is None:
             library_data = await stremio_service.get_library_items()
 
+        # Combine loved, watched, and removed (don't exclude 'added' yet to keep pool large enough)
         all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("removed", [])
 
         imdb_ids = set()
@@ -58,15 +59,17 @@ class RecommendationFiltering:
             if tmdb_id:
                 tmdb_ids.add(tmdb_id)
 
-            # Fallback parsing for common Stremio/Watchly patterns
+            # Fallback for common Stremio patterns (e.g. tt1234567:1:1)
             if item_id.startswith("tt"):
-                # Handle tt123 and tt123:1:1
                 base_imdb = item_id.split(":")[0]
                 imdb_ids.add(base_imdb)
             elif item_id.startswith("tmdb:"):
                 try:
-                    tid = int(item_id.split(":")[1])
-                    tmdb_ids.add(tid)
+                    # Handle tmdb:123:something
+                    parts = item_id.split(":")
+                    if len(parts) > 1:
+                        tid = int(parts[1])
+                        tmdb_ids.add(tid)
                 except Exception:
                     pass
 
