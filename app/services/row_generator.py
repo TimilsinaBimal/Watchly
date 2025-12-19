@@ -7,7 +7,7 @@ from app.models.profile import UserTasteProfile
 from app.services.gemini import gemini_service
 from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres
-from app.services.tmdb_service import TMDBService, get_tmdb_service
+from app.services.tmdb.service import TMDBService, get_tmdb_service
 
 
 def normalize_keyword(kw):

@@ -6,13 +6,15 @@ from loguru import logger
 
 from app.core.settings import UserSettings
 from app.services.discovery import DiscoveryEngine
+from app.services.profile.service import UserProfileService
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
 from app.services.scoring import ScoringService
-from app.services.stremio_service import StremioService
-from app.services.tmdb_service import get_tmdb_service
-from app.services.user_profile import TOP_GENRE_WHITELIST_LIMIT, UserProfileService
+from app.services.stremio.service import StremioBundle as StremioService
+from app.services.tmdb.service import get_tmdb_service
+
+TOP_GENRE_WHITELIST_LIMIT = 5
 
 PER_GENRE_MAX_SHARE = 0.4
 
@@ -29,12 +31,14 @@ class RecommendationEngine:
         user_settings: UserSettings | None = None,
         token: str | None = None,
         library_data: dict | None = None,
+        auth_key: str | None = None,
     ):
         self.tmdb_service = get_tmdb_service(language=language)
         self.stremio_service = stremio_service
         self.user_settings = user_settings
         self.stable_seed = token or ""
         self._library_data = library_data
+        self.auth_key = auth_key
 
         self.scoring_service = ScoringService()
         self.user_profile_service = UserProfileService(language=language)
@@ -54,14 +58,16 @@ class RecommendationEngine:
 
         # 1. Fetch & Score Library
         if self._library_data is None:
-            self._library_data = await self.stremio_service.get_library_items()
+            if not self.auth_key:
+                raise ValueError("auth_key is required to fetch library data")
+            self._library_data = await self.stremio_service.library.get_library_items(self.auth_key)
 
         lib = self._library_data
         all_lib_items = lib.get("loved", []) + lib.get("watched", []) + lib.get("added", [])
 
         # 2. Exclusion Sets
         watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
-            self.stremio_service, self._library_data
+            self.stremio_service, self._library_data, self.auth_key
         )
 
         # 3. Filter Source Items
@@ -184,7 +190,7 @@ class RecommendationEngine:
     async def get_recommendations_for_item(self, item_id: str, media_type: str = "movie") -> list[dict[str, Any]]:
         """Get recommendations for a specific item, strictly excluding watched content."""
         watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
-            self.stremio_service, self._library_data
+            self.stremio_service, self._library_data, self.auth_key
         )
 
         # Explicitly exclude the source item
@@ -527,7 +533,7 @@ class RecommendationEngine:
             pass
 
         watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
-            self.stremio_service, self._library_data
+            self.stremio_service, self._library_data, self.auth_key
         )
 
         # Initial filter
@@ -570,7 +576,7 @@ class RecommendationEngine:
             return existing
 
         watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
-            self.stremio_service, self._library_data
+            self.stremio_service, self._library_data, self.auth_key
         )
         excluded_ids = set(RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type))
         whitelist = self._whitelist_cache.get(content_type, set())

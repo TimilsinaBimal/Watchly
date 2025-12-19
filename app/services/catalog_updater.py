@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog import DynamicCatalogService
-from app.services.stremio_service import StremioService
+from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
 
@@ -25,55 +25,71 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
         raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
     auth_key = credentials.get("authKey")
-    stremio_service = StremioService(auth_key=auth_key)
-    # check if user has addon installed or not
-    try:
-        addon_installed = await stremio_service.is_addon_installed(auth_key)
-        if not addon_installed:
-            logger.info(f"[{redact_token(token)}] User has not installed addon. Removing token from redis")
-            return True
-    except Exception as e:
-        logger.exception(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
+    bundle = StremioBundle()
 
     try:
-        # Ensure user_settings is available
+        if not auth_key:
+            # Fallback to login if possible
+            email = credentials.get("email")
+            password = credentials.get("password")
+            if email and password:
+                auth_key = await bundle.auth.login(email, password)
+                credentials["authKey"] = auth_key
+                await token_store.update_user_data(token, credentials)
+            else:
+                logger.warning(f"[{redact_token(token)}] No authKey or credentials for refresh.")
+                return False
+
+        # 1. Check if addon is still installed
+        try:
+            addon_installed = await bundle.addons.is_addon_installed(auth_key)
+            if not addon_installed:
+                logger.info(f"[{redact_token(token)}] User has not installed addon. Removing token from redis")
+                # We could delete the token here: await token_store.delete_token(token)
+                return True
+        except Exception as e:
+            logger.warning(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
+
+        # 2. Extract settings and refresh
         user_settings = get_default_settings()
         if credentials.get("settings"):
             try:
                 user_settings = UserSettings(**credentials["settings"])
             except Exception as e:
-                user_settings = get_default_settings()
-                logger.warning(f"[{redact_token(token)}] Failed to parse user settings from credentials: {e}")
-        # force fresh library for background refresh
-        library_items = await stremio_service.get_library_items(use_cache=False)
+                logger.warning(f"[{redact_token(token)}] Failed to parse user settings: {e}")
+
+        # Fetch fresh library
+        library_items = await bundle.library.get_library_items(auth_key)
+
         dynamic_catalog_service = DynamicCatalogService(
-            stremio_service=stremio_service,
             language=(user_settings.language if user_settings else "en-US"),
         )
+
         catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
             library_items=library_items, user_settings=user_settings
         )
 
+        # Translate catalogs
         if user_settings and user_settings.language:
             for cat in catalogs:
                 if name := cat.get("name"):
-                    cat["name"] = await translation_service.translate(name, user_settings.language)
-        logger.info(f"[{redact_token(token)}] Prepared {len(catalogs)} catalogs")
-        return await stremio_service.update_catalogs(catalogs, auth_key)
+                    try:
+                        cat["name"] = await translation_service.translate(name, user_settings.language)
+                    except Exception:
+                        pass
+
+        logger.info(f"[{redact_token(token)}] Prepared {len(catalogs)} catalogs for background refresh")
+        return await bundle.addons.update_catalogs(auth_key, catalogs)
+
     except Exception as e:
-        logger.exception(f"[{redact_token(token)}] Failed to update catalogs: {e}", exc_info=True)
-        raise e
+        logger.exception(f"[{redact_token(token)}] Failed to update catalogs in background: {e}")
+        return False
     finally:
-        await stremio_service.close()
+        await bundle.close()
 
 
 class BackgroundCatalogUpdater:
-    """Periodic job that refreshes catalogs for every stored credential token.
-
-    Supports two modes:
-    - "cron": Runs twice daily at 12:00 PM UTC and 00:00 UTC (midnight)
-    - "interval": Runs every CATALOG_REFRESH_INTERVAL_SECONDS
-    """
+    """Periodic job that refreshes catalogs for every stored credential token."""
 
     def __init__(self) -> None:
         self.scheduler = AsyncIOScheduler(timezone="UTC")
@@ -98,7 +114,7 @@ class BackgroundCatalogUpdater:
                     **job_defaults,
                 )
         else:  # interval mode
-            interval_seconds = max(3600, settings.CATALOG_REFRESH_INTERVAL_SECONDS)  # minimum 1 hour
+            interval_seconds = max(3600, settings.CATALOG_REFRESH_INTERVAL_SECONDS)
             interval_hours = interval_seconds // 3600
             logger.info(f"Starting background catalog updater. Interval: {interval_seconds}s ({interval_hours} hours)")
 
@@ -107,8 +123,8 @@ class BackgroundCatalogUpdater:
                 trigger=IntervalTrigger(seconds=interval_seconds),
                 id="catalog_refresh",
                 replace_existing=True,
-                max_instances=1,  # Prevent new job from starting if previous one is still running
-                coalesce=True,  # If multiple runs are missed, only run once
+                max_instances=1,
+                coalesce=True,
             )
 
         self.scheduler.start()
@@ -116,7 +132,7 @@ class BackgroundCatalogUpdater:
     async def stop(self) -> None:
         if self.scheduler.running:
             logger.info("Stopping background catalog updater...")
-            self.scheduler.shutdown(wait=True)  # Wait for running jobs to complete
+            self.scheduler.shutdown(wait=True)
             logger.info("Background catalog updater stopped.")
 
     async def refresh_all_tokens(self) -> None:
@@ -125,12 +141,6 @@ class BackgroundCatalogUpdater:
         sem = asyncio.Semaphore(MAX_CONCURRENT_UPDATES)
 
         async def _update_safe(key: str, payload: dict[str, Any]) -> None:
-            if not payload.get("authKey"):
-                logger.debug(
-                    f"Skipping token {redact_token(key)} with incomplete credentials",
-                )
-                return
-
             async with sem:
                 try:
                     updated = await refresh_catalogs_for_credentials(key, payload)
@@ -138,26 +148,22 @@ class BackgroundCatalogUpdater:
                         f"Background refresh for {redact_token(key)} completed (updated={updated})",
                     )
                 except Exception as exc:
-                    logger.error(f"Background refresh failed for {redact_token(key)}: {exc}", exc_info=True)
+                    logger.error(f"Background refresh failed for {redact_token(key)}: {exc}")
 
         try:
-            # Check Redis connected clients and back off if overloaded
+            # Check Redis connections
             try:
                 client = await token_store._get_client()
                 info = await client.info(section="clients")
                 connected = int(info.get("connected_clients", 0))
                 threshold = getattr(settings, "REDIS_CONNECTIONS_THRESHOLD", 1000)
                 if connected > threshold:
-                    logger.warning(
-                        f"Redis connected clients {connected} exceed threshold {threshold}; skipping"
-                        "background refresh."
-                    )
+                    logger.warning(f"Redis connected clients {connected} exceed threshold; skipping refresh.")
                     return
             except Exception as exc:
                 logger.warning(f"Failed to check Redis client info before refresh: {exc}")
 
             async for key, payload in token_store.iter_payloads():
-                # Extract token from redis key prefix
                 prefix = token_store.KEY_PREFIX
                 tok = key[len(prefix) :] if key.startswith(prefix) else key  # noqa
                 tasks.append(asyncio.create_task(_update_safe(tok, payload)))
@@ -170,4 +176,4 @@ class BackgroundCatalogUpdater:
                 logger.info("No tokens found to refresh.")
 
         except Exception as exc:
-            logger.error(f"Catalog refresh scan failed: {exc}", exc_info=True)
+            logger.error(f"Catalog refresh scan failed: {exc}")

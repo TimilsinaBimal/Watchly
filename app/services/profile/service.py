@@ -16,7 +16,7 @@ from app.services.profile.similarity import (
     calculate_simple_overlap_breakdown,
 )
 from app.services.profile.vectorizer import ProfileVectorizer
-from app.services.tmdb_service import get_tmdb_service
+from app.services.tmdb.service import get_tmdb_service
 
 
 class UserProfileService:

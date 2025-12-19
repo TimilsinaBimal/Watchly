@@ -34,12 +34,16 @@ class RecommendationFiltering:
     """
 
     @staticmethod
-    async def get_exclusion_sets(stremio_service: Any, library_data: dict | None = None) -> tuple[set[str], set[int]]:
+    async def get_exclusion_sets(
+        stremio_service: Any, library_data: dict | None = None, auth_key: str | None = None
+    ) -> tuple[set[str], set[int]]:
         """
         Fetch library items and build exclusion sets for watched/loved content.
         """
         if library_data is None:
-            library_data = await stremio_service.get_library_items()
+            if not auth_key:
+                return set(), set()
+            library_data = await stremio_service.library.get_library_items(auth_key)
 
         all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("removed", [])
 

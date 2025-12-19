@@ -7,8 +7,8 @@ from app.api.endpoints.manifest import get_config_id
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog_updater import refresh_catalogs_for_credentials
-from app.services.recommendation_service import RecommendationService
-from app.services.stremio_service import StremioService
+from app.services.recommendation.engine import RecommendationEngine
+from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 
 MAX_RESULTS = 50
@@ -79,27 +79,50 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
     credentials = await token_store.get_user_data(token)
     if not credentials:
         raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
+
+    bundle = StremioBundle()
     try:
-        # Extract settings from credentials
+        # 1. Resolve Auth Key (with potential fallback to login)
+        auth_key = credentials.get("authKey")
+        email = credentials.get("email")
+        password = credentials.get("password")
+
+        is_valid = False
+        if auth_key:
+            try:
+                await bundle.auth.get_user_info(auth_key)
+                is_valid = True
+            except Exception:
+                pass
+
+        if not is_valid and email and password:
+            try:
+                auth_key = await bundle.auth.login(email, password)
+                credentials["authKey"] = auth_key
+                await token_store.update_user_data(token, credentials)
+            except Exception as e:
+                logger.error(f"Failed to refresh auth key during catalog fetch: {e}")
+
+        if not auth_key:
+            raise HTTPException(status_code=401, detail="Stremio session expired. Please reconfigure.")
+
+        # 2. Extract settings from credentials
         settings_dict = credentials.get("settings", {})
         user_settings = UserSettings(**settings_dict) if settings_dict else get_default_settings()
         language = user_settings.language if user_settings else "en-US"
 
-        # Create a single service; get_auth_key() will validate/refresh as needed
-        stremio_service = StremioService(
-            username=credentials.get("email", ""),
-            password=credentials.get("password", ""),
-            auth_key=credentials.get("authKey"),
-        )
-        # Fetch library once per request and reuse across recommendation paths
-        library_items = await stremio_service.get_library_items()
-        recommendation_service = RecommendationService(
-            stremio_service=stremio_service,
+        # 3. Fetch library once per request and reuse across recommendation paths
+        library_items = await bundle.library.get_library_items(auth_key)
+        engine = RecommendationEngine(
+            stremio_service=bundle,
             language=language,
             user_settings=user_settings,
             token=token,
             library_data=library_items,
         )
+        # Custom attribute for modularized exclusion logic if needed
+        # In this refactor, RecommendationFiltering.get_exclusion_sets(stremio_service, library_data)
+        # is called inside engine, and we pass bundle as stremio_service.
 
         # Resolve per-catalog limits (min/max)
         def _get_limits() -> tuple[int, int]:
@@ -129,13 +152,10 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
 
         # Handle item-based recommendations
         if id.startswith("tt"):
-            try:
-                recommendation_service.per_item_limit = max_items
-            except Exception:
-                pass
-            recommendations = await recommendation_service.get_recommendations_for_item(item_id=id, media_type=type)
+            engine.per_item_limit = max_items
+            recommendations = await engine.get_recommendations_for_item(item_id=id, media_type=type)
             if len(recommendations) < min_items:
-                recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
+                recommendations = await engine.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for {id}")
 
         elif any(
@@ -148,31 +168,26 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         ):
             # Extract actual item ID (tt... or tmdb:...)
             item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", id)
-            try:
-                recommendation_service.per_item_limit = max_items
-            except Exception:
-                pass
-            recommendations = await recommendation_service.get_recommendations_for_item(
-                item_id=item_id, media_type=type
-            )
+            engine.per_item_limit = max_items
+            recommendations = await engine.get_recommendations_for_item(item_id=item_id, media_type=type)
             if len(recommendations) < min_items:
-                recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
+                recommendations = await engine.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
 
         elif id.startswith("watchly.theme."):
-            recommendations = await recommendation_service.get_recommendations_for_theme(
+            recommendations = await engine.get_recommendations_for_theme(
                 theme_id=id, content_type=type, limit=max_items
             )
             if len(recommendations) < min_items:
-                recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
+                recommendations = await engine.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for theme {id}")
 
         else:
-            recommendations = await recommendation_service.get_recommendations(
+            recommendations = await engine.get_recommendations(
                 content_type=type, source_items_limit=SOURCE_ITEMS_LIMIT, max_results=max_items
             )
             if len(recommendations) < min_items:
-                recommendations = await recommendation_service.pad_to_min(type, recommendations, min_items)
+                recommendations = await engine.pad_to_min(type, recommendations, min_items)
             logger.info(f"Found {len(recommendations)} recommendations for {type}")
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
@@ -186,6 +201,8 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
     except Exception as e:
         logger.exception(f"[{redact_token(token)}] Error fetching catalog for {type}/{id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await bundle.close()
 
 
 @router.get("/{token}/catalog/update")

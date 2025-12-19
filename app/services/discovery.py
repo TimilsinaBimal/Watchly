@@ -1,7 +1,7 @@
 import asyncio
 
 from app.models.profile import UserTasteProfile
-from app.services.tmdb_service import get_tmdb_service
+from app.services.tmdb.service import get_tmdb_service
 
 
 class DiscoveryEngine:

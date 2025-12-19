@@ -1,11 +1,10 @@
 from datetime import datetime, timezone
 
 from app.core.settings import CatalogConfig, UserSettings
+from app.services.profile.service import UserProfileService
 from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
-from app.services.stremio_service import StremioService
-from app.services.tmdb_service import get_tmdb_service
-from app.services.user_profile import UserProfileService
+from app.services.tmdb.service import get_tmdb_service
 
 
 class DynamicCatalogService:
@@ -13,8 +12,7 @@ class DynamicCatalogService:
     Generates dynamic catalog rows based on user library and preferences.
     """
 
-    def __init__(self, stremio_service: StremioService, language: str = "en-US"):
-        self.stremio_service = stremio_service
+    def __init__(self, language: str = "en-US"):
         self.tmdb_service = get_tmdb_service(language=language)
         self.scoring_service = ScoringService()
         self.user_profile_service = UserProfileService(language=language)
@@ -46,7 +44,7 @@ class DynamicCatalogService:
         }
 
     async def get_theme_based_catalogs(
-        self, library_items: list[dict], user_settings: UserSettings | None = None
+        self, library_items: dict, user_settings: UserSettings | None = None
     ) -> list[dict]:
         catalogs = []
 
@@ -61,9 +59,8 @@ class DynamicCatalogService:
         scored_objects = []
 
         # Use only recent history for freshness
-        # sort using lastWatched...
         sorted_history = sorted(
-            unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched", ""), reverse=True
+            unique_items.values(), key=lambda x: x.get("state", {}).get("lastWatched", "") or "", reverse=True
         )
         recent_history = sorted_history[: self.HISTORY_LIMIT]
 
@@ -86,7 +83,6 @@ class DynamicCatalogService:
         movie_rows = await self.row_generator.generate_rows(movie_profile, "movie")
 
         for row in movie_rows:
-            # translated_title = await translation_service.translate(row.title, lang)
             catalogs.append({"type": "movie", "id": row.id, "name": row.title, "extra": []})
 
         # Generate for Series
@@ -96,14 +92,11 @@ class DynamicCatalogService:
         series_rows = await self.row_generator.generate_rows(series_profile, "series")
 
         for row in series_rows:
-            # translated_title = await translation_service.translate(row.title, lang)
             catalogs.append({"type": "series", "id": row.id, "name": row.title, "extra": []})
 
         return catalogs
 
-    async def get_dynamic_catalogs(
-        self, library_items: list[dict], user_settings: UserSettings | None = None
-    ) -> list[dict]:
+    async def get_dynamic_catalogs(self, library_items: dict, user_settings: UserSettings | None = None) -> list[dict]:
         """
         Generate all dynamic catalog rows.
         """
@@ -148,7 +141,6 @@ class DynamicCatalogService:
 
         # Helper to parse date
         def get_date(item):
-
             val = item.get("state", {}).get("lastWatched")
             if val:
                 try:
@@ -174,8 +166,7 @@ class DynamicCatalogService:
 
             last_loved = loved[0] if loved else None
             if last_loved:
-                label = loved_config.name
-
+                label = loved_config.name if loved_config.name else "More like"
                 catalogs.append(self.build_catalog_entry(last_loved, label, "watchly.loved"))
 
         # 2. Because you watched <Watched Item>
@@ -192,6 +183,5 @@ class DynamicCatalogService:
                 break
 
             if last_watched:
-                label = watched_config.name
-
+                label = watched_config.name if watched_config.name else "Because you watched"
                 catalogs.append(self.build_catalog_entry(last_watched, label, "watchly.watched"))

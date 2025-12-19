@@ -57,3 +57,45 @@ class StremioAddonService:
         except Exception as e:
             logger.error(f"Failed to update addon collection: {e}")
             return False
+
+    async def update_catalogs(self, auth_key: str, catalogs: list[dict[str, Any]]) -> bool:
+        """
+        Inject dynamic catalogs into the installed Watchly addon.
+        """
+        from app.core.config import settings
+
+        # Base catalogs that are always present
+        BASE_CATALOGS = [
+            {"type": "movie", "id": "watchly.rec", "name": "Top Picks for You", "extra": []},
+            {"type": "series", "id": "watchly.rec", "name": "Top Picks for You", "extra": []},
+        ]
+
+        addons = await self.get_addons(auth_key)
+        full_catalogs = BASE_CATALOGS + catalogs
+
+        found = False
+        for addon in addons:
+            if addon.get("manifest", {}).get("id") == settings.ADDON_ID and match_hostname(
+                addon.get("transportUrl"), settings.HOST_NAME
+            ):
+                addon["manifest"]["catalogs"] = full_catalogs
+                found = True
+                break
+
+        if not found:
+            logger.warning(f"Addon {settings.ADDON_ID} not found in user collection; cannot update catalogs.")
+            return False
+
+        return await self.update_addon_collection(auth_key, addons)
+
+    async def is_addon_installed(self, auth_key: str) -> bool:
+        """Check if the Watchly addon is present in the user's collection."""
+        from app.core.config import settings
+
+        addons = await self.get_addons(auth_key)
+        for addon in addons:
+            if addon.get("manifest", {}).get("id") == settings.ADDON_ID and match_hostname(
+                addon.get("transportUrl"), settings.HOST_NAME
+            ):
+                return True
+        return False

@@ -1,3 +1,4 @@
+import functools
 from typing import Any
 
 from async_lru import alru_cache
@@ -107,3 +108,15 @@ class TMDBService:
         mt = "movie" if media_type == "movie" else "tv"
         params = {"page": page}
         return await self.client.get(f"/{mt}/top_rated", params=params)
+
+    @alru_cache(maxsize=1, ttl=86400)
+    async def get_languages(self) -> list[dict[str, Any]]:
+        """Fetch supported languages from TMDB."""
+        return await self.client.get("/configuration/languages")
+
+
+@functools.lru_cache(maxsize=16)
+def get_tmdb_service(language: str = "en-US") -> TMDBService:
+    from app.core.config import settings
+
+    return TMDBService(api_key=settings.TMDB_API_KEY, language=language)
