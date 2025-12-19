@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from app.core.settings import CatalogConfig, UserSettings
@@ -75,21 +76,24 @@ class DynamicCatalogService:
             excluded_movie_genres = [int(g) for g in user_settings.excluded_movie_genres]
             excluded_series_genres = [int(g) for g in user_settings.excluded_series_genres]
 
-        # 2. Generate Thematic Rows with Type-Specific Profiles
-        # Generate for Movies
-        movie_profile = await self.user_profile_service.build_user_profile(
-            scored_objects, content_type="movie", excluded_genres=excluded_movie_genres
+        # 2. Generate Thematic Rows in Parallel
+        async def process_media(media_type, genres):
+            profile = await self.user_profile_service.build_user_profile(
+                scored_objects, content_type=media_type, excluded_genres=genres
+            )
+            return await self.row_generator.generate_rows(profile, media_type)
+
+        results = await asyncio.gather(
+            process_media("movie", excluded_movie_genres),
+            process_media("series", excluded_series_genres),
+            return_exceptions=True,
         )
-        movie_rows = await self.row_generator.generate_rows(movie_profile, "movie")
+
+        movie_rows = results[0] if not isinstance(results[0], Exception) else []
+        series_rows = results[1] if not isinstance(results[1], Exception) else []
 
         for row in movie_rows:
             catalogs.append({"type": "movie", "id": row.id, "name": row.title, "extra": []})
-
-        # Generate for Series
-        series_profile = await self.user_profile_service.build_user_profile(
-            scored_objects, content_type="series", excluded_genres=excluded_series_genres
-        )
-        series_rows = await self.row_generator.generate_rows(series_profile, "series")
 
         for row in series_rows:
             catalogs.append({"type": "series", "id": row.id, "name": row.title, "extra": []})

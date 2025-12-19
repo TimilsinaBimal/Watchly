@@ -50,7 +50,7 @@ def get_base_manifest(user_settings: UserSettings | None = None):
         "background": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/app/static/cover.png",
         "resources": ["catalog"],
         "types": ["movie", "series"],
-        "idPrefixes": ["tt"],
+        "idPrefixes": ["tt", "tmdb:"],
         "catalogs": catalogs,
         "behaviorHints": {"configurable": True, "configurationRequired": False},
         "stremioAddonsConfig": {
@@ -93,14 +93,18 @@ async def _manifest_handler(response: Response, token: str):
     user_settings = None
     try:
         creds = await token_store.get_user_data(token)
-        if creds.get("settings"):
+        if creds and creds.get("settings"):
             user_settings = UserSettings(**creds["settings"])
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
+    if not creds:
+        raise HTTPException(status_code=401, detail="Token not found. Please reconfigure the addon.")
+
     base_manifest = get_base_manifest(user_settings)
 
     bundle = StremioBundle()
+    fetched_catalogs = []
     try:
         # Resolve Auth Key (with potential fallback to login)
         auth_key = creds.get("authKey")
@@ -124,9 +128,7 @@ async def _manifest_handler(response: Response, token: str):
             except Exception as e:
                 logger.error(f"Failed to refresh auth key during manifest fetch: {e}")
 
-        if not auth_key:
-            fetched_catalogs = []
-        else:
+        if auth_key:
             fetched_catalogs = await build_dynamic_catalogs(
                 bundle,
                 auth_key,
@@ -159,17 +161,15 @@ async def _manifest_handler(response: Response, token: str):
         translated_catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
 
     if not translated_catalogs:
-        fallback_base = get_base_manifest(user_settings)
-        if fallback_base.get("catalogs"):
-            base_manifest["catalogs"] = fallback_base["catalogs"]
-        else:
-            base_manifest["catalogs"] = []
+        # If dynamic fetch resulted in nothing, we fall back to base manifest
+        # (provided it wasn't explicitly disabled in get_base_manifest).
+        base_manifest["catalogs"] = base_manifest["catalogs"]
     else:
         base_manifest["catalogs"] = translated_catalogs
 
     # Debug headers (counts) to help diagnose empty-manifest issues in production
     try:
-        response.headers["X-Base-Catalogs"] = str(len(get_base_manifest(user_settings)["catalogs"]))
+        response.headers["X-Base-Catalogs"] = str(len(base_manifest.get("catalogs", [])))
         response.headers["X-Dynamic-Catalogs"] = str(len(fetched_catalogs))
         response.headers["X-Final-Catalogs"] = str(len(base_manifest.get("catalogs", [])))
     except Exception as e:
