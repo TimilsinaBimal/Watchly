@@ -130,14 +130,35 @@ class RecommendationFiltering:
         return []
 
     @staticmethod
+    def get_genre_multiplier(genre_ids: list[int] | None, whitelist: set[int]) -> float:
+        """Calculate a score multiplier based on genre preference. Blocks animation if not preferred."""
+        if not whitelist:
+            return 1.0
+
+        gids = set(genre_ids or [])
+        if not gids:
+            return 1.0
+
+        # Special handling for Animation (16): Heavy penalty if not in whitelist
+        if 16 in gids and 16 not in whitelist:
+            return 0.1
+
+        # If it has at least one preferred genre, full score
+        if gids & whitelist:
+            return 1.0
+
+        # Otherwise, soft penalty to prioritize whitelist items without blocking variety
+        return 0.4
+
+    @staticmethod
     def passes_top_genre_whitelist(genre_ids: list[int] | None, whitelist: set[int]) -> bool:
-        """Check if an item's genres match the user's top genre whitelist."""
+        """Check if an item's genres match the user's top genre whitelist (Softened)."""
         if not whitelist:
             return True
         gids = set(genre_ids or [])
         if not gids:
             return True
-        # Special handling for Animation (16)
+        # If it's animation and not in whitelist, we still block it to prevent 'Anime Takeover'
         if 16 in gids and 16 not in whitelist:
             return False
-        return bool(gids & whitelist)
+        return True

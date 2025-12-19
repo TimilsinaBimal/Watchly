@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 
 from loguru import logger
 
@@ -21,7 +22,6 @@ class DiscoveryEngine:
         self,
         profile: UserTasteProfile,
         content_type: str,
-        limit: int = 20,
         excluded_genres: list[int] | None = None,
         *,
         use_genres: bool = False,
@@ -32,134 +32,28 @@ class DiscoveryEngine:
         use_year: bool = False,
     ) -> list[dict]:
         """
-        Find content that matches the user's taste profile.
-        Strategy:
-        1. Extract top weighted Genres, Keywords, Actors, Director.
-        2. Build specific 'Discovery Queries' for each category.
-        3. Fetch results in parallel.
-        4. Return the combined candidate set (B).
+        Find content that matches the user's taste profile using multi-phase TMDB discovery.
         """
-        # 1. Extract Top Features
-        top_genres = profile.get_top_genres(limit=3) if use_genres else []  # e.g. [(28, 1.0), (878, 0.8)]
-        top_keywords = profile.get_top_keywords(limit=3) if use_keywords else []  # e.g. [(123, 0.9)]
-        # Need to add get_top_cast to UserTasteProfile model first, assuming it exists or using profile.cast directly
-        # Based on previous step, profile.cast exists.
-        top_cast = profile.cast.get_top_features(limit=2) if use_cast else []
-        top_crew = profile.get_top_crew(limit=1) if use_director else []  # e.g. [(555, 1.0)] - Director
+        # 1. Build Phase 1 Tasks
+        tasks = self._build_discovery_tasks_phase1(
+            profile,
+            content_type,
+            excluded_genres,
+            use_genres=use_genres,
+            use_keywords=use_keywords,
+            use_cast=use_cast,
+            use_director=use_director,
+            use_countries=use_countries,
+            use_year=use_year,
+        )
 
-        top_countries = profile.get_top_countries(limit=2) if use_countries else []
-        top_year = profile.get_top_year(limit=1) if use_year else []
-
-        if not top_genres and not top_keywords and not top_cast and not top_crew:
-            # Fallback if profile is empty
+        if not tasks:
             return []
 
-        tasks = []
-        base_params = {}
-        if excluded_genres:
-            base_params["without_genres"] = "|".join([str(g) for g in excluded_genres])
-
-        # Phase 1: build first-page tasks only
-        if top_genres:
-            genre_ids = "|".join([str(g[0]) for g in top_genres])
-            params_popular = {
-                "with_genres": genre_ids,
-                "sort_by": "popularity.desc",
-                "vote_count.gte": 500,
-                **base_params,
-            }
-            tasks.append(self._fetch_discovery(content_type, params_popular))
-            params_rating = {
-                "with_genres": genre_ids,
-                "sort_by": "vote_average.desc",
-                "vote_count.gte": 500,
-                **base_params,
-            }
-            tasks.append(self._fetch_discovery(content_type, params_rating))
-
-        # Query 2: Top Keywords
-        if top_keywords:
-            keyword_ids = "|".join([str(k[0]) for k in top_keywords])
-            params_keywords = {
-                "with_keywords": keyword_ids,
-                "sort_by": "popularity.desc",
-                "vote_count.gte": 500,
-                **base_params,
-            }
-            tasks.append(self._fetch_discovery(content_type, params_keywords))
-
-            for page in range(1, 3):
-                params_rating_kw = {
-                    "with_keywords": keyword_ids,
-                    "sort_by": "vote_average.desc",
-                    "vote_count.gte": 500,
-                    "page": page,
-                    **base_params,
-                }
-                tasks.append(self._fetch_discovery(content_type, params_rating_kw))
-
-        # Query 3: Top Actors
-        is_tv = content_type in ("tv", "series")
-        for actor in top_cast:
-            actor_id = actor[0]
-            params_actor = {
-                "sort_by": "popularity.desc",
-                "vote_count.gte": 500,
-                **base_params,
-            }
-            if is_tv:
-                params_actor["with_people"] = str(actor_id)
-            else:
-                params_actor["with_cast"] = str(actor_id)
-            tasks.append(self._fetch_discovery(content_type, params_actor))
-
-        # Query 4: Top Director
-        if top_crew:
-            director_id = top_crew[0][0]
-            params_director = {
-                "sort_by": "vote_average.desc",
-                "vote_count.gte": 500,
-                **base_params,
-            }
-            if is_tv:
-                params_director["with_people"] = str(director_id)
-            else:
-                params_director["with_crew"] = str(director_id)
-            tasks.append(self._fetch_discovery(content_type, params_director))
-
-        # Query 5: Top Countries
-        if top_countries:
-            country_ids = "|".join([str(c[0]) for c in top_countries])
-            params_country = {
-                "with_origin_country": country_ids,
-                "sort_by": "popularity.desc",
-                "vote_count.gte": 100,
-                **base_params,
-            }
-            tasks.append(self._fetch_discovery(content_type, params_country))
-
-        # query 6: Top year
-        if top_year:
-            year = top_year[0][0]
-            start_year = f"{year}-01-01"
-            end_year = f"{int(year) + 9}-12-31"
-            params_year = {
-                "sort_by": "vote_average.desc",
-                "vote_count.gte": 500,
-                **base_params,
-            }
-            if is_tv:
-                params_year["first_air_date.gte"] = start_year
-                params_year["first_air_date.lte"] = end_year
-            else:
-                params_year["primary_release_date.gte"] = start_year
-                params_year["primary_release_date.lte"] = end_year
-            tasks.append(self._fetch_discovery(content_type, params_year))
-
-        # 3. Execute Phase 1
+        # 2. Execute Phase 1
         results_batches = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 4. Aggregate and Deduplicate
+        # 3. Aggregate Candidates
         all_candidates = {}
         for batch in results_batches:
             if isinstance(batch, Exception) or not batch:
@@ -168,51 +62,16 @@ class DiscoveryEngine:
                 if item["id"] not in all_candidates:
                     all_candidates[item["id"]] = item
 
-        # Conditional Phase 2: fetch page 2 if pool is thin
+        # 4. Phase 2 (If pool is thin)
         if len(all_candidates) < 120:
-            tasks2 = []
-            if top_genres:
-                genre_ids = "|".join([str(g[0]) for g in top_genres])
-                tasks2.append(
-                    self._fetch_discovery(
-                        content_type,
-                        {
-                            "with_genres": genre_ids,
-                            "sort_by": "vote_average.desc",
-                            "vote_count.gte": 400,
-                            "page": 2,
-                            **base_params,
-                        },
-                    )
-                )
-            if top_keywords:
-                keyword_ids = "|".join([str(k[0]) for k in top_keywords])
-                tasks2.append(
-                    self._fetch_discovery(
-                        content_type,
-                        {
-                            "with_keywords": keyword_ids,
-                            "sort_by": "vote_average.desc",
-                            "vote_count.gte": 400,
-                            "page": 2,
-                            **base_params,
-                        },
-                    )
-                )
-            for actor in top_cast[:1]:
-                actor_id = actor[0]
-                params_actor_2 = {
-                    "sort_by": "vote_average.desc",
-                    "vote_count.gte": 400,
-                    "page": 2,
-                    **base_params,
-                }
-                if is_tv:
-                    params_actor_2["with_people"] = str(actor_id)
-                else:
-                    params_actor_2["with_cast"] = str(actor_id)
-                tasks2.append(self._fetch_discovery(content_type, params_actor_2))
-
+            tasks2 = self._build_discovery_tasks_phase2(
+                profile,
+                content_type,
+                excluded_genres,
+                use_genres=use_genres,
+                use_keywords=use_keywords,
+                use_cast=use_cast,
+            )
             if tasks2:
                 results_batches2 = await asyncio.gather(*tasks2, return_exceptions=True)
                 for batch in results_batches2:
@@ -223,6 +82,154 @@ class DiscoveryEngine:
                             all_candidates[item["id"]] = item
 
         return list(all_candidates.values())
+
+    def _build_discovery_tasks_phase1(
+        self,
+        profile: UserTasteProfile,
+        content_type: str,
+        excluded_genres: list[int] | None = None,
+        **opts,
+    ) -> list[Any]:
+        """Construct the initial set of discovery tasks based on top profile features."""
+        top_genres = profile.get_top_genres(limit=3) if opts.get("use_genres") else []
+        top_keywords = profile.get_top_keywords(limit=3) if opts.get("use_keywords") else []
+        top_cast = profile.cast.get_top_features(limit=2) if opts.get("use_cast") else []
+        top_crew = profile.get_top_crew(limit=1) if opts.get("use_director") else []
+        top_countries = profile.get_top_countries(limit=2) if opts.get("use_countries") else []
+        top_year = profile.get_top_year(limit=1) if opts.get("use_year") else []
+
+        if not any([top_genres, top_keywords, top_cast, top_crew]):
+            return []
+
+        tasks = []
+        base_params = {}
+        if excluded_genres:
+            base_params["without_genres"] = "|".join([str(g) for g in excluded_genres])
+
+        # Query 1: Top Genres
+        if top_genres:
+            genre_ids = "|".join([str(g[0]) for g in top_genres])
+            tasks.append(
+                self._fetch_discovery(
+                    content_type,
+                    {"with_genres": genre_ids, "sort_by": "popularity.desc", "vote_count.gte": 500, **base_params},
+                )
+            )
+            tasks.append(
+                self._fetch_discovery(
+                    content_type,
+                    {"with_genres": genre_ids, "sort_by": "vote_average.desc", "vote_count.gte": 500, **base_params},
+                )
+            )
+
+        # Query 2: Top Keywords
+        if top_keywords:
+            keyword_ids = "|".join([str(k[0]) for k in top_keywords])
+            tasks.append(
+                self._fetch_discovery(
+                    content_type,
+                    {"with_keywords": keyword_ids, "sort_by": "popularity.desc", "vote_count.gte": 500, **base_params},
+                )
+            )
+            for page in range(1, 3):
+                tasks.append(
+                    self._fetch_discovery(
+                        content_type,
+                        {
+                            "with_keywords": keyword_ids,
+                            "sort_by": "vote_average.desc",
+                            "vote_count.gte": 500,
+                            "page": page,
+                            **base_params,
+                        },
+                    )
+                )
+
+        # Query 3: Cast & Crew
+        is_tv = content_type in ("tv", "series")
+        for actor in top_cast:
+            p = {"sort_by": "popularity.desc", "vote_count.gte": 500, **base_params}
+            p["with_people" if is_tv else "with_cast"] = str(actor[0])
+            tasks.append(self._fetch_discovery(content_type, p))
+
+        if top_crew:
+            p = {"sort_by": "vote_average.desc", "vote_count.gte": 500, **base_params}
+            p["with_people" if is_tv else "with_crew"] = str(top_crew[0][0])
+            tasks.append(self._fetch_discovery(content_type, p))
+
+        # Query 4: Countries & Year
+        if top_countries:
+            country_ids = "|".join([str(c[0]) for c in top_countries])
+            tasks.append(
+                self._fetch_discovery(
+                    content_type,
+                    {
+                        "with_origin_country": country_ids,
+                        "sort_by": "popularity.desc",
+                        "vote_count.gte": 100,
+                        **base_params,
+                    },
+                )
+            )
+
+        if top_year:
+            year = top_year[0][0]
+            prefix = "first_air_date" if is_tv else "primary_release_date"
+            tasks.append(
+                self._fetch_discovery(
+                    content_type,
+                    {
+                        "sort_by": "vote_average.desc",
+                        "vote_count.gte": 500,
+                        f"{prefix}.gte": f"{year}-01-01",
+                        f"{prefix}.lte": f"{int(year)+9}-12-31",
+                        **base_params,
+                    },
+                )
+            )
+        return tasks
+
+    def _build_discovery_tasks_phase2(
+        self,
+        profile: UserTasteProfile,
+        content_type: str,
+        excluded_genres: list[int] | None = None,
+        **opts,
+    ) -> list[Any]:
+        """Construct additional discovery tasks with lower thresholds to fill out candidate pool."""
+        top_genres = profile.get_top_genres(limit=3) if opts.get("use_genres") else []
+        top_keywords = profile.get_top_keywords(limit=3) if opts.get("use_keywords") else []
+        top_cast = profile.cast.get_top_features(limit=1) if opts.get("use_cast") else []
+
+        tasks = []
+        base_params = {"vote_count.gte": 400, "page": 2}
+        if excluded_genres:
+            base_params["without_genres"] = "|".join([str(g) for g in excluded_genres])
+
+        if top_genres:
+            genre_ids = "|".join([str(g[0]) for g in top_genres])
+            tasks.append(
+                self._fetch_discovery(
+                    content_type, {"with_genres": genre_ids, "sort_by": "vote_average.desc", **base_params}
+                )
+            )
+
+        if top_keywords:
+            keyword_ids = "|".join([str(k[0]) for k in top_keywords])
+            tasks.append(
+                self._fetch_discovery(
+                    content_type, {"with_keywords": keyword_ids, "sort_by": "vote_average.desc", **base_params}
+                )
+            )
+
+        if top_cast:
+            actor_id = top_cast[0][0]
+            is_tv = content_type in ("tv", "series")
+            p = {"sort_by": "vote_average.desc", **base_params}
+            p["with_people" if is_tv else "with_cast"] = str(actor_id)
+            tasks.append(self._fetch_discovery(content_type, p))
+
+        return tasks
 
     async def _fetch_discovery(self, media_type: str, params: dict) -> list[dict]:
         """Helper to call TMDB discovery."""
