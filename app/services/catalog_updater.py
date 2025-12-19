@@ -48,7 +48,7 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
                 # We could delete the token here: await token_store.delete_token(token)
                 return True
         except Exception as e:
-            logger.warning(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
+            logger.exception(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
 
         # 2. Extract settings and refresh
         user_settings = get_default_settings()
@@ -56,7 +56,7 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
             try:
                 user_settings = UserSettings(**credentials["settings"])
             except Exception as e:
-                logger.warning(f"[{redact_token(token)}] Failed to parse user settings: {e}")
+                logger.exception(f"[{redact_token(token)}] Failed to parse user settings: {e}")
 
         # Fetch fresh library
         library_items = await bundle.library.get_library_items(auth_key)
@@ -75,7 +75,8 @@ async def refresh_catalogs_for_credentials(token: str, credentials: dict[str, An
                 if name := cat.get("name"):
                     try:
                         cat["name"] = await translation_service.translate(name, user_settings.language)
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Failed to translate catalog name '{name}': {e}")
                         pass
 
         logger.info(f"[{redact_token(token)}] Prepared {len(catalogs)} catalogs for background refresh")

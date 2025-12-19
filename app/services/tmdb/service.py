@@ -46,7 +46,7 @@ class TMDBService:
 
             return None, None
         except Exception as e:
-            logger.warning(f"Error finding TMDB ID for IMDB {imdb_id}: {e}")
+            logger.exception(f"Error finding TMDB ID for IMDB {imdb_id}: {e}")
             return None, None
 
     @alru_cache(maxsize=5000)

@@ -95,8 +95,9 @@ async def _manifest_handler(response: Response, token: str):
         creds = await token_store.get_user_data(token)
         if creds and creds.get("settings"):
             user_settings = UserSettings(**creds["settings"])
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
+    except Exception as e:
+        logger.error(f"[{token}] Error loading user data from token store: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token session. Please reconfigure.")
 
     if not creds:
         raise HTTPException(status_code=401, detail="Token not found. Please reconfigure the addon.")
@@ -116,7 +117,8 @@ async def _manifest_handler(response: Response, token: str):
             try:
                 await bundle.auth.get_user_info(auth_key)
                 is_valid = True
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Auth key check failed for {email or 'unknown'}: {e}")
                 pass
 
         if not is_valid and email and password:
@@ -135,7 +137,7 @@ async def _manifest_handler(response: Response, token: str):
                 user_settings or get_default_settings(),
             )
     except Exception as e:
-        logger.warning(f"Dynamic catalog build failed: {e}")
+        logger.exception(f"[{token}] Dynamic catalog build failed: {e}")
         fetched_catalogs = []
     finally:
         await bundle.close()

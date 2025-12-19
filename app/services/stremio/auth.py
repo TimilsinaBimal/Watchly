@@ -36,7 +36,7 @@ class StremioAuthService:
 
             return auth_key
         except Exception as e:
-            logger.error(f"Failed to login to Stremio: {e}")
+            logger.exception(f"Failed to login to Stremio: {e}")
             raise
 
     async def get_user_info(self, auth_key: str) -> dict[str, str]:
@@ -66,5 +66,5 @@ class StremioAuthService:
 
             return {"user_id": user_id, "email": email}
         except Exception as e:
-            logger.error(f"Failed to fetch Stremio user info: {e}")
+            logger.exception(f"Failed to fetch Stremio user info: {e}")
             raise

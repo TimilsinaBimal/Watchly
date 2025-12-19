@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from loguru import logger
+
 from app.models.scoring import ScoredItem, StremioLibraryItem
 
 
@@ -69,7 +71,8 @@ class ScoringService:
         if state.duration and state.duration > 0:
             try:
                 ratio = min(float(state.timeWatched) / float(state.duration), 1.0)
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Math error in completion ratio calculation for {item.state}: {e}")
                 ratio = 0.0
             completion_rate = ratio
             completion_score = ratio * 100.0
@@ -117,7 +120,10 @@ class ScoringService:
                         ratio_component = max((ratio_est - 1.0) * 100.0, 0.0)
                     else:
                         ratio_component = max((float(state.timesWatched) - 1.0) * 20.0, 0.0)
-            except Exception:
+            except Exception as e:
+                from loguru import logger
+
+                logger.debug(f"Math error in rewatch score calculation for {item.item.id}: {e}")
                 ratio_component = 0.0
 
             # Combine components but clamp to reasonable bounds

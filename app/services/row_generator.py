@@ -169,6 +169,8 @@ class RowGeneratorService:
                     if "k" in r["id"] and "." in r["id"]:  # Strategy 1 (dual)
                         strategy1_success = True
                 else:
+                    if isinstance(res, Exception):
+                        logger.warning(f"Gemini failed for strategy {r['id']}: {res}")
                     title = r.get("fallback")
 
             if title:

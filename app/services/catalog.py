@@ -1,6 +1,8 @@
 import asyncio
 from datetime import datetime, timezone
 
+from loguru import logger
+
 from app.core.settings import CatalogConfig, UserSettings
 from app.services.profile.service import UserProfileService
 from app.services.row_generator import RowGeneratorService
@@ -89,8 +91,17 @@ class DynamicCatalogService:
             return_exceptions=True,
         )
 
-        movie_rows = results[0] if not isinstance(results[0], Exception) else []
-        series_rows = results[1] if not isinstance(results[1], Exception) else []
+        if isinstance(results[0], Exception):
+            logger.error(f"Failed to generate thematic rows for movies: {results[0]}")
+            movie_rows = []
+        else:
+            movie_rows = results[0]
+
+        if isinstance(results[1], Exception):
+            logger.error(f"Failed to generate thematic rows for series: {results[1]}")
+            series_rows = []
+        else:
+            series_rows = results[1]
 
         for row in movie_rows:
             catalogs.append({"type": "movie", "id": row.id, "name": row.title, "extra": []})

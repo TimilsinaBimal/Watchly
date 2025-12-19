@@ -1,5 +1,7 @@
 import asyncio
 
+from loguru import logger
+
 from app.models.profile import UserTasteProfile
 from app.services.tmdb.service import get_tmdb_service
 
@@ -228,5 +230,6 @@ class DiscoveryEngine:
             async with self._sem:
                 data = await self.tmdb_service.get_discover(media_type, **params)
                 return data.get("results", [])
-        except Exception:
+        except Exception as e:
+            logger.exception(f"TMDB Discovery failed with params {params}: {e}")
             return []

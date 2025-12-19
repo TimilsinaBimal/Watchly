@@ -28,7 +28,7 @@ class StremioLibraryService:
             metas = data.get("metas", [])
             return [meta.get("id") for meta in metas if meta.get("id")]
         except Exception as e:
-            logger.warning(f"Failed to fetch {status} {media_type} items: {e}")
+            logger.exception(f"Failed to fetch {status} {media_type} items: {e}")
             return []
 
     async def get_library_items(self, auth_key: str) -> dict[str, list[dict[str, Any]]]:
@@ -124,5 +124,5 @@ class StremioLibraryService:
                 "removed": removed,
             }
         except Exception as e:
-            logger.error(f"Error processing library items: {e}")
+            logger.exception(f"Error processing library items: {e}")
             return {"watched": [], "loved": [], "added": [], "removed": []}

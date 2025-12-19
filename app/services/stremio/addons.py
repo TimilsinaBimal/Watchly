@@ -12,7 +12,8 @@ def match_hostname(url: str, hostname: str) -> bool:
         url_host = urlparse(url if "://" in url else f"https://{url}").hostname
         target_host = urlparse(hostname if "://" in hostname else f"https://{hostname}").hostname
         return bool(url_host and target_host and url_host.lower() == target_host.lower())
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to parse or match hostname for URL {url} against {hostname}: {e}")
         return False
 
 
@@ -41,7 +42,7 @@ class StremioAddonService:
 
             return data.get("result", {}).get("addons", [])
         except Exception as e:
-            logger.error(f"Failed to fetch addons: {e}")
+            logger.exception(f"Failed to fetch addons: {e}")
             raise
 
     async def update_addon_collection(self, auth_key: str, addons: list[dict[str, Any]]) -> bool:
@@ -55,7 +56,7 @@ class StremioAddonService:
             data = await self.client.post("/api/addonCollectionSet", json=payload)
             return data.get("result", {}).get("success", False)
         except Exception as e:
-            logger.error(f"Failed to update addon collection: {e}")
+            logger.exception(f"Failed to update addon collection: {e}")
             return False
 
     async def update_catalogs(self, auth_key: str, catalogs: list[dict[str, Any]]) -> bool:

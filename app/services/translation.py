@@ -24,7 +24,7 @@ class TranslationService:
             )
             return translated if translated else text
         except Exception as e:
-            logger.warning(f"Translation failed for '{text}' to '{lang}': {e}")
+            logger.exception(f"Translation failed for '{text}' to '{lang}': {e}")
             return text
 
 

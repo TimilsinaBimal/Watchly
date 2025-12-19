@@ -2,6 +2,8 @@ import asyncio
 from collections import defaultdict
 from typing import Any
 
+from loguru import logger
+
 from app.models.profile import UserTasteProfile
 from app.models.scoring import ScoredItem
 from app.services.profile.similarity import (
@@ -74,7 +76,7 @@ class UserProfileService:
             except Exception as e:
                 from loguru import logger
 
-                logger.warning(f"Failed to process profile item {item.item.id}: {e}")
+                logger.exception(f"Failed to process profile item {item.item.id}: {e}")
                 return None
 
         # Process all items in parallel
@@ -150,7 +152,8 @@ class UserProfileService:
             if type_ == "movie":
                 return await self.tmdb_service.get_movie_details(tmdb_id)
             return await self.tmdb_service.get_tv_details(tmdb_id)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to fetch full metadata for TMDB {tmdb_id} ({type_}): {e}")
             return None
 
     def calculate_similarity(self, profile: UserTasteProfile, item_meta: dict) -> float:
