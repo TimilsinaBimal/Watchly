@@ -58,67 +58,55 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         stremio_auth_key = stremio_auth_key[1:-1].strip()
 
     bundle = StremioBundle()
+    # 1. Establish a valid auth key and fetch user info
+    if email and password:
+        stremio_auth_key = await bundle.auth.login(email, password)
+
     try:
-        # 1. Establish a valid auth key and fetch user info
-        if email and password:
-            try:
-                stremio_auth_key = await bundle.auth.login(email, password)
-                user_info = await bundle.auth.get_user_info(stremio_auth_key)
-                user_id = user_info["user_id"]
-                resolved_email = user_info.get("email", email)
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Failed to verify Stremio identity: {e}")
-        else:
-            try:
-                user_info = await bundle.auth.get_user_info(stremio_auth_key)
-                user_id = user_info["user_id"]
-                resolved_email = user_info.get("email", "")
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Failed to verify Stremio identity: {e}")
+        user_info = await bundle.auth.get_user_info(stremio_auth_key)
+        user_id = user_info["user_id"]
+        resolved_email = user_info.get("email", "")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to verify Stremio identity: {e}")
 
-        # 2. Check if user already exists
-        token = token_store.get_token_from_user_id(user_id)
-        existing_data = await token_store.get_user_data(token)
+    # 2. Check if user already exists
+    token = token_store.get_token_from_user_id(user_id)
+    existing_data = await token_store.get_user_data(token)
 
-        # 3. Construct Settings
-        default_settings = get_default_settings()
-        user_settings = UserSettings(
-            language=payload.language or default_settings.language,
-            catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
-            rpdb_key=payload.rpdb_key.strip() if payload.rpdb_key else None,
-            excluded_movie_genres=payload.excluded_movie_genres,
-            excluded_series_genres=payload.excluded_series_genres,
-        )
+    # 3. Construct Settings
+    default_settings = get_default_settings()
+    user_settings = UserSettings(
+        language=payload.language or default_settings.language,
+        catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
+        rpdb_key=payload.rpdb_key.strip() if payload.rpdb_key else None,
+        excluded_movie_genres=payload.excluded_movie_genres,
+        excluded_series_genres=payload.excluded_series_genres,
+    )
 
-        # 4. Prepare payload to store
-        payload_to_store = {
-            "authKey": stremio_auth_key,
-            "email": resolved_email or email or "",
-            "settings": user_settings.model_dump(),
-        }
-        if email and password:
-            payload_to_store["password"] = password
+    # 4. Prepare payload to store
+    payload_to_store = {
+        "authKey": stremio_auth_key,
+        "email": resolved_email or email or "",
+        "settings": user_settings.model_dump(),
+    }
+    if email and password:
+        payload_to_store["password"] = password
 
-        # 5. Store user data
-        token = await token_store.store_user_data(user_id, payload_to_store)
-        logger.info(
-            "[%s] Account %s for user %s",
-            redact_token(token),
-            "updated" if existing_data else "created",
-            user_id,
-        )
+    # 5. Store user data
+    token = await token_store.store_user_data(user_id, payload_to_store)
+    logger.info(f"[{redact_token(token)}] Account {'updated' if existing_data else 'created'} for user {user_id}")
 
-        base_url = settings.HOST_NAME
-        manifest_url = f"{base_url}/{token}/manifest.json"
-        expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
+    base_url = settings.HOST_NAME
+    manifest_url = f"{base_url}/{token}/manifest.json"
+    # Maybe generate manifest and check if catalogs exist and if not raise error?
+    expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
 
-        return TokenResponse(
-            token=token,
-            manifestUrl=manifest_url,
-            expiresInSeconds=expires_in,
-        )
-    finally:
-        await bundle.close()
+    return TokenResponse(
+        token=token,
+        manifestUrl=manifest_url,
+        expiresInSeconds=expires_in,
+    )
+    await bundle.close()
 
 
 async def get_stremio_user_data(payload: TokenRequest) -> tuple[str, str]:

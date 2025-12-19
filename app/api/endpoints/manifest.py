@@ -50,7 +50,7 @@ def get_base_manifest(user_settings: UserSettings | None = None):
         "background": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/app/static/cover.png",
         "resources": ["catalog"],
         "types": ["movie", "series"],
-        "idPrefixes": ["tt", "tmdb:"],
+        "idPrefixes": ["tt"],
         "catalogs": catalogs,
         "behaviorHints": {"configurable": True, "configurationRequired": False},
         "stremioAddonsConfig": {
@@ -85,7 +85,7 @@ def get_config_id(catalog) -> str | None:
 
 
 async def _manifest_handler(response: Response, token: str):
-    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Cache-Control"] = "public, max-age=300"  # 5 minutes
 
     if not token:
         raise HTTPException(status_code=401, detail="Missing token. Please reconfigure the addon.")
@@ -168,14 +168,6 @@ async def _manifest_handler(response: Response, token: str):
         base_manifest["catalogs"] = base_manifest["catalogs"]
     else:
         base_manifest["catalogs"] = translated_catalogs
-
-    # Debug headers (counts) to help diagnose empty-manifest issues in production
-    try:
-        response.headers["X-Base-Catalogs"] = str(len(base_manifest.get("catalogs", [])))
-        response.headers["X-Dynamic-Catalogs"] = str(len(fetched_catalogs))
-        response.headers["X-Final-Catalogs"] = str(len(base_manifest.get("catalogs", [])))
-    except Exception as e:
-        logger.warning(f"Failed to set debug headers: {e}")
 
     return base_manifest
 

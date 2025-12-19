@@ -61,19 +61,18 @@ class TMDBService:
         params = {"append_to_response": "credits,external_ids,keywords"}
         return await self.client.get(f"/tv/{tv_id}", params=params)
 
-    @alru_cache(maxsize=1000, ttl=21600)  # 6 hours
     async def get_recommendations(self, tmdb_id: int, media_type: str, page: int = 1) -> dict[str, Any]:
         """Get recommendations based on TMDB ID and media type."""
+        logger.info(f"Fetching recommendations for: {tmdb_id}")
         params = {"page": page}
         return await self.client.get(f"/{media_type}/{tmdb_id}/recommendations", params=params)
 
-    @alru_cache(maxsize=1000, ttl=21600)
     async def get_similar(self, tmdb_id: int, media_type: str, page: int = 1) -> dict[str, Any]:
         """Get similar content based on TMDB ID and media type."""
+        logger.info(f"Fetching similar for {tmdb_id}")
         params = {"page": page}
         return await self.client.get(f"/{media_type}/{tmdb_id}/similar", params=params)
 
-    @alru_cache(maxsize=1000, ttl=1800)  # 30 mins
     async def get_discover(
         self,
         media_type: str,
@@ -95,14 +94,12 @@ class TMDBService:
         """Get details of a specific keyword."""
         return await self.client.get(f"/keyword/{keyword_id}")
 
-    @alru_cache(maxsize=500, ttl=3600)  # 1 hour
     async def get_trending(self, media_type: str, time_window: str = "week", page: int = 1) -> dict[str, Any]:
         """Get trending content."""
         mt = "movie" if media_type == "movie" else "tv"
         params = {"page": page}
         return await self.client.get(f"/trending/{mt}/{time_window}", params=params)
 
-    @alru_cache(maxsize=500, ttl=3600)
     async def get_top_rated(self, media_type: str, page: int = 1) -> dict[str, Any]:
         """Get top-rated content list."""
         mt = "movie" if media_type == "movie" else "tv"
