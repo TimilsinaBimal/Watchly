@@ -1,3 +1,4 @@
+import asyncio
 import random
 
 from loguru import logger
@@ -41,129 +42,160 @@ class RowGeneratorService:
 
     async def generate_rows(self, profile: UserTasteProfile, content_type: str = "movie") -> list[RowDefinition]:
         """
-        Generate a diverse set of 3-5 thematic rows.
-        Async to allow fetching names for keywords.
+        Generate a diverse set of 3-5 thematic rows in parallel.
         """
-        rows = []
+        # 1. Extract features
+        top_genres = profile.get_top_genres(limit=3)
+        top_keywords = profile.get_top_keywords(limit=6)
+        top_countries = profile.get_top_countries(limit=1)
+        top_years = profile.years.get_top_features(limit=1)
 
-        # Extract features
-        top_genres = profile.get_top_genres(limit=3)  # [(id, score), ...]
-        top_keywords = profile.get_top_keywords(limit=4)  # [(id, score), ...]
-        top_countries = profile.get_top_countries(limit=1)  # [(code, score)]
-        top_years = profile.years.get_top_features(limit=1)  # [(decade_start, score)]
+        # 2. Fetch all keyword names in parallel
+        kw_ids = [k_id for k_id, _ in top_keywords]
+        kw_names = await asyncio.gather(*[self._get_keyword_name(kid) for kid in kw_ids], return_exceptions=True)
+        keyword_map = {kid: name for kid, name in zip(kw_ids, kw_names) if name and not isinstance(name, Exception)}
 
         genre_map = movie_genres if content_type == "movie" else series_genres
 
-        # Helper to get genre name safely
         def get_gname(gid):
             return genre_map.get(gid, "Movies")
 
         def get_cname(code):
             adjectives = COUNTRY_ADJECTIVES.get(code, [])
-            if adjectives:
-                return random.choice(adjectives)
-            return ""
+            return random.choice(adjectives) if adjectives else ""
 
-        # Strategy 1: Combined Keyword Row (Top Priority)
+        # 3. Define Strategy Candidates & Gemini Tasks
+        gemini_tasks = []
+        rows_to_build = []  # List of (builder_func, prompt_index_or_none)
+
+        # Strategy 1: Keywords
         if top_keywords:
             k_id1 = top_keywords[0][0]
-            kw_name1 = await self._get_keyword_name(k_id1)
+            kw_name1 = keyword_map.get(k_id1)
 
-            use_single_keyword_row = True
             if len(top_keywords) >= 2:
                 k_id2 = top_keywords[1][0]
-                kw_name2 = await self._get_keyword_name(k_id2)
-                title = ""
+                kw_name2 = keyword_map.get(k_id2)
                 if kw_name1 and kw_name2:
-                    title = await gemini_service.generate_content_async(f"Keywords: {kw_name1} + {kw_name2}")
-
-                if title:
-                    rows.append(
-                        RowDefinition(
-                            title=title,
-                            id=f"watchly.theme.k{k_id1}.k{k_id2}",
-                            keywords=[k_id1, k_id2],
-                        )
+                    prompt = f"Keywords: {kw_name1} + {kw_name2}"
+                    gemini_tasks.append(gemini_service.generate_content_async(prompt))
+                    rows_to_build.append(
+                        {
+                            "id": f"watchly.theme.k{k_id1}.k{k_id2}",
+                            "keywords": [k_id1, k_id2],
+                            "prompt_idx": len(gemini_tasks) - 1,
+                            "fallback": None,  # Will use Strategy 1.1 if this fails
+                        }
                     )
-                    use_single_keyword_row = False
-
-            if use_single_keyword_row and kw_name1:
-                rows.append(
-                    RowDefinition(
-                        title=normalize_keyword(kw_name1),
-                        id=f"watchly.theme.k{k_id1}",
-                        keywords=[k_id1],
+                elif kw_name1:
+                    rows_to_build.append(
+                        {"id": f"watchly.theme.k{k_id1}", "keywords": [k_id1], "title": normalize_keyword(kw_name1)}
                     )
+            elif kw_name1:
+                rows_to_build.append(
+                    {"id": f"watchly.theme.k{k_id1}", "keywords": [k_id1], "title": normalize_keyword(kw_name1)}
                 )
 
-        # Strategy 2: Keyword + Genre (Specific Niche)
+        # Strategy 2: Genre + Keyword
         if top_genres and len(top_keywords) > 2:
             g_id = top_genres[0][0]
-            # get random keywords: Just to surprise user in every refresh
             k_id = random.choice(top_keywords[2:])[0]
+            kw_name = keyword_map.get(k_id)
+            if kw_name:
+                prompt = f"Genre: {get_gname(g_id)} + Keyword: {normalize_keyword(kw_name)}"
+                gemini_tasks.append(gemini_service.generate_content_async(prompt))
+                rows_to_build.append(
+                    {
+                        "id": f"watchly.theme.g{g_id}.k{k_id}",
+                        "genres": [g_id],
+                        "keywords": [k_id],
+                        "prompt_idx": len(gemini_tasks) - 1,
+                        "fallback": f"{normalize_keyword(kw_name)} {get_gname(g_id)}",
+                    }
+                )
 
-            if k_id:
-                kw_name = await self._get_keyword_name(k_id)
-                if kw_name:
-                    title = await gemini_service.generate_content_async(
-                        f"Genre: {get_gname(g_id)} + Keyword: {normalize_keyword(kw_name)}"
-                    )
-                    if not title:
-                        title = f"{normalize_keyword(kw_name)} {get_gname(g_id)}"
-                        # keyword and genre can have same name sometimes, remove if so
-                        title = " ".join(dict.fromkeys(title.split()))
-
-                    rows.append(
-                        RowDefinition(
-                            title=title,
-                            id=f"watchly.theme.g{g_id}.k{k_id}",
-                            genres=[g_id],
-                            keywords=[k_id],
-                        )
-                    )
-
-        # Strategy 3: Genre + Country (e.g. "Bollywood Action")
+        # Strategy 3: Genre + Country
         if top_countries and len(top_genres) > 0:
             g_id = top_genres[0][0] if len(top_genres) == 1 else top_genres[1][0]
             c_code = top_countries[0][0]
             c_adj = get_cname(c_code)
             if c_adj:
-                title = await gemini_service.generate_content_async(f"Genre: {get_gname(g_id)} + Country: {c_adj}")
-                if not title:
-                    title = f"{c_adj} {get_gname(g_id)}"
-                rows.append(
-                    RowDefinition(
-                        title=title,
-                        id=f"watchly.theme.g{g_id}.ct{c_code}",  # ct for country
-                        genres=[g_id],
-                        country=c_code,
-                    )
+                prompt = f"Genre: {get_gname(g_id)} + Country: {c_adj}"
+                gemini_tasks.append(gemini_service.generate_content_async(prompt))
+                rows_to_build.append(
+                    {
+                        "id": f"watchly.theme.g{g_id}.ct{c_code}",
+                        "genres": [g_id],
+                        "country": c_code,
+                        "prompt_idx": len(gemini_tasks) - 1,
+                        "fallback": f"{c_adj} {get_gname(g_id)}",
+                    }
                 )
 
-        # Strategy 4: Genre + Era ("90s Action")
+        # Strategy 4: Genre + Era
         if len(top_genres) > 0 and top_years:
-            # Use 3rd genre if available for diversity, else 1st
-            g_id = top_genres[0][0]
-            if len(top_genres) > 2:
-                g_id = top_genres[2][0]
-
+            g_id = top_genres[2][0] if len(top_genres) > 2 else top_genres[0][0]
             decade_start = top_years[0][0]
-            # # Only do this if decade is valid and somewhat old (nostalgia factor)
             if 1970 <= decade_start <= 2010:
-                decade_str = str(decade_start)[2:] + "s"  # "90s"
-                title = await gemini_service.generate_content_async(f"Genre: {get_gname(g_id)} + Era: {decade_str}")
-                if not title:
-                    title = f"{decade_str} {get_gname(g_id)}"
-                rows.append(
+                decade_str = f"{str(decade_start)[2:]}s"
+                prompt = f"Genre: {get_gname(g_id)} + Era: {decade_str}"
+                gemini_tasks.append(gemini_service.generate_content_async(prompt))
+                rows_to_build.append(
+                    {
+                        "id": f"watchly.theme.g{g_id}.y{decade_start}",
+                        "genres": [g_id],
+                        "year_range": (decade_start, decade_start + 9),
+                        "prompt_idx": len(gemini_tasks) - 1,
+                        "fallback": f"{decade_str} {get_gname(g_id)}",
+                    }
+                )
+
+        # 4. Execute all Gemini tasks in parallel
+        gemini_results = await asyncio.gather(*gemini_tasks, return_exceptions=True)
+
+        # 5. Build Final Rows
+        final_rows = []
+        # Support for Strategy 1 fallback (single keyword if dual fails)
+        strategy1_success = False
+
+        for r in rows_to_build:
+            title = r.get("title")
+            idx = r.get("prompt_idx")
+
+            if title is None and idx is not None:
+                res = gemini_results[idx]
+                if not isinstance(res, Exception) and res:
+                    title = res
+                    if "k" in r["id"] and "." in r["id"]:  # Strategy 1 (dual)
+                        strategy1_success = True
+                else:
+                    title = r.get("fallback")
+
+            if title:
+                # Cleanup title
+                title = " ".join(dict.fromkeys(title.split())) if r.get("genres") and r.get("keywords") else title
+                final_rows.append(
                     RowDefinition(
                         title=title,
-                        id=f"watchly.theme.g{g_id}.y{decade_start}",
-                        genres=[g_id],
-                        year_range=(decade_start, decade_start + 9),
+                        id=r["id"],
+                        genres=r.get("genres", []),
+                        keywords=r.get("keywords", []),
+                        country=r.get("country"),
+                        year_range=r.get("year_range"),
                     )
                 )
 
-        return rows
+        # Handle Strategy 1 fallback if dual keyword failed to generate or was never added
+        if top_keywords and not strategy1_success:
+            k1 = top_keywords[0][0]
+            name1 = keyword_map.get(k1)
+            # Only add if it's not already in final_rows (it might be there if dual wasn't possible)
+            if name1 and not any(row.id == f"watchly.theme.k{k1}" for row in final_rows):
+                final_rows.insert(
+                    0, RowDefinition(title=normalize_keyword(name1), id=f"watchly.theme.k{k1}", keywords=[k1])
+                )
+
+        return final_rows
 
     async def _get_keyword_name(self, keyword_id: int) -> str | None:
         try:
