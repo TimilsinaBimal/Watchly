@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.core.settings import UserSettings, get_default_settings
 from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
-from app.services.stremio_service import StremioService
+from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
 
@@ -47,19 +47,23 @@ def get_base_manifest(user_settings: UserSettings | None = None):
         "name": settings.ADDON_NAME,
         "description": "Movie and series recommendations based on your Stremio library",
         "logo": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/app/static/logo.png",
-        "resources": [{"name": "catalog", "types": ["movie", "series"], "idPrefixes": ["tt"]}],
+        "background": "https://raw.githubusercontent.com/TimilsinaBimal/Watchly/refs/heads/main/app/static/cover.png",
+        "resources": ["catalog"],
         "types": ["movie", "series"],
         "idPrefixes": ["tt"],
         "catalogs": catalogs,
         "behaviorHints": {"configurable": True, "configurationRequired": False},
+        "stremioAddonsConfig": {
+            "issuer": "https://stremio-addons.net",
+            "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..ycLGL5WUjggv7PxKPqMLYQ.Y_cD-8wqoXqENdXbFmR1-Si39NtqBlsxEDdrEO0deciilBsWWAlPIglx85XFE4ScSfSqzNxrCZUjHjWWIb2LdcFuvE1RVBrFsUBXgbs5eQknnEL617pFtCWNh0bi37Xv.zYhJ87ZqcYZMRfxLY0bSGQ",  # noqa
+        },
     }
 
 
-async def build_dynamic_catalogs(stremio_service: StremioService, user_settings: UserSettings) -> list[dict]:
-    # Note: get_library_items is the heavy call; StremioService has its own short cache.
-    library_items = await stremio_service.get_library_items()
+async def build_dynamic_catalogs(bundle: StremioBundle, auth_key: str, user_settings: UserSettings) -> list[dict]:
+    # Fetch library using bundle directly
+    library_items = await bundle.library.get_library_items(auth_key)
     dynamic_catalog_service = DynamicCatalogService(
-        stremio_service=stremio_service,
         language=user_settings.language,
     )
     return await dynamic_catalog_service.get_dynamic_catalogs(library_items, user_settings)
@@ -81,7 +85,7 @@ def get_config_id(catalog) -> str | None:
 
 
 async def _manifest_handler(response: Response, token: str):
-    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Cache-Control"] = "public, max-age=300"  # 5 minutes
 
     if not token:
         raise HTTPException(status_code=401, detail="Missing token. Please reconfigure the addon.")
@@ -89,27 +93,54 @@ async def _manifest_handler(response: Response, token: str):
     user_settings = None
     try:
         creds = await token_store.get_user_data(token)
-        if creds.get("settings"):
+        if creds and creds.get("settings"):
             user_settings = UserSettings(**creds["settings"])
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
+    except Exception as e:
+        logger.error(f"[{token}] Error loading user data from token store: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token session. Please reconfigure.")
+
+    if not creds:
+        raise HTTPException(status_code=401, detail="Token not found. Please reconfigure the addon.")
 
     base_manifest = get_base_manifest(user_settings)
 
-    # Build dynamic catalogs using a single service; get_auth_key() handles validation/refresh
-    stremio_service = StremioService(
-        username=creds.get("email", ""),
-        password=creds.get("password", ""),
-        auth_key=creds.get("authKey"),
-    )
+    bundle = StremioBundle()
+    fetched_catalogs = []
     try:
-        fetched_catalogs = await build_dynamic_catalogs(
-            stremio_service,
-            user_settings or get_default_settings(),
-        )
+        # Resolve Auth Key (with potential fallback to login)
+        auth_key = creds.get("authKey")
+        email = creds.get("email")
+        password = creds.get("password")
+
+        is_valid = False
+        if auth_key:
+            try:
+                await bundle.auth.get_user_info(auth_key)
+                is_valid = True
+            except Exception as e:
+                logger.debug(f"Auth key check failed for {email or 'unknown'}: {e}")
+                pass
+
+        if not is_valid and email and password:
+            try:
+                auth_key = await bundle.auth.login(email, password)
+                # Update store
+                creds["authKey"] = auth_key
+                await token_store.update_user_data(token, creds)
+            except Exception as e:
+                logger.error(f"Failed to refresh auth key during manifest fetch: {e}")
+
+        if auth_key:
+            fetched_catalogs = await build_dynamic_catalogs(
+                bundle,
+                auth_key,
+                user_settings or get_default_settings(),
+            )
     except Exception as e:
-        logger.warning(f"Dynamic catalog build failed: {e}")
+        logger.exception(f"[{token}] Dynamic catalog build failed: {e}")
         fetched_catalogs = []
+    finally:
+        await bundle.close()
 
     all_catalogs = [c.copy() for c in base_manifest["catalogs"]] + [c.copy() for c in fetched_catalogs]
 
@@ -122,7 +153,6 @@ async def _manifest_handler(response: Response, token: str):
                 try:
                     cat["name"] = await translation_service.translate(cat["name"], user_settings.language)
                 except Exception as e:
-                    # On translation failure, keep original name and log the error
                     logger.warning(f"Failed to translate catalog name '{cat.get('name')}': {e}")
                 translated_catalogs.append(cat)
     else:
@@ -132,27 +162,8 @@ async def _manifest_handler(response: Response, token: str):
         order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
         translated_catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
 
-    # Safety fallback respecting user settings:
-    # - If the final list is empty AND user's base config allows 'watchly.rec',
-    #   expose the base recommendation rows (so users don't see an empty addon).
-    # - If the user explicitly disabled 'watchly.rec' (or disabled all rows),
-    #   DO NOT add fallback rows; keep it empty to honor their choice.
-    if not translated_catalogs:
-        fallback_base = get_base_manifest(user_settings)
-        if fallback_base.get("catalogs"):
-            base_manifest["catalogs"] = fallback_base["catalogs"]
-        else:
-            base_manifest["catalogs"] = []
-    else:
+    if translated_catalogs:
         base_manifest["catalogs"] = translated_catalogs
-
-    # Debug headers (counts) to help diagnose empty-manifest issues in production
-    try:
-        response.headers["X-Base-Catalogs"] = str(len(get_base_manifest(user_settings)["catalogs"]))
-        response.headers["X-Dynamic-Catalogs"] = str(len(fetched_catalogs))
-        response.headers["X-Final-Catalogs"] = str(len(base_manifest.get("catalogs", [])))
-    except Exception as e:
-        logger.warning(f"Failed to set debug headers: {e}")
 
     return base_manifest
 

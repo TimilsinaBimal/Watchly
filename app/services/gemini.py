@@ -51,7 +51,7 @@ class GeminiService:
             )
             return response.text.strip()
         except Exception as e:
-            logger.error(f"Error generating content: {e}")
+            logger.exception(f"Error generating content with Gemini: {e}")
             return ""
 
     async def generate_content_async(self, prompt: str) -> str:

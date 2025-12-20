@@ -97,8 +97,8 @@ class TokenStore:
             # Close client and disconnect underlying pool
             try:
                 await self._client.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Silent failure closing redis client: {e}")
             try:
                 pool = getattr(self._client, "connection_pool", None)
                 if pool is not None:
@@ -108,8 +108,8 @@ class TokenStore:
                         res = disconnect()
                         if hasattr(res, "__await__"):
                             await res
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Silent failure disconnecting redis pool: {e}")
         finally:
             self._client = None
 
@@ -172,8 +172,8 @@ class TokenStore:
         try:
             if token in self._missing_tokens:
                 del self._missing_tokens[token]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to clear negative cache for {token}: {e}")
 
         return token
 
@@ -184,8 +184,8 @@ class TokenStore:
             if token in self._missing_tokens:
                 logger.debug(f"[REDIS] Negative cache hit for missing token {token}")
                 return None
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to check negative cache for {token}: {e}")
 
         logger.debug(f"[REDIS] Cache miss. Fetching data from redis for {token}")
         key = self._format_key(token)
@@ -196,8 +196,8 @@ class TokenStore:
             # remember negative result briefly
             try:
                 self._missing_tokens[token] = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to set negative cache for missing token {token}: {e}")
             return None
 
         try:
@@ -209,13 +209,15 @@ class TokenStore:
         if data.get("authKey"):
             try:
                 data["authKey"] = self.decrypt_token(data["authKey"])
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Decryption failed for authKey associated with {redact_token(token)}: {e}")
                 # Leave as-is (legacy plaintext or previous failure)
                 pass
         if data.get("password"):
             try:
                 data["password"] = self.decrypt_token(data["password"])
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Decryption failed for password associated with {redact_token(token)}: {e}")
                 # require re-login path when needed
                 data["password"] = None
         return data
@@ -246,8 +248,8 @@ class TokenStore:
         try:
             if token and token in self._missing_tokens:
                 del self._missing_tokens[token]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to clear negative cache during deletion: {e}")
 
     async def iter_payloads(self, batch_size: int = 200) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         try:
@@ -281,7 +283,8 @@ class TokenStore:
                         try:
                             if payload.get("authKey"):
                                 payload["authKey"] = self.decrypt_token(payload["authKey"])
-                        except Exception:
+                        except Exception as e:
+                            logger.error(f"Failed to decrypt authKey in batch iteration: {e}")
                             pass
                         # Token payload ready for consumer
                         tok = k[len(self.KEY_PREFIX) :] if k.startswith(self.KEY_PREFIX) else k  # noqa
@@ -306,7 +309,8 @@ class TokenStore:
                     try:
                         if payload.get("authKey"):
                             payload["authKey"] = self.decrypt_token(payload["authKey"])
-                    except Exception:
+                    except Exception as e:
+                        logger.error(f"Failed to decrypt authKey in batch iteration final loop: {e}")
                         pass
                     tok = k[len(self.KEY_PREFIX) :] if k.startswith(self.KEY_PREFIX) else k  # noqa
                     yield k, payload

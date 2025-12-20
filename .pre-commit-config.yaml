@@ -1,6 +1,5 @@
 default_stages: [pre-commit]
 exclude: '^misc/|^data/|^docs/'
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -16,33 +15,27 @@ repos:
       - id: check-case-conflict
       - id: check-docstring-first
       - id: detect-private-key
-
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.15.2
     hooks:
       - id: pyupgrade
         args: [--py311-plus]
-
   - repo: https://github.com/psf/black
     rev: 24.4.0
     hooks:
       - id: black
-
   - repo: https://github.com/PyCQA/isort
     rev: 5.13.2
     hooks:
       - id: isort
-
   - repo: https://github.com/PyCQA/flake8
     rev: 7.0.0
     hooks:
       - id: flake8
-
   - repo: https://github.com/google/yamlfmt
     rev: v0.11.0
     hooks:
       - id: yamlfmt
-
 # sets up .pre-commit-ci.yaml to ensure pre-commit dependencies stay up to date
 ci:
   autoupdate_schedule: weekly
