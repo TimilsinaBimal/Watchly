@@ -1,7 +1,4 @@
 name: Build and Push Docker Image
-env:
-  DOCKER_BUILDKIT: 1
-  COMPOSE_DOCKER_CLI_BUILD: 1
 on:
   push:
     branches:
@@ -56,12 +53,13 @@ jobs:
         run: |
           REPO_NAME="${GITHUB_REPOSITORY,,}"
           IMAGE_TAG="${{ steps.set-tag.outputs.IMAGE_TAG }}"
-          # Build and tag with version
-          docker build -t ghcr.io/${REPO_NAME}:${IMAGE_TAG} .
-          docker push ghcr.io/${REPO_NAME}:${IMAGE_TAG}
-          # Also tag as latest
-          docker tag ghcr.io/${REPO_NAME}:${IMAGE_TAG} ghcr.io/${REPO_NAME}:latest
-          docker push ghcr.io/${REPO_NAME}:latest
+
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t ghcr.io/${REPO_NAME}:${IMAGE_TAG} \
+            -t ghcr.io/${REPO_NAME}:latest \
+            --push \
+            .
       - name: Create and Push Git Tag
         run: |
           VERSION="${{ steps.get-version.outputs.VERSION }}"
