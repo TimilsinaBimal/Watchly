@@ -676,18 +676,17 @@ async function initializeLanguageSelect() {
         if (!languagesResponse.ok) throw new Error('Failed to fetch languages');
         const languages = await languagesResponse.json();
         languages.sort((a, b) => {
-            if (a.iso_639_1 === 'en') return -1;
-            if (b.iso_639_1 === 'en') return 1;
-            return a.english_name.localeCompare(b.english_name);
+            if (a.iso_639_1 === 'en-US') return -1;
+            if (b.iso_639_1 === 'en-US') return 1;
+            return a.language.localeCompare(b.language);
         });
         languageSelect.innerHTML = languages.map(lang => {
             const code = lang.iso_639_1;
-            const label = lang.name ? lang.name : lang.english_name;
-            const fullLabel = lang.name && lang.name !== lang.english_name ? `${lang.english_name} (${lang.name})` : lang.english_name;
-            return `<option value="${code}" ${code === 'en' ? 'selected' : ''}>${fullLabel}</option>`;
+            const fullLabel = `${lang.language} (${lang.country})`;
+            return `<option value="${code}" ${code === 'en-US' ? 'selected' : ''}>${fullLabel}</option>`;
         }).join('');
     } catch (err) {
-        languageSelect.innerHTML = '<option value="en">English</option>';
+        languageSelect.innerHTML = '<option value="en-US">English (US)</option>';
     }
 }
 

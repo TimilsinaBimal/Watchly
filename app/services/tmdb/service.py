@@ -111,6 +111,16 @@ class TMDBService:
         """Fetch supported languages from TMDB."""
         return await self.client.get("/configuration/languages")
 
+    @alru_cache(maxsize=1, ttl=86400)
+    async def get_countries(self) -> list[dict[str, Any]]:
+        """Fetch supported countries from TMDB."""
+        return await self.client.get("/configuration/countries")
+
+    @alru_cache(maxsize=1, ttl=86400)
+    async def get_primary_translations(self) -> list[str]:
+        """Fetch supported primary translations from TMDB."""
+        return await self.client.get("/configuration/primary_translations")
+
 
 @functools.lru_cache(maxsize=16)
 def get_tmdb_service(language: str = "en-US") -> TMDBService:
