@@ -45,7 +45,11 @@ class RecommendationFiltering:
                 return set(), set()
             library_data = await stremio_service.library.get_library_items(auth_key)
 
-        all_items = library_data.get("loved", []) + library_data.get("watched", []) + library_data.get("removed", [])
+        all_items = (
+            library_data.get("loved", [])
+            + library_data.get("watched", [])
+            + library_data.get("removed", [] + library_data.get("liked"))
+        )
 
         imdb_ids = set()
         tmdb_ids = set()

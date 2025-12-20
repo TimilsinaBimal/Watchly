@@ -120,9 +120,6 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
             token=token,
             library_data=library_items,
         )
-        # Custom attribute for modularized exclusion logic if needed
-        # In this refactor, RecommendationFiltering.get_exclusion_sets(stremio_service, library_data)
-        # is called inside engine, and we pass bundle as stremio_service.
 
         # Resolve per-catalog limits (min/max)
         def _get_limits() -> tuple[int, int]:

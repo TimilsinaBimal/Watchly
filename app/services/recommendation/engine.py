@@ -292,7 +292,6 @@ class RecommendationEngine:
 
     async def _fetch_raw_recommendations(self, item_id: str, media_type: str, limit: int) -> list[dict[str, Any]]:
         """Fetch raw recommendations from TMDB (multiple pages)."""
-        # Logic from _fetch_recommendations_from_tmdb
         mtype = "tv" if media_type in ("tv", "series") else "movie"
         tmdb_id = None
 
@@ -313,25 +312,21 @@ class RecommendationEngine:
             return []
 
         combined = {}
-        for p in [1, 2, 3]:
-            res = await self.tmdb_service.get_recommendations(tmdb_id, mtype, page=p)
-            for it in res.get("results", []):
-                if it.get("id"):
-                    combined[it["id"]] = it
-            if len(combined) >= limit:
-                break
+        # fetch two pages of data
+        for action in ["recommendations", "similar"]:
+            method = getattr(self.tmdb_service, f"get_{action}")
+            results = await asyncio.gather(*[method(tmdb_id, mtype, page=p) for p in [1, 2]], return_exceptions=True)
 
-        if len(combined) < max(20, limit // 2):
-            try:
-                for p in [1, 2]:
-                    res = await self.tmdb_service.get_similar(tmdb_id, mtype, page=p)
-                    for it in res.get("results", []):
-                        if it.get("id"):
-                            combined[it["id"]] = it
-                    if len(combined) >= limit:
-                        break
-            except Exception:
-                pass
+            for res in results:
+                if isinstance(res, Exception):
+                    logger.error(f"Error fetching {action} for {tmdb_id}: {res}")
+                    continue
+                for it in res.get("results", []):
+                    if it.get("id"):
+                        combined[it["id"]] = it
+
+            if len(combined) >= max(20, limit // 2):
+                break
 
         return list(combined.values())
 
