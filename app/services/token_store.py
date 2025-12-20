@@ -1,6 +1,5 @@
 import base64
 import json
-from collections.abc import AsyncIterator
 from typing import Any
 
 import redis.asyncio as redis
@@ -177,6 +176,11 @@ class TokenStore:
 
         return token
 
+    async def update_user_data(self, token: str, payload: dict[str, Any]) -> str:
+        """Update user data by token. This is a convenience wrapper around store_user_data."""
+        user_id = self.get_user_id_from_token(token)
+        return await self.store_user_data(user_id, payload)
+
     @alru_cache(maxsize=2000, ttl=43200)
     async def get_user_data(self, token: str) -> dict[str, Any] | None:
         # Short-circuit for tokens known to be missing
@@ -250,72 +254,6 @@ class TokenStore:
                 del self._missing_tokens[token]
         except Exception as e:
             logger.debug(f"Failed to clear negative cache during deletion: {e}")
-
-    async def iter_payloads(self, batch_size: int = 200) -> AsyncIterator[tuple[str, dict[str, Any]]]:
-        try:
-            client = await self._get_client()
-        except (redis.RedisError, OSError) as exc:
-            logger.warning(f"Skipping credential iteration; Redis unavailable: {exc}")
-            return
-
-        pattern = f"{self.KEY_PREFIX}*"
-
-        try:
-            buffer: list[str] = []
-            async for key in client.scan_iter(match=pattern, count=batch_size):
-                buffer.append(key)
-                if len(buffer) >= batch_size:
-                    try:
-                        self._incr_calls()
-                        values = await client.mget(buffer)
-                    except (redis.RedisError, OSError) as exc:
-                        logger.warning(f"Failed batch fetch for {len(buffer)} keys: {exc}")
-                        values = [None] * len(buffer)
-                    for k, data_raw in zip(buffer, values):
-                        if not data_raw:
-                            continue
-                        try:
-                            payload = json.loads(data_raw)
-                        except json.JSONDecodeError:
-                            logger.warning(f"Failed to decode payload for key {redact_token(k)}. Skipping.")
-                            continue
-                        # Decrypt authKey for downstream consumers
-                        try:
-                            if payload.get("authKey"):
-                                payload["authKey"] = self.decrypt_token(payload["authKey"])
-                        except Exception as e:
-                            logger.error(f"Failed to decrypt authKey in batch iteration: {e}")
-                            pass
-                        # Token payload ready for consumer
-                        tok = k[len(self.KEY_PREFIX) :] if k.startswith(self.KEY_PREFIX) else k  # noqa
-                        yield k, payload
-                    buffer.clear()
-
-            # Flush remainder
-            if buffer:
-                try:
-                    values = await client.mget(buffer)
-                except (redis.RedisError, OSError) as exc:
-                    logger.warning(f"Failed batch fetch for {len(buffer)} keys: {exc}")
-                    values = [None] * len(buffer)
-                for k, data_raw in zip(buffer, values):
-                    if not data_raw:
-                        continue
-                    try:
-                        payload = json.loads(data_raw)
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to decode payload for key {redact_token(k)}. Skipping.")
-                        continue
-                    try:
-                        if payload.get("authKey"):
-                            payload["authKey"] = self.decrypt_token(payload["authKey"])
-                    except Exception as e:
-                        logger.error(f"Failed to decrypt authKey in batch iteration final loop: {e}")
-                        pass
-                    tok = k[len(self.KEY_PREFIX) :] if k.startswith(self.KEY_PREFIX) else k  # noqa
-                    yield k, payload
-        except (redis.RedisError, OSError) as exc:
-            logger.warning(f"Failed to scan credential tokens: {exc}")
 
     async def count_users(self) -> int:
         """Count total users by scanning Redis keys with the configured prefix.

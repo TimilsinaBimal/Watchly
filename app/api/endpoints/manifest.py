@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.settings import UserSettings, get_default_settings
 from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
+from app.services.catalog_updater import get_config_id
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
@@ -67,21 +68,6 @@ async def build_dynamic_catalogs(bundle: StremioBundle, auth_key: str, user_sett
         language=user_settings.language,
     )
     return await dynamic_catalog_service.get_dynamic_catalogs(library_items, user_settings)
-
-
-def get_config_id(catalog) -> str | None:
-    catalog_id = catalog.get("id", "")
-    if catalog_id.startswith("watchly.theme."):
-        return "watchly.theme"
-    if catalog_id.startswith("watchly.loved."):
-        return "watchly.loved"
-    if catalog_id.startswith("watchly.watched."):
-        return "watchly.watched"
-    if catalog_id.startswith("watchly.item."):
-        return "watchly.item"
-    if catalog_id.startswith("watchly.rec"):
-        return "watchly.rec"
-    return catalog_id
 
 
 async def _manifest_handler(response: Response, token: str):

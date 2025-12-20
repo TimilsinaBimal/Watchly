@@ -10,14 +10,10 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.main import api_router
-from app.services.catalog_updater import BackgroundCatalogUpdater
 from app.services.token_store import token_store
 
 from .config import settings
 from .version import __version__
-
-# Global catalog updater instance
-catalog_updater: BackgroundCatalogUpdater | None = None
 
 
 @asynccontextmanager
@@ -25,19 +21,7 @@ async def lifespan(app: FastAPI):
     """
     Manage application lifespan events (startup/shutdown).
     """
-    global catalog_updater
-    # Startup
-    if settings.AUTO_UPDATE_CATALOGS:
-        catalog_updater = BackgroundCatalogUpdater()
-        catalog_updater.start()
     yield
-
-    # Shutdown
-    if catalog_updater:
-        await catalog_updater.stop()
-        catalog_updater = None
-        logger.info("Background catalog updates stopped")
-    # Close shared token store Redis client
     try:
         await token_store.close()
         logger.info("TokenStore Redis client closed")

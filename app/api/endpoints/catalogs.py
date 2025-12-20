@@ -4,9 +4,10 @@ from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
 from app.api.endpoints.manifest import get_config_id
+from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
-from app.services.catalog_updater import refresh_catalogs_for_credentials
+from app.services.catalog_updater import catalog_updater
 from app.services.recommendation.engine import RecommendationEngine
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
@@ -79,6 +80,10 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
     credentials = await token_store.get_user_data(token)
     if not credentials:
         raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
+
+    # Trigger lazy update if needed
+    if settings.AUTO_UPDATE_CATALOGS:
+        await catalog_updater.trigger_update(token, credentials)
 
     bundle = StremioBundle()
     try:
@@ -200,17 +205,3 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         await bundle.close()
-
-
-@router.get("/{token}/catalog/update")
-async def update_catalogs(token: str):
-    """
-    Update the catalogs for the addon. This is a manual endpoint to update the catalogs.
-    """
-    # Decode credentials from path
-    credentials = await token_store.get_user_data(token)
-
-    logger.info(f"[{redact_token(token)}] Updating catalogs in response to manual request")
-    updated = await refresh_catalogs_for_credentials(token, credentials)
-    logger.info(f"Manual catalog update completed: {updated}")
-    return {"success": updated}
