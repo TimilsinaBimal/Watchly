@@ -16,6 +16,7 @@ dependencies = [
     "loguru>=0.7.2",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
+    "pydantic-core>=2.41.5",
     "redis>=5.0.1",
     "tomli>=2.3.0",
     "uvicorn[standard]>=0.24.0",
@@ -30,6 +31,9 @@ dev = [
     "flake9>=3.8.3.post2",
     "pre-commit>=4.4.0",
 ]
+
+[project.scripts]
+app = "app.core.app:app"
 
 
 # ==== black ====
