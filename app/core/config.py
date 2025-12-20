@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     HOST_NAME: str = "https://1ccea4301587-watchly.baby-beamup.club"
 
     RECOMMENDATION_SOURCE_ITEMS_LIMIT: int = 10
+    LIBRARY_ITEMS_LIMIT: int = 20
 
     # AI
     DEFAULT_GEMINI_MODEL: str = "gemma-3-27b-it"

@@ -4,6 +4,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.config import settings
 from app.core.settings import UserSettings
 from app.services.discovery import DiscoveryEngine
 from app.services.profile.service import UserProfileService
@@ -334,7 +335,6 @@ class RecommendationEngine:
         if content_type in self._whitelist_cache:
             return self._whitelist_cache[content_type]
 
-        # Logic from _get_top_genre_whitelist
         try:
             if scored_objects is None:
                 if self._library_data is None:
@@ -346,6 +346,7 @@ class RecommendationEngine:
                     self._library_data.get("loved", [])
                     + self._library_data.get("watched", [])
                     + self._library_data.get("added", [])
+                    + self._library_data.get("liked", [])
                 )
                 typed = [
                     it
@@ -357,7 +358,9 @@ class RecommendationEngine:
                     key=lambda x: x.get("state", {}).get("lastWatched") or "",
                     reverse=True,
                 )
-                scored_objects = [self.scoring_service.process_item(it) for it in sorted_hist[:10]]
+                scored_objects = [
+                    self.scoring_service.process_item(it) for it in sorted_hist[: settings.LIBRARY_ITEMS_LIMIT]
+                ]
 
             prof_type = "series" if content_type in ("tv", "series") else "movie"
             temp_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type=prof_type)
@@ -634,11 +637,13 @@ class RecommendationEngine:
         whitelist = await self._get_genre_whitelist(content_type)
         candidates = []
         try:
-            for p in [1, 2, 3]:
-                res = await self.tmdb_service.get_discover(content_type, page=p, **params)
+            discover_tasks = [self.tmdb_service.get_discover(content_type, page=p, **params) for p in [1, 2, 3]]
+            discover_results = await asyncio.gather(*discover_tasks, return_exceptions=True)
+            for res in discover_results:
+                if isinstance(res, Exception):
+                    logger.error(f"Error fetching discover for {content_type}: {res}")
+                    continue
                 candidates.extend(res.get("results", []))
-                if len(candidates) >= limit * 2:
-                    break
         except Exception:
             pass
 
