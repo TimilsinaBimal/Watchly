@@ -62,6 +62,7 @@ class StremioLibraryService:
             loved: list[dict] = []
             added: list[dict] = []
             removed: list[dict] = []
+            liked: list[dict] = []
 
             # Create sets for faster lookup
             loved_set = set(loved_movies + loved_series)
@@ -79,7 +80,7 @@ class StremioLibraryService:
                 # Check Watched status
                 state = item.get("state", {}) or {}
                 times_watched = int(state.get("timesWatched") or 0)
-                flagged_watched = int(state.get("flagged_watched") or state.get("flaggedWatched") or 0)
+                flagged_watched = int(state.get("flaggedWatched") or 0)
                 duration = int(state.get("duration") or 0)
                 time_watched = int(state.get("timeWatched") or 0)
 
@@ -89,23 +90,26 @@ class StremioLibraryService:
                 if is_watched:
                     # Set flags for recommendation engine compatibility
                     is_item_loved = False
+                    is_item_liked = False
                     if item_id in loved_set:
                         item["_is_loved"] = True
                         is_item_loved = True
                     if item_id in liked_set:
                         item["_is_liked"] = True
-                        is_item_loved = True
+                        is_item_liked = True
 
                     watched.append(item)
                     if is_item_loved:
                         loved.append(item)
+                    if is_item_liked:
+                        liked.append(item)
                 else:
-                    # Item is NOT considered watched
                     if item_id in all_loved_ids:
-                        # Loved but not watched - in legacy code, these were EXCLUDED from the loved list
-                        # and EXCLUDED from the added list (unless it's in all_raw_items check below)
+                        # if item is loved but not watched, do nothing
                         pass
                     elif not item.get("removed") and not item.get("temp"):
+                        # item has not removed and item is not temporary meaning item is not
+                        # added by stremio itself on user watch
                         added.append(item)
                     elif item.get("removed"):
                         removed.append(item)
@@ -116,13 +120,23 @@ class StremioLibraryService:
                 return (str(state.get("lastWatched") or ""), str(x.get("_mtime") or ""))
 
             watched.sort(key=sort_by_recency, reverse=True)
+            loved.sort(key=sort_by_recency, reverse=True)
+            liked.sort(key=sort_by_recency, reverse=True)
+            added.sort(key=sort_by_recency, reverse=True)
+            removed.sort(key=sort_by_recency, reverse=True)
+
+            logger.info(
+                f"Processed {len(watched)} watched items, {len(loved)} loved items,"
+                f"{len(liked)} liked items, {len(added)} added items, {len(removed)} removed items"
+            )
 
             return {
                 "watched": watched,
                 "loved": loved,
+                "liked": liked,
                 "added": added,
                 "removed": removed,
             }
         except Exception as e:
             logger.exception(f"Error processing library items: {e}")
-            return {"watched": [], "loved": [], "added": [], "removed": []}
+            return {"watched": [], "loved": [], "liked": [], "added": [], "removed": []}

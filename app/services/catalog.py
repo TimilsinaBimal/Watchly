@@ -1,4 +1,5 @@
 import asyncio
+import random
 from datetime import datetime, timezone
 from typing import Any
 
@@ -52,7 +53,7 @@ class DynamicCatalogService:
     ) -> list[dict]:
         """Build thematic catalogs by profiling recently watched items."""
         # 1. Prepare Scored History
-        all_items = library_items.get("loved", []) + library_items.get("watched", [])
+        all_items = library_items.get("loved", []) + library_items.get("watched", []) + library_items.get("liked", [])
         unique_items = {item["_id"]: item for item in all_items}
 
         sorted_history = sorted(
@@ -167,7 +168,8 @@ class DynamicCatalogService:
             loved = [i for i in library_items.get("loved", []) if i.get("type") == content_type]
             loved.sort(key=self._parse_item_last_watched, reverse=True)
 
-            last_loved = loved[0] if loved else None
+            # gather random last loved from last 3 items
+            last_loved = random.choice(loved[:3]) if loved else None
             if last_loved:
                 label = loved_config.name if loved_config.name else "More like"
                 catalogs.append(self.build_catalog_entry(last_loved, label, "watchly.loved"))
@@ -177,13 +179,12 @@ class DynamicCatalogService:
             watched = [i for i in library_items.get("watched", []) if i.get("type") == content_type]
             watched.sort(key=self._parse_item_last_watched, reverse=True)
 
-            last_watched = None
-            for item in watched:
-                # Avoid duplicate row if it's the same item as 'More like'
-                if last_loved and item.get("_id") == last_loved.get("_id"):
-                    continue
-                last_watched = item
-                break
+            # watched cannot be similar to loved
+            if last_loved:
+                watched = [i for i in watched if i.get("_id") != last_loved.get("_id")]
+
+            # gather random last watched from last 3 items
+            last_watched = random.choice(watched[:3]) if watched else None
 
             if last_watched:
                 label = watched_config.name if watched_config.name else "Because you watched"
