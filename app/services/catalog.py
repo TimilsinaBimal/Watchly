@@ -81,7 +81,12 @@ class DynamicCatalogService:
             profile = await self.user_profile_service.build_user_profile(
                 scored_objects, content_type=media_type, excluded_genres=genres
             )
-            return media_type, await self.row_generator.generate_rows(profile, media_type)
+            try:
+                catalogs = await self.row_generator.generate_rows(profile, media_type)
+                return media_type, catalogs
+            except Exception as e:
+                logger.error(f"Failed to generate thematic rows for {media_type}: {e}")
+                raise e
 
         tasks = []
         if enabled_movie:
@@ -96,7 +101,6 @@ class DynamicCatalogService:
 
         for result in results:
             if isinstance(result, Exception):
-                logger.error(f"Failed to generate thematic rows: {result}")
                 continue
             media_type, rows = result
             for row in rows:
