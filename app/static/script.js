@@ -1,9 +1,9 @@
 // Default catalog configurations
 const defaultCatalogs = [
-    { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, minItems: 20, maxItems: 24, description: 'Personalized recommendations based on your library' },
-    { id: 'watchly.loved', name: 'More Like', enabled: true, minItems: 20, maxItems: 24, description: 'Recommendations similar to content you explicitly loved' },
-    { id: 'watchly.watched', name: 'Because You Watched', enabled: true, minItems: 20, maxItems: 24, description: 'Recommendations based on your recent watch history' },
-    { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, minItems: 20, maxItems: 24, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
+    { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Personalized recommendations based on your library' },
+    { id: 'watchly.loved', name: 'More Like', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations similar to content you explicitly loved' },
+    { id: 'watchly.watched', name: 'Because You Watched', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations based on your recent watch history' },
+    { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
 ];
 
 let catalogs = JSON.parse(JSON.stringify(defaultCatalogs));
@@ -364,6 +364,8 @@ async function fetchStremioIdentity(authKey) {
                         if (remote.name) local.name = remote.name;
                         if (typeof remote.min_items === 'number') local.minItems = remote.min_items;
                         if (typeof remote.max_items === 'number') local.maxItems = remote.max_items;
+                        if (typeof remote.enabled_movie === 'boolean') local.enabledMovie = remote.enabled_movie;
+                        if (typeof remote.enabled_series === 'boolean') local.enabledSeries = remote.enabled_series;
                     }
                 });
                 renderCatalogList();
@@ -406,7 +408,7 @@ function initializeEmailPasswordLogin() {
         }
         if (!isValidEmail(email)) {
             showEmailPwdError('Please enter a valid email address.');
-            try { emailInput?.focus(); } catch (e) {}
+            try { emailInput?.focus(); } catch (e) { }
             return;
         }
         try {
@@ -592,10 +594,37 @@ async function initializeFormSubmission() {
                 // Enforce server policy: min <= 20, max <= 32, and max >= min
                 minV = Math.max(1, Math.min(20, minV));
                 maxV = Math.max(minV, Math.min(32, maxV));
+
+                // Get enabled_movie and enabled_series from toggle buttons
+                const activeBtn = document.querySelector(`.catalog-type-btn[data-catalog-id="${catalogId}"].bg-white`);
+                let enabledMovie = true;
+                let enabledSeries = true;
+
+                if (activeBtn) {
+                    const mode = activeBtn.dataset.mode;
+                    if (mode === 'movie') {
+                        enabledMovie = true;
+                        enabledSeries = false;
+                    } else if (mode === 'series') {
+                        enabledMovie = false;
+                        enabledSeries = true;
+                    } else {
+                        // 'both' or default
+                        enabledMovie = true;
+                        enabledSeries = true;
+                    }
+                } else {
+                    // Fallback to catalog state
+                    enabledMovie = originalCatalog.enabledMovie !== false;
+                    enabledSeries = originalCatalog.enabledSeries !== false;
+                }
+
                 catalogsToSend.push({
                     id: catalogId,
                     name: originalCatalog.name,
                     enabled: enabled,
+                    enabled_movie: enabledMovie,
+                    enabled_series: enabledSeries,
                     min_items: minV,
                     max_items: maxV,
                 });
@@ -748,6 +777,13 @@ function createCatalogItem(cat, index) {
     item.setAttribute('data-index', index);
 
     const isRenamable = cat.id !== 'watchly.theme';
+
+    // Determine active mode for toggle buttons
+    const enabledMovie = cat.enabledMovie !== false;
+    const enabledSeries = cat.enabledSeries !== false;
+    let activeMode = 'both';
+    if (enabledMovie && !enabledSeries) activeMode = 'movie';
+    else if (!enabledMovie && enabledSeries) activeMode = 'series';
     item.innerHTML = `
         <div class="flex items-start gap-3 sm:items-center sm:gap-4">
             <div class="sort-buttons flex flex-col gap-1 flex-shrink-0 mt-0.5 sm:mt-0">
@@ -772,22 +808,17 @@ function createCatalogItem(cat, index) {
             </label>
         </div>
         <div class="catalog-desc hidden sm:block text-xs text-slate-500 mt-2 ml-8 pl-1">${escapeHtml(cat.description || '')}</div>
-        <div class="mt-3 grid grid-cols-2 gap-3 ml-8">
-            <div class="text-xs text-slate-400 flex items-center gap-2">
-                <span class="whitespace-nowrap">Min items</span>
-                <div class="flex items-center gap-2 bg-neutral-950 border border-white/10 rounded-lg px-2 py-1">
-                    <button type="button" class="btn-minus step-btn text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1" aria-label="Decrease minimum">−</button>
-                    <input type="number" name="min-items" min="1" max="20" value="${(cat.minItems ?? 20)}" class="stepper-input w-16 bg-transparent outline-none text-white text-sm text-center" />
-                    <button type="button" class="btn-plus step-btn text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1" aria-label="Increase minimum">+</button>
-                </div>
-            </div>
-            <div class="text-xs text-slate-400 flex items-center gap-2">
-                <span class="whitespace-nowrap">Max items</span>
-                <div class="flex items-center gap-2 bg-neutral-950 border border-white/10 rounded-lg px-2 py-1">
-                    <button type="button" class="btn-minus-max step-btn text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1" aria-label="Decrease maximum">−</button>
-                    <input type="number" name="max-items" min="1" max="32" value="${(cat.maxItems ?? 24)}" class="stepper-input w-16 bg-transparent outline-none text-white text-sm text-center" />
-                    <button type="button" class="btn-plus-max step-btn text-slate-300 hover:text-white hover:bg-white/10 rounded-md px-2 py-1" aria-label="Increase maximum">+</button>
-                </div>
+        <div class="mt-3 ml-8">
+            <div class="inline-flex items-center bg-neutral-950 border border-white/10 rounded-lg p-1" role="group" aria-label="Content type selection">
+                <button type="button" class="catalog-type-btn px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeMode === 'both' ? 'bg-white text-black shadow-sm hover:text-black' : 'text-slate-400 hover:text-white'}" data-catalog-id="${cat.id}" data-mode="both">
+                    Both
+                </button>
+                <button type="button" class="catalog-type-btn px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeMode === 'movie' ? 'bg-white text-black shadow-sm hover:text-black' : 'text-slate-400 hover:text-white'}" data-catalog-id="${cat.id}" data-mode="movie">
+                    Movie
+                </button>
+                <button type="button" class="catalog-type-btn px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeMode === 'series' ? 'bg-white text-black shadow-sm hover:text-black' : 'text-slate-400 hover:text-white'}" data-catalog-id="${cat.id}" data-mode="series">
+                    Series
+                </button>
             </div>
         </div>
     `;
@@ -801,38 +832,37 @@ function createCatalogItem(cat, index) {
         else item.classList.add('opacity-50');
     });
 
+    // Handle movie/series toggle button changes
+    const allTypeButtons = item.querySelectorAll(`.catalog-type-btn[data-catalog-id="${cat.id}"]`);
+
+    allTypeButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const mode = e.target.dataset.mode;
+
+            // Update state
+            if (mode === 'both') {
+                cat.enabledMovie = true;
+                cat.enabledSeries = true;
+            } else if (mode === 'movie') {
+                cat.enabledMovie = true;
+                cat.enabledSeries = false;
+            } else if (mode === 'series') {
+                cat.enabledMovie = false;
+                cat.enabledSeries = true;
+            }
+
+            // Update UI
+            allTypeButtons.forEach(b => {
+                b.classList.remove('bg-white', 'text-black', 'shadow-sm', 'hover:text-black');
+                b.classList.add('text-slate-400', 'hover:text-white');
+            });
+            e.target.classList.remove('text-slate-400', 'hover:text-white');
+            e.target.classList.add('bg-white', 'text-black', 'shadow-sm', 'hover:text-black');
+        });
+    });
+
     item.querySelector('.move-up').addEventListener('click', (e) => { e.preventDefault(); moveCatalogUp(index); });
     item.querySelector('.move-down').addEventListener('click', (e) => { e.preventDefault(); moveCatalogDown(index); });
-
-    // keep min/max in model
-    const minEl = item.querySelector("input[name='min-items']");
-    const maxEl = item.querySelector("input[name='max-items']");
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    const sync = () => {
-        let minV = parseInt(minEl.value || '20', 10);
-        let maxV = parseInt(maxEl.value || '24', 10);
-        if (Number.isNaN(minV)) minV = 20;
-        if (Number.isNaN(maxV)) maxV = 24;
-        minV = clamp(minV, 1, 20);
-        maxV = clamp(maxV, 1, 32);
-        if (maxV < minV) maxV = minV;
-        minEl.value = String(minV);
-        maxEl.value = String(maxV);
-        cat.minItems = minV;
-        cat.maxItems = maxV;
-    };
-    minEl.addEventListener('change', sync);
-    maxEl.addEventListener('change', sync);
-
-    const inc = (el, delta) => { el.value = String((parseInt(el.value || '0', 10) || 0) + delta); sync(); };
-    const btnMinMinus = item.querySelector('.btn-minus');
-    const btnMinPlus = item.querySelector('.btn-plus');
-    const btnMaxMinus = item.querySelector('.btn-minus-max');
-    const btnMaxPlus = item.querySelector('.btn-plus-max');
-    btnMinMinus.addEventListener('click', () => inc(minEl, -1));
-    btnMinPlus.addEventListener('click', () => inc(minEl, +1));
-    btnMaxMinus.addEventListener('click', () => inc(maxEl, -1));
-    btnMaxPlus.addEventListener('click', () => inc(maxEl, +1));
 
     return item;
 }

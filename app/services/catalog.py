@@ -49,7 +49,11 @@ class DynamicCatalogService:
         }
 
     async def get_theme_based_catalogs(
-        self, library_items: dict, user_settings: UserSettings | None = None
+        self,
+        library_items: dict,
+        user_settings: UserSettings | None = None,
+        enabled_movie: bool = True,
+        enabled_series: bool = True,
     ) -> list[dict]:
         """Build thematic catalogs by profiling recently watched items."""
         # 1. Prepare Scored History
@@ -77,22 +81,25 @@ class DynamicCatalogService:
             profile = await self.user_profile_service.build_user_profile(
                 scored_objects, content_type=media_type, excluded_genres=genres
             )
-            return await self.row_generator.generate_rows(profile, media_type)
+            return media_type, await self.row_generator.generate_rows(profile, media_type)
 
-        results = await asyncio.gather(
-            _generate_for_type("movie", excluded_movie_genres),
-            _generate_for_type("series", excluded_series_genres),
-            return_exceptions=True,
-        )
+        tasks = []
+        if enabled_movie:
+            tasks.append(_generate_for_type("movie", excluded_movie_genres))
+        if enabled_series:
+            tasks.append(_generate_for_type("series", excluded_series_genres))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # 4. Assembly with error handling
         catalogs = []
-        for idx, media_type in enumerate(["movie", "series"]):
-            res = results[idx]
-            if isinstance(res, Exception):
-                logger.error(f"Failed to generate thematic rows for {media_type}: {res}")
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Failed to generate thematic rows: {result}")
                 continue
-            for row in res:
+            media_type, rows = result
+            for row in rows:
                 catalogs.append({"type": media_type, "id": row.id, "name": row.title, "extra": []})
 
         return catalogs
@@ -108,7 +115,13 @@ class DynamicCatalogService:
 
         # 2. Add Thematic Catalogs
         if theme_cfg and theme_cfg.enabled:
-            catalogs.extend(await self.get_theme_based_catalogs(library_items, user_settings))
+            # Filter theme catalogs by enabled_movie/enabled_series
+            enabled_movie = getattr(theme_cfg, "enabled_movie", True)
+            enabled_series = getattr(theme_cfg, "enabled_series", True)
+            theme_catalogs = await self.get_theme_based_catalogs(
+                library_items, user_settings, enabled_movie, enabled_series
+            )
+            catalogs.extend(theme_catalogs)
 
         # 3. Add Item-Based Catalogs (Movies & Series)
         for mtype in ["movie", "series"]:
@@ -161,10 +174,19 @@ class DynamicCatalogService:
         loved_config,
         watched_config,
     ):
+        # Check if this content type is enabled for the configs
+        def is_type_enabled(config, content_type: str) -> bool:
+            if not config:
+                return False
+            if content_type == "movie":
+                return getattr(config, "enabled_movie", True)
+            elif content_type == "series":
+                return getattr(config, "enabled_series", True)
+            return True
 
         # 1. More Like <Loved Item>
         last_loved = None  # Initialize for the watched check
-        if loved_config and loved_config.enabled:
+        if loved_config and loved_config.enabled and is_type_enabled(loved_config, content_type):
             loved = [i for i in library_items.get("loved", []) if i.get("type") == content_type]
             loved.sort(key=self._parse_item_last_watched, reverse=True)
 
@@ -175,7 +197,7 @@ class DynamicCatalogService:
                 catalogs.append(self.build_catalog_entry(last_loved, label, "watchly.loved"))
 
         # 2. Because you watched <Watched Item>
-        if watched_config and watched_config.enabled:
+        if watched_config and watched_config.enabled and is_type_enabled(watched_config, content_type):
             watched = [i for i in library_items.get("watched", []) if i.get("type") == content_type]
             watched.sort(key=self._parse_item_last_watched, reverse=True)
 

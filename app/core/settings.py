@@ -5,6 +5,8 @@ class CatalogConfig(BaseModel):
     id: str  # "watchly.rec", "watchly.theme", "watchly.item"
     name: str | None = None
     enabled: bool = True
+    enabled_movie: bool = Field(default=True, description="Enable movie catalog for this configuration")
+    enabled_series: bool = Field(default=True, description="Enable series catalog for this configuration")
     min_items: int = Field(default=20, ge=1, le=20)
     max_items: int = Field(default=24, ge=1, le=32)
 
@@ -21,10 +23,20 @@ def get_default_settings() -> UserSettings:
     return UserSettings(
         language="en-US",
         catalogs=[
-            CatalogConfig(id="watchly.rec", name="Top Picks for You", enabled=True),
-            CatalogConfig(id="watchly.loved", name="More Like", enabled=True),
-            CatalogConfig(id="watchly.watched", name="Because you watched", enabled=True),
-            CatalogConfig(id="watchly.theme", name="Genre & Keyword Catalogs", enabled=True),
+            CatalogConfig(
+                id="watchly.rec", name="Top Picks for You", enabled=True, enabled_movie=True, enabled_series=True
+            ),
+            CatalogConfig(id="watchly.loved", name="More Like", enabled=True, enabled_movie=True, enabled_series=True),
+            CatalogConfig(
+                id="watchly.watched", name="Because you watched", enabled=True, enabled_movie=True, enabled_series=True
+            ),
+            CatalogConfig(
+                id="watchly.theme",
+                name="Genre & Keyword Catalogs",
+                enabled=True,
+                enabled_movie=True,
+                enabled_series=True,
+            ),
         ],
     )
 

@@ -27,20 +27,28 @@ def get_base_manifest(user_settings: UserSettings | None = None):
         catalogs = []
     else:
         name = rec_config.name if rec_config and rec_config.name else "Top Picks for You"
-        catalogs = [
-            {
-                "type": "movie",
-                "id": "watchly.rec",
-                "name": name,
-                "extra": [],
-            },
-            {
-                "type": "series",
-                "id": "watchly.rec",
-                "name": name,
-                "extra": [],
-            },
-        ]
+        enabled_movie = getattr(rec_config, "enabled_movie", True) if rec_config else True
+        enabled_series = getattr(rec_config, "enabled_series", True) if rec_config else True
+
+        catalogs = []
+        if enabled_movie:
+            catalogs.append(
+                {
+                    "type": "movie",
+                    "id": "watchly.rec",
+                    "name": name,
+                    "extra": [],
+                }
+            )
+        if enabled_series:
+            catalogs.append(
+                {
+                    "type": "series",
+                    "id": "watchly.rec",
+                    "name": name,
+                    "extra": [],
+                }
+            )
 
     return {
         "id": settings.ADDON_ID,
