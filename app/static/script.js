@@ -682,8 +682,8 @@ async function initializeLanguageSelect() {
         });
         languageSelect.innerHTML = languages.map(lang => {
             const code = lang.iso_639_1;
-            const fullLabel = `${lang.language} (${lang.country})`;
-            return `<option value="${code}" ${code === 'en-US' ? 'selected' : ''}>${fullLabel}</option>`;
+            const fullLabel = escapeHtml(lang.language) + ' (' + escapeHtml(lang.country) + ')';
+            return '<option value="' + escapeHtml(code) + '"' + (code === 'en-US' ? ' selected' : '') + '>' + fullLabel + '</option>';
         }).join('');
     } catch (err) {
         languageSelect.innerHTML = '<option value="en-US">English (US)</option>';
