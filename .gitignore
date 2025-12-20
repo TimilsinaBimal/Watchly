@@ -46,3 +46,4 @@ logs/
 # python notebooks
 */ipynb_checkpoints/
 *.ipynb
+.vercel
