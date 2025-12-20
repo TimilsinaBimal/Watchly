@@ -108,6 +108,8 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
     # Maybe generate manifest and check if catalogs exist and if not raise error?
     expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
 
+    bundle.close()
+
     return TokenResponse(
         token=token,
         manifestUrl=manifest_url,

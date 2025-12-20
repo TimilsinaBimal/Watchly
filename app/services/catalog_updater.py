@@ -100,6 +100,7 @@ class CatalogUpdater:
                 credentials["authKey"] = auth_key
                 await token_store.update_user_data(token, credentials)
             else:
+                bundle.close()
                 return True  # true since we won't be able to update it again. so no need to try again.
 
         # 1. Check if addon is still installed
@@ -107,9 +108,11 @@ class CatalogUpdater:
             addon_installed = await bundle.addons.is_addon_installed(auth_key)
             if not addon_installed:
                 logger.info(f"[{redact_token(token)}] User has not installed addon. Removing token from redis")
+                bundle.close()
                 return True
         except Exception as e:
             logger.exception(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
+            bundle.close()
             return False
 
         try:
