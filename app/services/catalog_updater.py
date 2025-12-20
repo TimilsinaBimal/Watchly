@@ -90,32 +90,29 @@ class CatalogUpdater:
         # check if auth key is valid
         bundle = StremioBundle()
         try:
-            await bundle.auth.get_user_info(auth_key)
-        except Exception as e:
-            logger.exception(f"[{redact_token(token)}] Invalid auth key. Falling back to login: {e}")
-            email = credentials.get("email")
-            password = credentials.get("password")
-            if email and password:
-                auth_key = await bundle.auth.login(email, password)
-                credentials["authKey"] = auth_key
-                await token_store.update_user_data(token, credentials)
-            else:
-                bundle.close()
-                return True  # true since we won't be able to update it again. so no need to try again.
+            try:
+                await bundle.auth.get_user_info(auth_key)
+            except Exception as e:
+                logger.exception(f"[{redact_token(token)}] Invalid auth key. Falling back to login: {e}")
+                email = credentials.get("email")
+                password = credentials.get("password")
+                if email and password:
+                    auth_key = await bundle.auth.login(email, password)
+                    credentials["authKey"] = auth_key
+                    await token_store.update_user_data(token, credentials)
+                else:
+                    return True  # true since we won't be able to update it again. so no need to try again.
 
-        # 1. Check if addon is still installed
-        try:
-            addon_installed = await bundle.addons.is_addon_installed(auth_key)
-            if not addon_installed:
-                logger.info(f"[{redact_token(token)}] User has not installed addon. Removing token from redis")
-                bundle.close()
-                return True
-        except Exception as e:
-            logger.exception(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
-            bundle.close()
-            return False
+            # 1. Check if addon is still installed
+            try:
+                addon_installed = await bundle.addons.is_addon_installed(auth_key)
+                if not addon_installed:
+                    logger.info(f"[{redact_token(token)}] User has not installed addon. Removing token from redis")
+                    return True
+            except Exception as e:
+                logger.exception(f"[{redact_token(token)}] Failed to check if addon is installed: {e}")
+                return False
 
-        try:
             # 2. Extract settings and refresh
             user_settings = get_default_settings()
             if credentials.get("settings"):
