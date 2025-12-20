@@ -74,7 +74,8 @@ class StremioLibraryService:
                 if item.get("type") not in ["movie", "series"]:
                     continue
                 item_id = item.get("_id", "")
-                if not item_id.startswith("tt"):
+                if not item_id.startswith("tt") and not item_id.startswith("tmdb:"):
+                    # either imdb id or tmdb id should be there.
                     continue
 
                 # Check Watched status
