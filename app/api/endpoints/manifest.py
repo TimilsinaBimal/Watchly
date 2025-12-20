@@ -162,11 +162,7 @@ async def _manifest_handler(response: Response, token: str):
         order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
         translated_catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
 
-    if not translated_catalogs:
-        # If dynamic fetch resulted in nothing, we fall back to base manifest
-        # (provided it wasn't explicitly disabled in get_base_manifest).
-        base_manifest["catalogs"] = base_manifest["catalogs"]
-    else:
+    if translated_catalogs:
         base_manifest["catalogs"] = translated_catalogs
 
     return base_manifest
