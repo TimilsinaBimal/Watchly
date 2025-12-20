@@ -51,6 +51,7 @@ You can pull the latest image from the GitHub Container Registry.
     # Required
     TMDB_API_KEY=your_tmdb_api_key_here
     TOKEN_SALT=generate_a_random_secure_string_here
+    HOST_NAME=your_addon_url
 
     # Optional
     PORT=8000
@@ -81,7 +82,7 @@ To run the project locally:
     ```
 
 2.  **Install dependencies:**
-    We recommend using [uv](https://github.com/astral-sh/uv) for fast dependency management.
+    I recommend using [uv](https://github.com/astral-sh/uv) for fast dependency management.
     ```bash
     uv sync
     ```
@@ -93,10 +94,10 @@ To run the project locally:
 
 ## Contributing
 
-We welcome contributions of all sizes!
+I welcome contributions of all sizes!
 
 - **Small Bug Fixes & Improvements**: Feel free to open a Pull Request directly.
-- **Major Features & Refactors**: Please **open an issue first** to discuss your proposed changes. This helps ensure your work aligns with the project's direction and saves you time.
+- **Major Features & Refactors**: Please **[open an issue](https://github.com/TimilsinaBimal/Watchly/issues)** to discuss your proposed changes. This helps ensure your work aligns with the project's direction and saves you time.
 
 ## Funding & Support
 
