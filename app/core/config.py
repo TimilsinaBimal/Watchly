@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     ANNOUNCEMENT_HTML: str = ""
     AUTO_UPDATE_CATALOGS: bool = True
     CATALOG_REFRESH_INTERVAL_SECONDS: int = 43200  # 12 hours
-    APP_ENV: Literal["development", "production", "vercel"] = "development"
+    APP_ENV: Literal["development", "production", "vercel"] = "production"
     HOST_NAME: str = "https://1ccea4301587-watchly.baby-beamup.club"
 
     RECOMMENDATION_SOURCE_ITEMS_LIMIT: int = 10
