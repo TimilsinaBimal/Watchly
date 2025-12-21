@@ -13,6 +13,11 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+
+# if openai key is bytesconvert it to string
+if isinstance(OPENAI_API_KEY, bytes):
+    OPENAI_API_KEY = OPENAI_API_KEY.decode("utf-8")
+
 oai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 
@@ -225,7 +230,7 @@ def generate_release_notes(commits, last_release_tag):
     )
     try:
         response = oai_client.responses.parse(
-            model="gpt-5-mini",
+            model="gpt-5-nano",
             input=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": f"## Last release tag: {last_release_tag}\n ## Commits: {commits}"},
