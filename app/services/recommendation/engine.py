@@ -636,8 +636,23 @@ class RecommendationEngine:
 
         whitelist = await self._get_genre_whitelist(content_type)
         candidates = []
+
+        # Calculate how many pages to fetch based on excluded genres
+        # When many genres are excluded, we need to fetch more pages to get enough results
+        num_excluded = len(excluded_ids) if excluded_ids else 0
+        # Movies and Series both have ~20 genres, so if more than 10 are excluded, fetch more pages
+        if num_excluded > 10:
+            # Fetch 8-10 pages when most genres are excluded
+            pages_to_fetch = list(range(1, 11))
+        elif num_excluded > 5:
+            # Fetch 5-6 pages when many genres are excluded
+            pages_to_fetch = list(range(1, 6))
+        else:
+            # Default: 3 pages
+            pages_to_fetch = [1, 2, 3]
+
         try:
-            discover_tasks = [self.tmdb_service.get_discover(content_type, page=p, **params) for p in [1, 2, 3]]
+            discover_tasks = [self.tmdb_service.get_discover(content_type, page=p, **params) for p in pages_to_fetch]
             discover_results = await asyncio.gather(*discover_tasks, return_exceptions=True)
             for res in discover_results:
                 if isinstance(res, Exception):
@@ -659,6 +674,37 @@ class RecommendationEngine:
             if not RecommendationFiltering.passes_top_genre_whitelist(it.get("genre_ids"), whitelist):
                 continue
             filtered.append(it)
+
+        # If we still don't have enough candidates, fetch more pages
+        max_page_fetched = max(pages_to_fetch) if pages_to_fetch else 0
+        if len(filtered) < limit * 2 and max_page_fetched < 15:
+            try:
+                # Fetch additional pages starting from where we left off
+                next_page_start = max_page_fetched + 1
+                additional_pages = list(range(next_page_start, min(next_page_start + 5, 20)))
+                if additional_pages:
+                    logger.info(f"Fetching additional pages {additional_pages} due to insufficient candidates")
+                    additional_tasks = [
+                        self.tmdb_service.get_discover(content_type, page=p, **params) for p in additional_pages
+                    ]
+                    additional_results = await asyncio.gather(*additional_tasks, return_exceptions=True)
+                    # Track already processed IDs to avoid duplicates
+                    existing_ids = {it.get("id") for it in filtered}
+                    for res in additional_results:
+                        if isinstance(res, Exception):
+                            continue
+                        for it in res.get("results", []):
+                            item_id = it.get("id")
+                            if not item_id or item_id in existing_ids:
+                                continue
+                            if item_id in watched_tmdb:
+                                continue
+                            if not RecommendationFiltering.passes_top_genre_whitelist(it.get("genre_ids"), whitelist):
+                                continue
+                            filtered.append(it)
+                            existing_ids.add(item_id)
+            except Exception as e:
+                logger.warning(f"Failed to fetch additional pages: {e}")
 
         if len(filtered) < limit * 2:
             tmp_pool = {it["id"]: it for it in filtered}
