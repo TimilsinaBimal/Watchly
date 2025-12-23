@@ -594,6 +594,37 @@ class RecommendationEngine:
 
         return result
 
+    def _filter_candidates_by_watched_and_genres(
+        self, candidates: list[dict], watched_tmdb: set[int], whitelist: set[int], existing_ids: set[int] | None = None
+    ) -> list[dict]:
+        """
+        Filter candidates by watched items and genre whitelist.
+
+        Args:
+            candidates: List of candidate items to filter
+            watched_tmdb: Set of watched TMDB IDs to exclude
+            whitelist: Set of preferred genre IDs
+            existing_ids: Optional set of IDs to exclude (for deduplication)
+
+        Returns:
+            Filtered list of candidates
+        """
+        filtered = []
+        existing = existing_ids or set()
+
+        for it in candidates:
+            item_id = it.get("id")
+            if not item_id or item_id in existing:
+                continue
+            if item_id in watched_tmdb:
+                continue
+            if not RecommendationFiltering.passes_top_genre_whitelist(it.get("genre_ids"), whitelist):
+                continue
+            filtered.append(it)
+            existing.add(item_id)
+
+        return filtered
+
     async def get_recommendations_for_theme(self, theme_id: str, content_type: str, limit: int = 20) -> list[dict]:
         """Parse theme and fetch recommendations with strict filtering."""
         params = {}
@@ -667,13 +698,7 @@ class RecommendationEngine:
         )
 
         # Initial filter
-        filtered = []
-        for it in candidates:
-            if it.get("id") in watched_tmdb:
-                continue
-            if not RecommendationFiltering.passes_top_genre_whitelist(it.get("genre_ids"), whitelist):
-                continue
-            filtered.append(it)
+        filtered = self._filter_candidates_by_watched_and_genres(candidates, watched_tmdb, whitelist)
 
         # If we still don't have enough candidates, fetch more pages
         max_page_fetched = max(pages_to_fetch) if pages_to_fetch else 0
@@ -688,21 +713,18 @@ class RecommendationEngine:
                         self.tmdb_service.get_discover(content_type, page=p, **params) for p in additional_pages
                     ]
                     additional_results = await asyncio.gather(*additional_tasks, return_exceptions=True)
-                    # Track already processed IDs to avoid duplicates
-                    existing_ids = {it.get("id") for it in filtered}
+                    # Collect new candidates from additional pages
+                    new_candidates = []
                     for res in additional_results:
                         if isinstance(res, Exception):
                             continue
-                        for it in res.get("results", []):
-                            item_id = it.get("id")
-                            if not item_id or item_id in existing_ids:
-                                continue
-                            if item_id in watched_tmdb:
-                                continue
-                            if not RecommendationFiltering.passes_top_genre_whitelist(it.get("genre_ids"), whitelist):
-                                continue
-                            filtered.append(it)
-                            existing_ids.add(item_id)
+                        new_candidates.extend(res.get("results", []))
+                    # Filter new candidates, excluding already processed ones
+                    existing_ids = {it.get("id") for it in filtered}
+                    additional_filtered = self._filter_candidates_by_watched_and_genres(
+                        new_candidates, watched_tmdb, whitelist, existing_ids
+                    )
+                    filtered.extend(additional_filtered)
             except Exception as e:
                 logger.warning(f"Failed to fetch additional pages: {e}")
 
