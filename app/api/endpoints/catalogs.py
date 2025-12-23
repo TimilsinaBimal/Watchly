@@ -195,7 +195,7 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
             logger.info(f"Found {len(recommendations)} recommendations for {type}")
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
-        response.headers["Cache-Control"] = "public, max-age=21600" # 6 hours
+        response.headers["Cache-Control"] = "public, max-age=21600"  # 6 hours
         cleaned = [_clean_meta(m) for m in recommendations]
         return {"metas": cleaned}
 
