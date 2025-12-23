@@ -122,30 +122,19 @@ class DiscoveryEngine:
         if top_genres:
             genre_ids = "|".join([str(g[0]) for g in top_genres])
             for page in range(1, pages_per_query + 1):
-                tasks.append(
-                    self._fetch_discovery(
-                        content_type,
-                        {
-                            "with_genres": genre_ids,
-                            "sort_by": "popularity.desc",
-                            "vote_count.gte": 500,
-                            "page": page,
-                            **base_params,
-                        },
+                for sort_by_option in ["popularity.desc", "vote_average.desc"]:
+                    tasks.append(
+                        self._fetch_discovery(
+                            content_type,
+                            {
+                                "with_genres": genre_ids,
+                                "sort_by": sort_by_option,
+                                "vote_count.gte": 500,
+                                "page": page,
+                                **base_params,
+                            },
+                        )
                     )
-                )
-                tasks.append(
-                    self._fetch_discovery(
-                        content_type,
-                        {
-                            "with_genres": genre_ids,
-                            "sort_by": "vote_average.desc",
-                            "vote_count.gte": 500,
-                            "page": page,
-                            **base_params,
-                        },
-                    )
-                )
 
         # Query 2: Top Keywords - fetch multiple pages
         if top_keywords:
