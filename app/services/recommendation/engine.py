@@ -673,10 +673,10 @@ class RecommendationEngine:
         num_excluded = len(excluded_ids) if excluded_ids else 0
         # Movies and Series both have ~20 genres, so if more than 10 are excluded, fetch more pages
         if num_excluded > 10:
-            # Fetch 8-10 pages when most genres are excluded
+            # Fetch 10 pages when most genres are excluded
             pages_to_fetch = list(range(1, 11))
         elif num_excluded > 5:
-            # Fetch 5-6 pages when many genres are excluded
+            # Fetch 5 pages when many genres are excluded
             pages_to_fetch = list(range(1, 6))
         else:
             # Default: 3 pages
