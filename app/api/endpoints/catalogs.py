@@ -40,6 +40,8 @@ def _clean_meta(meta: dict) -> dict:
     cleaned = {k: v for k, v in meta.items() if k in allowed}
     # Drop empty values
     cleaned = {k: v for k, v in cleaned.items() if v not in (None, "", [], {}, ())}
+    # only return values with imdb id
+    cleaned = {k: v for k, v in cleaned.items() if k == "id" and v.startswith("tt")}
     return cleaned
 
 
