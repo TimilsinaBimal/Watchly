@@ -1,177 +1,276 @@
+"""
+Item Vectorizer - Extracts features from items for profile building.
+
+Pure extraction logic, no scoring or accumulation.
+"""
+
 from typing import Any
+
+from app.models.scoring import ScoredItem
+from app.services.profile.constants import CAST_POSITION_LEAD, CAST_POSITION_MINOR, CAST_POSITION_SUPPORTING
 
 
 class ProfileVectorizer:
     """
-    Handles tokenization and conversion of TMDB metadata into sparse vectors.
+    Legacy vectorizer for extracting features from TMDB metadata.
+    Used by old profile service and similarity calculations.
     """
 
-    STOPWORDS = {
-        "a",
-        "an",
-        "and",
-        "the",
-        "of",
-        "to",
-        "in",
-        "on",
-        "for",
-        "with",
-        "by",
-        "from",
-        "at",
-        "as",
-        "is",
-        "it",
-        "this",
-        "that",
-        "be",
-        "or",
-        "are",
-        "was",
-        "were",
-        "has",
-        "have",
-        "had",
-        "into",
-        "their",
-        "his",
-        "her",
-        "its",
-        "but",
-        "not",
-        "no",
-        "so",
-        "about",
-        "over",
-        "under",
-        "after",
-        "before",
-        "than",
-        "then",
-        "out",
-        "up",
-        "down",
-        "off",
-        "only",
-        "more",
-        "most",
-        "some",
-        "any",
-    }
-
     @staticmethod
-    def normalize_token(tok: str) -> str:
-        """Lowercases, removes non-alphanumeric, and performs lightweight stemming."""
-        t = tok.lower()
-        t = "".join(ch for ch in t if ch.isalnum())
-        if len(t) <= 2:
-            return ""
-
-        # Lightweight stemming
-        for suf in ("ing", "ers", "ies", "ment", "tion", "s", "ed"):
-            if t.endswith(suf) and len(t) - len(suf) >= 3:
-                t = t[: -len(suf)]
-                break
-        return t
-
-    @classmethod
-    def tokenize(cls, text: str) -> list[str]:
-        """Split text into normalized tokens, removing stopwords and duplicates."""
-        if not text:
-            return []
-
-        raw = text.replace("-", " ").replace("_", " ")
-        tokens = []
-        for part in raw.split():
-            t = cls.normalize_token(part)
-            if not t or t in cls.STOPWORDS:
-                continue
-            tokens.append(t)
-
-        # De-duplicate while preserving order
-        seen = set()
-        dedup = []
-        for t in tokens:
-            if t not in seen:
-                seen.add(t)
-                dedup.append(t)
-        return dedup
-
-    @classmethod
-    def vectorize_item(cls, meta: dict[str, Any]) -> dict[str, Any]:
+    def vectorize_item(metadata: dict[str, Any]) -> dict[str, Any] | None:
         """
-        Converts raw TMDB metadata into a sparse vector format.
+        Extract features from TMDB metadata.
+
+        Args:
+            metadata: TMDB metadata dict
+
+        Returns:
+            Dictionary with extracted features or None
         """
-        if not meta or not isinstance(meta, dict):
-            return {}
+        if not metadata:
+            return None
 
-        # 1. Robust Keyword Extraction (Movies use 'keywords', TV uses 'results' key)
-        keywords_obj = meta.get("keywords")
-        raw_keywords = []
-        if isinstance(keywords_obj, dict):
-            raw_keywords = keywords_obj.get("keywords") or keywords_obj.get("results") or []
-        elif isinstance(keywords_obj, list):
-            raw_keywords = keywords_obj
+        # Extract genres
+        genres = [g.get("id") for g in metadata.get("genres", []) if g.get("id")]
 
-        # 2. Extract countries
+        # Extract keywords
+        keywords = [k.get("id") for k in metadata.get("keywords", {}).get("keywords", []) if k.get("id")]
+
+        # Extract cast (top 10)
+        cast = []
+        credits = metadata.get("credits", {}) or {}
+        cast_list = credits.get("cast", []) or []
+        for idx, actor in enumerate(cast_list[:10]):
+            actor_id = actor.get("id") if isinstance(actor, dict) else actor
+            if actor_id:
+                cast.append(actor_id)
+
+        # Extract countries
         countries = []
-        prod_countries = meta.get("production_countries")
-        if isinstance(prod_countries, list):
-            countries = [c.get("iso_3166_1") for c in prod_countries if isinstance(c, dict) and c.get("iso_3166_1")]
+        production_countries = metadata.get("production_countries", []) or []
+        for country in production_countries:
+            country_code = country.get("iso_3166_1") if isinstance(country, dict) else country
+            if country_code:
+                countries.append(country_code)
 
-        if not countries:
-            origin = meta.get("origin_country")
-            if isinstance(origin, list):
-                countries = origin
-            elif isinstance(origin, str):
-                countries = [origin]
-
-        # 3. Genres
-        genre_ids = meta.get("genre_ids") or []
-        if not genre_ids:
-            genres_src = meta.get("genres")
-            if isinstance(genres_src, list):
-                genre_ids = [g.get("id") for g in genres_src if isinstance(g, dict) and g.get("id") is not None]
-
-        # 4. Topics (Title + Overview + Keyword Names)
-        title_text = meta.get("name") or meta.get("title") or meta.get("original_title") or ""
-        overview_text = meta.get("description") or meta.get("overview") or ""
-
-        kw_names = []
-        if isinstance(raw_keywords, list):
-            kw_names = [k.get("name") for k in raw_keywords if isinstance(k, dict) and k.get("name")]
-
-        topics_tokens: list[str] = []
-        if title_text:
-            topics_tokens.extend(cls.tokenize(title_text))
-        if overview_text:
-            topics_tokens.extend(cls.tokenize(overview_text))
-        for nm in kw_names:
-            topics_tokens.extend(cls.tokenize(nm))
-
-        # 5. Build Final Vector
-        credits = meta.get("credits") or {}
-        cast = credits.get("cast") or []
-        crew = credits.get("crew") or []
-
-        vector = {
-            "genres": [int(g) for g in genre_ids if g is not None],
-            "keywords": [int(k["id"]) for k in raw_keywords if isinstance(k, dict) and k.get("id") is not None],
-            "cast": [int(c["id"]) for c in cast[:5] if isinstance(c, dict) and c.get("id") is not None],
-            "crew": [int(c["id"]) for c in crew if isinstance(c, dict) and c.get("job") == "Director"],
-            "year": None,
-            "countries": countries,
-            "topics": topics_tokens,
-        }
-
-        # Year Bucket (Decades)
-        date_str = meta.get("release_date") or meta.get("first_air_date")
-        if date_str and isinstance(date_str, str):
+        # Extract year
+        release_date = metadata.get("release_date") or metadata.get("first_air_date")
+        year = None
+        if release_date:
             try:
-                year = int(date_str[:4])
-                vector["year"] = (year // 10) * 10
-            except (ValueError, TypeError):
+                year = int(release_date.split("-")[0])
+            except (ValueError, AttributeError):
                 pass
 
-        return vector
+        return {
+            "genres": genres,
+            "keywords": keywords,
+            "cast": cast,
+            "countries": countries,
+            "year": year,
+        }
+
+
+class ItemVectorizer:
+    """
+    Extracts features from items for taste profile building.
+
+    Pure extraction: no scoring, no accumulation, just feature extraction.
+    """
+
+    def __init__(self, tmdb_service: Any):
+        """
+        Initialize vectorizer.
+
+        Args:
+            tmdb_service: TMDB service for fetching metadata
+        """
+        self.tmdb_service = tmdb_service
+
+    async def extract_features(self, item: ScoredItem) -> dict[str, Any] | None:
+        """
+        Extract all features from an item.
+
+        Args:
+            item: ScoredItem to extract features from
+
+        Returns:
+            Dictionary with extracted features, or None if extraction fails
+        """
+        try:
+            # Resolve TMDB ID
+            tmdb_id = await self._resolve_tmdb_id(item.item.id)
+            if not tmdb_id:
+                return None
+
+            # Fetch metadata
+            if item.item.type == "movie":
+                metadata = await self.tmdb_service.get_movie_details(tmdb_id)
+            else:
+                metadata = await self.tmdb_service.get_tv_details(tmdb_id)
+
+            if not metadata:
+                return None
+
+            # Extract features using legacy vectorizer (reuse existing logic)
+            vector = ProfileVectorizer.vectorize_item(metadata)
+            if not vector:
+                return None
+
+            # Transform to our format (pass metadata for crew job extraction)
+            return self._transform_vector(vector, metadata)
+
+        except Exception as e:
+            from loguru import logger
+
+            logger.exception(f"Failed to extract features from item {item.item.id}: {e}")
+            return None
+
+    def _transform_vector(self, vector: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+        """
+        Transform legacy vector format to our feature format.
+
+        Args:
+            vector: Legacy vector format
+            metadata: Full metadata for additional extraction
+
+        Returns:
+            Transformed feature dictionary
+        """
+        features = {
+            "genres": vector.get("genres", []),
+            "keywords": vector.get("keywords", []),
+            "cast": self._extract_cast_with_positions(vector.get("cast", [])),
+            "crew": self._extract_crew_with_jobs(metadata),
+            "countries": vector.get("countries", []),
+            "year": vector.get("year"),
+        }
+
+        # Extract era bucket from year
+        if features["year"]:
+            features["era"] = self._year_to_era(features["year"])
+
+        return features
+
+    def _extract_cast_with_positions(self, cast: list[Any]) -> list[dict[str, Any]]:
+        """
+        Extract cast with position weights.
+
+        Args:
+            cast: Cast list (can be list of IDs or list of dicts)
+
+        Returns:
+            List of cast dicts with position and weight
+        """
+        if not cast:
+            return []
+
+        result = []
+        for idx, cast_item in enumerate(cast[:10]):  # Top 10 only
+            if isinstance(cast_item, dict):
+                cast_id = cast_item.get("id")
+                position = cast_item.get("position", idx)
+                weight = cast_item.get("weight", self._get_position_weight(position))
+            else:
+                cast_id = cast_item
+                position = idx
+                weight = self._get_position_weight(position)
+
+            if cast_id:
+                result.append({"id": cast_id, "position": position, "weight": weight})
+
+        return result
+
+    @staticmethod
+    def _get_position_weight(position: int) -> float:
+        """
+        Get weight for cast position.
+
+        Args:
+            position: Cast position (0 = lead, higher = supporting)
+
+        Returns:
+            Position weight
+        """
+        if position == 0:
+            return CAST_POSITION_LEAD
+        elif position < 3:
+            return CAST_POSITION_SUPPORTING
+        else:
+            return CAST_POSITION_MINOR
+
+    def _extract_crew_with_jobs(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
+        """
+        Extract crew with job information.
+
+        Args:
+            metadata: Full metadata dict with credits
+
+        Returns:
+            List of crew dicts with id and job
+        """
+        crew_list = []
+        credits = metadata.get("credits", {}) or {}
+        crew = credits.get("crew", []) or []
+
+        for crew_member in crew:
+            if not isinstance(crew_member, dict):
+                continue
+
+            crew_id = crew_member.get("id")
+            job = crew_member.get("job", "")
+
+            if crew_id:
+                crew_list.append({"id": crew_id, "job": job})
+
+        return crew_list
+
+    @staticmethod
+    def _year_to_era(year: int) -> str:
+        """
+        Convert year to era bucket.
+
+        Args:
+            year: Release year
+
+        Returns:
+            Era bucket string (e.g., "1990s", "2010s")
+        """
+        if year < 1970:
+            return "pre-1970s"
+        elif year < 1980:
+            return "1970s"
+        elif year < 1990:
+            return "1980s"
+        elif year < 2000:
+            return "1990s"
+        elif year < 2010:
+            return "2000s"
+        elif year < 2020:
+            return "2010s"
+        else:
+            return "2020s"
+
+    async def _resolve_tmdb_id(self, stremio_id: str) -> int | None:
+        """
+        Resolve Stremio ID to TMDB ID.
+
+        Args:
+            stremio_id: Stremio item ID
+
+        Returns:
+            TMDB ID or None
+        """
+        if stremio_id.startswith("tmdb:"):
+            try:
+                return int(stremio_id.split(":")[1])
+            except (ValueError, IndexError):
+                return None
+        elif stremio_id.startswith("tt"):
+            tmdb_id, _ = await self.tmdb_service.find_by_imdb_id(stremio_id)
+            return tmdb_id
+        else:
+            try:
+                return int(stremio_id)
+            except ValueError:
+                return None

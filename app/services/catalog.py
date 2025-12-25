@@ -6,7 +6,7 @@ from typing import Any
 from loguru import logger
 
 from app.core.settings import CatalogConfig, UserSettings
-from app.services.profile.service import UserProfileService
+from app.services.profile.integration import ProfileIntegration
 from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
 from app.services.tmdb.service import get_tmdb_service
@@ -20,9 +20,9 @@ class DynamicCatalogService:
     def __init__(self, language: str = "en-US"):
         self.tmdb_service = get_tmdb_service(language=language)
         self.scoring_service = ScoringService()
-        self.user_profile_service = UserProfileService(language=language)
+        self.profile_integration = ProfileIntegration(language=language)
         self.row_generator = RowGeneratorService(tmdb_service=self.tmdb_service)
-        self.HISTORY_LIMIT = 30
+        self.PROFILE_MAX_ITEMS = 50
 
     @staticmethod
     def normalize_type(type_):
@@ -48,6 +48,62 @@ class DynamicCatalogService:
             "extra": [],
         }
 
+    def _get_smart_scored_items(self, library_items: dict, content_type: str, max_items: int = 50) -> list:
+        """
+        Get smart sampled items for profile building.
+        Always includes all loved/liked/added items, then top watched items by interest_score.
+
+        Args:
+            library_items: Library items dict
+            content_type: Type of content (movie/series)
+            max_items: Maximum items to return (default: 50)
+
+        Returns:
+            List of ScoredItem objects
+        """
+        all_items = (
+            library_items.get("loved", [])
+            + library_items.get("liked", [])
+            + library_items.get("watched", [])
+            + library_items.get("added", [])
+        )
+        typed_items = [it for it in all_items if it.get("type") == content_type]
+
+        if not typed_items:
+            return []
+
+        # Get added items (strong signal - user wants to watch these)
+        added_item_ids = {it.get("_id") for it in library_items.get("added", [])}
+        added_items = [it for it in typed_items if it.get("_id") in added_item_ids]
+
+        # Separate loved/liked from watched items (excluding added)
+        loved_liked_items = [
+            it
+            for it in typed_items
+            if (it.get("_is_loved") or it.get("_is_liked")) and it.get("_id") not in added_item_ids
+        ]
+        watched_items = [
+            it
+            for it in typed_items
+            if not (it.get("_is_loved") or it.get("_is_liked") or it.get("_id") in added_item_ids)
+        ]
+
+        # Always include all loved/liked/added items (score them)
+        # These are strong signals of user intent
+        strong_signal_items = loved_liked_items + added_items
+        strong_signal_scored = [self.scoring_service.process_item(it) for it in strong_signal_items]
+
+        # For watched items, score them and sort by interest_score
+        watched_scored = [self.scoring_service.process_item(it) for it in watched_items]
+        watched_scored.sort(key=lambda x: x.score, reverse=True)
+
+        # Combine: all loved/liked/added + top watched items by score
+        # Limit total to max_items
+        remaining_slots = max(0, max_items - len(strong_signal_scored))
+        top_watched = watched_scored[:remaining_slots]
+
+        return strong_signal_scored + top_watched
+
     async def get_theme_based_catalogs(
         self,
         library_items: dict,
@@ -55,19 +111,9 @@ class DynamicCatalogService:
         enabled_movie: bool = True,
         enabled_series: bool = True,
     ) -> list[dict]:
-        """Build thematic catalogs by profiling recently watched items."""
-        # 1. Prepare Scored History
-        all_items = library_items.get("loved", []) + library_items.get("watched", []) + library_items.get("liked", [])
-        unique_items = {item["_id"]: item for item in all_items}
-
-        sorted_history = sorted(
-            unique_items.values(),
-            key=lambda x: self._parse_item_last_watched(x),
-            reverse=True,
-        )
-        recent_history = sorted_history[: self.HISTORY_LIMIT]
-
-        scored_objects = [self.scoring_service.process_item(item) for item in recent_history]
+        """Build thematic catalogs by profiling items using smart sampling."""
+        # 1. Prepare Scored History using smart sampling (loved/liked + top watched by score)
+        # We'll get items per content type in the generation function
 
         # 2. Extract Genre Filters
         excluded_movie_genres = []
@@ -78,9 +124,13 @@ class DynamicCatalogService:
 
         # 3. Generate Rows
         async def _generate_for_type(media_type: str, genres: list[int]):
-            profile = await self.user_profile_service.build_user_profile(
-                scored_objects, content_type=media_type, excluded_genres=genres
+            # Build profile using new system
+            profile, _, _ = await self.profile_integration.build_profile_from_library(
+                library_items, media_type, None, None
             )
+            if not profile:
+                return media_type, []
+
             try:
                 catalogs = await self.row_generator.generate_rows(profile, media_type)
                 return media_type, catalogs

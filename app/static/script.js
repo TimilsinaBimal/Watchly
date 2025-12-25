@@ -4,6 +4,7 @@ const defaultCatalogs = [
     { id: 'watchly.loved', name: 'More Like', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations similar to content you explicitly loved' },
     { id: 'watchly.watched', name: 'Because You Watched', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations based on your recent watch history' },
     { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
+    { id: 'watchly.creators', name: 'From your favourite Creators', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Movies and series from your top 5 favorite directors and top 5 favorite actors' },
 ];
 
 let catalogs = JSON.parse(JSON.stringify(defaultCatalogs));

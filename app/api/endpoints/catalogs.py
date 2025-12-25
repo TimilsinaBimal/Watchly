@@ -8,14 +8,19 @@ from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.services.catalog_updater import catalog_updater
-from app.services.recommendation.engine import RecommendationEngine
+from app.services.profile.integration import ProfileIntegration
+from app.services.recommendation.creators import CreatorsService
+from app.services.recommendation.item_based import ItemBasedService
+from app.services.recommendation.theme_based import ThemeBasedService
+from app.services.recommendation.top_picks import TopPicksService
+from app.services.recommendation.utils import pad_to_min
 from app.services.stremio.service import StremioBundle
+from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 
 MAX_RESULTS = 50
 DEFAULT_MIN_ITEMS = 20
 DEFAULT_MAX_ITEMS = 32
-SOURCE_ITEMS_LIMIT = 10
 
 router = APIRouter()
 
@@ -60,7 +65,7 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
 
     # Supported IDs now include dynamic themes and item-based rows
-    if id != "watchly.rec" and not any(
+    if id not in ["watchly.rec", "watchly.creators"] and not any(
         id.startswith(p)
         for p in (
             "tt",
@@ -74,8 +79,8 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         raise HTTPException(
             status_code=400,
             detail=(  #
-                "Invalid id. Supported: 'watchly.rec', 'watchly.theme.<params>', 'watchly.item.<id>', or"
-                " specific item IDs."
+                "Invalid id. Supported: 'watchly.rec', 'watchly.creators', 'watchly.theme.<params>',"
+                "'watchly.item.<id>', or  specific item IDs."
             ),
         )
 
@@ -122,13 +127,14 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
 
         # 3. Fetch library once per request and reuse across recommendation paths
         library_items = await bundle.library.get_library_items(auth_key)
-        engine = RecommendationEngine(
-            stremio_service=bundle,
-            language=language,
-            user_settings=user_settings,
-            token=token,
-            library_data=library_items,
-        )
+
+        # Initialize services
+        tmdb_service = get_tmdb_service(language=language)
+        integration = ProfileIntegration(language=language)
+        item_service = ItemBasedService(tmdb_service, user_settings)
+        theme_service = ThemeBasedService(tmdb_service, user_settings)
+        top_picks_service = TopPicksService(tmdb_service, user_settings)
+        creators_service = CreatorsService(tmdb_service, user_settings)
 
         # Resolve per-catalog limits (min/max)
         def _get_limits() -> tuple[int, int]:
@@ -157,14 +163,7 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
             min_items, max_items = DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
 
         # Handle item-based recommendations
-        if id.startswith("tt"):
-            engine.per_item_limit = max_items
-            recommendations = await engine.get_recommendations_for_item(item_id=id, media_type=type)
-            if len(recommendations) < min_items:
-                recommendations = await engine.pad_to_min(type, recommendations, min_items)
-            logger.info(f"Found {len(recommendations)} recommendations for {id}")
-
-        elif any(
+        if id.startswith("tt") or any(
             id.startswith(p)
             for p in (
                 "watchly.item.",
@@ -172,29 +171,120 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
                 "watchly.watched.",
             )
         ):
-            # Extract actual item ID (tt... or tmdb:...)
-            item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", id)
-            engine.per_item_limit = max_items
-            recommendations = await engine.get_recommendations_for_item(item_id=item_id, media_type=type)
+            # Extract actual item ID
+            if id.startswith("tt"):
+                item_id = id
+            else:
+                item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", id)
+
+            # Get watched sets
+            _, watched_tmdb, watched_imdb = await integration.build_profile_from_library(
+                library_items, type, bundle, auth_key
+            )
+
+            # Get genre whitelist
+            whitelist = await integration.get_genre_whitelist(library_items, type, bundle, auth_key)
+
+            # Use new item-based service
+            recommendations = await item_service.get_recommendations_for_item(
+                item_id=item_id,
+                content_type=type,
+                watched_tmdb=watched_tmdb,
+                watched_imdb=watched_imdb,
+                limit=max_items,
+                integration=integration,
+                library_items=library_items,
+            )
+
             if len(recommendations) < min_items:
-                recommendations = await engine.pad_to_min(type, recommendations, min_items)
+                recommendations = await pad_to_min(
+                    type, recommendations, min_items, tmdb_service, user_settings, bundle, library_items, auth_key
+                )
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
 
         elif id.startswith("watchly.theme."):
-            recommendations = await engine.get_recommendations_for_theme(
-                theme_id=id, content_type=type, limit=max_items
+            # Build profile for theme-based recommendations
+            profile, watched_tmdb, watched_imdb = await integration.build_profile_from_library(
+                library_items, type, bundle, auth_key
             )
+
+            # Use new theme-based service
+            recommendations = await theme_service.get_recommendations_for_theme(
+                theme_id=id,
+                content_type=type,
+                profile=profile,
+                watched_tmdb=watched_tmdb,
+                watched_imdb=watched_imdb,
+                limit=max_items,
+                integration=integration,
+                library_items=library_items,
+            )
+
             if len(recommendations) < min_items:
-                recommendations = await engine.pad_to_min(type, recommendations, min_items)
+                recommendations = await pad_to_min(
+                    type, recommendations, min_items, tmdb_service, user_settings, bundle, library_items, auth_key
+                )
             logger.info(f"Found {len(recommendations)} recommendations for theme {id}")
 
-        else:
-            recommendations = await engine.get_recommendations(
-                content_type=type, source_items_limit=SOURCE_ITEMS_LIMIT, max_results=max_items
+        elif id == "watchly.creators":
+            # Build profile for creators-based recommendations
+            profile, watched_tmdb, watched_imdb = await integration.build_profile_from_library(
+                library_items, type, bundle, auth_key
             )
+
+            # Get genre whitelist
+            whitelist = await integration.get_genre_whitelist(library_items, type, bundle, auth_key)
+
+            if profile:
+                # Use new creators service
+                recommendations = await creators_service.get_recommendations_from_creators(
+                    profile=profile,
+                    content_type=type,
+                    library_items=library_items,
+                    watched_tmdb=watched_tmdb,
+                    watched_imdb=watched_imdb,
+                    whitelist=whitelist,
+                    limit=max_items,
+                )
+            else:
+                # No profile available, return empty
+                recommendations = []
+
             if len(recommendations) < min_items:
-                recommendations = await engine.pad_to_min(type, recommendations, min_items)
-            logger.info(f"Found {len(recommendations)} recommendations for {type}")
+                recommendations = await pad_to_min(
+                    type, recommendations, min_items, tmdb_service, user_settings, bundle, library_items, auth_key
+                )
+            logger.info(f"Found {len(recommendations)} recommendations from creators")
+
+        elif id == "watchly.rec":
+            # Top picks - use new TopPicksService
+            profile, watched_tmdb, watched_imdb = await integration.build_profile_from_library(
+                library_items, type, bundle, auth_key
+            )
+
+            if profile:
+                recommendations = await top_picks_service.get_top_picks(
+                    profile=profile,
+                    content_type=type,
+                    library_items=library_items,
+                    watched_tmdb=watched_tmdb,
+                    watched_imdb=watched_imdb,
+                    limit=max_items,
+                )
+            else:
+                # No profile available, return empty
+                recommendations = []
+
+            if len(recommendations) < min_items:
+                recommendations = await pad_to_min(
+                    type, recommendations, min_items, tmdb_service, user_settings, bundle, library_items, auth_key
+                )
+            logger.info(f"Found {len(recommendations)} top picks for {type}")
+
+        else:
+            # Unknown catalog ID, return empty
+            logger.warning(f"Unknown catalog ID: {id}")
+            recommendations = []
 
         logger.info(f"Returning {len(recommendations)} items for {type}")
         response.headers["Cache-Control"] = "public, max-age=21600"  # 6 hours

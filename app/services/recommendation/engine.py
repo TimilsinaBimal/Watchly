@@ -4,7 +4,6 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.config import settings
 from app.core.settings import UserSettings
 from app.services.discovery import DiscoveryEngine
 from app.services.profile.service import UserProfileService
@@ -18,6 +17,8 @@ from app.services.tmdb.service import get_tmdb_service
 TOP_GENRE_WHITELIST_LIMIT = 5
 
 PER_GENRE_MAX_SHARE = 0.4
+
+PROFILE_MAX_ITEMS = 50
 
 
 class RecommendationEngine:
@@ -100,8 +101,67 @@ class RecommendationEngine:
 
         return final_items
 
+    async def _get_smart_scored_items(self, content_type: str, max_items: int = PROFILE_MAX_ITEMS) -> list[Any]:
+        """
+        Get smart sampled items for profile building.
+        Always includes all loved/liked/added items, then top watched items by interest_score.
+
+        Args:
+            content_type: Type of content (movie/series)
+            max_items: Maximum items to return (default: 50)
+
+        Returns:
+            List of ScoredItem objects
+        """
+        if self._library_data is None:
+            if not self.auth_key:
+                raise ValueError("auth_key is required to fetch library data")
+            self._library_data = await self.stremio_service.library.get_library_items(self.auth_key)
+
+        lib = self._library_data
+        all_lib_items = lib.get("loved", []) + lib.get("liked", []) + lib.get("watched", []) + lib.get("added", [])
+        typed_items = [it for it in all_lib_items if it.get("type") == content_type]
+
+        if not typed_items:
+            return []
+
+        # Get added items (strong signal - user wants to watch these)
+        added_item_ids = {it.get("_id") for it in lib.get("added", [])}
+        added_items = [it for it in typed_items if it.get("_id") in added_item_ids]
+
+        # Separate loved/liked from watched items (excluding added)
+        loved_liked_items = [
+            it
+            for it in typed_items
+            if (it.get("_is_loved") or it.get("_is_liked")) and it.get("_id") not in added_item_ids
+        ]
+        watched_items = [
+            it
+            for it in typed_items
+            if not (it.get("_is_loved") or it.get("_is_liked") or it.get("_id") in added_item_ids)
+        ]
+
+        # Always include all loved/liked/added items (score them)
+        # These are strong signals of user intent
+        strong_signal_items = loved_liked_items + added_items
+        strong_signal_scored = [self.scoring_service.process_item(it) for it in strong_signal_items]
+
+        # For watched items, score them and sort by interest_score
+        watched_scored = [self.scoring_service.process_item(it) for it in watched_items]
+        watched_scored.sort(key=lambda x: x.score, reverse=True)
+
+        # Combine: all loved/liked/added + top watched items by score
+        # Limit total to max_items
+        remaining_slots = max(0, max_items - len(strong_signal_scored))
+        top_watched = watched_scored[:remaining_slots]
+
+        return strong_signal_scored + top_watched
+
     async def _get_scored_library_items(self, content_type: str, limit: int) -> tuple[list[Any], set[int], set[str]]:
-        """Fetch library, compute exclusion sets, and score top history items."""
+        """
+        Fetch library, compute exclusion sets, and score items using smart sampling.
+        Uses smart sampling (loved/liked + top watched by score) instead of just recent items.
+        """
         if self._library_data is None:
             if not self.auth_key:
                 raise ValueError("auth_key is required to fetch library data")
@@ -112,25 +172,17 @@ class RecommendationEngine:
             self.stremio_service, lib, self.auth_key
         )
 
-        all_lib_items = lib.get("loved", []) + lib.get("watched", []) + lib.get("added", [])
-        typed_items = {it["_id"]: it for it in all_lib_items if it.get("type") == content_type}
+        scored_objects = await self._get_smart_scored_items(content_type, max_items=limit)
 
-        sorted_history = sorted(
-            typed_items.values(),
-            key=lambda x: x.get("state", {}).get("lastWatched") or "",
-            reverse=True,
-        )
+        # Store interest scores for compatibility
+        for scored in scored_objects:
+            if scored.item.id in lib.get("loved", []) + lib.get("watched", []) + lib.get("added", []):
+                # Find the original item to store score
+                for it in lib.get("loved", []) + lib.get("watched", []) + lib.get("added", []):
+                    if it.get("_id") == scored.item.id:
+                        it["_interest_score"] = scored.score
+                        break
 
-        scored_objects = []
-        top_sources = []
-        for it in sorted_history[:limit]:
-            scored = self.scoring_service.process_item(it)
-            scored_objects.append(scored)
-            it["_interest_score"] = scored.score
-            top_sources.append(it)
-
-        top_sources.sort(key=lambda x: x["_interest_score"], reverse=True)
-        # Store top sources in self if needed, but returning scored objects is enough for profile
         return scored_objects, watched_tmdb, watched_imdb
 
     async def _collect_hybrid_candidates(
@@ -231,7 +283,10 @@ class RecommendationEngine:
         return ranked
 
     async def get_recommendations_for_item(self, item_id: str, media_type: str = "movie") -> list[dict[str, Any]]:
-        """Get recommendations for a specific item, strictly excluding watched content."""
+        """
+        DEPRECATED: Use app.services.taste_profile.item_based.ItemBasedService instead.
+        Kept for backward compatibility only.
+        """
         watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
             self.stremio_service, self._library_data, self.auth_key
         )
@@ -337,30 +392,8 @@ class RecommendationEngine:
 
         try:
             if scored_objects is None:
-                if self._library_data is None:
-                    if not self.auth_key:
-                        return set()
-                    self._library_data = await self.stremio_service.library.get_library_items(self.auth_key)
-
-                all_lib = (
-                    self._library_data.get("loved", [])
-                    + self._library_data.get("watched", [])
-                    + self._library_data.get("added", [])
-                    + self._library_data.get("liked", [])
-                )
-                typed = [
-                    it
-                    for it in all_lib
-                    if it.get("type") == content_type or (content_type == "series" and it.get("type") == "tv")
-                ]
-                sorted_hist = sorted(
-                    {it["_id"]: it for it in typed}.values(),
-                    key=lambda x: x.get("state", {}).get("lastWatched") or "",
-                    reverse=True,
-                )
-                scored_objects = [
-                    self.scoring_service.process_item(it) for it in sorted_hist[: settings.LIBRARY_ITEMS_LIMIT]
-                ]
+                # Use smart sampling instead of just recent items
+                scored_objects = await self._get_smart_scored_items(content_type, max_items=PROFILE_MAX_ITEMS)
 
             prof_type = "series" if content_type in ("tv", "series") else "movie"
             temp_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type=prof_type)
@@ -626,7 +659,10 @@ class RecommendationEngine:
         return filtered
 
     async def get_recommendations_for_theme(self, theme_id: str, content_type: str, limit: int = 20) -> list[dict]:
-        """Parse theme and fetch recommendations with strict filtering."""
+        """
+        DEPRECATED: Use app.services.taste_profile.theme_based.ThemeBasedService instead.
+        Kept for backward compatibility only.
+        """
         params = {}
         parts = theme_id.replace("watchly.theme.", "").split(".")
 
@@ -753,85 +789,263 @@ class RecommendationEngine:
         return final
 
     async def pad_to_min(self, content_type: str, existing: list[dict], min_items: int) -> list[dict]:
-        """Pad results with trending/top-rated items, ensuring strict exclusion."""
-        need = max(0, int(min_items) - len(existing))
-        if need <= 0:
-            return existing
+        """
+        DEPRECATED: Use app.services.recommendation.utils.pad_to_min instead.
+        Kept for backward compatibility.
+        """
+        from app.services.recommendation.utils import pad_to_min as pad_to_min_util
 
-        watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
-            self.stremio_service, self._library_data, self.auth_key
+        return await pad_to_min_util(
+            content_type,
+            existing,
+            min_items,
+            self.tmdb_service,
+            self.user_settings,
+            self.stremio_service,
+            self._library_data,
+            self.auth_key,
         )
-        excluded_ids = set(RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type))
-        whitelist = await self._get_genre_whitelist(content_type)
 
-        mtype = "tv" if content_type in ("tv", "series") else "movie"
-        pool = []
-        try:
-            tr = await self.tmdb_service.get_trending(mtype, time_window="week")
-            pool.extend(tr.get("results", [])[:60])
-            tr2 = await self.tmdb_service.get_top_rated(mtype)
-            pool.extend(tr2.get("results", [])[:60])
-        except Exception:
-            pass
+    async def get_recommendations_from_creators(
+        self, content_type: str, limit: int = 20, max_items_for_profile: int = PROFILE_MAX_ITEMS
+    ) -> list[dict[str, Any]]:
+        """
+        Get recommendations from user's top 5 favorite directors and top 5 favorite cast members.
 
-        existing_tmdb = set()
-        for it in existing:
-            tid = it.get("_tmdb_id") or it.get("tmdb_id") or it.get("id")
+        Args:
+            content_type: Type of content (movie/series)
+            limit: Number of recommendations to return
+            max_items_for_profile: Maximum items to use for building profile (default: 50)
+        """
+        if self._library_data is None:
+            if not self.auth_key:
+                raise ValueError("auth_key is required to fetch library data")
+            self._library_data = await self.stremio_service.library.get_library_items(self.auth_key)
+
+        lib = self._library_data
+        watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
+            self.stremio_service, lib, self.auth_key
+        )
+
+        # Get items of this content type
+        all_lib_items = lib.get("loved", []) + lib.get("liked", []) + lib.get("watched", []) + lib.get("added", [])
+        typed_items = [it for it in all_lib_items if it.get("type") == content_type]
+
+        if not typed_items:
+            return []
+
+        # Separate loved/liked from watched items
+        loved_liked_items = [it for it in typed_items if it.get("_is_loved") or it.get("_is_liked")]
+        watched_items = [it for it in typed_items if not (it.get("_is_loved") or it.get("_is_liked"))]
+
+        # Always include all loved/liked items (score them)
+        loved_liked_scored = [self.scoring_service.process_item(it) for it in loved_liked_items]
+
+        # For watched items, score them and sort by interest_score
+        watched_scored = [self.scoring_service.process_item(it) for it in watched_items]
+        watched_scored.sort(key=lambda x: x.score, reverse=True)
+
+        # Combine: all loved/liked + top watched items by score
+        # Limit total to max_items_for_profile
+        remaining_slots = max(0, max_items_for_profile - len(loved_liked_scored))
+        top_watched = watched_scored[:remaining_slots]
+
+        scored_objects = loved_liked_scored + top_watched
+
+        if not scored_objects:
+            return []
+
+        # Build profile from ALL items
+        user_profile = await self.user_profile_service.build_user_profile(scored_objects, content_type=content_type)
+
+        # Get top directors and cast
+        # Note: Profile already uses frequency multipliers, but we need to ensure
+        # we're not dominated by a single recent item
+        all_directors = user_profile.get_top_crew(limit=20)
+        all_cast = user_profile.get_top_cast(limit=20)
+
+        # Count raw frequencies (not weighted) to filter out single appearances
+        # This prevents one recent movie from dominating
+        director_frequencies = defaultdict(int)
+        cast_frequencies = defaultdict(int)
+
+        # Count raw frequencies (not weighted) to filter out single appearances
+        # This prevents one recent movie from dominating
+        director_frequencies = defaultdict(int)
+        cast_frequencies = defaultdict(int)
+
+        async def count_creators(scored_item):
             try:
-                if isinstance(tid, str) and tid.startswith("tmdb:"):
-                    tid = int(tid.split(":")[1])
-                existing_tmdb.add(int(tid))
+                # Resolve TMDB ID
+                item_id = scored_item.item.id
+                tmdb_id = None
+                if item_id.startswith("tmdb:"):
+                    try:
+                        tmdb_id = int(item_id.split(":")[1])
+                    except (ValueError, IndexError):
+                        return
+                elif item_id.startswith("tt"):
+                    tmdb_id, _ = await self.tmdb_service.find_by_imdb_id(item_id)
+
+                if not tmdb_id:
+                    return
+
+                # Fetch metadata
+                if scored_item.item.type == "movie":
+                    meta = await self.tmdb_service.get_movie_details(tmdb_id)
+                else:
+                    meta = await self.tmdb_service.get_tv_details(tmdb_id)
+
+                if not meta:
+                    return
+
+                credits = meta.get("credits") or {}
+                crew = credits.get("crew") or []
+                cast = credits.get("cast") or []
+
+                # Count directors
+                for c in crew:
+                    if isinstance(c, dict) and c.get("job") == "Director":
+                        dir_id = c.get("id")
+                        if dir_id:
+                            director_frequencies[dir_id] += 1
+
+                # Count cast (top 5 only)
+                for c in cast[:5]:
+                    if isinstance(c, dict) and c.get("id"):
+                        cast_frequencies[c.get("id")] += 1
             except Exception:
                 pass
 
-        dedup = {}
-        for it in pool:
-            tid = it.get("id")
-            if not tid or tid in existing_tmdb or tid in watched_tmdb:
-                continue
-            gids = it.get("genre_ids") or []
-            if excluded_ids.intersection(gids):
-                continue
-            if not RecommendationFiltering.passes_top_genre_whitelist(gids, whitelist):
+        # Count frequencies in parallel (only for items we're using in profile)
+        await asyncio.gather(*[count_creators(item) for item in scored_objects], return_exceptions=True)
+
+        # Separate creators by frequency: reliable (2+) vs single appearance
+        MIN_FREQUENCY = 2
+        reliable_directors = [
+            (dir_id, score) for dir_id, score in all_directors if director_frequencies.get(dir_id, 0) >= MIN_FREQUENCY
+        ]
+        single_directors = [
+            (dir_id, score) for dir_id, score in all_directors if director_frequencies.get(dir_id, 0) == 1
+        ]
+
+        reliable_cast = [
+            (cast_id, score) for cast_id, score in all_cast if cast_frequencies.get(cast_id, 0) >= MIN_FREQUENCY
+        ]
+        single_cast = [(cast_id, score) for cast_id, score in all_cast if cast_frequencies.get(cast_id, 0) == 1]
+
+        # Select top 5: prioritize reliable (2+), fill with single if needed
+        top_directors = reliable_directors[:5]
+        remaining_director_slots = 5 - len(top_directors)
+        if remaining_director_slots > 0:
+            top_directors.extend(single_directors[:remaining_director_slots])
+
+        top_cast = reliable_cast[:5]
+        remaining_cast_slots = 5 - len(top_cast)
+        if remaining_cast_slots > 0:
+            top_cast.extend(single_cast[:remaining_cast_slots])
+
+        if not top_directors and not top_cast:
+            return []
+
+        excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
+        whitelist = await self._get_genre_whitelist(content_type, scored_objects)
+
+        mtype = "tv" if content_type in ("tv", "series") else "movie"
+        all_candidates = {}
+
+        # Fetch movies/series from each director
+        # Reliable directors (2+ appearances): fetch 3 pages
+        # Single-appearance directors: fetch only 1 page (less reliable)
+        for director_id, _ in top_directors:
+            try:
+                base_params = {}
+                if excluded_ids:
+                    base_params["without_genres"] = "|".join([str(g) for g in excluded_ids])
+
+                # Determine pages based on frequency
+                is_reliable = director_frequencies.get(director_id, 0) >= MIN_FREQUENCY
+                pages_to_fetch = 3 if is_reliable else 1
+
+                for page in range(1, pages_to_fetch + 1):
+                    params = {
+                        "sort_by": "popularity.desc",
+                        "vote_count.gte": 100,
+                        "page": page,
+                        **base_params,
+                    }
+                    if mtype == "tv":
+                        params["with_people"] = str(director_id)
+                    else:
+                        params["with_crew"] = str(director_id)
+
+                    result = await self.tmdb_service.get_discover(mtype, **params)
+                    for item in result.get("results", []):
+                        item_id = item.get("id")
+                        if item_id and item_id not in all_candidates:
+                            all_candidates[item_id] = item
+            except Exception as e:
+                logger.warning(f"Failed to fetch from director {director_id}: {e}")
                 continue
 
-            va, vc = float(it.get("vote_average") or 0.0), int(it.get("vote_count") or 0)
-            if vc < 100 or va < 6.2:
+        # Fetch movies/series from each cast member
+        # Reliable cast (2+ appearances): fetch 3 pages
+        # Single-appearance cast: fetch only 1 page (less reliable)
+        for cast_id, _ in top_cast:
+            try:
+                base_params = {}
+                if excluded_ids:
+                    base_params["without_genres"] = "|".join([str(g) for g in excluded_ids])
+
+                # Determine pages based on frequency
+                is_reliable = cast_frequencies.get(cast_id, 0) >= MIN_FREQUENCY
+                pages_to_fetch = 3 if is_reliable else 1
+
+                for page in range(1, pages_to_fetch + 1):
+                    params = {
+                        "sort_by": "popularity.desc",
+                        "vote_count.gte": 100,
+                        "page": page,
+                        **base_params,
+                    }
+                    if mtype == "tv":
+                        params["with_people"] = str(cast_id)
+                    else:
+                        params["with_cast"] = str(cast_id)
+
+                    result = await self.tmdb_service.get_discover(mtype, **params)
+                    for item in result.get("results", []):
+                        item_id = item.get("id")
+                        if item_id and item_id not in all_candidates:
+                            all_candidates[item_id] = item
+            except Exception as e:
+                logger.warning(f"Failed to fetch from cast {cast_id}: {e}")
                 continue
-            dedup[tid] = it
-            if len(dedup) >= need * 3:
-                break
 
-        if not dedup:
-            return existing
-
-        meta = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service,
-            list(dedup.values()),
-            content_type,
-            target_count=need * 2,
-            user_settings=self.user_settings,
-        )
-
-        extra = []
-        for it in meta:
-            if it.get("id") in watched_imdb:
+        # Filter candidates
+        filtered = []
+        for it in all_candidates.values():
+            if it.get("id") in watched_tmdb:
                 continue
-            if it.get("_external_ids", {}).get("imdb_id") in watched_imdb:
+            if not RecommendationFiltering.passes_top_genre_whitelist(it.get("genre_ids"), whitelist):
                 continue
+            filtered.append(it)
 
-            # Final check against existing
-            is_dup = False
-            for e in existing:
-                if e.get("id") == it.get("id"):
-                    is_dup = True
+        # Enrich and return
+        if filtered:
+            meta = await RecommendationMetadata.fetch_batch(
+                self.tmdb_service, filtered, content_type, target_count=limit * 2, user_settings=self.user_settings
+            )
+            final = []
+            for it in meta:
+                if it["id"] in watched_imdb:
+                    continue
+                if it.get("_external_ids", {}).get("imdb_id") in watched_imdb:
+                    continue
+                it.pop("_external_ids", None)
+                final.append(it)
+                if len(final) >= limit:
                     break
-            if is_dup:
-                continue
+            return final
 
-            it.pop("_external_ids", None)
-            extra.append(it)
-            if len(extra) >= need:
-                break
-
-        return existing + extra
+        return []

@@ -15,40 +15,38 @@ router = APIRouter()
 
 
 def get_base_manifest(user_settings: UserSettings | None = None):
-    # Default catalog config
-    rec_config = None
+    catalogs = []
+
     if user_settings:
-        # Find config for 'recommended'
+
+        print(user_settings)
+        # Handle watchly.rec
         rec_config = next((c for c in user_settings.catalogs if c.id == "watchly.rec"), None)
+        if not rec_config or rec_config.enabled:
+            name = rec_config.name if rec_config and rec_config.name else "Top Picks for You"
+            enabled_movie = getattr(rec_config, "enabled_movie", True) if rec_config else True
+            enabled_series = getattr(rec_config, "enabled_series", True) if rec_config else True
 
-    # If disabled explicitly, don't include it.
-    # If not configured (None), default to enabled.
-    if rec_config and not rec_config.enabled:
-        catalogs = []
+            if enabled_movie:
+                catalogs.append({"type": "movie", "id": "watchly.rec", "name": name, "extra": []})
+            if enabled_series:
+                catalogs.append({"type": "series", "id": "watchly.rec", "name": name, "extra": []})
+
+        # Handle watchly.creators
+        creators_config = next((c for c in user_settings.catalogs if c.id == "watchly.creators"), None)
+        if not creators_config or creators_config.enabled:
+            name = creators_config.name if creators_config and creators_config.name else "From your favourite Creators"
+            enabled_movie = getattr(creators_config, "enabled_movie", True) if creators_config else True
+            enabled_series = getattr(creators_config, "enabled_series", True) if creators_config else True
+
+            if enabled_movie:
+                catalogs.append({"type": "movie", "id": "watchly.creators", "name": name, "extra": []})
+            if enabled_series:
+                catalogs.append({"type": "series", "id": "watchly.creators", "name": name, "extra": []})
     else:
-        name = rec_config.name if rec_config and rec_config.name else "Top Picks for You"
-        enabled_movie = getattr(rec_config, "enabled_movie", True) if rec_config else True
-        enabled_series = getattr(rec_config, "enabled_series", True) if rec_config else True
-
-        catalogs = []
-        if enabled_movie:
-            catalogs.append(
-                {
-                    "type": "movie",
-                    "id": "watchly.rec",
-                    "name": name,
-                    "extra": [],
-                }
-            )
-        if enabled_series:
-            catalogs.append(
-                {
-                    "type": "series",
-                    "id": "watchly.rec",
-                    "name": name,
-                    "extra": [],
-                }
-            )
+        # Default: include watchly.rec
+        catalogs.append({"type": "movie", "id": "watchly.rec", "name": "Top Picks for You", "extra": []})
+        catalogs.append({"type": "series", "id": "watchly.rec", "name": "Top Picks for You", "extra": []})
 
     return {
         "id": settings.ADDON_ID,
@@ -79,7 +77,7 @@ async def build_dynamic_catalogs(bundle: StremioBundle, auth_key: str, user_sett
 
 
 async def _manifest_handler(response: Response, token: str):
-    response.headers["Cache-Control"] = "public, max-age=300"  # 5 minutes
+    # response.headers["Cache-Control"] = "public, max-age=300"  # 5 minutes
 
     if not token:
         raise HTTPException(status_code=401, detail="Missing token. Please reconfigure the addon.")
@@ -95,6 +93,8 @@ async def _manifest_handler(response: Response, token: str):
 
     if not creds:
         raise HTTPException(status_code=401, detail="Token not found. Please reconfigure the addon.")
+
+    logger.info(f"[{token}] User settings: {user_settings}")
 
     base_manifest = get_base_manifest(user_settings)
 

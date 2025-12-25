@@ -4,7 +4,7 @@ import random
 from loguru import logger
 from pydantic import BaseModel
 
-from app.models.profile import UserTasteProfile
+from app.models.taste_profile import TasteProfile
 from app.services.gemini import gemini_service
 from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres
@@ -40,7 +40,7 @@ class RowGeneratorService:
     def __init__(self, tmdb_service: TMDBService | None = None):
         self.tmdb_service = tmdb_service or get_tmdb_service()
 
-    async def generate_rows(self, profile: UserTasteProfile, content_type: str = "movie") -> list[RowDefinition]:
+    async def generate_rows(self, profile: TasteProfile, content_type: str = "movie") -> list[RowDefinition]:
         """
         Generate a diverse set of 3-5 thematic rows in parallel.
         """
@@ -48,7 +48,19 @@ class RowGeneratorService:
         top_genres = profile.get_top_genres(limit=3)
         top_keywords = profile.get_top_keywords(limit=6)
         top_countries = profile.get_top_countries(limit=1)
-        top_years = profile.years.get_top_features(limit=1)
+        # Convert era to decade for year extraction
+        top_eras = profile.get_top_eras(limit=1)
+        top_years = []
+        if top_eras:
+            era = top_eras[0][0]
+            try:
+                if era.startswith("pre-"):
+                    decade = 1960
+                else:
+                    decade = int(era.replace("s", ""))
+                top_years = [(decade, top_eras[0][1])]
+            except (ValueError, AttributeError):
+                pass
 
         # 2. Fetch all keyword names in parallel
         kw_ids = [k_id for k_id, _ in top_keywords]
