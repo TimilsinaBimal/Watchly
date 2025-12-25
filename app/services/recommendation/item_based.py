@@ -5,6 +5,12 @@ from loguru import logger
 
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.utils import (
+    content_type_to_mtype,
+    filter_by_genres,
+    filter_watched_by_imdb,
+    resolve_tmdb_id,
+)
 
 
 class ItemBasedService:
@@ -46,40 +52,22 @@ class ItemBasedService:
             List of recommended items
         """
         # Resolve TMDB ID
-        tmdb_id = await self._resolve_tmdb_id(item_id)
+        tmdb_id = await resolve_tmdb_id(item_id, self.tmdb_service)
         if not tmdb_id:
             return []
 
         # Exclude source item
-        watched_tmdb = watched_tmdb.copy()
+        watched_tmdb = watched_tmdb.copy() if watched_tmdb else set()
         watched_tmdb.add(tmdb_id)
 
-        mtype = "tv" if content_type in ("tv", "series") else "movie"
+        mtype = content_type_to_mtype(content_type)
 
         # Fetch candidates (similar + recommendations, 2 pages each)
         candidates = await self._fetch_candidates(tmdb_id, mtype)
 
-        # Use provided whitelist (or empty set if not provided)
-        whitelist = whitelist or set()
+        # Filter by genres and watched items
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
-
-        # Filter candidates
-        filtered = []
-        for item in candidates:
-            item_id_val = item.get("id")
-            if not item_id_val or item_id_val in watched_tmdb:
-                continue
-
-            # Genre whitelist check
-            genre_ids = item.get("genre_ids", [])
-            if not RecommendationFiltering.passes_top_genre_whitelist(genre_ids, whitelist):
-                continue
-
-            # Excluded genres check
-            if excluded_ids and any(gid in excluded_ids for gid in genre_ids):
-                continue
-
-            filtered.append(item)
+        filtered = filter_by_genres(candidates, watched_tmdb, whitelist, excluded_ids)
 
         # Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
@@ -87,39 +75,9 @@ class ItemBasedService:
         )
 
         # Final filter (remove watched by IMDB ID)
-        final = []
-        for item in enriched:
-            if item.get("id") in watched_imdb:
-                continue
-            if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
-                continue
-            final.append(item)
+        final = filter_watched_by_imdb(enriched, watched_imdb or set())
 
         return final[:limit]
-
-    async def _resolve_tmdb_id(self, item_id: str) -> int | None:
-        """
-        Resolve item ID to TMDB ID.
-
-        Args:
-            item_id: Item ID in various formats
-
-        Returns:
-            TMDB ID or None
-        """
-        if item_id.startswith("tmdb:"):
-            try:
-                return int(item_id.split(":")[1])
-            except (ValueError, IndexError):
-                return None
-        elif item_id.startswith("tt"):
-            tmdb_id, _ = await self.tmdb_service.find_by_imdb_id(item_id)
-            return tmdb_id
-        else:
-            try:
-                return int(item_id)
-            except ValueError:
-                return None
 
     async def _fetch_candidates(self, tmdb_id: int, mtype: str) -> list[dict[str, Any]]:
         """

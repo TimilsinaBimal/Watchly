@@ -47,3 +47,4 @@ logs/
 */ipynb_checkpoints/
 *.ipynb
 .vercel
+migration.py

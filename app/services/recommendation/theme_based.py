@@ -14,6 +14,7 @@ from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
+from app.services.recommendation.utils import filter_by_genres, filter_watched_by_imdb
 
 
 class ThemeBasedService:
@@ -148,13 +149,7 @@ class ThemeBasedService:
         )
 
         # Final filter (remove watched by IMDB ID)
-        final = []
-        for item in enriched:
-            if item.get("id") in watched_imdb:
-                continue
-            if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
-                continue
-            final.append(item)
+        final = filter_watched_by_imdb(enriched, watched_imdb)
 
         return final[:limit]
 
@@ -269,22 +264,14 @@ class ThemeBasedService:
         Returns:
             Filtered list of items
         """
-        filtered = []
         existing = existing_ids or set()
-
-        for item in candidates:
+        # First filter by genres (includes watched_tmdb check)
+        filtered = filter_by_genres(candidates, watched_tmdb, whitelist, None)
+        # Then deduplicate
+        result = []
+        for item in filtered:
             item_id = item.get("id")
-            if not item_id or item_id in existing:
-                continue
-            if item_id in watched_tmdb:
-                continue
-
-            # Genre whitelist check
-            genre_ids = item.get("genre_ids", [])
-            if not RecommendationFiltering.passes_top_genre_whitelist(genre_ids, whitelist):
-                continue
-
-            filtered.append(item)
-            existing.add(item_id)
-
-        return filtered
+            if item_id and item_id not in existing:
+                result.append(item)
+                existing.add(item_id)
+        return result

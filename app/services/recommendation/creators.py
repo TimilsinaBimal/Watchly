@@ -14,6 +14,7 @@ from loguru import logger
 from app.models.taste_profile import TasteProfile
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.utils import content_type_to_mtype, filter_watched_by_imdb, resolve_tmdb_id
 
 
 class CreatorsService:
@@ -65,7 +66,7 @@ class CreatorsService:
         Returns:
             List of recommended items
         """
-        mtype = "tv" if content_type in ("tv", "series") else "movie"
+        mtype = content_type_to_mtype(content_type)
 
         # Get top directors and cast from profile
         top_directors = profile.get_top_directors(limit=20)
@@ -171,13 +172,7 @@ class CreatorsService:
         )
 
         # Final filter (remove watched by IMDB ID)
-        final = []
-        for item in enriched:
-            if item.get("id") in watched_imdb:
-                continue
-            if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
-                continue
-            final.append(item)
+        final = filter_watched_by_imdb(enriched, watched_imdb)
 
         return final[:limit]
 
@@ -209,15 +204,7 @@ class CreatorsService:
             try:
                 # Resolve TMDB ID
                 item_id = item.get("_id", "")
-                tmdb_id = None
-
-                if item_id.startswith("tmdb:"):
-                    try:
-                        tmdb_id = int(item_id.split(":")[1])
-                    except (ValueError, IndexError):
-                        return
-                elif item_id.startswith("tt"):
-                    tmdb_id, _ = await self.tmdb_service.find_by_imdb_id(item_id)
+                tmdb_id = await resolve_tmdb_id(item_id, self.tmdb_service)
 
                 if not tmdb_id:
                     return

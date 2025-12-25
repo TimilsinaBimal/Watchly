@@ -22,6 +22,7 @@ from app.services.profile.constants import (
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
+from app.services.recommendation.utils import content_type_to_mtype, filter_watched_by_imdb, resolve_tmdb_id
 
 
 class TopPicksService:
@@ -73,7 +74,7 @@ class TopPicksService:
         Returns:
             List of recommended items
         """
-        mtype = "tv" if content_type in ("tv", "series") else "movie"
+        mtype = content_type_to_mtype(content_type)
         all_candidates = {}
 
         # 1. Fetch recommendations from top items (loved/watched/liked/added)
@@ -141,13 +142,7 @@ class TopPicksService:
         final = self._apply_creator_cap(enriched, limit)
 
         # 10. Final filter (remove watched by IMDB ID)
-        filtered = []
-        for item in final:
-            if item.get("id") in watched_imdb:
-                continue
-            if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
-                continue
-            filtered.append(item)
+        filtered = filter_watched_by_imdb(final, watched_imdb)
 
         return filtered[:limit]
 
@@ -186,16 +181,8 @@ class TopPicksService:
                 continue
 
             # Resolve TMDB ID
-            if item_id.startswith("tmdb:"):
-                try:
-                    tmdb_id = int(item_id.split(":")[1])
-                except (ValueError, IndexError):
-                    continue
-            elif item_id.startswith("tt"):
-                tmdb_id, _ = await self.tmdb_service.find_by_imdb_id(item_id)
-                if not tmdb_id:
-                    continue
-            else:
+            tmdb_id = await resolve_tmdb_id(item_id, self.tmdb_service)
+            if not tmdb_id:
                 continue
 
             # Fetch recommendations (1 page only)

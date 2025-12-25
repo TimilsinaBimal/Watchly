@@ -53,17 +53,6 @@ class CatalogService:
         Returns:
             Tuple of (recommendations list, response headers dict)
         """
-        """
-        Get catalog recommendations.
-
-        Args:
-            token: User token
-            content_type: Content type (movie/series)
-            catalog_id: Catalog ID (watchly.rec, watchly.creators, watchly.theme.*, etc.)
-
-        Returns:
-            Tuple of (recommendations list, response headers dict)
-        """
         # Validate inputs
         self._validate_inputs(token, content_type, catalog_id)
 
@@ -193,9 +182,8 @@ class CatalogService:
             try:
                 auth_key = await bundle.auth.login(email, password)
                 credentials["authKey"] = auth_key
-                # Note: token is not stored in credentials, we'd need to pass it separately
-                # For now, this is handled by the caller if needed
-                pass
+                # Update token store with refreshed credentials
+                await token_store.update_user_data(token, credentials)
             except Exception as e:
                 logger.error(f"Failed to refresh auth key during catalog fetch: {e}")
 
