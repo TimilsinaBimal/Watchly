@@ -18,8 +18,6 @@ def get_base_manifest(user_settings: UserSettings | None = None):
     catalogs = []
 
     if user_settings:
-
-        print(user_settings)
         # Handle watchly.rec
         rec_config = next((c for c in user_settings.catalogs if c.id == "watchly.rec"), None)
         if not rec_config or rec_config.enabled:
@@ -93,8 +91,6 @@ async def _manifest_handler(response: Response, token: str):
 
     if not creds:
         raise HTTPException(status_code=401, detail="Token not found. Please reconfigure the addon.")
-
-    logger.info(f"[{token}] User settings: {user_settings}")
 
     base_manifest = get_base_manifest(user_settings)
 

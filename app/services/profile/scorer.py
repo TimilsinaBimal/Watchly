@@ -136,7 +136,7 @@ class ProfileScorer:
         if year < 1970:
             return "pre-1970s"
         elif year < 1980:
-            return "1970s"
+            return "1980s"
         elif year < 1990:
             return "1990s"
         elif year < 2000:

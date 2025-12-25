@@ -65,10 +65,6 @@ class ScoringService:
         completion_score = 0.0
         completion_rate = 0.0
 
-        # Prefer ratio-based completion when duration is available to avoid
-        # treating short partial plays as full completion just because
-        # `timesWatched` was incremented. If duration is missing, fall back
-        # to conservative estimates based on timesWatched/flaggedWatched.
         if state.duration and state.duration > 0:
             try:
                 ratio = min(float(state.timeWatched) / float(state.duration), 1.0)
@@ -144,7 +140,7 @@ class ScoringService:
             days_since = (now - last_watched).days
 
             MAX_RECENCY_SCORE = 100.0
-            HALF_LIFE_DAYS = 20.0  # Days for score to halve
+            HALF_LIFE_DAYS = 60.0  # Days for score to halve
 
             if days_since >= 0:
                 recency_score = MAX_RECENCY_SCORE * math.exp(-days_since / HALF_LIFE_DAYS)
