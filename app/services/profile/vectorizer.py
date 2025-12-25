@@ -1,9 +1,3 @@
-"""
-Item Vectorizer - Extracts features from items for profile building.
-
-Pure extraction logic, no scoring or accumulation.
-"""
-
 from typing import Any
 
 from app.models.scoring import ScoredItem

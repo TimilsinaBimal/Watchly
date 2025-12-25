@@ -1,9 +1,3 @@
-"""
-Profile Scorer - Unified Scoring Function.
-
-Same scoring function used everywhere: Top Picks, Genre rows, Keyword rows, etc.
-"""
-
 from typing import Any
 
 from app.models.taste_profile import TasteProfile

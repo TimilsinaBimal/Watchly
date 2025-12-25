@@ -1,10 +1,3 @@
-"""
-Profile Builder - Additive Accumulation System.
-
-Pure additive accumulation. No normalization, no derived features.
-Easy to debug, transparent, explainable.
-"""
-
 import asyncio
 import math
 from collections import defaultdict

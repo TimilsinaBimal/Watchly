@@ -1,9 +1,3 @@
-"""
-Evidence Weight Calculator.
-
-Determines how much weight to give each user interaction based on type and recency.
-"""
-
 import math
 from datetime import datetime, timezone
 from typing import Literal

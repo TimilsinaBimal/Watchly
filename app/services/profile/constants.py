@@ -1,9 +1,3 @@
-"""
-Constants for Taste Profile System.
-
-Centralized configuration for evidence weights, feature weights, caps, and decay.
-"""
-
 from typing import Final
 
 # Evidence Weights (how much each interaction type contributes)

@@ -1,9 +1,3 @@
-"""
-Smart Sampling Service.
-
-Efficiently samples items for profile building while prioritizing strong signals.
-"""
-
 from typing import Any
 
 from app.models.scoring import ScoredItem
