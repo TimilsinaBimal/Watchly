@@ -135,7 +135,7 @@ class TopPicksService:
 
         # 8. Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, result, content_type, target_count=limit, user_settings=self.user_settings
+            self.tmdb_service, result, content_type, user_settings=self.user_settings
         )
 
         # 9. Apply creator cap (after enrichment, we have full metadata)

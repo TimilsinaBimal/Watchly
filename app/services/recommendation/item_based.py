@@ -71,13 +71,13 @@ class ItemBasedService:
 
         # Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, filtered, content_type, target_count=limit, user_settings=self.user_settings
+            self.tmdb_service, filtered, content_type, user_settings=self.user_settings
         )
 
         # Final filter (remove watched by IMDB ID)
         final = filter_watched_by_imdb(enriched, watched_imdb or set())
 
-        return final[:limit]
+        return final
 
     async def _fetch_candidates(self, tmdb_id: int, mtype: str) -> list[dict[str, Any]]:
         """

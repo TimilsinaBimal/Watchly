@@ -162,7 +162,4 @@ class RecommendationFiltering:
         gids = set(genre_ids or [])
         if not gids:
             return True
-        # If it's animation and not in whitelist, we still block it to prevent 'Anime Takeover'
-        if 16 in gids and 16 not in whitelist:
-            return False
         return True

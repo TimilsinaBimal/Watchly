@@ -1,16 +1,12 @@
-"""
-Catalog Service - Facade for catalog generation.
-
-Encapsulates all catalog logic: auth, profile building, routing, and recommendations.
-"""
-
 import re
 from typing import Any
 
+from fastapi import HTTPException
 from loguru import logger
 
 from app.api.endpoints.manifest import get_config_id
 from app.core.config import settings
+from app.core.constants import DEFAULT_MAX_ITEMS, DEFAULT_MIN_ITEMS
 from app.core.settings import UserSettings, get_default_settings
 from app.models.taste_profile import TasteProfile
 from app.services.catalog_updater import catalog_updater
@@ -24,19 +20,9 @@ from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 
-DEFAULT_MIN_ITEMS = 20
-DEFAULT_MAX_ITEMS = 32
-
 
 class CatalogService:
-    """
-    Facade for catalog generation.
-
-    Handles all catalog logic: validation, auth, profile building, routing, and recommendations.
-    """
-
     def __init__(self):
-        """Initialize catalog service."""
         pass
 
     async def get_catalog(
@@ -61,13 +47,18 @@ class CatalogService:
         # Get credentials
         credentials = await token_store.get_user_data(token)
         if not credentials:
-            from fastapi import HTTPException
-
+            logger.error("No credentials found for token")
             raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
         # Trigger lazy update if needed
         if settings.AUTO_UPDATE_CATALOGS:
-            await catalog_updater.trigger_update(token, credentials)
+            logger.info(f"[{token[:8]}...] Triggering auto update for token")
+            try:
+                await catalog_updater.trigger_update(token, credentials)
+            except Exception as e:
+                logger.error(f"[{token[:8]}...] Failed to trigger auto update: {e}")
+                # continue with the request even if the auto update fails
+                pass
 
         bundle = StremioBundle()
         try:
@@ -82,11 +73,13 @@ class CatalogService:
             # Initialize services
             services = self._initialize_services(language, user_settings)
 
+            integration_service: ProfileIntegration = services["integration"]
+
             # Build profile and watched sets (once, reused)
-            profile, watched_tmdb, watched_imdb = await services["integration"].build_profile_from_library(
+            profile, watched_tmdb, watched_imdb = await integration_service.build_profile_from_library(
                 library_items, content_type, bundle, auth_key
             )
-            whitelist = await services["integration"].get_genre_whitelist(profile, content_type) if profile else set()
+            whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
 
             # Get catalog limits
             min_items, max_items = self._get_catalog_limits(catalog_id, user_settings)
@@ -127,9 +120,6 @@ class CatalogService:
             await bundle.close()
 
     def _validate_inputs(self, token: str, content_type: str, catalog_id: str) -> None:
-        """Validate input parameters."""
-        from fastapi import HTTPException
-
         if not token:
             raise HTTPException(
                 status_code=400,
@@ -144,9 +134,7 @@ class CatalogService:
         if catalog_id not in ["watchly.rec", "watchly.creators"] and not any(
             catalog_id.startswith(p)
             for p in (
-                "tt",
                 "watchly.theme.",
-                "watchly.item.",
                 "watchly.loved.",
                 "watchly.watched.",
             )
@@ -154,16 +142,10 @@ class CatalogService:
             logger.warning(f"Invalid id: {catalog_id}")
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "Invalid id. Supported: 'watchly.rec', 'watchly.creators', 'watchly.theme.<params>',"
-                    "'watchly.item.<id>', or specific item IDs."
-                ),
+                detail=("Invalid id. Supported: 'watchly.rec', 'watchly.creators', 'watchly.theme.<params>'"),
             )
 
     async def _resolve_auth(self, bundle: StremioBundle, credentials: dict, token: str) -> str:
-        """Resolve and validate auth key."""
-        from fastapi import HTTPException
-
         auth_key = credentials.get("authKey")
         email = credentials.get("email")
         password = credentials.get("password")
@@ -174,7 +156,8 @@ class CatalogService:
             try:
                 await bundle.auth.get_user_info(auth_key)
                 is_valid = True
-            except Exception:
+            except Exception as e:
+                logger.error(f"Failed to validate auth key during catalog fetch: {e}")
                 pass
 
         # Try to refresh if invalid
@@ -188,23 +171,20 @@ class CatalogService:
                 logger.error(f"Failed to refresh auth key during catalog fetch: {e}")
 
         if not auth_key:
+            logger.error("No auth key found during catalog fetch")
             raise HTTPException(status_code=401, detail="Stremio session expired. Please reconfigure.")
 
         return auth_key
 
     def _extract_settings(self, credentials: dict) -> UserSettings:
-        """Extract user settings from credentials."""
         settings_dict = credentials.get("settings", {})
         return UserSettings(**settings_dict) if settings_dict else get_default_settings()
 
     def _initialize_services(self, language: str, user_settings: UserSettings) -> dict[str, Any]:
-        """Initialize all recommendation services."""
         tmdb_service = get_tmdb_service(language=language)
-        integration = ProfileIntegration(language=language)
-
         return {
             "tmdb": tmdb_service,
-            "integration": integration,
+            "integration": ProfileIntegration(language=language),
             "item": ItemBasedService(tmdb_service, user_settings),
             "theme": ThemeBasedService(tmdb_service, user_settings),
             "top_picks": TopPicksService(tmdb_service, user_settings),
@@ -212,7 +192,6 @@ class CatalogService:
         }
 
     def _get_catalog_limits(self, catalog_id: str, user_settings: UserSettings) -> tuple[int, int]:
-        """Get min/max items for catalog."""
         try:
             cfg_id = get_config_id({"id": catalog_id})
         except Exception:
@@ -255,21 +234,19 @@ class CatalogService:
     ) -> list[dict[str, Any]]:
         """Route to appropriate recommendation service based on catalog ID."""
         # Item-based recommendations
-        if catalog_id.startswith("tt") or any(
+        if any(
             catalog_id.startswith(p)
             for p in (
-                "watchly.item.",
                 "watchly.loved.",
                 "watchly.watched.",
             )
         ):
             # Extract item ID
-            if catalog_id.startswith("tt"):
-                item_id = catalog_id
-            else:
-                item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", catalog_id)
+            item_id = re.sub(r"^watchly\.(loved|watched)\.", "", catalog_id)
 
-            recommendations = await services["item"].get_recommendations_for_item(
+            item_service: ItemBasedService = services["item"]
+
+            recommendations = await item_service.get_recommendations_for_item(
                 item_id=item_id,
                 content_type=content_type,
                 watched_tmdb=watched_tmdb,
@@ -281,7 +258,9 @@ class CatalogService:
 
         # Theme-based recommendations
         elif catalog_id.startswith("watchly.theme."):
-            recommendations = await services["theme"].get_recommendations_for_theme(
+            theme_service: ThemeBasedService = services["theme"]
+
+            recommendations = await theme_service.get_recommendations_for_theme(
                 theme_id=catalog_id,
                 content_type=content_type,
                 profile=profile,
@@ -294,8 +273,10 @@ class CatalogService:
 
         # Creators-based recommendations
         elif catalog_id == "watchly.creators":
+            creators_service: CreatorsService = services["creators"]
+
             if profile:
-                recommendations = await services["creators"].get_recommendations_from_creators(
+                recommendations = await creators_service.get_recommendations_from_creators(
                     profile=profile,
                     content_type=content_type,
                     library_items=library_items,
@@ -311,7 +292,9 @@ class CatalogService:
         # Top picks
         elif catalog_id == "watchly.rec":
             if profile:
-                recommendations = await services["top_picks"].get_top_picks(
+                top_picks_service: TopPicksService = services["top_picks"]
+
+                recommendations = await top_picks_service.get_top_picks(
                     profile=profile,
                     content_type=content_type,
                     library_items=library_items,

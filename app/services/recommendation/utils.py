@@ -1,7 +1,3 @@
-"""
-Utility functions for recommendations.
-"""
-
 from typing import Any
 
 from loguru import logger
@@ -11,15 +7,6 @@ from app.services.recommendation.metadata import RecommendationMetadata
 
 
 def content_type_to_mtype(content_type: str) -> str:
-    """
-    Convert content_type to TMDB media type.
-
-    Args:
-        content_type: Content type (movie/series/tv)
-
-    Returns:
-        TMDB media type (movie/tv)
-    """
     return "tv" if content_type in ("tv", "series") else "movie"
 
 
@@ -102,10 +89,6 @@ def filter_by_genres(
             continue
 
         genre_ids = item.get("genre_ids", [])
-
-        # Genre whitelist check
-        if not RecommendationFiltering.passes_top_genre_whitelist(genre_ids, whitelist):
-            continue
 
         # Excluded genres check
         if excluded_ids and any(gid in excluded_ids for gid in genre_ids):
@@ -198,7 +181,6 @@ async def pad_to_min(
         tmdb_service,
         list(dedup.values()),
         content_type,
-        target_count=need * 2,
         user_settings=user_settings,
     )
 

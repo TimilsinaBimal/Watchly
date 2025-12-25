@@ -157,8 +157,6 @@ class CreatorsService:
 
             # Genre whitelist check
             genre_ids = item.get("genre_ids", [])
-            if not RecommendationFiltering.passes_top_genre_whitelist(genre_ids, whitelist):
-                continue
 
             # Excluded genres check
             if excluded_ids and any(gid in excluded_ids for gid in genre_ids):
@@ -168,7 +166,7 @@ class CreatorsService:
 
         # Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, filtered, content_type, target_count=limit, user_settings=self.user_settings
+            self.tmdb_service, filtered, content_type, user_settings=self.user_settings
         )
 
         # Final filter (remove watched by IMDB ID)

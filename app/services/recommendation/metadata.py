@@ -1,6 +1,9 @@
 import asyncio
 from typing import Any
 
+from loguru import logger
+
+from app.core.constants import DEFAULT_CONCURRENCY_LIMIT
 from app.services.rpdb import RPDBService
 
 
@@ -117,14 +120,13 @@ class RecommendationMetadata:
         tmdb_service: Any,
         items: list[dict[str, Any]],
         media_type: str,
-        target_count: int,
         user_settings: Any = None,
     ) -> list[dict[str, Any]]:
         """Fetch details for a batch of items in parallel with target-based short-circuiting."""
         final_results = []
         valid_items = [it for it in items if it.get("id")]
         query_type = "movie" if media_type == "movie" else "tv"
-        sem = asyncio.Semaphore(30)
+        sem = asyncio.Semaphore(DEFAULT_CONCURRENCY_LIMIT)
 
         async def _fetch_one(tid: int):
             async with sem:
@@ -135,25 +137,20 @@ class RecommendationMetadata:
                 except Exception:
                     return None
 
-        # Process in chunks to allow early exit once target_count is reached
-        batch_size = 20
-        for i in range(0, len(valid_items), batch_size):
-            if len(final_results) >= target_count:
-                break
+        tasks = [_fetch_one(it.get("id")) for it in valid_items]
+        details_list = await asyncio.gather(*tasks)
 
-            chunk = valid_items[i : i + batch_size]  # noqa
-            tasks = [_fetch_one(it["id"]) for it in chunk]
-            details_list = await asyncio.gather(*tasks)
+        format_task = [
+            cls.format_for_stremio(details, media_type, user_settings) for details in details_list if details
+        ]
 
-            for details in details_list:
-                if not details:
-                    continue
+        formatted_list = await asyncio.gather(*format_task, return_exceptions=True)
 
-                formatted = await cls.format_for_stremio(details, media_type, user_settings)
-                if formatted:
-                    final_results.append(formatted)
-
-                if len(final_results) >= target_count:
-                    break
+        for formatted in formatted_list:
+            if isinstance(formatted, Exception):
+                logger.warning(f"Error formatting metadata: {formatted}")
+                continue
+            if formatted:
+                final_results.append(formatted)
 
         return final_results
