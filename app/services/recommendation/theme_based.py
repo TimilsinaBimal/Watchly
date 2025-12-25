@@ -48,8 +48,7 @@ class ThemeBasedService:
         watched_tmdb: set[int] | None = None,
         watched_imdb: set[str] | None = None,
         limit: int = 20,
-        integration: Any = None,
-        library_items: dict | None = None,
+        whitelist: set[int] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get recommendations for a theme (genre+keyword, etc.).
@@ -90,8 +89,8 @@ class ThemeBasedService:
         # Fetch candidates
         candidates = await self._fetch_discover_candidates(content_type, params, pages_to_fetch)
 
-        # Get genre whitelist
-        whitelist = await self._get_genre_whitelist(content_type, integration, library_items)
+        # Use provided whitelist (or empty set if not provided)
+        whitelist = whitelist or set()
 
         # Initial filter (watched + genre whitelist)
         filtered = self._filter_candidates(candidates, watched_tmdb, whitelist)
@@ -289,24 +288,3 @@ class ThemeBasedService:
             existing.add(item_id)
 
         return filtered
-
-    async def _get_genre_whitelist(
-        self, content_type: str, integration: Any = None, library_items: dict | None = None
-    ) -> set[int]:
-        """
-        Get genre whitelist for content type.
-
-        For theme-based recommendations, we can use profile-based whitelist
-        if available.
-
-        Args:
-            content_type: Content type
-            integration: ProfileIntegration instance (optional)
-            library_items: Library items dict (optional)
-
-        Returns:
-            Set of genre IDs (empty = no filtering)
-        """
-        if integration and library_items:
-            return await integration.get_genre_whitelist(library_items, content_type)
-        return set()

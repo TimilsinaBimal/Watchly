@@ -1,10 +1,3 @@
-"""
-Item-Based Recommendations Service.
-
-Minimal processing: fetch similar/recommendations from TMDB, filter watched/excluded.
-No heavy scoring - TMDB recommendations are already good.
-"""
-
 import asyncio
 from typing import Any
 
@@ -17,19 +10,9 @@ from app.services.recommendation.metadata import RecommendationMetadata
 class ItemBasedService:
     """
     Handles item-based recommendations (Because you watched/loved).
-
-    Strategy: Minimal processing - just filter and return.
-    TMDB recommendations are already curated, no need for heavy scoring.
     """
 
     def __init__(self, tmdb_service: Any, user_settings: Any = None):
-        """
-        Initialize item-based service.
-
-        Args:
-            tmdb_service: TMDB service for API calls
-            user_settings: User settings for exclusions
-        """
         self.tmdb_service = tmdb_service
         self.user_settings = user_settings
 
@@ -37,16 +20,15 @@ class ItemBasedService:
         self,
         item_id: str,
         content_type: str,
-        watched_tmdb: set[int],
-        watched_imdb: set[str],
+        watched_tmdb: set[int] | None = None,
+        watched_imdb: set[str] | None = None,
         limit: int = 20,
-        integration: Any = None,
-        library_items: dict | None = None,
+        whitelist: set[int] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get recommendations for a specific item.
 
-        Minimal processing:
+        Strategy:
         1. Fetch similar + recommendations from TMDB (2 pages each)
         2. Filter watched items
         3. Filter excluded genres
@@ -77,8 +59,8 @@ class ItemBasedService:
         # Fetch candidates (similar + recommendations, 2 pages each)
         candidates = await self._fetch_candidates(tmdb_id, mtype)
 
-        # Get genre whitelist and excluded genres
-        whitelist = await self._get_genre_whitelist(content_type, integration, library_items)
+        # Use provided whitelist (or empty set if not provided)
+        whitelist = whitelist or set()
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
 
         # Filter candidates
@@ -167,25 +149,3 @@ class ItemBasedService:
                         combined[item_id] = item
 
         return list(combined.values())
-
-    async def _get_genre_whitelist(
-        self, content_type: str, integration: Any = None, library_items: dict | None = None
-    ) -> set[int]:
-        """
-        Get genre whitelist for content type.
-
-        For item-based recommendations, we use a lenient whitelist approach.
-        Since TMDB recommendations are already curated, we don't need strict filtering.
-        But we can use profile-based whitelist if provided.
-
-        Args:
-            content_type: Content type
-            integration: ProfileIntegration instance (optional)
-            library_items: Library items dict (optional)
-
-        Returns:
-            Set of genre IDs (empty = no filtering)
-        """
-        if integration and library_items:
-            return await integration.get_genre_whitelist(library_items, content_type)
-        return set()

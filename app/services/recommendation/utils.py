@@ -16,9 +16,8 @@ async def pad_to_min(
     min_items: int,
     tmdb_service: Any,
     user_settings: Any = None,
-    stremio_service: Any = None,
-    library_data: dict | None = None,
-    auth_key: str | None = None,
+    watched_tmdb: set[int] | None = None,
+    watched_imdb: set[str] | None = None,
 ) -> list[dict]:
     """
     Pad recommendations to meet minimum item count by fetching trending/popular items.
@@ -29,9 +28,8 @@ async def pad_to_min(
         min_items: Minimum number of items required
         tmdb_service: TMDB service instance
         user_settings: User settings (optional)
-        stremio_service: Stremio service (optional, for watched sets)
-        library_data: Library data (optional, for watched sets)
-        auth_key: Auth key (optional, for watched sets)
+        watched_tmdb: Set of watched TMDB IDs (optional)
+        watched_imdb: Set of watched IMDB IDs (optional)
 
     Returns:
         List of recommendations padded to min_items
@@ -40,10 +38,9 @@ async def pad_to_min(
     if need <= 0:
         return existing
 
-    # Get watched sets and excluded genres
-    watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
-        stremio_service, library_data, auth_key
-    )
+    # Use provided watched sets (or empty sets if not provided)
+    watched_tmdb = watched_tmdb or set()
+    watched_imdb = watched_imdb or set()
     excluded_ids = set(RecommendationFiltering.get_excluded_genre_ids(user_settings, content_type))
 
     mtype = "tv" if content_type in ("tv", "series") else "movie"
