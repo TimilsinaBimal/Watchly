@@ -1,14 +1,9 @@
-"""
-Theme-Based Recommendations Service.
-
-Fetches from TMDB discover API, scores with profile, applies quality filters.
-"""
-
 import asyncio
 from typing import Any
 
 from loguru import logger
 
+from app.core.constants import DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE, DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
 from app.models.taste_profile import TasteProfile
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
@@ -30,13 +25,6 @@ class ThemeBasedService:
     """
 
     def __init__(self, tmdb_service: Any, user_settings: Any = None):
-        """
-        Initialize theme-based service.
-
-        Args:
-            tmdb_service: TMDB service for API calls
-            user_settings: User settings for exclusions
-        """
         self.tmdb_service = tmdb_service
         self.user_settings = user_settings
         self.scorer = ProfileScorer()
@@ -114,10 +102,15 @@ class ThemeBasedService:
                 try:
                     profile_score = self.scorer.score_item(item, profile)
                     # Add quality score
+                    minimum_rating = (
+                        DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
+                        if content_type in ("tv", "series")
+                        else DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE
+                    )
                     wr = RecommendationScoring.weighted_rating(
                         item.get("vote_average"),
                         item.get("vote_count"),
-                        C=7.2 if content_type in ("tv", "series") else 6.8,
+                        C=minimum_rating,
                     )
                     quality_score = RecommendationScoring.normalize(wr)
 
@@ -151,7 +144,7 @@ class ThemeBasedService:
         # Final filter (remove watched by IMDB ID)
         final = filter_watched_by_imdb(enriched, watched_imdb)
 
-        return final[:limit]
+        return final
 
     def _parse_theme_id(self, theme_id: str, content_type: str) -> dict[str, Any]:
         """

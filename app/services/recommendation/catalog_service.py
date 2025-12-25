@@ -279,10 +279,8 @@ class CatalogService:
                 recommendations = await creators_service.get_recommendations_from_creators(
                     profile=profile,
                     content_type=content_type,
-                    library_items=library_items,
                     watched_tmdb=watched_tmdb,
                     watched_imdb=watched_imdb,
-                    whitelist=whitelist,
                     limit=max_items,
                 )
             else:
