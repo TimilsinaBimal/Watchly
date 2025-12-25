@@ -3,7 +3,7 @@ import os
 from app.core.app import app  # noqa: F401
 from app.core.config import settings
 
-if __name__ == "__main__":
+if __name__ == "__main__" and settings.APP_ENV != "vercel":
     import uvicorn
 
     PORT = os.getenv("PORT", settings.PORT)
