@@ -1,15 +1,10 @@
-"""
-Top Picks Service - Generates personalized top picks with diversity caps.
-
-Fetches from multiple sources, scores with profile, applies diversity constraints.
-"""
-
 import asyncio
 from collections import defaultdict
 from typing import Any
 
 from loguru import logger
 
+from app.core.settings import UserSettings
 from app.models.taste_profile import TasteProfile
 from app.services.profile.constants import (
     TOP_PICKS_CREATOR_CAP,
@@ -23,6 +18,7 @@ from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
 from app.services.recommendation.utils import content_type_to_mtype, filter_watched_by_imdb, resolve_tmdb_id
+from app.services.tmdb.service import TMDBService
 
 
 class TopPicksService:
@@ -30,17 +26,10 @@ class TopPicksService:
     Generates top picks by combining multiple sources and applying diversity caps.
     """
 
-    def __init__(self, tmdb_service: Any, user_settings: Any = None):
-        """
-        Initialize Top Picks service.
-
-        Args:
-            tmdb_service: TMDB service for API calls
-            user_settings: User settings for exclusions
-        """
-        self.tmdb_service = tmdb_service
-        self.user_settings = user_settings
-        self.scorer = ProfileScorer()
+    def __init__(self, tmdb_service: TMDBService, user_settings: UserSettings | None = None):
+        self.tmdb_service: TMDBService = tmdb_service
+        self.user_settings: UserSettings | None = user_settings
+        self.scorer: ProfileScorer = ProfileScorer()
 
     async def get_top_picks(
         self,
@@ -104,24 +93,16 @@ class TopPicksService:
         scored_candidates = []
         for item in filtered_candidates:
             try:
-                profile_score = self.scorer.score_item(item, profile)
-                # Add quality score for final ranking
-                wr = RecommendationScoring.weighted_rating(
-                    item.get("vote_average"), item.get("vote_count"), C=7.2 if mtype == "tv" else 6.8
-                )
-                quality_score = RecommendationScoring.normalize(wr)
-
-                # Apply quality adjustments
-                vote_count = item.get("vote_count", 0)
                 is_ranked = item.get("_ranked_candidate", False)
                 is_fresh = item.get("_fresh_boost", False)
-                adjusted_profile_score = RecommendationScoring.apply_quality_adjustments(
-                    profile_score, wr, vote_count, is_ranked=is_ranked, is_fresh=is_fresh
+                final_score = RecommendationScoring.calculate_final_score(
+                    item=item,
+                    profile=profile,
+                    scorer=self.scorer,
+                    mtype=mtype,
+                    is_ranked=is_ranked,
+                    is_fresh=is_fresh,
                 )
-
-                # Combined score: profile similarity (with quality adjustments) + quality
-                final_score = (adjusted_profile_score * 0.6) + (quality_score * 0.4)
-
                 scored_candidates.append((final_score, item))
             except Exception as e:
                 logger.debug(f"Failed to score item {item.get('id')}: {e}")
@@ -372,11 +353,6 @@ class TopPicksService:
                 top_genre = genre_ids[0]  # Primary genre
                 if genre_counts[top_genre] >= max_per_genre:
                     continue
-
-            # Check creator cap (2 max per creator)
-            # Extract directors and cast from item (if available in metadata)
-            # For now, we'll skip this check as it requires full metadata
-            # Can be added after enrichment
 
             # Check era cap (40% max per era)
             year = self._extract_year(item)

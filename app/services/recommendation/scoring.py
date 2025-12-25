@@ -3,6 +3,8 @@ import math
 from collections.abc import Callable
 from typing import Any
 
+from app.core.constants import DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE, DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
+
 
 class RecommendationScoring:
     """
@@ -114,3 +116,55 @@ class RecommendationScoring:
             q_mult *= 1.10
 
         return score * q_mult
+
+    @staticmethod
+    def calculate_final_score(
+        item: dict[str, Any],
+        profile: Any,
+        scorer: Any,
+        mtype: str,
+        is_ranked: bool = False,
+        is_fresh: bool = False,
+    ) -> float:  # noqa: E501
+        """
+        Calculate final recommendation score combining profile similarity and quality.
+
+        Args:
+            item: Item dictionary with vote_average, vote_count, etc.
+            profile: User taste profile
+            scorer: ProfileScorer instance
+            mtype: Media type (movie/tv) to determine minimum rating
+            is_ranked: Whether item is from ranked source
+            is_fresh: Whether item should get freshness boost
+            minimum_rating_tv: Minimum rating constant for TV
+            minimum_rating_movie: Minimum rating constant for movies
+
+        Returns:
+            Final combined score (0-1 range)
+        """
+        # Score with profile
+        profile_score = scorer.score_item(item, profile)
+
+        # Calculate weighted rating
+        C = (
+            DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
+            if mtype in ("tv", "series")
+            else DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE
+        )
+        wr = RecommendationScoring.weighted_rating(
+            item.get("vote_average"),
+            item.get("vote_count"),
+            C=C,
+        )
+        quality_score = RecommendationScoring.normalize(wr)
+
+        # Apply quality adjustments
+        vote_count = item.get("vote_count", 0)
+        adjusted_profile_score = RecommendationScoring.apply_quality_adjustments(
+            profile_score, wr, vote_count, is_ranked=is_ranked, is_fresh=is_fresh
+        )
+
+        # Combined score: profile similarity (with quality adjustments) + quality
+        final_score = (adjusted_profile_score * 0.6) + (quality_score * 0.4)
+
+        return final_score

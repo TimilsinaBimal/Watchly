@@ -3,13 +3,12 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.constants import DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE, DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
 from app.models.taste_profile import TasteProfile
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
-from app.services.recommendation.utils import filter_by_genres, filter_watched_by_imdb
+from app.services.recommendation.utils import content_type_to_mtype, filter_by_genres, filter_watched_by_imdb
 
 
 class ThemeBasedService:
@@ -98,30 +97,18 @@ class ThemeBasedService:
         # Score with profile if available
         if profile:
             scored = []
+            mtype = content_type_to_mtype(content_type)
             for item in filtered:
                 try:
-                    profile_score = self.scorer.score_item(item, profile)
-                    # Add quality score
-                    minimum_rating = (
-                        DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
-                        if content_type in ("tv", "series")
-                        else DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE
-                    )
-                    wr = RecommendationScoring.weighted_rating(
-                        item.get("vote_average"),
-                        item.get("vote_count"),
-                        C=minimum_rating,
-                    )
-                    quality_score = RecommendationScoring.normalize(wr)
 
-                    # Apply quality adjustments (like old system)
-                    vote_count = item.get("vote_count", 0)
-                    adjusted_profile_score = RecommendationScoring.apply_quality_adjustments(
-                        profile_score, wr, vote_count, is_ranked=False, is_fresh=False
+                    final_score = RecommendationScoring.calculate_final_score(
+                        item=item,
+                        profile=profile,
+                        scorer=self.scorer,
+                        mtype=mtype,
+                        is_ranked=False,
+                        is_fresh=False,
                     )
-
-                    # Combined: profile similarity (with quality adjustments) + quality
-                    final_score = (adjusted_profile_score * 0.6) + (quality_score * 0.4)
 
                     # Apply genre multiplier (if whitelist available)
                     genre_mult = RecommendationFiltering.get_genre_multiplier(item.get("genre_ids"), whitelist)
