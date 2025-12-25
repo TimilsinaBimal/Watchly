@@ -40,8 +40,10 @@ def _clean_meta(meta: dict) -> dict:
     cleaned = {k: v for k, v in meta.items() if k in allowed}
     # Drop empty values
     cleaned = {k: v for k, v in cleaned.items() if v not in (None, "", [], {}, ())}
-    # only return values with imdb id
-    cleaned = {k: v for k, v in cleaned.items() if k == "id" and v.startswith("tt")}
+
+    # if id does not start with tt, return None
+    if not cleaned.get("id", "").startswith("tt"):
+        return None
     return cleaned
 
 
@@ -197,6 +199,8 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         logger.info(f"Returning {len(recommendations)} items for {type}")
         response.headers["Cache-Control"] = "public, max-age=21600"  # 6 hours
         cleaned = [_clean_meta(m) for m in recommendations]
+        # remove none values
+        cleaned = [m for m in cleaned if m is not None]
         return {"metas": cleaned}
 
     except HTTPException:
