@@ -25,9 +25,10 @@
             Discover movies and series tailored to your unique taste, powered by your Stremio library
             and watch history.
         </p>
-        <!-- Announcement (fetched from API) -->
+        <!-- Announcement (from Jinja2 context) -->
+        {% if announcement_html %}
         <div id="announcement"
-            class="hidden max-w-2xl mx-auto mt-6 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50 text-sm text-slate-200 flex items-start gap-3"
+            class="max-w-2xl mx-auto mt-6 p-3 rounded-xl bg-neutral-800/50 border border-slate-700/50 text-sm text-slate-200 flex items-start gap-3"
             role="region" aria-live="polite">
             <div class="flex-shrink-0 text-slate-200 mt-0.5">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -35,8 +36,9 @@
                         d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
             </div>
-            <div id="announcement-content" class="flex-grow text-slate-200">{{ announcement_html | safe }}</div>
+            <div id="announcement-content" class="flex-grow text-slate-200">{{ announcement_html|safe }}</div>
         </div>
+        {% endif %}
     </div>
 
     <!-- Features Grid -->
@@ -158,7 +160,7 @@
         <!-- Secondary Links: Donate + Source, aligned in two columns under CTA -->
         <div class="max-w-2xl mx-auto pt-2 grid grid-cols-2 gap-3">
             <button type="button" id="homepageDonateBtn"
-                class="flex items-center justify-center gap-2 text-sm text-slate-300 hover:text-white transition-colors bg-slate-800/40 border border-white/10 hover:border-white/20 rounded-xl py-3 hover:shadow-md hover:shadow-black/10">
+                class="flex items-center justify-center gap-2 text-sm text-slate-300 hover:text-white transition-colors bg-neutral-800/40 border border-white/10 hover:border-white/20 rounded-xl py-3 hover:shadow-md hover:shadow-black/10">
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path
                         d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -166,7 +168,7 @@
                 <span class="font-medium">Support me</span>
             </button>
             <a href="https://github.com/TimilsinaBimal/watchly" target="_blank" rel="noopener"
-                class="flex items-center justify-center gap-2 text-sm text-slate-300 hover:text-white transition-colors bg-slate-800/50 border border-slate-700/50 hover:border-white/30 rounded-xl py-3 hover:shadow-lg hover:shadow-black/20">
+                class="flex items-center justify-center gap-2 text-sm text-slate-300 hover:text-white transition-colors bg-neutral-800/50 border border-slate-700/50 hover:border-white/30 rounded-xl py-3 hover:shadow-lg hover:shadow-black/20">
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path
                         d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387 0.6.111 0.82-.25 0.82-.557 0-.276-0.01-1.003-0.015-1.972-3.337 0.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-0.744 0.084-0.73 0.084-0.73 1.205 0.084 1.838 1.237 1.838 1.237 1.07 1.835 2.809 1.305 3.492 0.998 0.108-0.776 0.419-1.305 0.762-1.604-2.665-0.3-5.466-1.332-5.466-5.93 0-1.31 0.465-2.38 1.235-3.221-0.135-0.303-0.54-1.523 0.116-3.176 0 0 1.008-0.322 3.301 1.23A11.026 11.026 0 0112 5.86c1.02 0 2.047 0.137 3.013 0.403 2.291-1.552 3.297-1.23 3.297-1.23 0.656 1.653 0.24 2.873 0.116 3.176 0.77 0.84 1.235 1.91 1.235 3.221 0 4.61-2.805 5.621-5.476 5.922 0.43 0.37 0.81 1.096 0.81 2.22 0 1.606-0.015 2.899-0.015 3.286 0 0.308 0.219 0.678 0.825 0.557C20.565 21.79 24 17.29 24 12c0-6.627-5.372-12-12-12z" />

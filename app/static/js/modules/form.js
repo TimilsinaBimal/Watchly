@@ -144,7 +144,7 @@ function renderGenreList(container, genres, namePrefix) {
         <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition group">
             <div class="relative flex items-center">
                 <input type="checkbox" name="${namePrefix}" value="${genre.id}"
-                    class="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-slate-900 checked:bg-white checked:border-white transition-colors">
+                    class="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-neutral-900 checked:bg-white checked:border-white transition-colors">
                 <svg class="absolute w-3.5 h-3.5 text-black left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity"
                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
@@ -155,26 +155,8 @@ function renderGenreList(container, genres, namePrefix) {
     `).join('');
 }
 
-// Language Selection
-async function initializeLanguageSelect() {
+function initializeLanguageSelect() {
     if (!languageSelect) return;
-    try {
-        const languagesResponse = await fetch('/api/languages');
-        if (!languagesResponse.ok) throw new Error('Failed to fetch languages');
-        const languages = await languagesResponse.json();
-        languages.sort((a, b) => {
-            if (a.iso_639_1 === 'en-US') return -1;
-            if (b.iso_639_1 === 'en-US') return 1;
-            return a.language.localeCompare(b.language);
-        });
-        languageSelect.innerHTML = languages.map(lang => {
-            const code = lang.iso_639_1;
-            const fullLabel = escapeHtml(lang.language) + ' (' + escapeHtml(lang.country) + ')';
-            return '<option value="' + escapeHtml(code) + '"' + (code === 'en-US' ? ' selected' : '') + '>' + fullLabel + '</option>';
-        }).join('');
-    } catch (err) {
-        languageSelect.innerHTML = '<option value="en-US">English (US)</option>';
-    }
 }
 
 // Password Toggles

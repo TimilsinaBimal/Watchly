@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
+from app.api.endpoints.meta import fetch_languages_list
 from app.api.main import api_router
 from app.services.token_store import token_store
 
@@ -64,12 +65,20 @@ jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
 @app.get("/configure", response_class=HTMLResponse)
 @app.get("/{token}/configure", response_class=HTMLResponse)
 async def configure_page(request: Request, token: str | None = None):
+    languages = []
+    try:
+        languages = await fetch_languages_list()
+    except Exception as e:
+        logger.warning(f"Failed to fetch languages for template: {e}")
+        languages = [{"iso_639_1": "en-US", "language": "English", "country": "US"}]
+
     template = jinja_env.get_template("index.html")
     html_content = template.render(
         request=request,
         app_version=__version__,
         app_host=settings.HOST_NAME,
         announcement_html=settings.ANNOUNCEMENT_HTML or "",
+        languages=languages,
     )
     return HTMLResponse(content=html_content, media_type="text/html")
 

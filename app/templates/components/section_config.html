@@ -10,8 +10,12 @@
         <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Language</label>
         <div class="relative">
             <select id="languageSelect"
-                class="w-full appearance-none bg-slate-900 hover:bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
-                <!-- JS Populated -->
+                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
+                {% for lang in languages %}
+                <option value="{{ lang.iso_639_1 }}" {% if lang.iso_639_1 == 'en-US' %}selected{% endif %}>
+                    {{ lang.language }} ({{ lang.country }})
+                </option>
+                {% endfor %}
             </select>
             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,7 +63,7 @@
                 </svg>
             </div>
             <input type="text" id="rpdbKey"
-                class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
+                class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
                 placeholder="Paste your RPDB API key here">
         </div>
         <p class="text-xs text-slate-500">Enable ratings on posters via <a
