@@ -40,9 +40,8 @@ def get_base_manifest(user_settings: UserSettings | None = None):
             get_catalogs_from_config(user_settings, "watchly.creators", "From your favourite Creators", False, False)
         )
     else:
-        # Default: include watchly.rec
-        catalogs.append({"type": "movie", "id": "watchly.rec", "name": "Top Picks for You", "extra": []})
-        catalogs.append({"type": "series", "id": "watchly.rec", "name": "Top Picks for You", "extra": []})
+        # Default: empty catalogs
+        catalogs = []
 
     return {
         "id": settings.ADDON_ID,
@@ -76,7 +75,6 @@ async def build_dynamic_catalogs(bundle: StremioBundle, auth_key: str, user_sett
 
 async def _manifest_handler(response: Response, token: str):
     # response.headers["Cache-Control"] = "public, max-age=300"  # 5 minutes
-
     if not token:
         raise HTTPException(status_code=401, detail="Missing token. Please reconfigure the addon.")
 
