@@ -169,9 +169,9 @@ class AllBasedService:
         try:
             res = await self.tmdb_service.get_recommendations(tmdb_id, mtype, page=1)
             for item in res.get("results", []):
-                item_id = item.get("id")
-                if item_id:
-                    combined[item_id] = item
+                candidate_id = item.get("id")
+                if candidate_id:
+                    combined[candidate_id] = item
         except Exception as e:
             logger.debug(f"Error fetching recommendations for {tmdb_id}: {e}")
 
