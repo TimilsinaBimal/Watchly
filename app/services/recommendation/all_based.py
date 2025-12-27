@@ -17,6 +17,8 @@ from app.services.recommendation.utils import (
 )
 from app.services.tmdb.service import TMDBService
 
+TOP_ITEMS_LIMIT = 10
+
 
 class AllBasedService:
     """
@@ -69,9 +71,8 @@ class AllBasedService:
         if not typed_items or len(typed_items) == 0:
             return []
 
-        # Limit to top 10 items to avoid too many API calls
         # We'll process them in parallel
-        top_items = typed_items[:10]
+        top_items = typed_items[:TOP_ITEMS_LIMIT]
 
         mtype = content_type_to_mtype(content_type)
 
@@ -111,7 +112,6 @@ class AllBasedService:
         # Score with profile if available
         if profile:
             scored = []
-            mtype = content_type_to_mtype(content_type)
             for item in filtered:
                 try:
                     final_score = RecommendationScoring.calculate_final_score(

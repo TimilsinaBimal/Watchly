@@ -21,6 +21,9 @@ from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 
+PAD_RECOMMENDATIONS_THRESHOLD = 8
+PAD_RECOMMENDATIONS_TARGET = 10
+
 
 class CatalogService:
     def __init__(self):
@@ -100,11 +103,11 @@ class CatalogService:
 
             # Pad if needed
             # TODO: This is risky because it can fetch too many unrelated items.
-            if recommendations and len(recommendations) < 8:
+            if recommendations and len(recommendations) < PAD_RECOMMENDATIONS_THRESHOLD:
                 recommendations = await pad_to_min(
                     content_type,
                     recommendations,
-                    10,  # only fetch 10 items if less than 8
+                    PAD_RECOMMENDATIONS_TARGET,
                     services["tmdb"],
                     user_settings,
                     watched_tmdb,
