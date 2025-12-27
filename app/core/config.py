@@ -29,7 +29,14 @@ class Settings(BaseSettings):
     REDIS_TOKEN_KEY: str = "watchly:token:"
     TOKEN_SALT: str = "change-me"
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire
-    ANNOUNCEMENT_HTML: str = ""
+    ANNOUNCEMENT_HTML: str = (
+        '<img src="https://elfhosted.com/images/logo.svg" height="64px" width="64px" style="float: left;'
+        ' margin-right: 10px;"><p>This is the public instance of <a'
+        ' href="https://github.com/TimilsinaBimal/Watchly">Watchly</a>, sponsored by <a'
+        ' href="https://store.elfhosted.com/">ElfHosted</a> ❤️ <br>See our FREE <a'
+        ' href="https://stremio-addons-guide.elfhosted.com">Stremio Addons Guide</a> for more great addons and'
+        " features!</p>"
+    )
     AUTO_UPDATE_CATALOGS: bool = True
     CATALOG_REFRESH_INTERVAL_SECONDS: int = 43200  # 12 hours
     APP_ENV: Literal["development", "production", "vercel"] = "production"
