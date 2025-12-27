@@ -14,33 +14,31 @@ from app.services.translation import translation_service
 router = APIRouter()
 
 
+def get_catalogs_from_config(
+    user_settings: UserSettings, cat_id: str, default_name: str, default_movie: bool, default_series: bool
+):
+    catalogs = []
+    config = next((c for c in user_settings.catalogs if c.id == cat_id), None)
+    if not config or config.enabled:
+        name = config.name if config and config.name else default_name
+        enabled_movie = getattr(config, "enabled_movie", default_movie) if config else default_movie
+        enabled_series = getattr(config, "enabled_series", default_series) if config else default_series
+
+        if enabled_movie:
+            catalogs.append({"type": "movie", "id": cat_id, "name": name, "extra": []})
+        if enabled_series:
+            catalogs.append({"type": "series", "id": cat_id, "name": name, "extra": []})
+    return catalogs
+
+
 def get_base_manifest(user_settings: UserSettings | None = None):
     catalogs = []
 
     if user_settings:
-        # Handle watchly.rec
-        rec_config = next((c for c in user_settings.catalogs if c.id == "watchly.rec"), None)
-        if not rec_config or rec_config.enabled:
-            name = rec_config.name if rec_config and rec_config.name else "Top Picks for You"
-            enabled_movie = getattr(rec_config, "enabled_movie", True) if rec_config else True
-            enabled_series = getattr(rec_config, "enabled_series", True) if rec_config else True
-
-            if enabled_movie:
-                catalogs.append({"type": "movie", "id": "watchly.rec", "name": name, "extra": []})
-            if enabled_series:
-                catalogs.append({"type": "series", "id": "watchly.rec", "name": name, "extra": []})
-
-        # Handle watchly.creators
-        creators_config = next((c for c in user_settings.catalogs if c.id == "watchly.creators"), None)
-        if not creators_config or creators_config.enabled:
-            name = creators_config.name if creators_config and creators_config.name else "From your favourite Creators"
-            enabled_movie = getattr(creators_config, "enabled_movie", True) if creators_config else True
-            enabled_series = getattr(creators_config, "enabled_series", True) if creators_config else True
-
-            if enabled_movie:
-                catalogs.append({"type": "movie", "id": "watchly.creators", "name": name, "extra": []})
-            if enabled_series:
-                catalogs.append({"type": "series", "id": "watchly.creators", "name": name, "extra": []})
+        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rec", "Top Picks for You", True, True))
+        catalogs.extend(
+            get_catalogs_from_config(user_settings, "watchly.creators", "From your favourite Creators", False, False)
+        )
     else:
         # Default: include watchly.rec
         catalogs.append({"type": "movie", "id": "watchly.rec", "name": "Top Picks for You", "extra": []})
