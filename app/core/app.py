@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from cachetools import TTLCache
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -14,6 +15,10 @@ from app.services.token_store import token_store
 
 from .config import settings
 from .version import __version__
+
+project_root = Path(__file__).resolve().parent.parent.parent
+static_dir = project_root / "app/static"
+templates_dir = project_root / "app/templates"
 
 
 @asynccontextmanager
@@ -46,12 +51,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_ip_failure_cache: TTLCache = TTLCache(maxsize=10000, ttl=600)
+IP_FAILURE_THRESHOLD = 8
 
-# Serve static files
-# app/core/app.py -> app/core -> app -> root
-project_root = Path(__file__).resolve().parent.parent.parent
-static_dir = project_root / "app/static"
-templates_dir = project_root / "app/templates"
+
+@app.middleware("http")
+async def block_missing_token_middleware(request: Request, call_next):
+    # Extract first path segment which is commonly the token in addon routes
+    path = request.url.path.lstrip("/")
+    seg = path.split("/", 1)[0] if path else ""
+    try:
+        # If token is known-missing, short-circuit and track IP failures
+        if seg and seg in token_store._missing_tokens:
+            ip = request.client.host if request.client else "unknown"
+            try:
+                _ip_failure_cache[ip] = _ip_failure_cache.get(ip, 0) + 1
+            except Exception:
+                pass
+            if _ip_failure_cache.get(ip, 0) > IP_FAILURE_THRESHOLD:
+                return HTMLResponse(content="Too many requests", status_code=429)
+            return HTMLResponse(content="Invalid token", status_code=401)
+    except Exception:
+        pass
+    return await call_next(request)
+
 
 if static_dir.exists():
     app.mount("/app/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -60,7 +83,6 @@ if static_dir.exists():
 jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
 
 
-# Serve index.html at /configure and /{token}/configure
 @app.get("/", response_class=HTMLResponse)
 @app.get("/configure", response_class=HTMLResponse)
 @app.get("/{token}/configure", response_class=HTMLResponse)
