@@ -7,8 +7,6 @@ class CatalogConfig(BaseModel):
     enabled: bool = True
     enabled_movie: bool = Field(default=True, description="Enable movie catalog for this configuration")
     enabled_series: bool = Field(default=True, description="Enable series catalog for this configuration")
-    min_items: int = Field(default=20, ge=1, le=20)
-    max_items: int = Field(default=24, ge=1, le=32)
 
 
 class UserSettings(BaseModel):

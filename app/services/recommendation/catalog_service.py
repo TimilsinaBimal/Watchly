@@ -4,9 +4,8 @@ from typing import Any
 from fastapi import HTTPException
 from loguru import logger
 
-from app.api.endpoints.manifest import get_config_id
 from app.core.config import settings
-from app.core.constants import DEFAULT_MAX_ITEMS, DEFAULT_MIN_ITEMS
+from app.core.constants import DEFAULT_CATALOG_LIMIT, DEFAULT_MIN_ITEMS
 from app.core.settings import UserSettings, get_default_settings
 from app.models.taste_profile import TasteProfile
 from app.services.catalog_updater import catalog_updater
@@ -20,9 +19,6 @@ from app.services.recommendation.utils import pad_to_min
 from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
-
-PAD_RECOMMENDATIONS_THRESHOLD = 8
-PAD_RECOMMENDATIONS_TARGET = 10
 
 
 class CatalogService:
@@ -85,9 +81,6 @@ class CatalogService:
             )
             whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
 
-            # Get catalog limits
-            min_items, max_items = self._get_catalog_limits(catalog_id, user_settings)
-
             # Route to appropriate recommendation service
             recommendations = await self._get_recommendations(
                 catalog_id=catalog_id,
@@ -98,16 +91,16 @@ class CatalogService:
                 watched_imdb=watched_imdb,
                 whitelist=whitelist,
                 library_items=library_items,
-                max_items=max_items,
+                limit=DEFAULT_CATALOG_LIMIT,
             )
 
-            # Pad if needed
-            # TODO: This is risky because it can fetch too many unrelated items.
-            if recommendations and len(recommendations) < PAD_RECOMMENDATIONS_THRESHOLD:
+            # Pad if needed to meet minimum of 8 items
+            # # TODO: This is risky because it can fetch too many unrelated items.
+            if recommendations and len(recommendations) < DEFAULT_MIN_ITEMS:
                 recommendations = await pad_to_min(
                     content_type,
                     recommendations,
-                    PAD_RECOMMENDATIONS_TARGET,
+                    DEFAULT_MIN_ITEMS,
                     services["tmdb"],
                     user_settings,
                     watched_tmdb,
@@ -195,35 +188,6 @@ class CatalogService:
             "all_based": AllBasedService(tmdb_service, user_settings),
         }
 
-    def _get_catalog_limits(self, catalog_id: str, user_settings: UserSettings) -> tuple[int, int]:
-        try:
-            cfg_id = get_config_id({"id": catalog_id})
-        except Exception:
-            cfg_id = catalog_id
-
-        try:
-            cfg = next((c for c in user_settings.catalogs if c.id == cfg_id), None)
-            if cfg and hasattr(cfg, "min_items") and hasattr(cfg, "max_items"):
-                min_items = int(cfg.min_items or DEFAULT_MIN_ITEMS)
-                max_items = int(cfg.max_items or DEFAULT_MAX_ITEMS)
-            else:
-                min_items, max_items = DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
-        except Exception:
-            min_items, max_items = DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
-
-        # Enforce caps
-        try:
-            min_items = max(1, min(DEFAULT_MIN_ITEMS, int(min_items)))
-            max_items = max(min_items, min(DEFAULT_MAX_ITEMS, int(max_items)))
-        except (ValueError, TypeError):
-            logger.warning(
-                "Invalid min/max items values. Falling back to defaults. "
-                f"min_items={min_items}, max_items={max_items}"
-            )
-            min_items, max_items = DEFAULT_MIN_ITEMS, DEFAULT_MAX_ITEMS
-
-        return min_items, max_items
-
     async def _get_recommendations(
         self,
         catalog_id: str,
@@ -234,7 +198,7 @@ class CatalogService:
         watched_imdb: set[str],
         whitelist: set[int],
         library_items: dict,
-        max_items: int,
+        limit: int,
     ) -> list[dict[str, Any]]:
         """Route to appropriate recommendation service based on catalog ID."""
         # Item-based recommendations
@@ -255,7 +219,7 @@ class CatalogService:
                 content_type=content_type,
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
-                limit=max_items,
+                limit=limit,
                 whitelist=whitelist,
             )
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
@@ -270,7 +234,7 @@ class CatalogService:
                 profile=profile,
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
-                limit=max_items,
+                limit=limit,
                 whitelist=whitelist,
             )
             logger.info(f"Found {len(recommendations)} recommendations for theme {catalog_id}")
@@ -285,7 +249,7 @@ class CatalogService:
                     content_type=content_type,
                     watched_tmdb=watched_tmdb,
                     watched_imdb=watched_imdb,
-                    limit=max_items,
+                    limit=limit,
                 )
             else:
                 recommendations = []
@@ -302,7 +266,7 @@ class CatalogService:
                     library_items=library_items,
                     watched_tmdb=watched_tmdb,
                     watched_imdb=watched_imdb,
-                    limit=max_items,
+                    limit=limit,
                 )
             else:
                 recommendations = []
@@ -318,7 +282,7 @@ class CatalogService:
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
                 whitelist=whitelist,
-                limit=max_items,
+                limit=limit,
                 item_type=item_type,
                 profile=profile,
             )

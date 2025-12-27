@@ -1,12 +1,12 @@
 // Default catalog configurations
 const defaultCatalogs = [
-    { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Personalized recommendations based on your library' },
-    { id: 'watchly.loved', name: 'More Like', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations similar to content you explicitly loved' },
-    { id: 'watchly.watched', name: 'Because You Watched', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations based on your recent watch history' },
-    { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
-    { id: 'watchly.creators', name: 'From your favourite Creators', enabled: false, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Movies and series from your top 5 favorite directors and top 5 favorite actors' },
-    { id: 'watchly.all.loved', name: 'Based on what you loved', enabled: false, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations based on all your loved items' },
-    { id: 'watchly.liked.all', name: 'Based on what you liked', enabled: false, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations based on all your liked items' },
+    { id: 'watchly.rec', name: 'Top Picks for You', enabled: true, enabledMovie: true, enabledSeries: true, description: 'Personalized recommendations based on your library' },
+    { id: 'watchly.loved', name: 'More Like', enabled: true, enabledMovie: true, enabledSeries: true, description: 'Recommendations similar to content you explicitly loved' },
+    { id: 'watchly.watched', name: 'Because You Watched', enabled: true, enabledMovie: true, enabledSeries: true, description: 'Recommendations based on your recent watch history' },
+    { id: 'watchly.creators', name: 'From your favourite Creators', enabled: false, enabledMovie: true, enabledSeries: true, description: 'Movies and series from your top 5 favorite directors and top 5 favorite actors' },
+    { id: 'watchly.all.loved', name: 'Based on what you loved', enabled: false, enabledMovie: true, enabledSeries: true, description: 'Recommendations based on all your loved items' },
+    { id: 'watchly.liked.all', name: 'Based on what you liked', enabled: false, enabledMovie: true, enabledSeries: true, description: 'Recommendations based on all your liked items' },
+    { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, enabledMovie: true, enabledSeries: true, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
 ];
 
 let catalogs = JSON.parse(JSON.stringify(defaultCatalogs));
@@ -365,8 +365,6 @@ async function fetchStremioIdentity(authKey) {
                     if (local) {
                         local.enabled = remote.enabled;
                         if (remote.name) local.name = remote.name;
-                        if (typeof remote.min_items === 'number') local.minItems = remote.min_items;
-                        if (typeof remote.max_items === 'number') local.maxItems = remote.max_items;
                         if (typeof remote.enabled_movie === 'boolean') local.enabledMovie = remote.enabled_movie;
                         if (typeof remote.enabled_series === 'boolean') local.enabledSeries = remote.enabled_series;
                     }
@@ -591,14 +589,6 @@ async function initializeFormSubmission() {
             const enabled = toggle.checked;
             const originalCatalog = catalogs.find(c => c.id === catalogId);
             if (originalCatalog) {
-                let minV = parseInt(originalCatalog.minItems ?? 20, 10);
-                let maxV = parseInt(originalCatalog.maxItems ?? 24, 10);
-                if (Number.isNaN(minV)) minV = 20;
-                if (Number.isNaN(maxV)) maxV = 24;
-                // Enforce server policy: min <= 20, max <= 32, and max >= min
-                minV = Math.max(1, Math.min(20, minV));
-                maxV = Math.max(minV, Math.min(32, maxV));
-
                 // Get enabled_movie and enabled_series from toggle buttons
                 const activeBtn = document.querySelector(`.catalog-type-btn[data-catalog-id="${catalogId}"].bg-white`);
                 let enabledMovie = true;
@@ -629,8 +619,6 @@ async function initializeFormSubmission() {
                     enabled: enabled,
                     enabled_movie: enabledMovie,
                     enabled_series: enabledSeries,
-                    min_items: minV,
-                    max_items: maxV,
                 });
             }
         });
