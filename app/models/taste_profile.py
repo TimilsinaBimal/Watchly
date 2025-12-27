@@ -32,7 +32,7 @@ class TasteProfile(BaseModel):
     cast_scores: dict[int, float] = Field(default_factory=dict, description="Actor ID → accumulated score")
 
     # Metadata
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     content_type: str | None = Field(default=None, description="movie or series")
 
     class Config:
