@@ -166,16 +166,13 @@ class AllBasedService:
         combined = {}
 
         # Fetch 1 page each for recommendations
-        for action in ["recommendations"]:
-            method = getattr(self.tmdb_service, f"get_{action}")
-            try:
-                res = await method(tmdb_id, mtype, page=1)
-                for item in res.get("results", []):
-                    item_id = item.get("id")
-                    if item_id:
-                        combined[item_id] = item
-            except Exception as e:
-                logger.debug(f"Error fetching {action} for {tmdb_id}: {e}")
-                continue
+        try:
+            res = await self.tmdb_service.get_recommendations(tmdb_id, mtype, page=1)
+            for item in res.get("results", []):
+                item_id = item.get("id")
+                if item_id:
+                    combined[item_id] = item
+        except Exception as e:
+            logger.debug(f"Error fetching recommendations for {tmdb_id}: {e}")
 
         return list(combined.values())

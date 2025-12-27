@@ -41,8 +41,14 @@ def get_base_manifest():
     }
 
 
-async def build_dynamic_catalogs(bundle: StremioBundle, auth_key: str, user_settings: UserSettings) -> list[dict]:
+async def build_dynamic_catalogs(
+    bundle: StremioBundle, auth_key: str, user_settings: UserSettings | None
+) -> list[dict]:
     # Fetch library using bundle directly
+    if not user_settings:
+        logger.error("User settings not found. Please reconfigure the addon.")
+        raise HTTPException(status_code=401, detail="User settings not found. Please reconfigure the addon.")
+
     library_items = await bundle.library.get_library_items(auth_key)
     dynamic_catalog_service = DynamicCatalogService(
         language=user_settings.language,

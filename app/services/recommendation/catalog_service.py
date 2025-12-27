@@ -16,6 +16,7 @@ from app.services.recommendation.creators import CreatorsService
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
+from app.services.recommendation.utils import pad_to_min
 from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
@@ -98,16 +99,17 @@ class CatalogService:
             )
 
             # Pad if needed
-            # if len(recommendations) < min_items:
-            #     recommendations = await pad_to_min(
-            #         content_type,
-            #         recommendations,
-            #         min_items,
-            #         services["tmdb"],
-            #         user_settings,
-            #         watched_tmdb,
-            #         watched_imdb,
-            #     )
+            # TODO: This is risky because it can fetch too many unrelated items.
+            if recommendations and len(recommendations) < 8:
+                recommendations = await pad_to_min(
+                    content_type,
+                    recommendations,
+                    10,  # only fetch 10 items if less than 8
+                    services["tmdb"],
+                    user_settings,
+                    watched_tmdb,
+                    watched_imdb,
+                )
 
             logger.info(f"Returning {len(recommendations)} items for {content_type}")
 
@@ -304,7 +306,8 @@ class CatalogService:
             logger.info(f"Found {len(recommendations)} top picks for {content_type}")
 
         # Based on what you loved
-        elif catalog_id == "watchly.all.loved":
+        elif catalog_id in ("watchly.all.loved", "watchly.liked.all"):
+            item_type = "loved" if catalog_id == "watchly.all.loved" else "liked"
             all_based_service: AllBasedService = services["all_based"]
             recommendations = await all_based_service.get_recommendations_from_all_items(
                 library_items=library_items,
@@ -313,25 +316,10 @@ class CatalogService:
                 watched_imdb=watched_imdb,
                 whitelist=whitelist,
                 limit=max_items,
-                item_type="loved",
+                item_type=item_type,
                 profile=profile,
             )
-            logger.info(f"Found {len(recommendations)} recommendations based on all loved items")
-
-        # Based on what you liked
-        elif catalog_id == "watchly.liked.all":
-            all_based_service: AllBasedService = services["all_based"]
-            recommendations = await all_based_service.get_recommendations_from_all_items(
-                library_items=library_items,
-                content_type=content_type,
-                watched_tmdb=watched_tmdb,
-                watched_imdb=watched_imdb,
-                whitelist=whitelist,
-                limit=max_items,
-                item_type="liked",
-                profile=profile,
-            )
-            logger.info(f"Found {len(recommendations)} recommendations based on all liked items")
+            logger.info(f"Found {len(recommendations)} recommendations based on all {item_type} items")
 
         else:
             logger.warning(f"Unknown catalog ID: {catalog_id}")
