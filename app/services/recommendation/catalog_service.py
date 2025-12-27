@@ -20,6 +20,9 @@ from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 
+PAD_RECOMMENDATIONS_THRESHOLD = 8
+PAD_RECOMMENDATIONS_TARGET = 10
+
 
 class CatalogService:
     def __init__(self):
