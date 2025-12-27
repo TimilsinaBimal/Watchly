@@ -10,6 +10,7 @@ from app.services.profile.integration import ProfileIntegration
 from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
 from app.services.tmdb.service import get_tmdb_service
+from app.utils.catalog import get_catalogs_from_config
 
 
 class DynamicCatalogService:
@@ -180,6 +181,24 @@ class DynamicCatalogService:
         # 3. Add Item-Based Catalogs (Movies & Series)
         for mtype in ["movie", "series"]:
             await self._add_item_based_rows(catalogs, library_items, mtype, loved_cfg, watched_cfg)
+
+        # 4. Add watchly.rec catalog
+        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rec", "Top Picks for You", True, True))
+
+        # 5. Add watchly.creators catalog
+        catalogs.extend(
+            get_catalogs_from_config(user_settings, "watchly.creators", "From your favourite Creators", False, False)
+        )
+
+        # 6. Add watchly.all.loved catalog
+        catalogs.extend(
+            get_catalogs_from_config(user_settings, "watchly.all.loved", "Based on what you loved", True, True)
+        )
+
+        # 7. Add watchly.liked.all catalog
+        catalogs.extend(
+            get_catalogs_from_config(user_settings, "watchly.liked.all", "Based on what you liked", True, True)
+        )
 
         return catalogs
 

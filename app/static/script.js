@@ -4,7 +4,9 @@ const defaultCatalogs = [
     { id: 'watchly.loved', name: 'More Like', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations similar to content you explicitly loved' },
     { id: 'watchly.watched', name: 'Because You Watched', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations based on your recent watch history' },
     { id: 'watchly.theme', name: 'Genre & Keyword Catalogs', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Dynamic catalogs based on your favorite genres, keyword, countries and many more. Just like netflix. Example: American Horror, Based on Novel or Book etc.' },
-    { id: 'watchly.creators', name: 'From your favourite Creators', enabled: true, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Movies and series from your top 5 favorite directors and top 5 favorite actors' },
+    { id: 'watchly.creators', name: 'From your favourite Creators', enabled: false, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Movies and series from your top 5 favorite directors and top 5 favorite actors' },
+    { id: 'watchly.all.loved', name: 'Based on what you loved', enabled: false, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations based on all your loved items' },
+    { id: 'watchly.liked.all', name: 'Based on what you liked', enabled: false, enabledMovie: true, enabledSeries: true, minItems: 20, maxItems: 24, description: 'Recommendations based on all your liked items' },
 ];
 
 let catalogs = JSON.parse(JSON.stringify(defaultCatalogs));
@@ -371,6 +373,7 @@ async function fetchStremioIdentity(authKey) {
                 });
                 renderCatalogList();
             }
+
         }
 
         // Update UI for "Update Mode"

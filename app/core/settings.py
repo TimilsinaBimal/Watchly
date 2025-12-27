@@ -24,11 +24,25 @@ def get_default_settings() -> UserSettings:
         language="en-US",
         catalogs=[
             CatalogConfig(
-                id="watchly.rec", name="Top Picks for You", enabled=True, enabled_movie=True, enabled_series=True
+                id="watchly.rec",
+                name="Top Picks for You",
+                enabled=True,
+                enabled_movie=True,
+                enabled_series=True,
             ),
-            CatalogConfig(id="watchly.loved", name="More Like", enabled=True, enabled_movie=True, enabled_series=True),
             CatalogConfig(
-                id="watchly.watched", name="Because you watched", enabled=True, enabled_movie=True, enabled_series=True
+                id="watchly.loved",
+                name="More Like",
+                enabled=True,
+                enabled_movie=True,
+                enabled_series=True,
+            ),
+            CatalogConfig(
+                id="watchly.watched",
+                name="Because you watched",
+                enabled=True,
+                enabled_movie=True,
+                enabled_series=True,
             ),
             CatalogConfig(
                 id="watchly.theme",
@@ -40,7 +54,21 @@ def get_default_settings() -> UserSettings:
             CatalogConfig(
                 id="watchly.creators",
                 name="From your favourite Creators",
-                enabled=True,
+                enabled=False,
+                enabled_movie=True,
+                enabled_series=True,
+            ),
+            CatalogConfig(
+                id="watchly.all.loved",
+                name="Based on what you loved",
+                enabled=False,
+                enabled_movie=True,
+                enabled_series=True,
+            ),
+            CatalogConfig(
+                id="watchly.liked.all",
+                name="Based on what you liked",
+                enabled=False,
                 enabled_movie=True,
                 enabled_series=True,
             ),

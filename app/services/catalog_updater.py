@@ -12,7 +12,6 @@ from app.services.catalog import DynamicCatalogService
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
-from app.utils.catalog import get_catalogs_from_config
 
 
 def get_config_id(catalog) -> str | None:
@@ -23,10 +22,6 @@ def get_config_id(catalog) -> str | None:
         return "watchly.loved"
     if catalog_id.startswith("watchly.watched."):
         return "watchly.watched"
-    if catalog_id.startswith("watchly.item."):
-        return "watchly.item"
-    if catalog_id.startswith("watchly.rec"):
-        return "watchly.rec"
     return catalog_id
 
 
@@ -133,15 +128,6 @@ class CatalogUpdater:
             catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
                 library_items=library_items, user_settings=user_settings
             )
-
-            # now add the default catalogs
-            if user_settings:
-                catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rec", "Top Picks for You", True, True))
-                catalogs.extend(
-                    get_catalogs_from_config(
-                        user_settings, "watchly.creators", "From your favourite Creators", False, False
-                    )
-                )
 
             # Translate catalogs
             if user_settings and user_settings.language:
