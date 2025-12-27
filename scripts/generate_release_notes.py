@@ -215,10 +215,9 @@ def generate_release_notes(commits, last_release_tag):
     prompt = (
         "Generate release notes for the given commits. Focus on user-facing changes and important technical"
         " improvements that stakeholders care about Organize changes into clear sections such as: Summary,"
-        " Features, Bug Fixes, Improvements, etc. with markdown formatting. Include PR requests with (#123) at"
-        " the end of each change. Include refactor commits only if they contain meaningful architectural"
-        " changes. Exclude trivial changes like formatting, linting, merge commits, or dependency updates"
-        " unless they're significant. Format with proper markdown. Do not include commit hashes. When"
+        " Features, Bug Fixes, Improvements, etc. with markdown formatting. Include refactor commits only if"
+        " they contain meaningful architectural changes. Exclude trivial changes like formatting, linting,"
+        " merge commits, or dependency updates unless they're significant. Format with proper markdown. When"
         " generating release notes, do not just write commit messages. Describe them. Try to make them like"
         " release change.Do not output anything other than the release notes. Keep it to a reasonable length"
         " that helps developers and engineers understand the changes. This is directly attached to GitHub"

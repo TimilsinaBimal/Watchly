@@ -1,11 +1,4 @@
-"""
-Taste Profile Model - Additive, Transparent Design
-
-This module implements a transparent, additive taste profile system.
-No hidden interactions, easy to debug, powerful enough for all row types.
-"""
-
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
