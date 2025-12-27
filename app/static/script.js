@@ -1181,16 +1181,58 @@ function initializeFooter() {
 }
 
 
-// Ko-fi Modal Logic
+// Donation Modal Logic
 function initializeKofi() {
     const kofiBtn = document.getElementById('kofiBtn');
-    const MEMOMO_URL = 'https://buymemomo.com/timilsinabimal';
+    const homepageDonateBtn = document.getElementById('homepageDonateBtn');
+    const donationModal = document.getElementById('donation-modal');
+    const donationBackdrop = document.getElementById('donation-backdrop');
+    const closeDonationBtn = document.getElementById('close-donation');
 
-    if (kofiBtn) kofiBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        // Open BuyMeMoMo in a new tab and remove window.opener for safety
-        const win = window.open(MEMOMO_URL, '_blank');
-        try { if (win) win.opener = null; } catch (err) { /* ignore */ }
+    if (!donationModal) return;
+
+    // Open modal function
+    const openModal = (e) => {
+        if (e) e.preventDefault();
+        donationModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    };
+
+    // Close modal function
+    const closeModal = () => {
+        donationModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    };
+
+    // Open modal when navbar button is clicked
+    if (kofiBtn) {
+        kofiBtn.addEventListener('click', openModal);
+    }
+
+    // Open modal when homepage donate button is clicked
+    if (homepageDonateBtn) {
+        homepageDonateBtn.addEventListener('click', openModal);
+    }
+
+    // Close button
+    if (closeDonationBtn) {
+        closeDonationBtn.addEventListener('click', closeModal);
+    }
+
+    // Close on backdrop click
+    if (donationBackdrop) {
+        donationBackdrop.addEventListener('click', (e) => {
+            if (e.target === donationBackdrop) {
+                closeModal();
+            }
+        });
+    }
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !donationModal.classList.contains('hidden')) {
+            closeModal();
+        }
     });
 }
 
