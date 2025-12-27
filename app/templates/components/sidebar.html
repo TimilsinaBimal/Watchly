@@ -1,0 +1,136 @@
+<!-- Mobile Header -->
+<div id="mobileHeader"
+    class="md:hidden fixed top-0 left-0 right-0 z-50 px-4 py-3 bg-neutral-950 border-b border-slate-800 flex items-center gap-4">
+    <button id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false"
+        class="hamburger p-2 rounded-md hover:bg-neutral-800/50">
+        <span class="bar top"></span>
+        <span class="bar middle"></span>
+        <span class="bar bottom"></span>
+    </button>
+    <img src="/app/static/logo.png" alt="Watchly" class="w-8 h-8 rounded-lg ring-1 ring-white/15 bg-black">
+    <h1 class="font-bold text-xl text-white">Watchly</h1>
+</div>
+
+<!-- Mobile Nav Backdrop -->
+<div id="mobileNavBackdrop" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"></div>
+
+<!-- Sidebar Navigation -->
+<aside id="mainSidebar"
+    class="fixed inset-y-0 left-0 z-40 w-72 transform -translate-x-full transition-transform duration-300 ease-out bg-neutral-950/50 backdrop-blur-xl border-b md:border-b-0 md:border-r border-slate-800 flex flex-col flex-shrink-0 md:translate-x-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <div class="p-6 md:p-8 flex-col items-start gap-4 hidden md:flex">
+        <div class="flex items-center gap-3">
+            <img src="/app/static/logo.png" alt="Watchly"
+                class="w-10 h-10 rounded-xl shadow-lg shadow-white/10 ring-1 ring-white/10 bg-black">
+            <h1 class="font-bold text-2xl text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300">
+                Watchly</h1>
+        </div>
+    </div>
+
+    <nav
+        class="flex-grow px-4 md:px-6 py-4 space-y-1 md:overflow-visible flex flex-col md:block whitespace-normal gap-2">
+
+        <!-- User Profile Section (Hidden by default, shown after login) -->
+        <div id="user-profile" class="hidden mb-6 p-4 bg-neutral-800/50 border border-slate-700/50 rounded-xl w-full">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-white text-black ring-1 ring-white/10 flex items-center justify-center font-bold text-sm flex-shrink-0"
+                    id="user-avatar">
+                    <!-- Avatar initials will be generated from email -->
+                </div>
+                <div class="flex-grow min-w-0">
+                    <div class="text-xs text-slate-500 mb-0.5">Logged in as</div>
+                    <div class="text-sm text-white font-medium truncate" id="user-email">
+                        <!-- Email will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button id="nav-welcome"
+            class="nav-item group w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-white hover:bg-neutral-800/50 active text-left">
+            <div
+                class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-400/20 flex-shrink-0 transition-all group-hover:scale-105 group-hover:bg-blue-500/15 group-hover:border-blue-400/30 group-hover:shadow-lg group-hover:shadow-blue-900/10">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6">
+                    </path>
+                </svg>
+            </div>
+            <span>Get Started</span>
+        </button>
+
+        <button id="nav-login"
+            class="nav-item group w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-white hover:bg-neutral-800/50 text-left disabled">
+            <div
+                class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-400/20 flex-shrink-0 transition-all group-hover:scale-105 group-hover:bg-cyan-500/15 group-hover:border-cyan-400/30 group-hover:shadow-lg group-hover:shadow-cyan-900/10">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1">
+                    </path>
+                </svg>
+            </div>
+            <span>Login to Stremio</span>
+        </button>
+
+        <button id="nav-config"
+            class="nav-item group w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-white hover:bg-neutral-800/50 text-left disabled">
+            <div
+                class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-400/20 flex-shrink-0 transition-all group-hover:scale-105 group-hover:bg-purple-500/15 group-hover:border-purple-400/30 group-hover:shadow-lg group-hover:shadow-purple-900/10">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                    </path>
+                </svg>
+            </div>
+            <span>Configure Options</span>
+        </button>
+
+        <button id="nav-catalogs"
+            class="nav-item group w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-white hover:bg-neutral-800/50 text-left disabled">
+            <div
+                class="w-8 h-8 rounded-lg bg-orange-500/10 text-orange-400 flex items-center justify-center border border-orange-400/20 flex-shrink-0 transition-all group-hover:scale-105 group-hover:bg-orange-500/15 group-hover:border-orange-400/30 group-hover:shadow-lg group-hover:shadow-orange-900/10">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 6h16M4 10h16M4 14h16M4 18h16">
+                    </path>
+                </svg>
+            </div>
+            <span>Catalogs</span>
+        </button>
+
+        <button id="nav-install"
+            class="nav-item group w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-white hover:bg-neutral-800/50 text-left disabled">
+            <div
+                class="w-8 h-8 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center border border-green-400/20 flex-shrink-0 transition-all group-hover:scale-105 group-hover:bg-green-500/15 group-hover:border-green-400/30 group-hover:shadow-lg group-hover:shadow-green-900/10">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4">
+                    </path>
+                </svg>
+            </div>
+            <span>Save & Install</span>
+        </button>
+
+    </nav>
+
+    <div class="p-4 md:p-6 mt-auto space-y-4">
+        <!-- Support Button -->
+        <button type="button" id="kofiBtn"
+            class="block w-full bg-white text-black hover:bg-white/90 font-medium py-3 px-4 rounded-xl transition-all shadow-lg shadow-black/10 hover:shadow-xl hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0 border border-white/10 group text-left"
+            aria-label="Support me">
+            <div class="flex items-center justify-center gap-3">
+                <!-- Heart icon -->
+                <svg class="w-5 h-5 group-hover:scale-110 transition-transform text-black" fill="currentColor"
+                    viewBox="0 0 24 24">
+                    <path
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                <span>Support me</span>
+            </div>
+        </button>
+
+        <!-- Copyright -->
+        <div class="text-xs text-slate-600 text-center hidden md:block">
+            &copy; <span id="currentYear">2024</span> Watchly
+        </div>
+    </div>
+</aside>

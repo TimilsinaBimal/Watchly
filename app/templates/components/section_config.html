@@ -1,0 +1,78 @@
+<!-- SECTION 2: CONFIGURE -->
+<section id="sect-config" class="space-y-8 hidden animate-fade-in">
+    <div class="mb-6">
+        <h2 class="text-3xl font-bold text-white mb-2">Preferences</h2>
+        <p class="text-slate-400">Customize how your recommendations appear.</p>
+    </div>
+
+    <!-- Language -->
+    <div class="space-y-4">
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Language</label>
+        <div class="relative">
+            <select id="languageSelect"
+                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
+                {% for lang in languages %}
+                <option value="{{ lang.iso_639_1 }}" {% if lang.iso_639_1 == 'en-US' %}selected{% endif %}>
+                    {{ lang.language }} ({{ lang.country }})
+                </option>
+                {% endfor %}
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div class="border-t border-white/10"></div>
+
+    <!-- Genre Exclusion -->
+    <div class="space-y-6">
+        <div class="flex items-center justify-between">
+            <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Exclude Genres</label>
+            <span class="text-xs text-slate-500">Uncheck to include</span>
+        </div>
+        <div class="grid md:grid-cols-2 gap-6">
+            <div class="space-y-3">
+                <label class="block text-xs font-semibold text-slate-500 uppercase">Movies</label>
+                <div id="movieGenreList"
+                    class="h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar bg-neutral-900/60 rounded-xl p-3 border border-white/10 backdrop-blur-sm">
+                </div>
+            </div>
+            <div class="space-y-3">
+                <label class="block text-xs font-semibold text-slate-500 uppercase">Series</label>
+                <div id="seriesGenreList"
+                    class="h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar bg-neutral-900/60 rounded-xl p-3 border border-white/10 backdrop-blur-sm">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="border-t border-white/10"></div>
+
+    <!-- RPDB -->
+    <div class="space-y-4">
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">RPDB API Key (Optional)</label>
+        <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                    </path>
+                </svg>
+            </div>
+            <input type="text" id="rpdbKey"
+                class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
+                placeholder="Paste your RPDB API key here">
+        </div>
+        <p class="text-xs text-slate-500">Enable ratings on posters via <a
+                href="https://ratingposterdb.com" target="_blank"
+                class="text-slate-300 hover:text-white underline">RatingPosterDB</a>.</p>
+    </div>
+    <div class="pt-4 flex justify-end">
+        <button type="button" id="configNextBtn"
+            class="bg-white text-black hover:bg-white/90 border border-white/10 px-8 py-3 rounded-xl font-medium transition hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0">Next:
+            Catalogs &rarr;</button>
+    </div>
+</section>

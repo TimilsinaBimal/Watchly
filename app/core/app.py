@@ -1,4 +1,3 @@
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -7,13 +6,19 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
+from app.api.endpoints.meta import fetch_languages_list
 from app.api.main import api_router
 from app.services.token_store import token_store
 
 from .config import settings
 from .version import __version__
+
+project_root = Path(__file__).resolve().parent.parent.parent
+static_dir = project_root / "app/static"
+templates_dir = project_root / "app/templates"
 
 
 @asynccontextmanager
@@ -46,11 +51,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# Simple IP-based rate limiter for repeated probes of missing tokens.
-# Tracks recent failure counts per IP to avoid expensive repeated requests.
 _ip_failure_cache: TTLCache = TTLCache(maxsize=10000, ttl=600)
-_IP_FAILURE_THRESHOLD = 8
+IP_FAILURE_THRESHOLD = 8
 
 
 @app.middleware("http")
@@ -66,7 +68,7 @@ async def block_missing_token_middleware(request: Request, call_next):
                 _ip_failure_cache[ip] = _ip_failure_cache.get(ip, 0) + 1
             except Exception:
                 pass
-            if _ip_failure_cache.get(ip, 0) > _IP_FAILURE_THRESHOLD:
+            if _ip_failure_cache.get(ip, 0) > IP_FAILURE_THRESHOLD:
                 return HTMLResponse(content="Too many requests", status_code=429)
             return HTMLResponse(content="Invalid token", status_code=401)
     except Exception:
@@ -74,42 +76,33 @@ async def block_missing_token_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-# Serve static files
-# app/core/app.py -> app/core -> app -> root
-project_root = Path(__file__).resolve().parent.parent.parent
-static_dir = project_root / "app/static"
-
 if static_dir.exists():
     app.mount("/app/static", StaticFiles(directory=str(static_dir)), name="static")
 
+# Initialize Jinja2 templates
+jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
 
-# Serve index.html at /configure and /{token}/configure
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/configure", response_class=HTMLResponse)
 @app.get("/{token}/configure", response_class=HTMLResponse)
-async def configure_page(token: str | None = None):
-    index_path = static_dir / "index.html"
-    if index_path.exists():
-        with open(index_path, encoding="utf-8") as file:
-            html_content = file.read()
-        dynamic_announcement = os.getenv("ANNOUNCEMENT_HTML")
-        if dynamic_announcement is None:
-            dynamic_announcement = settings.ANNOUNCEMENT_HTML
-        announcement_html = (dynamic_announcement or "").strip()
-        snippet = ""
-        if announcement_html:
-            snippet = f'\n                <div class="announcement">{announcement_html}</div>'
-        html_content = html_content.replace("<!-- ANNOUNCEMENT_HTML -->", snippet, 1)
-        # Inject version
-        html_content = html_content.replace("<!-- APP_VERSION -->", __version__, 1)
-        # Inject host
-        html_content = html_content.replace("<!-- APP_HOST -->", settings.HOST_NAME, 1)
-        return HTMLResponse(content=html_content, media_type="text/html")
-    return HTMLResponse(
-        content="Watchly API is running. Static files not found.",
-        media_type="text/plain",
-        status_code=200,
+async def configure_page(request: Request, token: str | None = None):
+    languages = []
+    try:
+        languages = await fetch_languages_list()
+    except Exception as e:
+        logger.warning(f"Failed to fetch languages for template: {e}")
+        languages = [{"iso_639_1": "en-US", "language": "English", "country": "US"}]
+
+    template = jinja_env.get_template("index.html")
+    html_content = template.render(
+        request=request,
+        app_version=__version__,
+        app_host=settings.HOST_NAME,
+        announcement_html=settings.ANNOUNCEMENT_HTML or "",
+        languages=languages,
     )
+    return HTMLResponse(content=html_content, media_type="text/html")
 
 
 app.include_router(api_router)

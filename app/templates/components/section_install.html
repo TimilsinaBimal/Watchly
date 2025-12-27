@@ -1,0 +1,95 @@
+<!-- SECTION 4: INSTALL -->
+<section id="sect-install" class="space-y-8 hidden animate-fade-in">
+    <div class="mb-6">
+        <h2 class="text-3xl font-bold text-white mb-2">Save & Install</h2>
+        <p class="text-slate-400">Ready to install your personalized addon.</p>
+    </div>
+
+    <div class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 backdrop-blur-sm shadow-xl shadow-black/20">
+        <div class="pt-4">
+            <button type="submit" id="submitBtn"
+                class="w-full bg-white text-black hover:bg-white/90 font-bold py-4 rounded-xl transition-all shadow-lg shadow-black/10 text-lg flex items-center justify-center gap-2 border border-white/10 hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0">
+                <span class="btn-text">Save & Install</span>
+                <div class="loader hidden w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin">
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <div class="pt-8">
+        <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+            <div class="flex items-start gap-4">
+                <div
+                    class="w-10 h-10 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                        </path>
+                    </svg>
+                </div>
+                <div class="flex-grow">
+                    <h3 class="text-sm font-semibold text-red-400 mb-1">Danger Zone</h3>
+                    <p class="text-xs text-slate-400 mb-4">Permanently delete your settings and account
+                        data. This action cannot be undone.</p>
+                    <button type="button" id="deleteAccountBtn"
+                        class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 group">
+                        <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                            </path>
+                        </svg>
+                        <span>Delete Account</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Message -->
+    <div id="errorMessage"
+        class="hidden p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-200 text-sm animate-shake">
+        <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor"
+            viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span class="message-content">Error message</span>
+    </div>
+</section>
+
+<!-- SECTION 5: SUCCESS -->
+<section id="sect-success"
+    class="bg-neutral-900/70 border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl text-center hidden animate-fade-in backdrop-blur-sm">
+    <div
+        class="w-20 h-20 bg-gradient-to-br from-green-500/20 to-emerald-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-6 ring-1 ring-green-500/30 shadow-lg shadow-green-500/10">
+        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+    </div>
+    <h3 class="text-3xl font-bold text-white mb-2">You're all set!</h3>
+    <p class="text-slate-400 mb-8">Your personalized catalog is ready.</p>
+
+    <div
+        class="bg-neutral-950 rounded-xl p-4 mb-8 border border-white/10 font-mono text-sm text-slate-200 break-all relative group">
+        <div id="addonUrl">https://...</div>
+        <div
+            class="absolute inset-0 bg-neutral-900/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl cursor-default">
+            <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
+        </div>
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2 max-w-lg mx-auto">
+        <button type="button" id="installDesktopBtn"
+            class="col-span-full md:col-span-1 bg-white hover:bg-white/90 text-black font-semibold py-3.5 rounded-xl transition shadow-lg shadow-black/10 hover:shadow-black/20 hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0 px-4 border border-white/10">Install
+            on App</button>
+        <button type="button" id="installWebBtn"
+            class="col-span-full md:col-span-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium py-3.5 rounded-xl transition border border-white/10 px-4">Install
+            on Web</button>
+        <button type="button" id="copyBtn"
+            class="col-span-full bg-transparent hover:bg-neutral-800 text-slate-400 hover:text-white font-medium py-3 rounded-xl transition border border-white/10 px-4">Copy
+            Link</button>
+    </div>
+    <button type="button" id="successResetBtn"
+        class="mt-8 text-sm text-slate-500 hover:text-slate-300">Start Over</button>
+</section>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Watchly - Personalized Stremio Recommendations</title>
+    <meta name="description"
+        content="Stremio catalog addon that provides personalized movie and series recommendations based on your library.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="/app/static/logo.png" type="image/png">
+    <script>
+        window.APP_HOST = "{{ app_host }}";
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#151f32',
+                            900: '#0f172a',
+                            950: '#020617'
+                        },
+                        stremio: {
+                            DEFAULT: '#3b2667',
+                            hover: '#4e3286',
+                            border: '#573b94'
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            /* Modern layered dark background: subtle vignette + ultra-faint grid */
+            background-color: #0c0d10;
+            background-image:
+                radial-gradient(1200px 600px at 50% -10%, rgba(255, 255, 255, 0.05), transparent 60%),
+                radial-gradient(800px 400px at 85% -5%, rgba(255, 255, 255, 0.03), transparent 60%),
+                radial-gradient(600px 300px at 10% -5%, rgba(255, 255, 255, 0.025), transparent 60%),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent 200px),
+                repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.015) 0, rgba(255, 255, 255, 0.015) 1px, transparent 1px, transparent 24px),
+                repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012) 0, rgba(255, 255, 255, 0.012) 1px, transparent 1px, transparent 24px);
+            background-blend-mode: screen, screen, screen, normal, normal, normal;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        .nav-item.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border-left: 2px solid #ffffff;
+        }
+
+        .nav-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* Announcement link styling to ensure visibility (neutral theme) */
+        #announcement-content a {
+            color: #e5e7eb;
+            /* slate-200 */
+            text-decoration: underline;
+        }
+
+        #announcement-content a:hover {
+            color: #ffffff;
+            text-decoration: underline;
+        }
+
+        /* Improve mobile scrolling behavior */
+        main {
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
+        /* Desktop: Sidebar fixed, main content scrolls independently */
+        @media (min-width: 768px) {
+            #mainSidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100dvh;
+                overflow-y: auto;
+            }
+
+            main {
+                position: fixed;
+                top: 0;
+                right: 0;
+                left: 288px;
+                /* w-72 = 18rem = 288px */
+                height: 100dvh;
+                overflow-y: auto;
+            }
+        }
+
+        /* High-contrast text selection to avoid blending with blue OS highlight */
+        ::selection {
+            background: rgba(59, 130, 246, 0.35);
+            /* blue-500 @ 35% */
+            color: #ffffff;
+        }
+
+        ::-moz-selection {
+            background: rgba(59, 130, 246, 0.35);
+            color: #ffffff;
+        }
+
+        input::selection,
+        textarea::selection {
+            background: rgba(59, 130, 246, 0.45);
+            color: #ffffff;
+        }
+
+        input::-moz-selection,
+        textarea::-moz-selection {
+            background: rgba(59, 130, 246, 0.45);
+            color: #ffffff;
+        }
+
+        /* Ensure caret is visible on dark inputs */
+        input,
+        textarea {
+            caret-color: #ffffff;
+        }
+
+        /* Animated hamburger icon */
+        .hamburger {
+            position: relative;
+            width: 40px;
+            height: 40px;
+        }
+
+        .hamburger .bar {
+            position: absolute;
+            left: 9px;
+            right: 9px;
+            height: 2px;
+            background: #e5e7eb;
+            /* slate-200 */
+            border-radius: 2px;
+            transform-origin: center;
+            transition: transform 200ms ease, opacity 180ms ease;
+        }
+
+        .hamburger .bar.top {
+            top: 12px;
+        }
+
+        .hamburger .bar.middle {
+            top: 19px;
+        }
+
+        .hamburger .bar.bottom {
+            top: 26px;
+        }
+
+        .hamburger.is-active .bar.top {
+            transform: translateY(7px) rotate(45deg);
+        }
+
+        .hamburger.is-active .bar.middle {
+            opacity: 0;
+        }
+
+        .hamburger.is-active .bar.bottom {
+            transform: translateY(-7px) rotate(-45deg);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .hamburger .bar {
+                transition: none;
+            }
+        }
+
+        /* Number input: hide native spinners; we provide custom +/- */
+        input.stepper-input[type=number]::-webkit-outer-spin-button,
+        input.stepper-input[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input.stepper-input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-200 font-sans antialiased overflow-x-hidden">
+    {% block content %}{% endblock %}
+
+    <script type="module" src="/app/static/js/main.js"></script>
+</body>
+</html>

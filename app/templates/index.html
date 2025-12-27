@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+    {% include "components/sidebar.html" %}
+
+    <!-- Main Content Area -->
+    <main
+        class="min-h-[100dvh] md:fixed md:inset-y-0 md:right-0 md:left-72 overflow-y-auto relative no-scrollbar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+        <div class="max-w-2xl mx-auto px-4 py-8 md:py-16 pb-[calc(env(safe-area-inset-bottom)+8rem)]">
+
+            <form id="configForm">
+                {% include "components/section_welcome.html" %}
+                {% include "components/section_login.html" %}
+                {% include "components/section_config.html" %}
+                {% include "components/section_catalogs.html" %}
+                {% include "components/section_install.html" %}
+            </form>
+
+        </div>
+    </main>
+
+    {% include "components/modal_donation.html" %}
+{% endblock %}

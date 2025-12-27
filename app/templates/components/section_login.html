@@ -1,0 +1,69 @@
+<!-- SECTION 1: LOGIN -->
+<section id="sect-login" class="space-y-6 hidden animate-fade-in">
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-white mb-2">Connect to Stremio</h2>
+        <p class="text-slate-400">Log in to your Stremio account to enable Watchly to read your library.</p>
+    </div>
+    <div class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
+        <button type="button" id="stremioLoginBtn"
+            class="w-full bg-stremio text-white font-medium py-4 rounded-xl transition flex items-center justify-center gap-3 border border-stremio-border shadow-lg shadow-stremio/20 group hover:bg-white hover:text-black hover:border-white/10">
+            <img src="https://stremio.com/website/stremio-logo-small.png"
+                class="w-6 h-6 group-hover:scale-110 transition-transform" alt="Stremio">
+            <span id="stremioLoginText" class="text-lg">Login with Stremio</span>
+        </button>
+
+        <input type="hidden" id="authKey">
+
+        <!-- Divider -->
+        <div id="emailPwdDivider" class="flex items-center gap-3 my-6">
+            <div class="h-px bg-white/10 w-full"></div>
+            <div class="text-xs text-slate-500">or</div>
+            <div class="h-px bg-white/10 w-full"></div>
+        </div>
+
+        <!-- Email/Password Login -->
+        <div id="emailPwdSection" class="grid gap-3">
+            <label class="text-xs text-slate-400">Email</label>
+            <input id="emailInput" type="email" autocomplete="email" inputmode="email"
+                spellcheck="false" required placeholder="you@example.com"
+                class="w-full bg-neutral-900 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
+            <label class="text-xs text-slate-400">Password</label>
+            <div class="relative">
+                <input id="passwordInput" type="password" autocomplete="current-password"
+                    placeholder="Your Stremio password"
+                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-4 pr-12 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
+                <button type="button"
+                    class="toggle-btn absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg"
+                    aria-label="Show password" title="Show" data-target="passwordInput">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                        <circle cx="12" cy="12" r="3" />
+                    </svg>
+                </button>
+            </div>
+            <button type="button" id="emailPwdContinueBtn"
+                class="mt-2 w-full bg-white text-black hover:bg-white/90 font-medium py-3 rounded-xl transition border border-white/10 flex items-center justify-center gap-2">
+                <span class="btn-text">Continue with Email</span>
+                <div class="loader hidden w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin">
+                </div>
+            </button>
+        </div>
+
+        <!-- Inline error for email/password login -->
+        <div id="emailPwdError" class="hidden mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm">
+        </div>
+
+        <!-- Disclaimer -->
+        <div id="emailPwdDisclaimer"
+            class="mt-4 text-xs leading-relaxed bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 rounded-xl p-3">
+            <strong class="text-yellow-300">Why email & password?</strong>
+            <span class="block mt-1">We store your credentials securely to generate a fresh Stremio auth
+                key automatically when needed. This avoids expired keys and keeps your addon working
+                without manual re-login.</span>
+            <span class="block mt-2">Prefer not to share your password? Use the Stremio login above to
+                supply an auth key. Note: auth keys can expire and may require periodic
+                re-authentication.</span>
+        </div>
+    </div>
+</section>

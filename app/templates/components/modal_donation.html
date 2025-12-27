@@ -1,0 +1,160 @@
+<!-- Donation Modal -->
+<div id="donation-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="donation-backdrop"></div>
+
+    <!-- Modal Content -->
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="bg-neutral-900 border border-white/10 rounded-xl w-full max-w-md shadow-2xl relative animate-fade-in">
+            <button type="button" id="close-donation"
+                class="absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+
+            <div class="p-6 space-y-5">
+                <!-- Header -->
+                <div class="text-center space-y-3">
+                    <div
+                        class="w-12 h-12 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 text-yellow-400 rounded-full flex items-center justify-center mx-auto ring-1 ring-yellow-500/30">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-white">Support Watchly 💙</h3>
+                </div>
+
+                <!-- Message -->
+                <div class="space-y-2.5 text-center">
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        I'm building this addon alone in my free time. If you find Watchly useful, consider
+                        supporting the project. Your support helps me keep it alive, maintain it, and continue improving it for
+                        everyone.
+                    </p>
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        Every contribution, no matter how small, makes a difference and fuels my passion to create
+                        something amazing. I truly appreciate your support! 🙏
+                    </p>
+                </div>
+
+                <!-- Buttons -->
+                <div class="space-y-2.5 pt-1">
+                    <a href="https://ko-fi.com/timilsinabimal" target="_blank" rel="noopener"
+                        class="block w-full bg-[#13C3FF] hover:bg-[#0ea5e9] text-white font-medium py-3 px-4 rounded-lg transition-all shadow-lg shadow-[#13C3FF]/20 hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2.5 group">
+                        <svg class="w-4 h-4 group-hover:scale-110 transition-transform" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 7h14v3a5 5 0 01-5 5H8a5 5 0 01-5-5V7z" fill="currentColor" opacity="0.9" />
+                            <path d="M19 8.5a3 3 0 010 6" stroke="currentColor" stroke-width="1.5"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M6 4v1M9 4v1M12 4v1" stroke="currentColor" stroke-width="1.5"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <span class="text-sm">Support on Ko-fi</span>
+                        <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                    </a>
+                    <a href="https://buymemomo.com/timilsinabimal" target="_blank" rel="noopener"
+                        class="block w-full bg-white hover:bg-white/90 text-black font-medium py-3 px-4 rounded-lg transition-all shadow-lg shadow-black/10 hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2.5 group border border-white/10">
+                        <svg class="w-4 h-4 group-hover:scale-110 transition-transform" viewBox="0 0 24 24"
+                            fill="currentColor">
+                            <path
+                                d="M12 4C8 4 5 6.5 5 10c0 2 1 3.5 2.5 4.5L8 18h8l.5-3.5c1.5-1 2.5-2.5 2.5-4.5 0-3.5-3-6-7-6z"
+                                fill="currentColor" opacity="0.9" />
+                            <path
+                                d="M7 10.5c0.5 0.5 1.5 0.8 2.5 0.8s2-0.3 2.5-0.8M14 10.5c0.5 0.5 1.5 0.8 2.5 0.8s2-0.3 2.5-0.8"
+                                stroke="currentColor" stroke-width="1" stroke-linecap="round" fill="none"
+                                opacity="0.6" />
+                        </svg>
+                        <span class="text-sm">Buy me MoMo</span>
+                        <svg class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                    </a>
+                </div>
+
+                <!-- Fun Fact -->
+                <div class="pt-3 border-t border-white/10">
+                    <div class="bg-neutral-800/30 border border-slate-700/50 rounded-lg p-3">
+                        <p class="text-xs text-slate-400 leading-relaxed">
+                            <span class="font-semibold text-slate-300">Fun fact:</span> Momo is a delicious steamed spicy
+                            dumpling popular in Nepal. Just like how momo brings joy to
+                            food lovers, your support brings joy to this project! 🥟
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ko-fi Modal -->
+<div id="kofi-modal" class="fixed inset-0 z-50 hidden">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-neutral-950/80 backdrop-blur-sm transition-opacity" id="kofi-backdrop"></div>
+
+    <!-- Modal Content -->
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div
+            class="bg-[#f9f9f9] rounded-2xl w-full max-w-[400px] h-[712px] max-h-[90vh] shadow-2xl relative overflow-hidden animate-fade-in flex flex-col">
+            <!-- Floating Close Button -->
+            <button type="button" id="close-kofi"
+                class="absolute top-3 right-3 z-50 bg-white/80 hover:bg-white text-slate-500 hover:text-slate-900 transition-all p-2 rounded-full shadow-sm backdrop-blur-sm border border-slate-200/50">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                </svg>
+            </button>
+
+            <!-- Iframe -->
+            <div class="flex-grow relative">
+                <iframe id='kofiframe' src='about:blank'
+                    style='border:none;width:100%;height:100%;padding:0;background:#f9f9f9;' title='timilsinabimal'
+                    class="absolute inset-0 w-full h-full"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notification Container -->
+<div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-3 max-w-md"></div>
+
+<!-- Confirmation Modal -->
+<div id="confirmModal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="bg-neutral-900 border border-slate-700 rounded-2xl shadow-2xl max-w-md w-full transform transition-all scale-95 opacity-0"
+        id="confirmModalContent">
+        <div class="p-6 space-y-4">
+            <div class="flex items-start gap-4">
+                <div
+                    class="flex-shrink-0 w-12 h-12 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                        </path>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-lg font-bold text-white mb-1" id="confirmModalTitle">Confirm Action</h3>
+                    <p class="text-sm text-slate-400 leading-relaxed" id="confirmModalMessage">Are you sure?</p>
+                </div>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button id="confirmModalCancel"
+                    class="flex-1 px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl font-medium transition">
+                    Cancel
+                </button>
+                <button id="confirmModalConfirm"
+                    class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl font-medium transition">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
