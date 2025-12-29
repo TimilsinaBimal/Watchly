@@ -1,13 +1,14 @@
+import json
+
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
+from app.core.config import settings
 from app.core.security import redact_token
-from app.services.recommendation.catalog_service import CatalogService
+from app.services.recommendation.catalog_service import catalog_service
+from app.services.redis_service import redis_service
 
 router = APIRouter()
-
-# Initialize catalog service (singleton)
-_catalog_service = CatalogService()
 
 
 def _clean_meta(meta: dict) -> dict:
@@ -45,8 +46,14 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
     This endpoint delegates all logic to CatalogService facade.
     """
     try:
+        # catalog_key
+        catalog_key = f"watchly:catalog:{token}:{type}:{id}"
+        cached_data = await redis_service.get(catalog_key)
+        if cached_data:
+            return json.loads(cached_data)
+
         # Delegate to catalog service facade
-        recommendations, headers = await _catalog_service.get_catalog(token, type, id)
+        recommendations, headers = await catalog_service.get_catalog(token, type, id)
 
         # Set response headers
         for key, value in headers.items():
@@ -56,7 +63,9 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         cleaned = [_clean_meta(m) for m in recommendations]
         cleaned = [m for m in cleaned if m is not None]
 
-        return {"metas": cleaned}
+        data = {"metas": cleaned}
+        await redis_service.set(catalog_key, json.dumps(data), settings.CATALOG_CACHE_TTL)
+        return data
 
     except HTTPException:
         raise

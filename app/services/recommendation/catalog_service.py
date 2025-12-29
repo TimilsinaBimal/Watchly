@@ -329,3 +329,6 @@ class CatalogService:
             recommendations = []
 
         return recommendations
+
+
+catalog_service = CatalogService()

@@ -12,6 +12,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.security import redact_token
+from app.services.redis_service import redis_service
 
 
 class TokenStore:
@@ -20,12 +21,9 @@ class TokenStore:
     KEY_PREFIX = settings.REDIS_TOKEN_KEY
 
     def __init__(self) -> None:
-        self._client: redis.Redis | None = None
         # Negative cache for missing tokens to avoid repeated Redis GETs
         # when external probes request non-existent tokens.
         self._missing_tokens: TTLCache = TTLCache(maxsize=10000, ttl=86400)
-        if not settings.REDIS_URL:
-            logger.warning("REDIS_URL is not set. Token storage will fail until a Redis instance is configured.")
 
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
             logger.warning(
@@ -34,10 +32,8 @@ class TokenStore:
 
     def _ensure_secure_salt(self) -> None:
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
-            logger.error("Refusing to store credentials because TOKEN_SALT is unset or using the insecure default.")
-            raise RuntimeError(
-                "Server misconfiguration: TOKEN_SALT must be set to a non-default value before storing" " credentials."
-            )
+            logger.error("TOKEN_SALT is unset or using the insecure default.")
+            raise RuntimeError("TOKEN_SALT must be set to a non-default value before storing credentials.")
 
     def _get_cipher(self) -> Fernet:
         salt = b"x7FDf9kypzQ1LmR32b8hWv49sKq2Pd8T"
@@ -58,59 +54,6 @@ class TokenStore:
     def decrypt_token(self, enc: str) -> str:
         cipher = self._get_cipher()
         return cipher.decrypt(enc.encode("utf-8")).decode("utf-8")
-
-    async def _get_client(self) -> redis.Redis:
-        if self._client is None:
-            # Add socket timeouts to avoid hanging on Redis operations
-            import traceback
-
-            logger.info("Creating shared Redis client")
-            # Limit the number of pooled connections to avoid unbounded growth
-            # `max_connections` is forwarded to ConnectionPool.from_url
-            self._client = redis.from_url(
-                settings.REDIS_URL,
-                decode_responses=True,
-                encoding="utf-8",
-                socket_connect_timeout=5,
-                socket_timeout=5,
-                max_connections=getattr(settings, "REDIS_MAX_CONNECTIONS", 100),
-                health_check_interval=30,
-                socket_keepalive=True,
-            )
-            if getattr(self, "_creation_count", None) is None:
-                self._creation_count = 1
-            else:
-                self._creation_count += 1
-                logger.warning(
-                    f"Redis client creation invoked again (count={self._creation_count})."
-                    f" Stack:\n{''.join(traceback.format_stack())}"
-                )
-        return self._client
-
-    async def close(self) -> None:
-        """Close and disconnect the shared Redis client (call on shutdown)."""
-        if self._client is None:
-            return
-        try:
-            logger.info("Closing shared Redis client")
-            # Close client and disconnect underlying pool
-            try:
-                await self._client.close()
-            except Exception as e:
-                logger.debug(f"Silent failure closing redis client: {e}")
-            try:
-                pool = getattr(self._client, "connection_pool", None)
-                if pool is not None:
-                    # connection_pool.disconnect may be a coroutine in some redis implementations
-                    disconnect = getattr(pool, "disconnect", None)
-                    if disconnect:
-                        res = disconnect()
-                        if hasattr(res, "__await__"):
-                            await res
-            except Exception as e:
-                logger.debug(f"Silent failure disconnecting redis pool: {e}")
-        finally:
-            self._client = None
 
     def _format_key(self, token: str) -> str:
         """Format Redis key from token."""
@@ -145,13 +88,12 @@ class TokenStore:
                 # Do not store plaintext passwords
                 raise RuntimeError("PASSWORD_ENCRYPT_FAILED")
 
-        client = await self._get_client()
         json_str = json.dumps(storage_data)
 
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
-            await client.setex(key, settings.TOKEN_TTL_SECONDS, json_str)
+            await redis_service.set(key, json_str, settings.TOKEN_TTL_SECONDS)
         else:
-            await client.set(key, json_str)
+            await redis_service.set(key, json_str)
 
         # Invalidate async LRU cache for fresh reads on subsequent requests
         try:
@@ -193,8 +135,7 @@ class TokenStore:
 
         logger.debug(f"[REDIS] Cache miss. Fetching data from redis for {token}")
         key = self._format_key(token)
-        client = await self._get_client()
-        data_raw = await client.get(key)
+        data_raw = await redis_service.get(key)
 
         if not data_raw:
             # remember negative result briefly
@@ -232,8 +173,7 @@ class TokenStore:
         if token:
             key = self._format_key(token)
 
-        client = await self._get_client()
-        await client.delete(key)
+        await redis_service.delete(key)
 
         # Invalidate async LRU cache so future reads reflect deletion
         try:
@@ -261,7 +201,7 @@ class TokenStore:
         Cached for 12 hours to avoid frequent Redis scans.
         """
         try:
-            client = await self._get_client()
+            client = await redis_service.get_client()
         except (redis.RedisError, OSError) as exc:
             logger.warning(f"Cannot count users; Redis unavailable: {exc}")
             return 0
