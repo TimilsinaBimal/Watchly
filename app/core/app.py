@@ -86,7 +86,7 @@ jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
 @app.get("/", response_class=HTMLResponse)
 @app.get("/configure", response_class=HTMLResponse)
 @app.get("/{token}/configure", response_class=HTMLResponse)
-async def configure_page(request: Request, token: str | None = None):
+async def configure_page(request: Request, _token: str | None = None):
     languages = []
     try:
         languages = await fetch_languages_list()
