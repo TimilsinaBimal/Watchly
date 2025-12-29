@@ -1,4 +1,16 @@
 # Watchly
+
+<div align="center">
+
+<!-- Premium Badge Collection -->
+[![Version](https://img.shields.io/github/v/release/timilsinabimal/watchly?style=for-the-badge&logo=semver&color=6366f1)](https://github.com/timilsinabimal/watchly/releases)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/timilsinabimal/watchly?style=for-the-badge&color=f59e0b&logo=github)](https://github.com/timilsinabimal/watchly/stargazers)
+[![Buy me  Coffee](https://img.shields.io/badge/Ko--fi-Support-F16061?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/timilsinabimal)
+
+</div>
+<br/>
+
 **Watchly** is a Stremio catalog addon that provides personalized movie and series recommendations based on your Stremio library. It uses The Movie Database (TMDB) API to generate intelligent recommendations from the content you've watched and loved.
 
 ## Features
