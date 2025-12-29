@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.api.endpoints.meta import fetch_languages_list
 from app.api.main import api_router
+from app.services.redis_service import redis_service
 from app.services.token_store import token_store
 
 from .config import settings
@@ -28,10 +29,10 @@ async def lifespan(app: FastAPI):
     """
     yield
     try:
-        await token_store.close()
-        logger.info("TokenStore Redis client closed")
+        await redis_service.close()
+        logger.info("Redis client closed")
     except Exception as exc:
-        logger.warning(f"Failed to close TokenStore Redis client: {exc}")
+        logger.warning(f"Failed to close Redis client: {exc}")
 
 
 app = FastAPI(

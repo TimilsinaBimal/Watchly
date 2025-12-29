@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import CatalogConfig, UserSettings, get_default_settings
+from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 
@@ -101,11 +102,25 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
 
     # 5. Store user data
     token = await token_store.store_user_data(user_id, payload_to_store)
-    logger.info(f"[{redact_token(token)}] Account {'updated' if existing_data else 'created'} for user {user_id}")
+    account_status = "updated" if existing_data else "created"
+    logger.info(f"[{redact_token(token)}] Account {account_status} for user {user_id}")
+
+    # 6. Cache library items and profiles before returning
+    # This ensures manifest generation is fast when user installs the addon
+    # We wait for caching to complete so everything is ready immediately
+    try:
+        logger.info(f"[{redact_token(token)}] Caching library and profiles before returning token")
+        await manifest_service.cache_library_and_profiles(bundle, stremio_auth_key, user_settings, token)
+        logger.info(f"[{redact_token(token)}] Successfully cached library and profiles")
+    except Exception as e:
+        logger.warning(
+            f"[{redact_token(token)}] Failed to cache library and profiles: {e}. "
+            "Continuing anyway - will cache on manifest request."
+        )
+        # Continue even if caching fails - manifest service will handle it
 
     base_url = settings.HOST_NAME
     manifest_url = f"{base_url}/{token}/manifest.json"
-    # Maybe generate manifest and check if catalogs exist and if not raise error?
     expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
 
     await bundle.close()
