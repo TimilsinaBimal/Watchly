@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Any
 
@@ -16,6 +17,7 @@ from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
 from app.services.recommendation.utils import pad_to_min
+from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
@@ -70,18 +72,54 @@ class CatalogService:
             user_settings = self._extract_settings(credentials)
             language = user_settings.language if user_settings else "en-US"
 
-            # Fetch library
-            library_items = await bundle.library.get_library_items(auth_key)
+            # Try to get cached library items first
+            library_items_key = f"watchly:library_items:{token}"
+            cached_library = await redis_service.get(library_items_key)
 
-            # Initialize services
+            if cached_library:
+                library_items = json.loads(cached_library)
+                logger.debug(f"[{token[:8]}...] Using cached library items")
+            else:
+                # Fetch library if not cached
+                logger.info(f"[{token[:8]}...] Library items not cached, fetching from Stremio")
+                library_items = await bundle.library.get_library_items(auth_key)
+                # Cache it for future use
+                await redis_service.set(library_items_key, json.dumps(library_items))
+
+            # Try to get cached profile and watched sets
+            profile_key = f"watchly:profile:{token}:{content_type}"
+            watched_sets_key = f"watchly:watched_sets:{token}:{content_type}"
+
+            cached_profile = await redis_service.get(profile_key)
+            cached_watched_sets = await redis_service.get(watched_sets_key)
+
+            if cached_profile and cached_watched_sets:
+                # Use cached profile and watched sets
+                profile = TasteProfile.model_validate_json(cached_profile)
+                watched_sets_data = json.loads(cached_watched_sets)
+                watched_tmdb = set(watched_sets_data.get("watched_tmdb", []))
+                watched_imdb = set(watched_sets_data.get("watched_imdb", []))
+                logger.debug(f"[{token[:8]}...] Using cached profile and watched sets for {content_type}")
+            else:
+                # Build profile if not cached
+                logger.info(f"[{token[:8]}...] Profile not cached for {content_type}, building from library")
+                services = self._initialize_services(language, user_settings)
+                integration_service: ProfileIntegration = services["integration"]
+                profile, watched_tmdb, watched_imdb = await integration_service.build_profile_from_library(
+                    library_items, content_type, bundle, auth_key
+                )
+                # Cache the profile and watched sets for future use
+                if profile:
+                    await redis_service.set(profile_key, profile.model_dump_json())
+                watched_sets_data = {
+                    "watched_tmdb": list(watched_tmdb),
+                    "watched_imdb": list(watched_imdb),
+                }
+                await redis_service.set(watched_sets_key, json.dumps(watched_sets_data))
+
+            # Initialize services (needed for recommendations)
             services = self._initialize_services(language, user_settings)
-
             integration_service: ProfileIntegration = services["integration"]
-
-            # Build profile and watched sets (once, reused)
-            profile, watched_tmdb, watched_imdb = await integration_service.build_profile_from_library(
-                library_items, content_type, bundle, auth_key
-            )
             whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
 
             # Route to appropriate recommendation service

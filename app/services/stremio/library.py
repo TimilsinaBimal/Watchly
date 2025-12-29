@@ -113,7 +113,9 @@ class StremioLibraryService:
                         # added by stremio itself on user watch
                         added.append(item)
                     elif item.get("removed"):
-                        removed.append(item)
+                        # do not do anything with removed items
+                        # removed.append(item)
+                        continue
 
             # 4. Sort watched items by recency
             def sort_by_recency(x: dict):

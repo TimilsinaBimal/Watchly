@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -9,6 +10,8 @@ from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings
 from app.services.catalog import DynamicCatalogService
+from app.services.profile.integration import ProfileIntegration
+from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
@@ -116,13 +119,47 @@ class CatalogUpdater:
                     user_settings = UserSettings(**credentials["settings"])
                 except Exception as e:
                     logger.exception(f"[{redact_token(token)}] Failed to parse user settings: {e}")
-                    return True  # if user doesn't have setting, we can't update the catalogs. so no need to try again.
+                    # if user doesn't have setting, we can't update the catalogs.
+                    # so no need to try again.
+                    return True
 
             # Fetch fresh library
             library_items = await bundle.library.get_library_items(auth_key)
 
+            # Cache library items
+            library_items_key = f"watchly:library_items:{token}"
+            await redis_service.set(library_items_key, json.dumps(library_items))
+            # no cache ttl since it will be updated on every catalog update
+
+            # Build and cache profiles for both movie and series
+            language = user_settings.language if user_settings else "en-US"
+            integration_service = ProfileIntegration(language=language)
+
+            for content_type in ["movie", "series"]:
+                try:
+                    profile, watched_tmdb, watched_imdb = await integration_service.build_profile_from_library(
+                        library_items, content_type, bundle, auth_key
+                    )
+
+                    # Cache profile
+                    if profile:
+                        profile_key = f"watchly:profile:{token}:{content_type}"
+                        await redis_service.set(profile_key, profile.model_dump_json())
+
+                    # Cache watched sets
+                    watched_sets_key = f"watchly:watched_sets:{token}:{content_type}"
+                    watched_sets_data = {
+                        "watched_tmdb": list(watched_tmdb),
+                        "watched_imdb": list(watched_imdb),
+                    }
+                    await redis_service.set(watched_sets_key, json.dumps(watched_sets_data))
+
+                    logger.debug(f"[{redact_token(token)}] Cached profile and watched sets for {content_type}")
+                except Exception as e:
+                    logger.warning(f"[{redact_token(token)}] Failed to build/cache profile for {content_type}: {e}")
+
             dynamic_catalog_service = DynamicCatalogService(
-                language=(user_settings.language if user_settings else "en-US"),
+                language=language,
             )
 
             catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
