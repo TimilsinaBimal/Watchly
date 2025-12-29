@@ -113,7 +113,7 @@ class CatalogService:
             logger.info(f"Returning {len(recommendations)} items for {content_type}")
 
             # Prepare response headers
-            headers = {"Cache-Control": "public, max-age=21600"}  # 6 hours
+            headers = {"Cache-Control": f"public, max-age={settings.CATALOG_CACHE_TTL}"}
 
             return recommendations, headers
 

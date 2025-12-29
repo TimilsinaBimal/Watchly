@@ -64,7 +64,9 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         cleaned = [m for m in cleaned if m is not None]
 
         data = {"metas": cleaned}
-        await redis_service.set(catalog_key, json.dumps(data), settings.CATALOG_CACHE_TTL)
+        # if catalog data is not empty, set the cache
+        if cleaned:
+            await redis_service.set(catalog_key, json.dumps(data), settings.CATALOG_CACHE_TTL)
         return data
 
     except HTTPException:
