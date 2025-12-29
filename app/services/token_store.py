@@ -174,6 +174,12 @@ class TokenStore:
             key = self._format_key(token)
 
         await redis_service.delete(key)
+        # we also need to delete the cached library items, profiles and watched sets
+        await redis_service.delete(f"watchly:library_items:{token}")
+        await redis_service.delete(f"watchly:profile:{token}:movie")
+        await redis_service.delete(f"watchly:profile:{token}:series")
+        await redis_service.delete(f"watchly:watched_sets:{token}:movie")
+        await redis_service.delete(f"watchly:watched_sets:{token}:series")
 
         # Invalidate async LRU cache so future reads reflect deletion
         try:
