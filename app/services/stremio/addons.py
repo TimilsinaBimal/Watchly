@@ -75,10 +75,8 @@ class StremioAddonService:
             ):
                 addon["manifest"]["catalogs"] = catalogs
                 # also update description with updated time
-                # get description from existing addon manifest
-                description = addon.get("manifest", {}).get("description", "")
                 addon["manifest"]["description"] = (
-                    f"{description}\nLast updated on:"
+                    "Movie and series recommendations based on your Stremio library.\nLast Updated on: "
                     f" {datetime.now(timezone.utc).strftime('%d %B %Y, %H:%M:%S')} UTC"
                 )
                 found = True
