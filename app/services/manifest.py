@@ -103,7 +103,7 @@ class ManifestService:
         for content_type in ["movie", "series"]:
             try:
                 logger.info(f"[{redact_token(token)}] Building and caching profile for {content_type}")
-                await cache_profile_and_watched_sets(
+                _, _, _ = await cache_profile_and_watched_sets(
                     token, content_type, integration_service, library_items, bundle, auth_key
                 )
                 logger.debug(f"[{redact_token(token)}] Cached profile and watched sets for {content_type}")

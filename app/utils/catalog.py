@@ -38,6 +38,7 @@ async def cache_profile_and_watched_sets(
     )
 
     await user_cache.set_profile_and_watched_sets(token, content_type, profile, watched_tmdb, watched_imdb)
+    return profile, watched_tmdb, watched_imdb
 
 
 def get_config_id(catalog) -> str | None:

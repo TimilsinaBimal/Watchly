@@ -135,18 +135,9 @@ class CatalogService:
             else:
                 # Build profile if not cached
                 logger.info(f"[{redact_token(token)}...] Profile not cached for {content_type}, building from library")
-                await cache_profile_and_watched_sets(
+                profile, watched_tmdb, watched_imdb = await cache_profile_and_watched_sets(
                     token, content_type, integration_service, library_items, bundle, auth_key
                 )
-                # Fetch the newly cached data
-                cached_data = await user_cache.get_profile_and_watched_sets(token, content_type)
-                if cached_data:
-                    profile, watched_tmdb, watched_imdb = cached_data
-                else:
-                    # Fallback: profile build may have failed
-                    profile = None
-                    watched_tmdb = set()
-                    watched_imdb = set()
 
             whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
 
