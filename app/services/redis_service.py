@@ -113,10 +113,14 @@ class RedisService:
         try:
             client = await self.get_client()
             deleted_count = 0
-            async for key in client.scan_iter(match=pattern, count=100):
-                result = await client.delete(key)
-                if result:
-                    deleted_count += 1
+            keys_to_delete = []
+            async for key in client.scan_iter(match=pattern, count=500):
+                keys_to_delete.append(key)
+                if len(keys_to_delete) >= 500:
+                    deleted_count += await client.delete(*keys_to_delete)
+                    keys_to_delete = []
+            if keys_to_delete:
+                deleted_count += await client.delete(*keys_to_delete)
             return deleted_count
         except (redis.RedisError, OSError) as exc:
             logger.error(f"Failed to delete keys matching pattern '{pattern}' in Redis: {exc}")
