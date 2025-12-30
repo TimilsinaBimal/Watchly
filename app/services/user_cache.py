@@ -60,6 +60,10 @@ class UserCacheService:
         await redis_service.set(key, json.dumps(library_items))
         logger.debug(f"[{token[:8]}...] Cached library items")
 
+        # Invalidate all catalog caches when library items are updated
+        # This ensures catalogs are regenerated with fresh library data
+        await self.invalidate_all_catalogs(token)
+
     async def invalidate_library_items(self, token: str) -> None:
         """
         Invalidate cached library items for a user.
@@ -228,11 +232,15 @@ class UserCacheService:
             await self.set_profile(token, content_type, profile)
         await self.set_watched_sets(token, content_type, watched_tmdb, watched_imdb)
 
+        # Invalidate all catalog caches when profile is updated
+        # This ensures catalogs are regenerated with fresh profile data
+        await self.invalidate_all_catalogs(token)
+
     # Invalidation Methods
 
     async def invalidate_all_user_data(self, token: str) -> None:
         """
-        Invalidate all cached data for a user (library items, profiles, watched sets).
+        Invalidate all cached data for a user (library items, profiles, watched sets, catalogs).
 
         Args:
             token: User token
@@ -241,6 +249,7 @@ class UserCacheService:
         for content_type in ["movie", "series"]:
             await self.invalidate_profile(token, content_type)
             await self.invalidate_watched_sets(token, content_type)
+        await self.invalidate_all_catalogs(token)
         logger.debug(f"[{token[:8]}...] Invalidated all user data cache")
 
     async def get_catalog(self, token: str, type: str, id: str) -> dict[str, Any] | None:
@@ -287,6 +296,23 @@ class UserCacheService:
         key = CATALOG_KEY.format(token=token, type=type, id=id)
         await redis_service.delete(key)
         logger.debug(f"[{token[:8]}...] Invalidated catalog cache for {type}/{id}")
+
+    async def invalidate_all_catalogs(self, token: str) -> None:
+        """
+        Invalidate all cached catalogs for a user.
+
+        This should be called when user data (library items, profiles) is updated
+        to ensure catalogs are regenerated with fresh data.
+
+        Args:
+            token: User token
+        """
+        pattern = f"watchly:catalog:{token}:*"
+        deleted_count = await redis_service.delete_by_pattern(pattern)
+        if deleted_count > 0:
+            logger.debug(f"[{token[:8]}...] Invalidated {deleted_count} catalog cache(s)")
+        else:
+            logger.debug(f"[{token[:8]}...] No catalog caches found to invalidate")
 
 
 user_cache = UserCacheService()

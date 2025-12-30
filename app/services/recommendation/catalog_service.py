@@ -24,6 +24,33 @@ from app.services.user_cache import user_cache
 from app.utils.catalog import cache_profile_and_watched_sets
 
 
+def _clean_meta(meta: dict) -> dict:
+    """Return a sanitized Stremio meta object without internal fields.
+
+    Keeps only public keys and drops internal scoring/IDs/keywords/cast, etc.
+    """
+    allowed = {
+        "id",
+        "type",
+        "name",
+        "poster",
+        "background",
+        "description",
+        "releaseInfo",
+        "imdbRating",
+        "genres",
+        "runtime",
+    }
+    cleaned = {k: v for k, v in meta.items() if k in allowed}
+    # Drop empty values
+    cleaned = {k: v for k, v in cleaned.items() if v not in (None, "", [], {}, ())}
+
+    # if id does not start with tt, return None
+    if not cleaned.get("id", "").startswith("tt"):
+        return None
+    return cleaned
+
+
 class CatalogService:
     def __init__(self):
         pass
@@ -45,6 +72,9 @@ class CatalogService:
         # Validate inputs
         self._validate_inputs(token, content_type, catalog_id)
 
+        # Prepare response headers
+        headers: dict[str, Any] = {"Cache-Control": f"public, max-age={settings.CATALOG_CACHE_TTL}"}
+
         logger.info(f"[{redact_token(token)}...] Fetching catalog for {content_type} with id {catalog_id}")
 
         # Get credentials
@@ -62,6 +92,16 @@ class CatalogService:
                 logger.error(f"[{redact_token(token)}...] Failed to trigger auto update: {e}")
                 # continue with the request even if the auto update fails
                 pass
+
+        # get cached catalog
+        cached_data = await user_cache.get_catalog(token, content_type, catalog_id)
+        if cached_data:
+            logger.debug(f"[{redact_token(token)}...] Using cached catalog for {content_type}/{catalog_id}")
+            return cached_data, headers
+
+        logger.info(
+            f"[{redact_token(token)}...] Catalog not cached for {content_type}/{catalog_id}, building from" " scratch"
+        )
 
         bundle = StremioBundle()
         try:
@@ -138,10 +178,16 @@ class CatalogService:
 
             logger.info(f"Returning {len(recommendations)} items for {content_type}")
 
-            # Prepare response headers
-            headers = {"Cache-Control": f"public, max-age={settings.CATALOG_CACHE_TTL}"}
+            # Clean and format metadata
+            cleaned = [_clean_meta(m) for m in recommendations]
+            cleaned = [m for m in cleaned if m is not None]
 
-            return recommendations, headers
+            data = {"metas": cleaned}
+            # if catalog data is not empty, set the cache
+            if cleaned:
+                await user_cache.set_catalog(token, type, id, data, settings.CATALOG_CACHE_TTL)
+
+            return data, headers
 
         finally:
             await bundle.close()
