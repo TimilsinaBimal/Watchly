@@ -3,6 +3,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.constants import CATALOG_KEY, LIBRARY_ITEMS_KEY, PROFILE_KEY, WATCHED_SETS_KEY
 from app.models.taste_profile import TasteProfile
 from app.services.redis_service import redis_service
 
@@ -11,17 +12,17 @@ class UserCacheService:
     @staticmethod
     def _library_items_key(token: str) -> str:
         """Generate cache key for library items."""
-        return f"watchly:library_items:{token}"
+        return LIBRARY_ITEMS_KEY.format(token=token)
 
     @staticmethod
     def _profile_key(token: str, content_type: str) -> str:
         """Generate cache key for profile."""
-        return f"watchly:profile:{token}:{content_type}"
+        return PROFILE_KEY.format(token=token, content_type=content_type)
 
     @staticmethod
     def _watched_sets_key(token: str, content_type: str) -> str:
         """Generate cache key for watched sets."""
-        return f"watchly:watched_sets:{token}:{content_type}"
+        return WATCHED_SETS_KEY.format(token=token, content_type=content_type)
 
     # Library Items Methods
 
@@ -241,6 +242,47 @@ class UserCacheService:
             await self.invalidate_profile(token, content_type)
             await self.invalidate_watched_sets(token, content_type)
         logger.debug(f"[{token[:8]}...] Invalidated all user data cache")
+
+    async def get_catalog(self, token: str, type: str, id: str) -> dict[str, Any] | None:
+        """
+        Get cached catalog for a user and content type.
+
+        Args:
+            token: User token
+            type: Content type (movie or series)
+            id: Catalog ID
+        """
+        key = CATALOG_KEY.format(token=token, type=type, id=id)
+        cached = await redis_service.get(key)
+        if cached:
+            return json.loads(cached)
+        return None
+
+    async def set_catalog(self, token: str, type: str, id: str, catalog: dict[str, Any]) -> None:
+        """
+        Cache catalog for a user and content type.
+
+        Args:
+            token: User token
+            type: Content type (movie or series)
+            id: Catalog ID
+        """
+        key = CATALOG_KEY.format(token=token, type=type, id=id)
+        await redis_service.set(key, json.dumps(catalog))
+        logger.debug(f"[{token[:8]}...] Cached catalog for {type}/{id}")
+
+    async def invalidate_catalog(self, token: str, type: str, id: str) -> None:
+        """
+        Invalidate cached catalog for a user and content type.
+
+        Args:
+            token: User token
+            type: Content type (movie or series)
+            id: Catalog ID
+        """
+        key = CATALOG_KEY.format(token=token, type=type, id=id)
+        await redis_service.delete(key)
+        logger.debug(f"[{token[:8]}...] Invalidated catalog cache for {type}/{id}")
 
 
 user_cache = UserCacheService()
