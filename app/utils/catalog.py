@@ -46,3 +46,14 @@ async def cache_profile_and_watched_sets(
         "watched_imdb": list(watched_imdb),
     }
     await redis_service.set(watched_sets_key, json.dumps(watched_sets_data))
+
+
+def get_config_id(catalog) -> str | None:
+    catalog_id = catalog.get("id", "")
+    if catalog_id.startswith("watchly.theme."):
+        return "watchly.theme"
+    if catalog_id.startswith("watchly.loved."):
+        return "watchly.loved"
+    if catalog_id.startswith("watchly.watched."):
+        return "watchly.watched"
+    return catalog_id

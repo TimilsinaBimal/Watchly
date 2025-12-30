@@ -9,13 +9,12 @@ from app.core.security import redact_token
 from app.core.settings import UserSettings
 from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
-from app.services.catalog_updater import get_config_id
 from app.services.profile.integration import ProfileIntegration
 from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
-from app.utils.catalog import cache_profile_and_watched_sets
+from app.utils.catalog import cache_profile_and_watched_sets, get_config_id
 
 
 class ManifestService:

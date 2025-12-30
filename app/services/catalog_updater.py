@@ -1,5 +1,4 @@
 import asyncio
-import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -10,23 +9,11 @@ from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings
 from app.services.catalog import DynamicCatalogService
-from app.services.profile.integration import ProfileIntegration
-from app.services.redis_service import redis_service
+from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
-from app.utils.catalog import cache_profile_and_watched_sets
-
-
-def get_config_id(catalog) -> str | None:
-    catalog_id = catalog.get("id", "")
-    if catalog_id.startswith("watchly.theme."):
-        return "watchly.theme"
-    if catalog_id.startswith("watchly.loved."):
-        return "watchly.loved"
-    if catalog_id.startswith("watchly.watched."):
-        return "watchly.watched"
-    return catalog_id
+from app.utils.catalog import get_config_id
 
 
 class CatalogUpdater:
@@ -124,27 +111,8 @@ class CatalogUpdater:
                     # so no need to try again.
                     return True
 
-            # Fetch fresh library
-            library_items = await bundle.library.get_library_items(auth_key)
-
-            # Cache library items
-            library_items_key = f"watchly:library_items:{token}"
-            await redis_service.set(library_items_key, json.dumps(library_items))
-            # no cache ttl since it will be updated on every catalog update
-
-            # Build and cache profiles for both movie and series
+            library_items = await manifest_service.cache_library_and_profiles(bundle, auth_key, user_settings, token)
             language = user_settings.language if user_settings else "en-US"
-            integration_service: ProfileIntegration = ProfileIntegration(language=language)
-
-            for content_type in ["movie", "series"]:
-                try:
-                    await cache_profile_and_watched_sets(
-                        token, content_type, integration_service, library_items, bundle, auth_key
-                    )
-
-                    logger.debug(f"[{redact_token(token)}] Cached profile and watched sets for {content_type}")
-                except Exception as e:
-                    logger.warning(f"[{redact_token(token)}] Failed to build/cache profile for {content_type}: {e}")
 
             dynamic_catalog_service = DynamicCatalogService(
                 language=language,
