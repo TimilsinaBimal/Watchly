@@ -190,7 +190,7 @@ class ManifestService:
             if creds.get("settings"):
                 user_settings = UserSettings(**creds["settings"])
         except Exception as e:
-            logger.error(f"[{token}] Error loading user data from token store: {e}")
+            logger.error(f"[{redact_token(token)}] Error loading user data from token store: {e}")
             raise HTTPException(status_code=401, detail="Invalid token session. Please reconfigure.")
 
         base_manifest = self.get_base_manifest()
@@ -204,7 +204,7 @@ class ManifestService:
             if auth_key:
                 fetched_catalogs = await self._build_dynamic_catalogs(bundle, auth_key, user_settings, token)
         except Exception as e:
-            logger.exception(f"[{token}] Dynamic catalog build failed: {e}")
+            logger.exception(f"[{redact_token(token)}] Dynamic catalog build failed: {e}")
             fetched_catalogs = []
         finally:
             await bundle.close()

@@ -258,7 +258,9 @@ class UserCacheService:
             return json.loads(cached)
         return None
 
-    async def set_catalog(self, token: str, type: str, id: str, catalog: dict[str, Any]) -> None:
+    async def set_catalog(
+        self, token: str, type: str, id: str, catalog: dict[str, Any], ttl: int | None = None
+    ) -> None:
         """
         Cache catalog for a user and content type.
 
@@ -266,9 +268,11 @@ class UserCacheService:
             token: User token
             type: Content type (movie or series)
             id: Catalog ID
+            catalog: Catalog dictionary to cache
+            ttl: Time to live for the cache (in seconds)
         """
         key = CATALOG_KEY.format(token=token, type=type, id=id)
-        await redis_service.set(key, json.dumps(catalog))
+        await redis_service.set(key, json.dumps(catalog), ttl)
         logger.debug(f"[{token[:8]}...] Cached catalog for {type}/{id}")
 
     async def invalidate_catalog(self, token: str, type: str, id: str) -> None:

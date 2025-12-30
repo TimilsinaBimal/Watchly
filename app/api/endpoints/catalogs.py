@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
+from app.core.config import settings
 from app.core.security import redact_token
 from app.services.recommendation.catalog_service import catalog_service
 from app.services.user_cache import user_cache
@@ -62,7 +63,7 @@ async def get_catalog(type: str, id: str, response: Response, token: str):
         data = {"metas": cleaned}
         # if catalog data is not empty, set the cache
         if cleaned:
-            await user_cache.set_catalog(token, type, id, data)
+            await user_cache.set_catalog(token, type, id, data, settings.CATALOG_CACHE_TTL)
         return data
 
     except HTTPException:

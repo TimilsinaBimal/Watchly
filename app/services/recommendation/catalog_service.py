@@ -6,6 +6,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.constants import DEFAULT_CATALOG_LIMIT, DEFAULT_MIN_ITEMS
+from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.models.taste_profile import TasteProfile
 from app.services.catalog_updater import catalog_updater
@@ -21,9 +22,6 @@ from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
 from app.utils.catalog import cache_profile_and_watched_sets
-
-PAD_RECOMMENDATIONS_THRESHOLD = 8
-PAD_RECOMMENDATIONS_TARGET = 10
 
 
 class CatalogService:
@@ -47,7 +45,7 @@ class CatalogService:
         # Validate inputs
         self._validate_inputs(token, content_type, catalog_id)
 
-        logger.info(f"[{token[:8]}...] Fetching catalog for {content_type} with id {catalog_id}")
+        logger.info(f"[{redact_token(token)}...] Fetching catalog for {content_type} with id {catalog_id}")
 
         # Get credentials
         credentials = await token_store.get_user_data(token)
@@ -57,11 +55,11 @@ class CatalogService:
 
         # Trigger lazy update if needed
         if settings.AUTO_UPDATE_CATALOGS:
-            logger.info(f"[{token[:8]}...] Triggering auto update for token")
+            logger.info(f"[{redact_token(token)}...] Triggering auto update for token")
             try:
                 await catalog_updater.trigger_update(token, credentials)
             except Exception as e:
-                logger.error(f"[{token[:8]}...] Failed to trigger auto update: {e}")
+                logger.error(f"[{redact_token(token)}...] Failed to trigger auto update: {e}")
                 # continue with the request even if the auto update fails
                 pass
 
@@ -76,10 +74,10 @@ class CatalogService:
             library_items = await user_cache.get_library_items(token)
 
             if library_items:
-                logger.debug(f"[{token[:8]}...] Using cached library items")
+                logger.debug(f"[{redact_token(token)}...] Using cached library items")
             else:
                 # Fetch library if not cached
-                logger.info(f"[{token[:8]}...] Library items not cached, fetching from Stremio")
+                logger.info(f"[{redact_token(token)}...] Library items not cached, fetching from Stremio")
                 library_items = await bundle.library.get_library_items(auth_key)
                 # Cache it for future use
                 await user_cache.set_library_items(token, library_items)
@@ -93,10 +91,10 @@ class CatalogService:
             if cached_data:
                 # Use cached profile and watched sets
                 profile, watched_tmdb, watched_imdb = cached_data
-                logger.debug(f"[{token[:8]}...] Using cached profile and watched sets for {content_type}")
+                logger.debug(f"[{redact_token(token)}...] Using cached profile and watched sets for {content_type}")
             else:
                 # Build profile if not cached
-                logger.info(f"[{token[:8]}...] Profile not cached for {content_type}, building from library")
+                logger.info(f"[{redact_token(token)}...] Profile not cached for {content_type}, building from library")
                 await cache_profile_and_watched_sets(
                     token, content_type, integration_service, library_items, bundle, auth_key
                 )
