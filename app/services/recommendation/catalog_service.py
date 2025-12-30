@@ -185,7 +185,7 @@ class CatalogService:
             data = {"metas": cleaned}
             # if catalog data is not empty, set the cache
             if cleaned:
-                await user_cache.set_catalog(token, type, id, data, settings.CATALOG_CACHE_TTL)
+                await user_cache.set_catalog(token, content_type, catalog_id, data, settings.CATALOG_CACHE_TTL)
 
             return data, headers
 
