@@ -15,6 +15,7 @@ from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
+from app.utils.catalog import cache_profile_and_watched_sets
 
 
 def get_config_id(catalog) -> str | None:
@@ -133,26 +134,13 @@ class CatalogUpdater:
 
             # Build and cache profiles for both movie and series
             language = user_settings.language if user_settings else "en-US"
-            integration_service = ProfileIntegration(language=language)
+            integration_service: ProfileIntegration = ProfileIntegration(language=language)
 
             for content_type in ["movie", "series"]:
                 try:
-                    profile, watched_tmdb, watched_imdb = await integration_service.build_profile_from_library(
-                        library_items, content_type, bundle, auth_key
+                    await cache_profile_and_watched_sets(
+                        token, content_type, integration_service, library_items, bundle, auth_key
                     )
-
-                    # Cache profile
-                    if profile:
-                        profile_key = f"watchly:profile:{token}:{content_type}"
-                        await redis_service.set(profile_key, profile.model_dump_json())
-
-                    # Cache watched sets
-                    watched_sets_key = f"watchly:watched_sets:{token}:{content_type}"
-                    watched_sets_data = {
-                        "watched_tmdb": list(watched_tmdb),
-                        "watched_imdb": list(watched_imdb),
-                    }
-                    await redis_service.set(watched_sets_key, json.dumps(watched_sets_data))
 
                     logger.debug(f"[{redact_token(token)}] Cached profile and watched sets for {content_type}")
                 except Exception as e:

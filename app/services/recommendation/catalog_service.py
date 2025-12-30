@@ -21,6 +21,7 @@ from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
+from app.utils.catalog import cache_profile_and_watched_sets
 
 PAD_RECOMMENDATIONS_THRESHOLD = 8
 PAD_RECOMMENDATIONS_TARGET = 10
@@ -93,6 +94,9 @@ class CatalogService:
             cached_profile = await redis_service.get(profile_key)
             cached_watched_sets = await redis_service.get(watched_sets_key)
 
+            services = self._initialize_services(language, user_settings)
+            integration_service: ProfileIntegration = services["integration"]
+
             if cached_profile and cached_watched_sets:
                 # Use cached profile and watched sets
                 profile = TasteProfile.model_validate_json(cached_profile)
@@ -103,23 +107,10 @@ class CatalogService:
             else:
                 # Build profile if not cached
                 logger.info(f"[{token[:8]}...] Profile not cached for {content_type}, building from library")
-                services = self._initialize_services(language, user_settings)
-                integration_service: ProfileIntegration = services["integration"]
-                profile, watched_tmdb, watched_imdb = await integration_service.build_profile_from_library(
-                    library_items, content_type, bundle, auth_key
+                await cache_profile_and_watched_sets(
+                    token, content_type, integration_service, library_items, bundle, auth_key
                 )
-                # Cache the profile and watched sets for future use
-                if profile:
-                    await redis_service.set(profile_key, profile.model_dump_json())
-                watched_sets_data = {
-                    "watched_tmdb": list(watched_tmdb),
-                    "watched_imdb": list(watched_imdb),
-                }
-                await redis_service.set(watched_sets_key, json.dumps(watched_sets_data))
 
-            # Initialize services (needed for recommendations)
-            services = self._initialize_services(language, user_settings)
-            integration_service: ProfileIntegration = services["integration"]
             whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
 
             # Route to appropriate recommendation service
