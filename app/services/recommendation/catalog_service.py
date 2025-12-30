@@ -1,4 +1,3 @@
-import json
 import re
 from typing import Any
 
@@ -17,10 +16,10 @@ from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
 from app.services.recommendation.utils import pad_to_min
-from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
+from app.services.user_cache import user_cache
 from app.utils.catalog import cache_profile_and_watched_sets
 
 PAD_RECOMMENDATIONS_THRESHOLD = 8
@@ -74,35 +73,26 @@ class CatalogService:
             language = user_settings.language if user_settings else "en-US"
 
             # Try to get cached library items first
-            library_items_key = f"watchly:library_items:{token}"
-            cached_library = await redis_service.get(library_items_key)
+            library_items = await user_cache.get_library_items(token)
 
-            if cached_library:
-                library_items = json.loads(cached_library)
+            if library_items:
                 logger.debug(f"[{token[:8]}...] Using cached library items")
             else:
                 # Fetch library if not cached
                 logger.info(f"[{token[:8]}...] Library items not cached, fetching from Stremio")
                 library_items = await bundle.library.get_library_items(auth_key)
                 # Cache it for future use
-                await redis_service.set(library_items_key, json.dumps(library_items))
-
-            # Try to get cached profile and watched sets
-            profile_key = f"watchly:profile:{token}:{content_type}"
-            watched_sets_key = f"watchly:watched_sets:{token}:{content_type}"
-
-            cached_profile = await redis_service.get(profile_key)
-            cached_watched_sets = await redis_service.get(watched_sets_key)
+                await user_cache.set_library_items(token, library_items)
 
             services = self._initialize_services(language, user_settings)
             integration_service: ProfileIntegration = services["integration"]
 
-            if cached_profile and cached_watched_sets:
+            # Try to get cached profile and watched sets
+            cached_data = await user_cache.get_profile_and_watched_sets(token, content_type)
+
+            if cached_data:
                 # Use cached profile and watched sets
-                profile = TasteProfile.model_validate_json(cached_profile)
-                watched_sets_data = json.loads(cached_watched_sets)
-                watched_tmdb = set(watched_sets_data.get("watched_tmdb", []))
-                watched_imdb = set(watched_sets_data.get("watched_imdb", []))
+                profile, watched_tmdb, watched_imdb = cached_data
                 logger.debug(f"[{token[:8]}...] Using cached profile and watched sets for {content_type}")
             else:
                 # Build profile if not cached
@@ -110,6 +100,15 @@ class CatalogService:
                 await cache_profile_and_watched_sets(
                     token, content_type, integration_service, library_items, bundle, auth_key
                 )
+                # Fetch the newly cached data
+                cached_data = await user_cache.get_profile_and_watched_sets(token, content_type)
+                if cached_data:
+                    profile, watched_tmdb, watched_imdb = cached_data
+                else:
+                    # Fallback: profile build may have failed
+                    profile = None
+                    watched_tmdb = set()
+                    watched_imdb = set()
 
             whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
 

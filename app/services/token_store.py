@@ -13,6 +13,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.security import redact_token
 from app.services.redis_service import redis_service
+from app.services.user_cache import user_cache
 
 
 class TokenStore:
@@ -175,11 +176,11 @@ class TokenStore:
 
         await redis_service.delete(key)
         # we also need to delete the cached library items, profiles and watched sets
-        await redis_service.delete(f"watchly:library_items:{token}")
-        await redis_service.delete(f"watchly:profile:{token}:movie")
-        await redis_service.delete(f"watchly:profile:{token}:series")
-        await redis_service.delete(f"watchly:watched_sets:{token}:movie")
-        await redis_service.delete(f"watchly:watched_sets:{token}:series")
+        if token:
+            try:
+                await user_cache.invalidate_all_user_data(token)
+            except Exception as e:
+                logger.warning(f"Failed to invalidate all user data for {redact_token(token)}: {e}")
 
         # Invalidate async LRU cache so future reads reflect deletion
         try:

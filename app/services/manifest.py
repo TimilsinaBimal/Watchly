@@ -1,4 +1,3 @@
-import json
 from typing import Any
 
 from fastapi import HTTPException
@@ -10,10 +9,10 @@ from app.core.settings import UserSettings
 from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
 from app.services.profile.integration import ProfileIntegration
-from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
+from app.services.user_cache import user_cache
 from app.utils.catalog import cache_profile_and_watched_sets, get_config_id
 
 
@@ -93,9 +92,8 @@ class ManifestService:
         logger.info(f"[{redact_token(token)}] Fetching library items for caching")
         library_items = await bundle.library.get_library_items(auth_key)
 
-        # Cache library items
-        library_items_key = f"watchly:library_items:{token}"
-        await redis_service.set(library_items_key, json.dumps(library_items))
+        # Cache library items using centralized cache service
+        await user_cache.set_library_items(token, library_items)
         logger.debug(f"[{redact_token(token)}] Cached library items")
 
         # Build and cache profiles for both movie and series
@@ -119,15 +117,13 @@ class ManifestService:
     ) -> dict[str, Any]:
         """Ensure library items and profiles are cached, fetching and building if needed."""
         # Try to get cached library items first
-        library_items_key = f"watchly:library_items:{token}"
-        cached_library = await redis_service.get(library_items_key)
+        library_items = await user_cache.get_library_items(token)
 
-        if cached_library:
-            library_items = json.loads(cached_library)
+        if library_items:
             logger.debug(f"[{redact_token(token)}] Using cached library items for manifest")
             return library_items
 
-        # If not cached, fetch and cache (fallback scenario)
+        # If not cached, fetch and cache
         logger.info(f"[{redact_token(token)}] Library items not cached, fetching from Stremio for manifest")
         return await self.cache_library_and_profiles(bundle, auth_key, user_settings, token)
 

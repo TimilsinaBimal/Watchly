@@ -1,9 +1,7 @@
-import json
-
 from app.core.settings import UserSettings
 from app.services.profile.integration import ProfileIntegration
-from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
+from app.services.user_cache import user_cache
 
 
 def get_catalogs_from_config(
@@ -31,21 +29,15 @@ async def cache_profile_and_watched_sets(
     bundle: StremioBundle,
     auth_key: str,
 ):
+    """
+    Build and cache profile and watched sets for a user and content type.
+    Uses the centralized UserCacheService for caching.
+    """
     profile, watched_tmdb, watched_imdb = await integration_service.build_profile_from_library(
         library_items, content_type, bundle, auth_key
     )
 
-    # Cache profile
-    if profile:
-        profile_key = f"watchly:profile:{token}:{content_type}"
-        await redis_service.set(profile_key, profile.model_dump_json())
-
-    watched_sets_key = f"watchly:watched_sets:{token}:{content_type}"
-    watched_sets_data = {
-        "watched_tmdb": list(watched_tmdb),
-        "watched_imdb": list(watched_imdb),
-    }
-    await redis_service.set(watched_sets_key, json.dumps(watched_sets_data))
+    await user_cache.set_profile_and_watched_sets(token, content_type, profile, watched_tmdb, watched_imdb)
 
 
 def get_config_id(catalog) -> str | None:
