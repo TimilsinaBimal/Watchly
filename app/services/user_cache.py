@@ -95,7 +95,7 @@ class UserCacheService:
         if cached:
             try:
                 return TasteProfile.model_validate_json(cached)
-            except Exception as e:
+            except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Failed to decode cached profile for {redact_token(token)}.../{content_type}: {e}")
                 return None
 
