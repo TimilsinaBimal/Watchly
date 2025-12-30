@@ -4,6 +4,7 @@ from typing import Any
 from loguru import logger
 
 from app.core.constants import CATALOG_KEY, LIBRARY_ITEMS_KEY, PROFILE_KEY, WATCHED_SETS_KEY
+from app.core.security import redact_token
 from app.models.taste_profile import TasteProfile
 from app.services.redis_service import redis_service
 
@@ -43,7 +44,7 @@ class UserCacheService:
             try:
                 return json.loads(cached)
             except json.JSONDecodeError as e:
-                logger.warning(f"Failed to decode cached library items for {token[:8]}...: {e}")
+                logger.warning(f"Failed to decode cached library items for {redact_token(token)}...: {e}")
                 return None
 
         return None
@@ -58,7 +59,7 @@ class UserCacheService:
         """
         key = self._library_items_key(token)
         await redis_service.set(key, json.dumps(library_items))
-        logger.debug(f"[{token[:8]}...] Cached library items")
+        logger.debug(f"[{redact_token(token)}...] Cached library items")
 
         # Invalidate all catalog caches when library items are updated
         # This ensures catalogs are regenerated with fresh library data
@@ -73,7 +74,7 @@ class UserCacheService:
         """
         key = self._library_items_key(token)
         await redis_service.delete(key)
-        logger.debug(f"[{token[:8]}...] Invalidated library items cache")
+        logger.debug(f"[{redact_token(token)}...] Invalidated library items cache")
 
     # Profile Methods
 
@@ -95,7 +96,7 @@ class UserCacheService:
             try:
                 return TasteProfile.model_validate_json(cached)
             except Exception as e:
-                logger.warning(f"Failed to decode cached profile for {token[:8]}.../{content_type}: {e}")
+                logger.warning(f"Failed to decode cached profile for {redact_token(token)}.../{content_type}: {e}")
                 return None
 
         return None
@@ -111,7 +112,7 @@ class UserCacheService:
         """
         key = self._profile_key(token, content_type)
         await redis_service.set(key, profile.model_dump_json())
-        logger.debug(f"[{token[:8]}...] Cached profile for {content_type}")
+        logger.debug(f"[{redact_token(token)}...] Cached profile for {content_type}")
 
     async def invalidate_profile(self, token: str, content_type: str) -> None:
         """
@@ -123,7 +124,7 @@ class UserCacheService:
         """
         key = self._profile_key(token, content_type)
         await redis_service.delete(key)
-        logger.debug(f"[{token[:8]}...] Invalidated profile cache for {content_type}")
+        logger.debug(f"[{redact_token(token)}...] Invalidated profile cache for {content_type}")
 
     # Watched Sets Methods
 
@@ -148,7 +149,7 @@ class UserCacheService:
                 watched_imdb = set(data.get("watched_imdb", []))
                 return (watched_tmdb, watched_imdb)
             except (json.JSONDecodeError, KeyError, TypeError) as e:
-                logger.warning(f"Failed to decode cached watched sets for {token[:8]}.../{content_type}: {e}")
+                logger.warning(f"Failed to decode cached watched sets for {redact_token(token)}.../{content_type}: {e}")
                 return None
 
         return None
@@ -171,7 +172,7 @@ class UserCacheService:
             "watched_imdb": list(watched_imdb),
         }
         await redis_service.set(key, json.dumps(data))
-        logger.debug(f"[{token[:8]}...] Cached watched sets for {content_type}")
+        logger.debug(f"[{redact_token(token)}...] Cached watched sets for {content_type}")
 
     async def invalidate_watched_sets(self, token: str, content_type: str) -> None:
         """
@@ -183,7 +184,7 @@ class UserCacheService:
         """
         key = self._watched_sets_key(token, content_type)
         await redis_service.delete(key)
-        logger.debug(f"[{token[:8]}...] Invalidated watched sets cache for {content_type}")
+        logger.debug(f"[{redact_token(token)}...] Invalidated watched sets cache for {content_type}")
 
     # Combined Methods
 
@@ -250,7 +251,7 @@ class UserCacheService:
             await self.invalidate_profile(token, content_type)
             await self.invalidate_watched_sets(token, content_type)
         await self.invalidate_all_catalogs(token)
-        logger.debug(f"[{token[:8]}...] Invalidated all user data cache")
+        logger.debug(f"[{redact_token(token)}...] Invalidated all user data cache")
 
     async def get_catalog(self, token: str, type: str, id: str) -> dict[str, Any] | None:
         """
@@ -282,7 +283,7 @@ class UserCacheService:
         """
         key = CATALOG_KEY.format(token=token, type=type, id=id)
         await redis_service.set(key, json.dumps(catalog), ttl)
-        logger.debug(f"[{token[:8]}...] Cached catalog for {type}/{id}")
+        logger.debug(f"[{redact_token(token)}...] Cached catalog for {type}/{id}")
 
     async def invalidate_catalog(self, token: str, type: str, id: str) -> None:
         """
@@ -295,7 +296,7 @@ class UserCacheService:
         """
         key = CATALOG_KEY.format(token=token, type=type, id=id)
         await redis_service.delete(key)
-        logger.debug(f"[{token[:8]}...] Invalidated catalog cache for {type}/{id}")
+        logger.debug(f"[{redact_token(token)}...] Invalidated catalog cache for {type}/{id}")
 
     async def invalidate_all_catalogs(self, token: str) -> None:
         """
@@ -310,9 +311,9 @@ class UserCacheService:
         pattern = f"watchly:catalog:{token}:*"
         deleted_count = await redis_service.delete_by_pattern(pattern)
         if deleted_count > 0:
-            logger.debug(f"[{token[:8]}...] Invalidated {deleted_count} catalog cache(s)")
+            logger.debug(f"[{redact_token(token)}...] Invalidated {deleted_count} catalog cache(s)")
         else:
-            logger.debug(f"[{token[:8]}...] No catalog caches found to invalidate")
+            logger.debug(f"[{redact_token(token)}...] No catalog caches found to invalidate")
 
 
 user_cache = UserCacheService()
