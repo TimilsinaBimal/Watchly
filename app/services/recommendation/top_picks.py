@@ -152,6 +152,7 @@ class TopPicksService:
         tasks = []
 
         for item in top_items:
+            item = item.item
             item_id = item.get("_id", "")
             if not item_id:
                 continue
