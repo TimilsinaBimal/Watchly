@@ -11,6 +11,7 @@ from app.services.recommendation.utils import (
     filter_watched_by_imdb,
     resolve_tmdb_id,
 )
+from app.services.tmdb.service import TMDBService
 
 
 class ItemBasedService:
@@ -19,7 +20,7 @@ class ItemBasedService:
     """
 
     def __init__(self, tmdb_service: Any, user_settings: Any = None):
-        self.tmdb_service = tmdb_service
+        self.tmdb_service: TMDBService = tmdb_service
         self.user_settings = user_settings
 
     async def get_recommendations_for_item(
@@ -77,7 +78,7 @@ class ItemBasedService:
         # Final filter (remove watched by IMDB ID)
         final = filter_watched_by_imdb(enriched, watched_imdb or set())
 
-        return final
+        return final[:limit]
 
     async def _fetch_candidates(self, tmdb_id: int, mtype: str) -> list[dict[str, Any]]:
         """
@@ -92,18 +93,18 @@ class ItemBasedService:
         """
         combined = {}
 
-        # Fetch 2 pages each for recommendations and similar
-        for action in ["recommendations", "similar"]:
-            method = getattr(self.tmdb_service, f"get_{action}")
-            results = await asyncio.gather(*[method(tmdb_id, mtype, page=p) for p in [1, 2]], return_exceptions=True)
+        results = await asyncio.gather(
+            *[self.tmdb_service.get_recommendations(tmdb_id, mtype, page=p) for p in [1, 2]],
+            return_exceptions=True,
+        )
 
-            for res in results:
-                if isinstance(res, Exception):
-                    logger.debug(f"Error fetching {action} for {tmdb_id}: {res}")
-                    continue
-                for item in res.get("results", []):
-                    item_id = item.get("id")
-                    if item_id:
-                        combined[item_id] = item
+        for res in results:
+            if isinstance(res, Exception):
+                logger.warning(f"Error fetching recommendations for {tmdb_id}: {res}")
+                continue
+            for item in res.get("results", []):
+                item_id = item.get("id")
+                if item_id:
+                    combined[item_id] = item
 
         return list(combined.values())

@@ -6,6 +6,8 @@ from loguru import logger
 
 from app.services.tmdb.client import TMDBClient
 
+# from app.services.profile.constants import TOP_PICKS_MIN_VOTE_COUNT, TOP_PICKS_MIN_RATING
+
 
 class TMDBService:
     """
@@ -20,7 +22,7 @@ class TMDBService:
         """Close the underlying HTTP client."""
         await self.client.close()
 
-    @alru_cache(maxsize=2000)
+    @alru_cache(maxsize=1000)
     async def find_by_imdb_id(self, imdb_id: str) -> tuple[int | None, str | None]:
         """Find TMDB ID and type by IMDB ID."""
         try:
@@ -49,23 +51,25 @@ class TMDBService:
             logger.exception(f"Error finding TMDB ID for IMDB {imdb_id}: {e}")
             return None, None
 
-    @alru_cache(maxsize=5000)
+    @alru_cache(maxsize=500)
     async def get_movie_details(self, movie_id: int) -> dict[str, Any]:
         """Get details of a specific movie with credits and keywords."""
         params = {"append_to_response": "credits,external_ids,keywords"}
         return await self.client.get(f"/movie/{movie_id}", params=params)
 
-    @alru_cache(maxsize=5000)
+    @alru_cache(maxsize=500)
     async def get_tv_details(self, tv_id: int) -> dict[str, Any]:
         """Get details of a specific TV series with credits and keywords."""
         params = {"append_to_response": "credits,external_ids,keywords"}
         return await self.client.get(f"/tv/{tv_id}", params=params)
 
+    @alru_cache(maxsize=500, ttl=86400)
     async def get_recommendations(self, tmdb_id: int, media_type: str, page: int = 1) -> dict[str, Any]:
         """Get recommendations based on TMDB ID and media type."""
         params = {"page": page}
         return await self.client.get(f"/{media_type}/{tmdb_id}/recommendations", params=params)
 
+    @alru_cache(maxsize=500, ttl=86400)
     async def get_similar(self, tmdb_id: int, media_type: str, page: int = 1) -> dict[str, Any]:
         """Get similar content based on TMDB ID and media type."""
         params = {"page": page}
@@ -84,6 +88,9 @@ class TMDBService:
         params = {"page": page, "sort_by": sort_by}
         if with_genres:
             params["with_genres"] = with_genres
+        # # always filter by vote count
+        # params["vote_count.gte"] = TOP_PICKS_MIN_VOTE_COUNT
+        # params["vote_average.gte"] = TOP_PICKS_MIN_RATING
         params.update(kwargs)
         return await self.client.get(f"/discover/{mt}", params=params)
 

@@ -14,10 +14,12 @@ from app.services.profile.constants import (
     TOP_PICKS_MIN_VOTE_COUNT,
     TOP_PICKS_RECENCY_CAP,
 )
+from app.services.profile.sampling import SmartSampler
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
 from app.services.recommendation.utils import content_type_to_mtype, filter_watched_by_imdb, resolve_tmdb_id
+from app.services.scoring import ScoringService
 from app.services.tmdb.service import TMDBService
 
 
@@ -30,6 +32,8 @@ class TopPicksService:
         self.tmdb_service: TMDBService = tmdb_service
         self.user_settings: UserSettings | None = user_settings
         self.scorer: ProfileScorer = ProfileScorer()
+        self.scoring_service = ScoringService()
+        self.smart_sampler = SmartSampler(self.scoring_service)
 
     async def get_top_picks(
         self,
@@ -142,16 +146,7 @@ class TopPicksService:
             List of candidate items
         """
         # Get top items (loved first, then liked, then added, then top watched)
-        all_items = (
-            library_items.get("loved", [])
-            + library_items.get("liked", [])
-            + library_items.get("added", [])
-            + library_items.get("watched", [])
-        )
-        typed_items = [it for it in all_items if it.get("type") == content_type]
-
-        # Limit to top 5 items (to avoid too many API calls)
-        top_items = typed_items[:5]
+        top_items = self.smart_sampler.sample_items(library_items, content_type, max_items=15)
 
         candidates = []
         tasks = []
@@ -168,7 +163,7 @@ class TopPicksService:
 
             # Fetch recommendations (1 page only)
             tasks.append(self.tmdb_service.get_recommendations(tmdb_id, mtype, page=1))
-            tasks.append(self.tmdb_service.get_similar(tmdb_id, mtype, page=1))
+            # tasks.append(self.tmdb_service.get_similar(tmdb_id, mtype, page=1))
 
         # Execute all in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -196,10 +191,11 @@ class TopPicksService:
         """
         # Get top features from profile
         top_genres = profile.get_top_genres(limit=2)
-        top_keywords = profile.get_top_keywords(limit=2)
+        top_keywords = profile.get_top_keywords(limit=3)
         top_directors = profile.get_top_directors(limit=2)
         top_cast = profile.get_top_cast(limit=2)
         top_eras = profile.get_top_eras(limit=1)
+        top_countries = profile.get_top_countries(limit=1)
 
         candidates = []
         tasks = []
@@ -209,7 +205,12 @@ class TopPicksService:
             genre_ids = [g[0] for g in top_genres]
             tasks.append(
                 self.tmdb_service.get_discover(
-                    mtype, with_genres="|".join(str(g) for g in genre_ids), page=1, sort_by="popularity.desc"
+                    mtype,
+                    with_genres="|".join(str(g) for g in genre_ids),
+                    page=1,
+                    sort_by="popularity.desc",
+                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
+                    vote_average_gte=TOP_PICKS_MIN_RATING,
                 )
             )
 
@@ -218,7 +219,12 @@ class TopPicksService:
             keyword_ids = [k[0] for k in top_keywords]
             tasks.append(
                 self.tmdb_service.get_discover(
-                    mtype, with_keywords="|".join(str(k) for k in keyword_ids), page=1, sort_by="popularity.desc"
+                    mtype,
+                    with_keywords="|".join(str(k) for k in keyword_ids),
+                    page=1,
+                    sort_by="popularity.desc",
+                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
+                    vote_average_gte=TOP_PICKS_MIN_RATING,
                 )
             )
 
@@ -226,14 +232,28 @@ class TopPicksService:
         if top_directors:
             director_id = top_directors[0][0]
             tasks.append(
-                self.tmdb_service.get_discover(mtype, with_crew=str(director_id), page=1, sort_by="popularity.desc")
+                self.tmdb_service.get_discover(
+                    mtype,
+                    with_crew=str(director_id),
+                    page=1,
+                    sort_by="popularity.desc",
+                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
+                    vote_average_gte=TOP_PICKS_MIN_RATING,
+                )
             )
 
         # Discover with cast
         if top_cast:
             cast_id = top_cast[0][0]
             tasks.append(
-                self.tmdb_service.get_discover(mtype, with_cast=str(cast_id), page=1, sort_by="popularity.desc")
+                self.tmdb_service.get_discover(
+                    mtype,
+                    with_cast=str(cast_id),
+                    page=1,
+                    sort_by="popularity.desc",
+                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
+                    vote_average_gte=TOP_PICKS_MIN_RATING,
+                )
             )
 
         # Discover with era (year range)
@@ -248,8 +268,24 @@ class TopPicksService:
                         **{f"{prefix}.gte": f"{year_start}-01-01", f"{prefix}.lte": f"{year_start+9}-12-31"},
                         page=1,
                         sort_by="popularity.desc",
+                        vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
+                        vote_average_gte=TOP_PICKS_MIN_RATING,
                     )
                 )
+
+        # Discover with countries
+        if top_countries:
+            country_codes = [c[0] for c in top_countries]
+            tasks.append(
+                self.tmdb_service.get_discover(
+                    mtype,
+                    with_origin_country="|".join(country_codes),
+                    page=1,
+                    sort_by="popularity.desc",
+                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
+                    vote_average_gte=TOP_PICKS_MIN_RATING,
+                )
+            )
 
         # Execute all in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)

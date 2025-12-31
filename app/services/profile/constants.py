@@ -40,7 +40,7 @@ RECENCY_HALF_LIFE_DAYS: Final[float] = 90.0  # 90-day half-life
 RECENCY_DECAY_RATE: Final[float] = 0.98  # Daily decay multiplier (soft decay)
 
 # Smart Sampling
-SMART_SAMPLING_MAX_ITEMS: Final[int] = 50
+SMART_SAMPLING_MAX_ITEMS: Final[int] = 30
 
 # Frequency Multiplier (optional, subtle boost for repeated patterns)
 FREQUENCY_ENABLED: Final[bool] = True
@@ -52,7 +52,7 @@ TOP_PICKS_RECENCY_CAP: Final[float] = 0.15  # Max 15% recent items (from trendin
 TOP_PICKS_GENRE_CAP: Final[float] = 0.30  # Max 30% per genre
 TOP_PICKS_CREATOR_CAP: Final[int] = 2  # Max 2 items per creator (director/actor)
 TOP_PICKS_ERA_CAP: Final[float] = 0.40  # Max 40% per era
-TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 100  # Minimum vote count for quality
+TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 300  # Minimum vote count for quality
 TOP_PICKS_MIN_RATING: Final[float] = 5.0  # Minimum weighted rating for quality
 
 # Genre whitelist limit (top N genres)

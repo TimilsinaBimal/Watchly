@@ -69,8 +69,8 @@ class SmartSampler:
             if not (it.get("_is_loved") or it.get("_is_liked") or it.get("_id") in added_item_ids)
         ]
 
-        # Always include all strong signal items
-        strong_signal_items = loved_liked_items + added_items
+        # Always include strong signal items: Loved/Liked: 45%, Added: 20%
+        strong_signal_items = loved_liked_items[: int(max_items * 0.45)] + added_items[: int(max_items * 0.20)]
         strong_signal_scored = [self.scoring_service.process_item(it) for it in strong_signal_items]
 
         # Score watched items and sort by score
