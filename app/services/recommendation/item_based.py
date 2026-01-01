@@ -78,7 +78,7 @@ class ItemBasedService:
         # Final filter (remove watched by IMDB ID)
         final = filter_watched_by_imdb(enriched, watched_imdb or set())
 
-        return final[:limit]
+        return final
 
     async def _fetch_candidates(self, tmdb_id: int, mtype: str) -> list[dict[str, Any]]:
         """

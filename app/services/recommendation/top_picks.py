@@ -129,7 +129,7 @@ class TopPicksService:
         # 10. Final filter (remove watched by IMDB ID)
         filtered = filter_watched_by_imdb(final, watched_imdb)
 
-        return filtered[:limit]
+        return filtered
 
     async def _fetch_recommendations_from_top_items(
         self, library_items: dict[str, list[dict[str, Any]]], content_type: str, mtype: str

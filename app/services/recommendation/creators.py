@@ -118,7 +118,7 @@ class CreatorsService:
         # Final filter (remove watched by IMDB ID)
         final = filter_watched_by_imdb(enriched, watched_imdb)
 
-        return final[:limit]
+        return final
 
     async def _fetch_discover_page(
         self, mtype: str, discover_params: dict[str, Any], creator_id: int, creator_type: str

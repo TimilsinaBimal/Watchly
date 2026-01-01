@@ -25,6 +25,11 @@
 - **Background Sync**: Keeps your catalogs updated automatically in the background.
 - **Performance Optimized**: Intelligent caching for fast and reliable responses.
 
+### Screenshot
+<img src="./app/static/screenshots/homepage.png" alt="Top Picks" width="800"/>
+
+
+Find more screenshots [here](./app/static/screenshots/)
 ## Installation
 
 ### Using Docker (Recommended)

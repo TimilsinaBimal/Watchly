@@ -145,7 +145,7 @@ class AllBasedService:
         final = filter_watched_by_imdb(enriched, watched_imdb)
 
         # Return top N
-        return final[:limit]
+        return final
 
     async def _fetch_recommendations_for_item(self, item_id: str, mtype: str) -> list[dict[str, Any]]:
         """
