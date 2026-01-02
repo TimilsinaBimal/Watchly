@@ -143,10 +143,6 @@ class RecommendationFiltering:
         if not gids:
             return 1.0
 
-        # Special handling for Animation (16): Heavy penalty if not in whitelist
-        if 16 in gids and 16 not in whitelist:
-            return 0.1
-
         # If it has at least one preferred genre, full score
         if gids & whitelist:
             return 1.0

@@ -1,14 +1,17 @@
 import asyncio
+from datetime import datetime
 from typing import Any
 
 from loguru import logger
 
 from app.models.taste_profile import TasteProfile
+from app.services.profile.constants import TOP_PICKS_MIN_RATING, TOP_PICKS_MIN_VOTE_COUNT
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
 from app.services.recommendation.utils import content_type_to_mtype, filter_by_genres, filter_watched_by_imdb
+from app.services.tmdb.service import TMDBService
 
 
 class ThemeBasedService:
@@ -24,7 +27,7 @@ class ThemeBasedService:
     """
 
     def __init__(self, tmdb_service: Any, user_settings: Any = None):
-        self.tmdb_service = tmdb_service
+        self.tmdb_service: TMDBService = tmdb_service
         self.user_settings = user_settings
         self.scorer = ProfileScorer()
 
@@ -77,11 +80,13 @@ class ThemeBasedService:
         # Fetch candidates
         candidates = await self._fetch_discover_candidates(content_type, params, pages_to_fetch)
 
-        # Use provided whitelist (or empty set if not provided)
-        whitelist = whitelist or set()
+        # # Use provided whitelist (or empty set if not provided)
+        # whitelist = whitelist or set()
 
-        # Initial filter (watched + genre whitelist)
-        filtered = self._filter_candidates(candidates, watched_tmdb, whitelist)
+        # # Initial filter (watched + genre whitelist)
+        # filtered = self._filter_candidates(candidates, watched_tmdb, whitelist)
+
+        filtered = candidates
 
         # If not enough candidates, fetch more pages
         if len(filtered) < limit * 2 and max(pages_to_fetch) < 15:
@@ -122,6 +127,9 @@ class ThemeBasedService:
             # Sort by score
             scored.sort(key=lambda x: x[0], reverse=True)
             filtered = [item for _, item in scored]
+
+        # limit items to limit *2
+        filtered = filtered[: limit * 2]
 
         # Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
@@ -168,16 +176,27 @@ class ThemeBasedService:
                     is_tv = content_type in ("tv", "series")
                     prefix = "first_air_date" if is_tv else "primary_release_date"
                     params[f"{prefix}.gte"] = f"{year}-01-01"
-                    params[f"{prefix}.lte"] = f"{year+9}-12-31"
+                    end_year = year + 9
+                    end_date_str = f"{end_year}-12-31"
+                    today_str = datetime.now().strftime("%Y-%m-%d")
+                    # If the calculated end date is after today, use today
+                    if end_date_str > today_str:
+                        params[f"{prefix}.lte"] = today_str
+                    else:
+                        params[f"{prefix}.lte"] = end_date_str
                 except Exception:
                     pass
             elif part == "sort-vote":
                 params["sort_by"] = "vote_average.desc"
-                params["vote_count.gte"] = 200
+                params["vote_count.gte"] = TOP_PICKS_MIN_VOTE_COUNT
 
         # Default sort
         if "sort_by" not in params:
             params["sort_by"] = "popularity.desc"
+
+        # add default vote count and vote average
+        params["vote_count.gte"] = TOP_PICKS_MIN_VOTE_COUNT
+        params["vote_average.gte"] = TOP_PICKS_MIN_RATING
 
         return params
 
