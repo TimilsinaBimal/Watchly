@@ -98,6 +98,13 @@ class ItemBasedService:
             return_exceptions=True,
         )
 
+        if not results:
+            # fetch similar
+            results = await asyncio.gather(
+                *[self.tmdb_service.get_similar(tmdb_id, mtype, page=p) for p in [1, 2]],
+                return_exceptions=True,
+            )
+
         for res in results:
             if isinstance(res, Exception):
                 logger.warning(f"Error fetching recommendations for {tmdb_id}: {res}")
