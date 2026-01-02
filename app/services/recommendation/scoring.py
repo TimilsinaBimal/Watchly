@@ -12,7 +12,7 @@ class RecommendationScoring:
     """
 
     @staticmethod
-    def weighted_rating(vote_avg: float | None, vote_count: int | None, C: float = 6.8, m: int = 300) -> float:
+    def weighted_rating(vote_avg: float | None, vote_count: int | None, C: float = 6.8, m: int = 150) -> float:
         """IMDb-style weighted rating on 0-10 scale."""
         try:
             R = float(vote_avg or 0.0)
@@ -95,9 +95,9 @@ class RecommendationScoring:
         """Apply multiplicative adjustments based on item quality and source."""
         q_mult = 1.0
         if vote_count < 50:
-            q_mult *= 0.6
+            q_mult *= 0.75
         elif vote_count < 150:
-            q_mult *= 0.85
+            q_mult *= 0.90
 
         if wr < 5.5:
             q_mult *= 0.5
