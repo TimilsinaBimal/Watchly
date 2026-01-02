@@ -1,5 +1,6 @@
 import asyncio
 from collections import defaultdict
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from loguru import logger
@@ -48,13 +49,15 @@ class TopPicksService:
         Get top picks with diversity caps.
 
         Strategy:
-        1. Fetch recommendations from top items (loved/watched/liked/added) - 1 page each
-        2. Fetch discover with profile features (keywords, cast, crew, era)
-        3. Fetch trending and popular items - 1 page each
-        4. Merge all candidates
-        5. Score with ProfileScorer
-        6. Apply diversity caps
-        7. Return balanced results
+        1. Fetch recommendations from top 8 library items - 1 page each
+        2. Fetch discover with profile features (genres, keywords, cast, crew, era, country)
+        3. Merge all candidates (deduped by TMDB ID)
+        4. Score with ProfileScorer + Quality
+        5. Apply diversity caps (relaxed: 50% genre, 50% era, 15% recent)
+        6. Limit to 2x target before enrichment (performance optimization)
+        7. Enrich metadata with full details
+        8. Apply creator cap and final filters
+        9. Return balanced results
 
         Args:
             profile: User taste profile
@@ -67,6 +70,12 @@ class TopPicksService:
         Returns:
             List of recommended items
         """
+        import time
+
+        start_time = time.time()
+
+        logger.info(f"Starting top picks generation for {content_type}, target limit={limit}")
+
         mtype = content_type_to_mtype(content_type)
         all_candidates = {}
 
@@ -82,18 +91,10 @@ class TopPicksService:
             if item.get("id"):
                 all_candidates[item["id"]] = item
 
-        # 3. Fetch trending and popular (for recent items injection - 10-15% cap)
-        trending_candidates = await self._fetch_trending_and_popular(content_type, mtype)
-        for item in trending_candidates:
-            if item.get("id"):
-                # Mark source for recency tracking
-                item["_source"] = "trending_popular"
-                all_candidates[item["id"]] = item
-
-        # 4. Filter out watched items
+        # Filter out watched items
         filtered_candidates = [item for item in all_candidates.values() if item.get("id") not in watched_tmdb]
 
-        # 5. Score all candidates with profile
+        #  Score all candidates with profile
         scored_candidates = []
         for item in filtered_candidates:
             try:
@@ -112,22 +113,37 @@ class TopPicksService:
                 logger.debug(f"Failed to score item {item.get('id')}: {e}")
                 continue
 
-        # 6. Sort by score
+        # Sort by score
         scored_candidates.sort(key=lambda x: x[0], reverse=True)
 
-        # 7. Apply diversity caps
-        result = self._apply_diversity_caps(scored_candidates, limit, mtype)
+        logger.info(f"Scored {len(scored_candidates)} candidates.")
 
-        # 8. Enrich metadata
+        # Apply diversity caps
+        result = self._apply_diversity_caps(scored_candidates, len(scored_candidates), mtype)
+        logger.info(f"After diversity caps: {len(result)} items")
+
+        # Limit before enrichment to avoid timeout (only enrich 3x what we need)
+        result = result[: limit * 3]
+        logger.info(f"After diversity caps and pre-enrichment limit: {len(result)} items")
+
+        # Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
             self.tmdb_service, result, content_type, user_settings=self.user_settings
         )
+        logger.info(f"Enriched {len(enriched)} items with full metadata")
 
-        # 9. Apply creator cap (after enrichment, we have full metadata)
-        final = self._apply_creator_cap(enriched, limit)
+        # Apply creator cap (after enrichment, we have full metadata)
+        final = self._apply_creator_cap(enriched, len(enriched))
+        logger.info(f"After creator cap: {len(final)} items")
 
-        # 10. Final filter (remove watched by IMDB ID)
+        # Final filter (remove watched by IMDB ID)
         filtered = filter_watched_by_imdb(final, watched_imdb)
+
+        elapsed_time = time.time() - start_time
+        logger.info(
+            f"✓ Top picks complete: {len(filtered)} items returned in {elapsed_time:.2f}s "
+            f"(target: {limit}, candidates: {len(all_candidates)}, scored: {len(scored_candidates)})"
+        )
 
         return filtered
 
@@ -167,12 +183,20 @@ class TopPicksService:
             # tasks.append(self.tmdb_service.get_similar(tmdb_id, mtype, page=1))
 
         # Execute all in parallel
+        logger.debug(f"Fetching recommendations from {len(tasks)} top library items")
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        failed_count = 0
         for res in results:
             if isinstance(res, Exception):
+                failed_count += 1
+                logger.debug(f"Recommendation fetch failed: {res}")
                 continue
             candidates.extend(res.get("results", []))
+
+        if failed_count > 0:
+            logger.info(f"{failed_count}/{len(tasks)} recommendation fetches failed (expected for items with no recs)")
+        logger.debug(f"Fetched {len(candidates)} candidates from top items")
 
         return candidates
 
@@ -190,13 +214,21 @@ class TopPicksService:
         Returns:
             List of candidate items
         """
+        # Get excluded genres
+        from app.services.recommendation.filtering import RecommendationFiltering
+
+        excluded_genre_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
+        without_genres = "|".join(str(g) for g in excluded_genre_ids) if excluded_genre_ids else None
+
+        logger.debug(f"Excluded genres for {content_type}: {excluded_genre_ids}")
+
         # Get top features from profile
-        top_genres = profile.get_top_genres(limit=2)
-        top_keywords = profile.get_top_keywords(limit=3)
-        top_directors = profile.get_top_directors(limit=2)
-        top_cast = profile.get_top_cast(limit=2)
-        top_eras = profile.get_top_eras(limit=1)
-        top_countries = profile.get_top_countries(limit=1)
+        top_genres = profile.get_top_genres(limit=5)
+        top_keywords = profile.get_top_keywords(limit=5)
+        top_directors = profile.get_top_directors(limit=3)
+        top_cast = profile.get_top_cast(limit=5)
+        top_eras = profile.get_top_eras(limit=2)
+        top_countries = profile.get_top_countries(limit=5)
 
         candidates = []
         tasks = []
@@ -204,64 +236,59 @@ class TopPicksService:
         # Discover with genres
         if top_genres:
             genre_ids = [g[0] for g in top_genres]
-            tasks.extend(
-                [
-                    self.tmdb_service.get_discover(
-                        mtype,
-                        with_genres="|".join(str(g) for g in genre_ids),
-                        page=page,
-                        sort_by="popularity.asc",
-                        vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
-                        vote_average_gte=TOP_PICKS_MIN_RATING,
-                    )
-                    for page in [1, 2]
-                ]
-            )
+            discover_params = {
+                "with_genres": "|".join(str(g) for g in genre_ids),
+                "page": 1,
+                "sort_by": "popularity.asc",
+                "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
+                "vote_average_gte": TOP_PICKS_MIN_RATING,
+            }
+            if without_genres:
+                discover_params["without_genres"] = without_genres
+            tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
 
         # Discover with keywords
         if top_keywords:
             keyword_ids = [k[0] for k in top_keywords]
-            tasks.extend(
-                [
-                    self.tmdb_service.get_discover(
-                        mtype,
-                        with_keywords="|".join(str(k) for k in keyword_ids),
-                        page=page,
-                        sort_by="popularity.asc",
-                        vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
-                        vote_average_gte=TOP_PICKS_MIN_RATING,
-                    )
-                    for page in range(1, 4)  # 3 pages
-                ]
-            )
+            for page in range(1, 3):  # 2 pages
+                discover_params = {
+                    "with_keywords": "|".join(str(k) for k in keyword_ids),
+                    "page": page,
+                    "sort_by": "popularity.asc",
+                    "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
+                    "vote_average_gte": TOP_PICKS_MIN_RATING,
+                }
+                if without_genres:
+                    discover_params["without_genres"] = without_genres
+                tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
 
         # Discover with directors
         if top_directors:
-            director_id = top_directors[0][0]
-            tasks.append(
-                self.tmdb_service.get_discover(
-                    mtype,
-                    with_crew=str(director_id),
-                    page=1,
-                    sort_by="popularity.asc",
-                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
-                    vote_average_gte=TOP_PICKS_MIN_RATING,
-                )
-            )
+            director_ids = [d[0] for d in top_directors]
+            discover_params = {
+                "with_crew": "|".join(str(d) for d in director_ids),
+                "page": 1,
+                "sort_by": "popularity.asc",
+                "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
+                "vote_average_gte": TOP_PICKS_MIN_RATING,
+            }
+            if without_genres:
+                discover_params["without_genres"] = without_genres
+            tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
 
         # Discover with cast
         if top_cast:
-            cast_id = top_cast[0][0]
-            tasks.append(
-                self.tmdb_service.get_discover(
-                    mtype,
-                    with_cast=str(cast_id),
-                    page=1,
-                    sort_by="popularity.asc",
-                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
-                    vote_average_gte=TOP_PICKS_MIN_RATING,
-                )
-            )
+            cast_ids = [c[0] for c in top_cast]
+            discover_params = {
+                "with_cast": "|".join(str(c) for c in cast_ids),
+                "page": 1,
+                "sort_by": "popularity.asc",
+                "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
+                "vote_average_gte": TOP_PICKS_MIN_RATING,
+            }
+            if without_genres:
+                discover_params["without_genres"] = without_genres
+            tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
 
         # Discover with era (year range)
         if top_eras:
@@ -269,38 +296,49 @@ class TopPicksService:
             year_start = self._era_to_year_start(era)
             if year_start:
                 prefix = "first_air_date" if mtype == "tv" else "primary_release_date"
-                tasks.append(
-                    self.tmdb_service.get_discover(
-                        mtype,
-                        **{f"{prefix}.gte": f"{year_start}-01-01", f"{prefix}.lte": f"{year_start+9}-12-31"},
-                        page=1,
-                        sort_by="popularity.asc",
-                        vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
-                        vote_average_gte=TOP_PICKS_MIN_RATING,
-                    )
-                )
+                discover_params = {
+                    f"{prefix}.gte": f"{year_start}-01-01",
+                    f"{prefix}.lte": (
+                        date.today().isoformat() if year_start + 9 > date.today().year else f"{year_start+9}-12-31"
+                    ),
+                    "page": 1,
+                    "sort_by": "popularity.asc",
+                    "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
+                    "vote_average_gte": TOP_PICKS_MIN_RATING,
+                }
+                if without_genres:
+                    discover_params["without_genres"] = without_genres
+                tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
 
         # Discover with countries
         if top_countries:
             country_codes = [c[0] for c in top_countries]
-            tasks.append(
-                self.tmdb_service.get_discover(
-                    mtype,
-                    with_origin_country="|".join(country_codes),
-                    page=1,
-                    sort_by="popularity.asc",
-                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
-                    vote_average_gte=TOP_PICKS_MIN_RATING,
-                )
-            )
+            discover_params = {
+                "with_origin_country": "|".join(country_codes),
+                "page": 1,
+                "sort_by": "popularity.asc",
+                "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
+                "vote_average_gte": TOP_PICKS_MIN_RATING,
+            }
+            if without_genres:
+                discover_params["without_genres"] = without_genres
+            tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
 
         # Execute all in parallel
+        logger.debug(f"Fetching {len(tasks)} discover queries with profile features")
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        failed_count = 0
         for res in results:
             if isinstance(res, Exception):
+                failed_count += 1
+                logger.warning(f"Discover query failed: {res}")
                 continue
             candidates.extend(res.get("results", []))
+
+        if failed_count > 0:
+            logger.warning(f"{failed_count}/{len(tasks)} discover queries failed")
+        logger.debug(f"Fetched {len(candidates)} candidates from discover")
 
         return candidates
 
@@ -324,13 +362,6 @@ class TopPicksService:
         except Exception as e:
             logger.debug(f"Failed to fetch trending: {e}")
 
-        # Fetch popular (top rated, 1 page)
-        # try:
-        #     popular = await self.tmdb_service.get_top_rated(mtype, page=1)
-        #     candidates.extend(popular.get("results", []))
-        # except Exception as e:
-        #     logger.debug(f"Failed to fetch popular: {e}")
-
         return candidates
 
     def _apply_diversity_caps(
@@ -340,10 +371,10 @@ class TopPicksService:
         Apply diversity caps to ensure balanced results.
 
         Caps:
-        - Recent items: max 15% (from trending/popular)
-        - Genre: max 30% per genre
-        - Creator: max 2 items per creator
-        - Era: max 40% per era
+        - Recency: max 15% from items released in last 6 months
+        - Genre: max 50% per genre
+        - Creator: max 3 items per creator
+        - Era: max 50% per era
         - Quality: minimum vote_count and rating
 
         Args:
@@ -359,9 +390,8 @@ class TopPicksService:
         era_counts = defaultdict(int)
         recent_count = 0
 
-        # # Determine recent threshold (6 months ago)
-        # recent_threshold = datetime.now() - timedelta(days=180)
-
+        # Determine recent threshold (1 year ago)
+        recent_threshold = datetime.now() - timedelta(days=365)
         max_recent = int(limit * TOP_PICKS_RECENCY_CAP)
         max_per_genre = int(limit * TOP_PICKS_GENRE_CAP)
         max_per_era = int(limit * TOP_PICKS_ERA_CAP)
@@ -384,20 +414,20 @@ class TopPicksService:
             if wr < TOP_PICKS_MIN_RATING:
                 continue
 
-            # Check recency cap (15% max from trending/popular sources)
-            # Recent items come from trending/popular, so track by source
-            is_from_trending_popular = item.get("_source") == "trending_popular"
-            if is_from_trending_popular and recent_count >= max_recent:
+            # Check recency cap (15% max from items released in last 6 months)
+            # Check release date against threshold
+            is_recent = self._is_recent_release(item, recent_threshold, mtype)
+            if is_recent and recent_count >= max_recent:
                 continue
 
-            # Check genre cap (30% max per genre)
+            # Check genre cap (50% max per genre)
             genre_ids = item.get("genre_ids", [])
             if genre_ids:
                 top_genre = genre_ids[0]  # Primary genre
                 if genre_counts[top_genre] >= max_per_genre:
                     continue
 
-            # Check era cap (40% max per era)
+            # Check era cap (50% max per era)
             year = self._extract_year(item)
             if year:
                 era = self._year_to_era(year)
@@ -408,7 +438,7 @@ class TopPicksService:
             result.append(item)
 
             # Update counts
-            if is_from_trending_popular:
+            if is_recent:
                 recent_count += 1
             if genre_ids:
                 genre_counts[top_genre] += 1
@@ -481,6 +511,20 @@ class TopPicksService:
             except (ValueError, TypeError):
                 pass
         return None
+
+    @staticmethod
+    def _is_recent_release(item: dict[str, Any], threshold: datetime, mtype: str) -> bool:
+        """Check if item was released within the threshold (e.g., last 6 months)."""
+        release_date_str = item.get("release_date") if mtype == "movie" else item.get("first_air_date")
+        if not release_date_str:
+            return False
+
+        try:
+            # Parse release date (format: YYYY-MM-DD)
+            release_date = datetime.strptime(str(release_date_str)[:10], "%Y-%m-%d")
+            return release_date >= threshold
+        except (ValueError, TypeError):
+            return False
 
     @staticmethod
     def _year_to_era(year: int) -> str:

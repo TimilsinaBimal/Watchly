@@ -4,6 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.core.constants import DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE, DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
+from app.services.profile.constants import MAXIMUM_POPULARITY_SCORE
 
 
 class RecommendationScoring:
@@ -91,31 +92,21 @@ class RecommendationScoring:
         return m_raw, alpha
 
     @staticmethod
-    def apply_quality_adjustments(score: float, wr: float, vote_count: int, is_ranked: bool, is_fresh: bool) -> float:
-        """Apply multiplicative adjustments based on item quality and source."""
-        q_mult = 1.0
-        if vote_count < 50:
-            q_mult *= 0.75
-        elif vote_count < 150:
-            q_mult *= 0.90
+    def apply_quality_adjustments(
+        score: float, wr: float, vote_count: int, popularity: float, is_ranked: bool, is_fresh: bool
+    ) -> float:
+        """Apply simple quality boost for high-confidence items only."""
+        # Simplified: only boost proven high-quality items, no penalties
+        # Trust the weighted rating formula to handle low vote counts naturally
+        if vote_count >= 1000 and wr >= 7.5 and popularity <= MAXIMUM_POPULARITY_SCORE:
+            # Proven gem: high confidence, high quality
+            return score * 1.10
+        elif vote_count >= 500 and wr >= 7.0 and popularity <= MAXIMUM_POPULARITY_SCORE:
+            # Good confidence and quality
+            return score * 1.05
 
-        if wr < 5.5:
-            q_mult *= 0.5
-        elif wr < 6.0:
-            q_mult *= 0.7
-        elif wr >= 7.0 and vote_count >= 500:
-            q_mult *= 1.10
-
-        if is_ranked:
-            if wr >= 6.5 and vote_count >= 200:
-                q_mult *= 1.25
-            elif wr >= 6.0 and vote_count >= 100:
-                q_mult *= 1.10
-
-        if is_fresh and wr >= 7.0 and vote_count >= 300:
-            q_mult *= 1.10
-
-        return score * q_mult
+        # Everything else: trust the base scoring
+        return score
 
     @staticmethod
     def calculate_final_score(
@@ -158,13 +149,14 @@ class RecommendationScoring:
         )
         quality_score = RecommendationScoring.normalize(wr)
 
-        # Apply quality adjustments
-        vote_count = item.get("vote_count", 0)
-        adjusted_profile_score = RecommendationScoring.apply_quality_adjustments(
-            profile_score, wr, vote_count, is_ranked=is_ranked, is_fresh=is_fresh
-        )
+        # Simple weighted combination: profile match is primary, quality ensures no bad items
+        base_score = (profile_score * 0.70) + (quality_score * 0.30)
 
-        # Combined score: profile similarity (with quality adjustments) + quality
-        final_score = (adjusted_profile_score * 0.6) + (quality_score * 0.4)
+        # light boost for high-confidence items (no penalties!)
+        vote_count = item.get("vote_count", 0)
+        popularity = item.get("popularity", 0)
+        final_score = RecommendationScoring.apply_quality_adjustments(
+            base_score, wr, vote_count, popularity, is_ranked=is_ranked, is_fresh=is_fresh
+        )
 
         return final_score

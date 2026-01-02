@@ -48,12 +48,14 @@ FREQUENCY_MULTIPLIER_BASE: Final[float] = 1.0
 FREQUENCY_MULTIPLIER_LOG_FACTOR: Final[float] = 0.1  # Subtle boost
 
 # Top Picks Caps (diversity constraints)
-TOP_PICKS_RECENCY_CAP: Final[float] = 0.10  # Max 10% recent items (from trending/popular)
-TOP_PICKS_GENRE_CAP: Final[float] = 0.40  # Max 40% per genre
+TOP_PICKS_RECENCY_CAP: Final[float] = 0.15  # Max 15% recent items (from trending/popular)
+TOP_PICKS_GENRE_CAP: Final[float] = 0.50  # Max 50% per genre
 TOP_PICKS_CREATOR_CAP: Final[int] = 3  # Max 3 items per creator (director/actor)
-TOP_PICKS_ERA_CAP: Final[float] = 0.40  # Max 40% per era
-TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 500  # Minimum vote count for quality
-TOP_PICKS_MIN_RATING: Final[float] = 7.5  # Minimum weighted rating for quality
+TOP_PICKS_ERA_CAP: Final[float] = 0.50  # Max 50% per era
+TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 250  # Lower noise filter
+TOP_PICKS_MIN_RATING: Final[float] = 7.2  # Minimum weighted rating
+
+MAXIMUM_POPULARITY_SCORE: Final[float] = 15
 
 # Genre whitelist limit (top N genres)
 GENRE_WHITELIST_LIMIT: Final[int] = 7
