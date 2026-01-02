@@ -13,8 +13,6 @@ from app.services.profile.constants import (
 class ProfileScorer:
     """
     Scores items against taste profile using unified function.
-
-    Design principle: Same function everywhere, no special cases.
     """
 
     @staticmethod
@@ -96,7 +94,7 @@ class ProfileScorer:
         cast_ids = []
         credits = item_metadata.get("credits", {}) or {}
         cast_list = credits.get("cast", []) or []
-        for actor in cast_list[:10]:  # Top 10 only
+        for actor in cast_list[:5]:  # Top 5 only
             if isinstance(actor, dict):
                 actor_id = actor.get("id")
                 if actor_id:

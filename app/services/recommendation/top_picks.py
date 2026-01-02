@@ -146,7 +146,7 @@ class TopPicksService:
             List of candidate items
         """
         # Get top items (loved first, then liked, then added, then top watched)
-        top_items = self.smart_sampler.sample_items(library_items, content_type, max_items=10)
+        top_items = self.smart_sampler.sample_items(library_items, content_type, max_items=15)
 
         candidates = []
         tasks = []
@@ -204,29 +204,35 @@ class TopPicksService:
         # Discover with genres
         if top_genres:
             genre_ids = [g[0] for g in top_genres]
-            tasks.append(
-                self.tmdb_service.get_discover(
-                    mtype,
-                    with_genres="|".join(str(g) for g in genre_ids),
-                    page=1,
-                    sort_by="popularity.desc",
-                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
-                    vote_average_gte=TOP_PICKS_MIN_RATING,
-                )
+            tasks.extend(
+                [
+                    self.tmdb_service.get_discover(
+                        mtype,
+                        with_genres="|".join(str(g) for g in genre_ids),
+                        page=page,
+                        sort_by="popularity.asc",
+                        vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
+                        vote_average_gte=TOP_PICKS_MIN_RATING,
+                    )
+                    for page in [1, 2]
+                ]
             )
 
         # Discover with keywords
         if top_keywords:
             keyword_ids = [k[0] for k in top_keywords]
-            tasks.append(
-                self.tmdb_service.get_discover(
-                    mtype,
-                    with_keywords="|".join(str(k) for k in keyword_ids),
-                    page=1,
-                    sort_by="popularity.desc",
-                    vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
-                    vote_average_gte=TOP_PICKS_MIN_RATING,
-                )
+            tasks.extend(
+                [
+                    self.tmdb_service.get_discover(
+                        mtype,
+                        with_keywords="|".join(str(k) for k in keyword_ids),
+                        page=page,
+                        sort_by="popularity.asc",
+                        vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
+                        vote_average_gte=TOP_PICKS_MIN_RATING,
+                    )
+                    for page in range(1, 4)  # 3 pages
+                ]
             )
 
         # Discover with directors
@@ -237,7 +243,7 @@ class TopPicksService:
                     mtype,
                     with_crew=str(director_id),
                     page=1,
-                    sort_by="popularity.desc",
+                    sort_by="popularity.asc",
                     vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
                     vote_average_gte=TOP_PICKS_MIN_RATING,
                 )
@@ -251,7 +257,7 @@ class TopPicksService:
                     mtype,
                     with_cast=str(cast_id),
                     page=1,
-                    sort_by="popularity.desc",
+                    sort_by="popularity.asc",
                     vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
                     vote_average_gte=TOP_PICKS_MIN_RATING,
                 )
@@ -268,7 +274,7 @@ class TopPicksService:
                         mtype,
                         **{f"{prefix}.gte": f"{year_start}-01-01", f"{prefix}.lte": f"{year_start+9}-12-31"},
                         page=1,
-                        sort_by="popularity.desc",
+                        sort_by="popularity.asc",
                         vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
                         vote_average_gte=TOP_PICKS_MIN_RATING,
                     )
@@ -282,7 +288,7 @@ class TopPicksService:
                     mtype,
                     with_origin_country="|".join(country_codes),
                     page=1,
-                    sort_by="popularity.desc",
+                    sort_by="popularity.asc",
                     vote_count_gte=TOP_PICKS_MIN_VOTE_COUNT,
                     vote_average_gte=TOP_PICKS_MIN_RATING,
                 )
@@ -319,11 +325,11 @@ class TopPicksService:
             logger.debug(f"Failed to fetch trending: {e}")
 
         # Fetch popular (top rated, 1 page)
-        try:
-            popular = await self.tmdb_service.get_top_rated(mtype, page=1)
-            candidates.extend(popular.get("results", []))
-        except Exception as e:
-            logger.debug(f"Failed to fetch popular: {e}")
+        # try:
+        #     popular = await self.tmdb_service.get_top_rated(mtype, page=1)
+        #     candidates.extend(popular.get("results", []))
+        # except Exception as e:
+        #     logger.debug(f"Failed to fetch popular: {e}")
 
         return candidates
 

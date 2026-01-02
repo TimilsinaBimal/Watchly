@@ -36,7 +36,7 @@ CAP_ERA: Final[float] = 25.0
 CAP_COUNTRY: Final[float] = 20.0
 
 # Recency Decay (exponential decay parameters)
-RECENCY_HALF_LIFE_DAYS: Final[float] = 90.0  # 90-day half-life
+RECENCY_HALF_LIFE_DAYS: Final[float] = 15.0  # 15-day half-life
 RECENCY_DECAY_RATE: Final[float] = 0.98  # Daily decay multiplier (soft decay)
 
 # Smart Sampling
@@ -48,12 +48,12 @@ FREQUENCY_MULTIPLIER_BASE: Final[float] = 1.0
 FREQUENCY_MULTIPLIER_LOG_FACTOR: Final[float] = 0.1  # Subtle boost
 
 # Top Picks Caps (diversity constraints)
-TOP_PICKS_RECENCY_CAP: Final[float] = 0.15  # Max 15% recent items (from trending/popular)
-TOP_PICKS_GENRE_CAP: Final[float] = 0.30  # Max 30% per genre
-TOP_PICKS_CREATOR_CAP: Final[int] = 2  # Max 2 items per creator (director/actor)
+TOP_PICKS_RECENCY_CAP: Final[float] = 0.10  # Max 10% recent items (from trending/popular)
+TOP_PICKS_GENRE_CAP: Final[float] = 0.40  # Max 40% per genre
+TOP_PICKS_CREATOR_CAP: Final[int] = 3  # Max 3 items per creator (director/actor)
 TOP_PICKS_ERA_CAP: Final[float] = 0.40  # Max 40% per era
-TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 300  # Minimum vote count for quality
-TOP_PICKS_MIN_RATING: Final[float] = 5.0  # Minimum weighted rating for quality
+TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 500  # Minimum vote count for quality
+TOP_PICKS_MIN_RATING: Final[float] = 7.5  # Minimum weighted rating for quality
 
 # Genre whitelist limit (top N genres)
-GENRE_WHITELIST_LIMIT: Final[int] = 5
+GENRE_WHITELIST_LIMIT: Final[int] = 7

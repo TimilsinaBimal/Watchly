@@ -167,7 +167,7 @@ async def pad_to_min(
 
         # Quality threshold
         va, vc = float(it.get("vote_average") or 0.0), int(it.get("vote_count") or 0)
-        if vc < 100 or va < 6.2:
+        if vc < 200 or va < 6.0:
             continue
         dedup[tid] = it
         if len(dedup) >= need * 3:
