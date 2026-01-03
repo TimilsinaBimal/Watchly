@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.services.poster_ratings.factory import PosterProvider
@@ -16,7 +18,9 @@ class CatalogConfig(BaseModel):
 class PosterRatingConfig(BaseModel):
     """Configuration for poster rating provider."""
 
-    provider: PosterProvider = Field(description="Provider name: 'rpdb' or 'top_posters'")
+    provider: Literal[PosterProvider.RPDB.value, PosterProvider.TOP_POSTERS.value] = Field(
+        description="Provider name: 'rpdb' or 'top_posters'"
+    )
     api_key: str = Field(description="API key for the provider")
 
 
