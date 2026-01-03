@@ -93,25 +93,23 @@ class ItemBasedService:
         """
         combined = {}
 
-        results = await asyncio.gather(
-            *[self.tmdb_service.get_recommendations(tmdb_id, mtype, page=p) for p in [1, 2]],
-            return_exceptions=True,
-        )
-
-        if not results:
-            # fetch similar
+        async def fetch_and_combine(fetch_method, source_name):
             results = await asyncio.gather(
-                *[self.tmdb_service.get_similar(tmdb_id, mtype, page=p) for p in [1, 2]],
+                *[fetch_method(tmdb_id, mtype, page=p) for p in [1, 2]],
                 return_exceptions=True,
             )
+            for res in results:
+                if isinstance(res, Exception):
+                    logger.warning(f"Error fetching {source_name} for {tmdb_id}: {res}")
+                    continue
+                for item in res.get("results", []):
+                    item_id = item.get("id")
+                    if item_id:
+                        combined[item_id] = item
 
-        for res in results:
-            if isinstance(res, Exception):
-                logger.warning(f"Error fetching recommendations for {tmdb_id}: {res}")
-                continue
-            for item in res.get("results", []):
-                item_id = item.get("id")
-                if item_id:
-                    combined[item_id] = item
+        await fetch_and_combine(self.tmdb_service.get_recommendations, "recommendations")
+
+        if not combined:
+            await fetch_and_combine(self.tmdb_service.get_similar, "similar")
 
         return list(combined.values())
