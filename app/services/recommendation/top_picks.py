@@ -197,6 +197,20 @@ class TopPicksService:
 
         return candidates
 
+    def _add_discover_task(self, tasks: list, mtype: str, without_genres: str | None, **kwargs: Any) -> None:
+        """
+        Add a discover task to the list of tasks with default parameters.
+        """
+        params = {
+            "sort_by": "popularity.asc",
+            "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
+            "vote_average_gte": TOP_PICKS_MIN_RATING,
+            **kwargs,
+        }
+        if without_genres:
+            params["without_genres"] = without_genres
+        tasks.append(self.tmdb_service.get_discover(mtype, **params))
+
     async def _fetch_discover_with_profile(
         self, profile: TasteProfile, content_type: str, mtype: str
     ) -> list[dict[str, Any]]:
@@ -231,59 +245,29 @@ class TopPicksService:
         # Discover with genres
         if top_genres:
             genre_ids = [g[0] for g in top_genres]
-            discover_params = {
-                "with_genres": "|".join(str(g) for g in genre_ids),
-                "page": 1,
-                "sort_by": "popularity.asc",
-                "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
-                "vote_average_gte": TOP_PICKS_MIN_RATING,
-            }
-            if without_genres:
-                discover_params["without_genres"] = without_genres
-            tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
+            self._add_discover_task(
+                tasks, mtype, without_genres, with_genres="|".join(str(g) for g in genre_ids), page=1
+            )
 
         # Discover with keywords
         if top_keywords:
             keyword_ids = [k[0] for k in top_keywords]
             for page in range(1, 3):  # 2 pages
-                discover_params = {
-                    "with_keywords": "|".join(str(k) for k in keyword_ids),
-                    "page": page,
-                    "sort_by": "popularity.asc",
-                    "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
-                    "vote_average_gte": TOP_PICKS_MIN_RATING,
-                }
-                if without_genres:
-                    discover_params["without_genres"] = without_genres
-                tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
+                self._add_discover_task(
+                    tasks, mtype, without_genres, with_keywords="|".join(str(k) for k in keyword_ids), page=page
+                )
 
         # Discover with directors
         if top_directors:
             director_ids = [d[0] for d in top_directors]
-            discover_params = {
-                "with_crew": "|".join(str(d) for d in director_ids),
-                "page": 1,
-                "sort_by": "popularity.asc",
-                "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
-                "vote_average_gte": TOP_PICKS_MIN_RATING,
-            }
-            if without_genres:
-                discover_params["without_genres"] = without_genres
-            tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
+            self._add_discover_task(
+                tasks, mtype, without_genres, with_crew="|".join(str(d) for d in director_ids), page=1
+            )
 
         # Discover with cast
         if top_cast:
             cast_ids = [c[0] for c in top_cast]
-            discover_params = {
-                "with_cast": "|".join(str(c) for c in cast_ids),
-                "page": 1,
-                "sort_by": "popularity.asc",
-                "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
-                "vote_average_gte": TOP_PICKS_MIN_RATING,
-            }
-            if without_genres:
-                discover_params["without_genres"] = without_genres
-            tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
+            self._add_discover_task(tasks, mtype, without_genres, with_cast="|".join(str(c) for c in cast_ids), page=1)
 
         # Discover with era (year range)
         if top_eras:
@@ -291,33 +275,23 @@ class TopPicksService:
             year_start = self._era_to_year_start(era)
             if year_start:
                 prefix = "first_air_date" if mtype == "tv" else "primary_release_date"
-                discover_params = {
+                lte_prefix = date.today().isoformat() if year_start + 9 > date.today().year else f"{year_start+9}-12-31"
+                params = {
                     f"{prefix}.gte": f"{year_start}-01-01",
-                    f"{prefix}.lte": (
-                        date.today().isoformat() if year_start + 9 > date.today().year else f"{year_start+9}-12-31"
-                    ),
+                    f"{prefix}.lte": lte_prefix,
                     "page": 1,
-                    "sort_by": "popularity.asc",
-                    "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
-                    "vote_average_gte": TOP_PICKS_MIN_RATING,
                 }
-                if without_genres:
-                    discover_params["without_genres"] = without_genres
-                tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
+
+                self._add_discover_task(tasks, mtype, without_genres, **params)
 
         # Discover with countries
         if top_countries:
             country_codes = [c[0] for c in top_countries]
-            discover_params = {
+            params = {
                 "with_origin_country": "|".join(country_codes),
                 "page": 1,
-                "sort_by": "popularity.asc",
-                "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
-                "vote_average_gte": TOP_PICKS_MIN_RATING,
             }
-            if without_genres:
-                discover_params["without_genres"] = without_genres
-            tasks.append(self.tmdb_service.get_discover(mtype, **discover_params))
+            self._add_discover_task(tasks, mtype, without_genres, **params)
 
         # Execute all in parallel
         logger.debug(f"Fetching {len(tasks)} discover queries with profile features")
