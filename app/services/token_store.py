@@ -249,7 +249,7 @@ class TokenStore:
                     logger.warning(
                         "Decryption failed for poster_rating api_key associated " f"with {redact_token(token)}: {e}"
                     )
-                    pass
+                    poster_rating["api_key"] = None
 
         return data
 
