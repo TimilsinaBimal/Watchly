@@ -14,6 +14,55 @@ let getCatalogs = null;
 let renderCatalogList = null;
 let resetApp = null;
 
+// LocalStorage keys
+const STORAGE_KEY = 'watchly_auth';
+const EXPIRY_DAYS = 30;
+
+// LocalStorage helper functions
+function saveAuthToStorage(authData) {
+    try {
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + EXPIRY_DAYS);
+        const data = {
+            ...authData,
+            expiresAt: expiryDate.getTime()
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.warn('Failed to save auth to localStorage:', e);
+    }
+}
+
+function getAuthFromStorage() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) return null;
+
+        const data = JSON.parse(stored);
+        const now = Date.now();
+
+        // Check if expired
+        if (data.expiresAt && data.expiresAt < now) {
+            clearAuthFromStorage();
+            return null;
+        }
+
+        return data;
+    } catch (e) {
+        console.warn('Failed to read auth from localStorage:', e);
+        clearAuthFromStorage();
+        return null;
+    }
+}
+
+function clearAuthFromStorage() {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+        console.warn('Failed to clear auth from localStorage:', e);
+    }
+}
+
 export function initializeAuth(domElements, catalogState) {
     stremioLoginBtn = domElements.stremioLoginBtn;
     stremioLoginText = domElements.stremioLoginText;
@@ -25,8 +74,129 @@ export function initializeAuth(domElements, catalogState) {
     renderCatalogList = catalogState.renderCatalogList;
     resetApp = catalogState.resetApp;
 
+    // Initialize logout buttons
+    initializeLoginStatusLogoutButton();
+    initializeUserProfileDropdown();
+
+    // Try to auto-login from localStorage
+    attemptAutoLogin();
+
     initializeStremioLogin();
     initializeEmailPasswordLogin();
+}
+
+// Initialize user profile dropdown
+function initializeUserProfileDropdown() {
+    const trigger = document.getElementById('user-profile-trigger');
+    const dropdown = document.getElementById('user-profile-dropdown');
+    const logoutBtn = document.getElementById('user-profile-logout-btn');
+    const chevron = document.getElementById('user-profile-chevron');
+
+    if (!trigger || !dropdown || !logoutBtn) return;
+
+    // Toggle dropdown on trigger click
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = !dropdown.classList.contains('hidden');
+        if (isOpen) {
+            closeDropdown();
+        } else {
+            openDropdown();
+        }
+    });
+
+    // Handle logout button click
+    logoutBtn.addEventListener('click', () => {
+        closeDropdown();
+        // Close mobile nav if open
+        const sidebar = document.getElementById('mainSidebar');
+        const backdrop = document.getElementById('mobileNavBackdrop');
+        if (sidebar && backdrop) {
+            sidebar.classList.remove('translate-x-0');
+            sidebar.classList.add('-translate-x-full');
+            backdrop.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+            const mobileToggle = document.getElementById('mobileNavToggle');
+            if (mobileToggle) {
+                mobileToggle.classList.remove('is-active');
+                mobileToggle.setAttribute('aria-expanded', 'false');
+                mobileToggle.setAttribute('aria-label', 'Open navigation');
+            }
+        }
+        if (resetApp) resetApp();
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!trigger.contains(e.target) && !dropdown.contains(e.target)) {
+            closeDropdown();
+        }
+    });
+
+    function openDropdown() {
+        dropdown.classList.remove('hidden');
+        if (chevron) {
+            chevron.style.transform = 'rotate(180deg)';
+        }
+    }
+
+    function closeDropdown() {
+        dropdown.classList.add('hidden');
+        if (chevron) {
+            chevron.style.transform = 'rotate(0deg)';
+        }
+    }
+}
+
+// Initialize logout button in login status section
+function initializeLoginStatusLogoutButton() {
+    const logoutBtn = document.getElementById('loginStatusLogoutBtn');
+    if (!logoutBtn) return;
+
+    logoutBtn.addEventListener('click', () => {
+        if (resetApp) resetApp();
+    });
+}
+
+// Attempt to auto-login from stored credentials
+async function attemptAutoLogin() {
+    // Don't auto-login if there's an auth key in URL (let URL-based login handle it)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlAuthKey = urlParams.get('key') || urlParams.get('authKey');
+    if (urlAuthKey) return;
+
+    const storedAuth = getAuthFromStorage();
+    if (!storedAuth) return;
+
+    try {
+        // If we have an auth key, use it
+        if (storedAuth.authKey) {
+            setStremioLoggedInState(storedAuth.authKey);
+            await fetchStremioIdentity(storedAuth.authKey);
+            unlockNavigation();
+            switchSection('config');
+            return;
+        }
+
+        // If we have email/password, use them
+        if (storedAuth.email && storedAuth.password) {
+            // Pre-fill inputs
+            if (emailInput) emailInput.value = storedAuth.email;
+            if (passwordInput) passwordInput.value = storedAuth.password;
+
+            // Try to login
+            await fetchStremioIdentity(null);
+            setStremioLoggedInState('');
+            unlockNavigation();
+            switchSection('config');
+            return;
+        }
+    } catch (error) {
+        // Auto-login failed, clear stored auth
+        console.warn('Auto-login failed:', error);
+        clearAuthFromStorage();
+        if (resetApp) resetApp();
+    }
 }
 
 // Stremio Login Logic
@@ -40,10 +210,13 @@ async function initializeStremioLogin() {
 
         try {
             await fetchStremioIdentity(authKey);
+            // Save auth key to localStorage for persistent login
+            saveAuthToStorage({ authKey });
             unlockNavigation();
             switchSection('config');
         } catch (error) {
             showToast(error.message, "error");
+            clearAuthFromStorage();
             if (resetApp) resetApp();
             return;
         }
@@ -180,6 +353,8 @@ function initializeEmailPasswordLogin() {
             setEmailPwdLoading(true);
             // Reuse the shared identity handler to populate settings if account exists
             await fetchStremioIdentity(null);
+            // Save email/password to localStorage for persistent login
+            saveAuthToStorage({ email, password: pwd });
             // Mark as logged-in (disables inputs and flips button to Logout)
             setStremioLoggedInState('');
             // Proceed to config
@@ -187,6 +362,7 @@ function initializeEmailPasswordLogin() {
             switchSection('config');
         } catch (e) {
             showEmailPwdError(e.message || 'Login failed');
+            clearAuthFromStorage();
             // Preserve email, clear only password
             if (passwordInput) passwordInput.value = '';
         } finally {
@@ -257,6 +433,9 @@ export function setStremioLoggedOutState() {
     const authKeyInput = document.getElementById('authKey');
     if (authKeyInput) authKeyInput.value = '';
 
+    // Clear stored auth credentials
+    clearAuthFromStorage();
+
     // Hide user profile
     hideUserProfile();
 
@@ -284,11 +463,16 @@ export function setStremioLoggedOutState() {
 
 // User Profile Functions
 function showUserProfile(email) {
-    const userProfile = document.getElementById('user-profile');
+    const userProfileWrapper = document.getElementById('user-profile-dropdown-wrapper');
     const userEmail = document.getElementById('user-email');
     const userAvatar = document.getElementById('user-avatar');
 
-    if (!userProfile || !userEmail || !userAvatar) return;
+    // Login status section elements
+    const loginStatusSection = document.getElementById('loginStatusSection');
+    const loginStatusEmail = document.getElementById('loginStatusEmail');
+    const loginStatusAvatar = document.getElementById('loginStatusAvatar');
+
+    if (!userProfileWrapper || !userEmail || !userAvatar) return;
 
     // Set email
     userEmail.textContent = email;
@@ -297,15 +481,47 @@ function showUserProfile(email) {
     const initials = getInitialsFromEmail(email);
     userAvatar.textContent = initials;
 
-    // Show the profile
-    userProfile.classList.remove('hidden');
+    // Show the profile dropdown wrapper
+    userProfileWrapper.classList.remove('hidden');
+
+    // Show login status section and update it
+    if (loginStatusSection && loginStatusEmail && loginStatusAvatar) {
+        loginStatusEmail.textContent = email;
+        loginStatusAvatar.textContent = initials;
+        loginStatusSection.classList.remove('hidden');
+    }
+
+    // Hide the login form when logged in
+    const loginFormCard = document.getElementById('loginFormCard');
+    if (loginFormCard) loginFormCard.classList.add('hidden');
 }
 
 function hideUserProfile() {
-    const userProfile = document.getElementById('user-profile');
-    if (userProfile) {
-        userProfile.classList.add('hidden');
+    const userProfileWrapper = document.getElementById('user-profile-dropdown-wrapper');
+    const dropdown = document.getElementById('user-profile-dropdown');
+    const loginStatusSection = document.getElementById('loginStatusSection');
+
+    if (userProfileWrapper) {
+        userProfileWrapper.classList.add('hidden');
     }
+
+    // Close dropdown if open
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+        const chevron = document.getElementById('user-profile-chevron');
+        if (chevron) {
+            chevron.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    // Hide login status section
+    if (loginStatusSection) {
+        loginStatusSection.classList.add('hidden');
+    }
+
+    // Show the login form when logged out
+    const loginFormCard = document.getElementById('loginFormCard');
+    if (loginFormCard) loginFormCard.classList.remove('hidden');
 }
 
 function getInitialsFromEmail(email) {

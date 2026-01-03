@@ -51,43 +51,44 @@ async function initializeFormSubmission() {
 
         const catalogsToSend = [];
         const catalogs = getCatalogs ? getCatalogs() : [];
-        document.querySelectorAll(".catalog-item .switch input[type='checkbox']").forEach(toggle => {
-            const catalogId = toggle.dataset.catalogId;
-            const enabled = toggle.checked;
-            const originalCatalog = catalogs.find(c => c.id === catalogId);
-            if (originalCatalog) {
-                // Get enabled_movie and enabled_series from toggle buttons
-                const activeBtn = document.querySelector(`.catalog-type-btn[data-catalog-id="${catalogId}"].bg-white`);
-                let enabledMovie = true;
-                let enabledSeries = true;
+        // Get enabled state from catalog objects (updated by visibility button)
+        catalogs.forEach(originalCatalog => {
+            const catalogId = originalCatalog.id;
+            const enabled = originalCatalog.enabled !== false;
 
-                if (activeBtn) {
-                    const mode = activeBtn.dataset.mode;
-                    if (mode === 'movie') {
-                        enabledMovie = true;
-                        enabledSeries = false;
-                    } else if (mode === 'series') {
-                        enabledMovie = false;
-                        enabledSeries = true;
-                    } else {
-                        // 'both' or default
-                        enabledMovie = true;
-                        enabledSeries = true;
-                    }
+            // Get enabled_movie and enabled_series from toggle buttons
+            const activeBtn = document.querySelector(`.catalog-type-btn[data-catalog-id="${catalogId}"].bg-white`);
+            let enabledMovie = true;
+            let enabledSeries = true;
+
+            if (activeBtn) {
+                const mode = activeBtn.dataset.mode;
+                if (mode === 'movie') {
+                    enabledMovie = true;
+                    enabledSeries = false;
+                } else if (mode === 'series') {
+                    enabledMovie = false;
+                    enabledSeries = true;
                 } else {
-                    // Fallback to catalog state
-                    enabledMovie = originalCatalog.enabledMovie !== false;
-                    enabledSeries = originalCatalog.enabledSeries !== false;
+                    // 'both' or default
+                    enabledMovie = true;
+                    enabledSeries = true;
                 }
-
-                catalogsToSend.push({
-                    id: catalogId,
-                    name: originalCatalog.name,
-                    enabled: enabled,
-                    enabled_movie: enabledMovie,
-                    enabled_series: enabledSeries,
-                });
+            } else {
+                // Fallback to catalog state
+                enabledMovie = originalCatalog.enabledMovie !== false;
+                enabledSeries = originalCatalog.enabledSeries !== false;
             }
+
+            catalogsToSend.push({
+                id: catalogId,
+                name: originalCatalog.name,
+                enabled: enabled,
+                enabled_movie: enabledMovie,
+                enabled_series: enabledSeries,
+                display_at_home: originalCatalog.display_at_home !== false, // Default to true if not set
+                shuffle: originalCatalog.shuffle === true, // Default to false if not set
+            });
         });
 
         // Validation

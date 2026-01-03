@@ -29,7 +29,7 @@ class DynamicCatalogService:
     def normalize_type(type_):
         return "series" if type_ == "tv" else type_
 
-    def build_catalog_entry(self, item, label, config_id):
+    def build_catalog_entry(self, item, label, config_id, display_at_home: bool = True):
         item_id = item.get("_id", "")
         # Use watchly.{config_id}.{item_id} format for better organization
         if config_id in ["watchly.item", "watchly.loved", "watchly.watched"]:
@@ -42,11 +42,16 @@ class DynamicCatalogService:
 
         name = item.get("name")
 
+        extra = []
+        if not display_at_home:
+            # only display in discover section
+            extra = [{"name": "genre", "isRequired": True, "options": ["All"], "optionsLimit": 1}]
+
         return {
             "type": self.normalize_type(item.get("type")),
             "id": catalog_id,
             "name": f"{label} {name}",
-            "extra": [],
+            "extra": extra,
         }
 
     def _get_smart_scored_items(self, library_items: dict, content_type: str, max_items: int = 50) -> list:
@@ -111,6 +116,7 @@ class DynamicCatalogService:
         user_settings: UserSettings | None = None,
         enabled_movie: bool = True,
         enabled_series: bool = True,
+        display_at_home: bool = True,
     ) -> list[dict]:
         """Build thematic catalogs by profiling items using smart sampling."""
         # 1. Prepare Scored History using smart sampling (loved/liked + top watched by score)
@@ -150,12 +156,17 @@ class DynamicCatalogService:
         # 4. Assembly with error handling
         catalogs = []
 
+        extra = []
+        if not display_at_home:
+            # only display in discover section
+            extra = [{"name": "genre", "isRequired": True, "options": ["All"], "optionsLimit": 1}]
+
         for result in results:
             if isinstance(result, Exception):
                 continue
             media_type, rows = result
             for row in rows:
-                catalogs.append({"type": media_type, "id": row.id, "name": row.title, "extra": []})
+                catalogs.append({"type": media_type, "id": row.id, "name": row.title, "extra": extra})
 
         return catalogs
 
@@ -173,8 +184,9 @@ class DynamicCatalogService:
             # Filter theme catalogs by enabled_movie/enabled_series
             enabled_movie = getattr(theme_cfg, "enabled_movie", True)
             enabled_series = getattr(theme_cfg, "enabled_series", True)
+            display_at_home = getattr(theme_cfg, "display_at_home", True)
             theme_catalogs = await self.get_theme_based_catalogs(
-                library_items, user_settings, enabled_movie, enabled_series
+                library_items, user_settings, enabled_movie, enabled_series, display_at_home
             )
             catalogs.extend(theme_catalogs)
 
@@ -267,7 +279,10 @@ class DynamicCatalogService:
             last_loved = random.choice(loved[:3]) if loved else None
             if last_loved:
                 label = loved_config.name if loved_config.name else "More like"
-                catalogs.append(self.build_catalog_entry(last_loved, label, "watchly.loved"))
+                loved_config_display_at_home = getattr(loved_config, "display_at_home", True)
+                catalogs.append(
+                    self.build_catalog_entry(last_loved, label, "watchly.loved", loved_config_display_at_home)
+                )
 
         # 2. Because you watched <Watched Item>
         if watched_config and watched_config.enabled and is_type_enabled(watched_config, content_type):
@@ -283,4 +298,7 @@ class DynamicCatalogService:
 
             if last_watched:
                 label = watched_config.name if watched_config.name else "Because you watched"
-                catalogs.append(self.build_catalog_entry(last_watched, label, "watchly.watched"))
+                watched_config_display_at_home = getattr(watched_config, "display_at_home", True)
+                catalogs.append(
+                    self.build_catalog_entry(last_watched, label, "watchly.watched", watched_config_display_at_home)
+                )

@@ -26,24 +26,44 @@
         </div>
     </div>
 
-    <nav
-        class="flex-grow px-4 md:px-6 py-4 space-y-1 md:overflow-visible flex flex-col md:block whitespace-normal gap-2">
-
-        <!-- User Profile Section (Hidden by default, shown after login) -->
-        <div id="user-profile" class="hidden mb-6 p-4 bg-neutral-800/50 border border-slate-700/50 rounded-xl w-full">
-            <div class="flex items-center gap-3">
+    <!-- User Profile Dropdown (Hidden by default, shown after login) -->
+    <div id="user-profile-dropdown-wrapper" class="hidden px-4 md:px-6 pt-4 pb-2">
+        <div class="relative">
+            <button id="user-profile-trigger" type="button"
+                class="w-full flex items-center gap-3 p-3 bg-neutral-800/50 border border-slate-700/50 rounded-xl hover:bg-neutral-800/70 transition-all group">
                 <div class="w-10 h-10 rounded-full bg-white text-black ring-1 ring-white/10 flex items-center justify-center font-bold text-sm flex-shrink-0"
                     id="user-avatar">
                     <!-- Avatar initials will be generated from email -->
                 </div>
-                <div class="flex-grow min-w-0">
+                <div class="flex-grow min-w-0 text-left">
                     <div class="text-xs text-slate-500 mb-0.5">Logged in as</div>
                     <div class="text-sm text-white font-medium truncate" id="user-email">
                         <!-- Email will be inserted here -->
                     </div>
                 </div>
+                <svg class="w-4 h-4 text-slate-400 group-hover:text-white transition-colors flex-shrink-0" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24" id="user-profile-chevron" style="transition: transform 200ms ease;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div id="user-profile-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-neutral-900 border border-slate-700/50 rounded-xl shadow-xl overflow-hidden z-50">
+                <button type="button" id="user-profile-logout-btn"
+                    class="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors text-left">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                        </path>
+                    </svg>
+                    <span>Logout</span>
+                </button>
             </div>
         </div>
+    </div>
+
+    <nav
+        class="flex-grow px-4 md:px-6 py-4 space-y-1 md:overflow-visible flex flex-col md:block whitespace-normal gap-2">
 
         <button id="nav-welcome"
             class="nav-item group w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all text-slate-400 hover:text-white hover:bg-neutral-800/50 active text-left">

@@ -7,6 +7,8 @@ class CatalogConfig(BaseModel):
     enabled: bool = True
     enabled_movie: bool = Field(default=True, description="Enable movie catalog for this configuration")
     enabled_series: bool = Field(default=True, description="Enable series catalog for this configuration")
+    display_at_home: bool = Field(default=True, description="Display this catalog on home page")
+    shuffle: bool = Field(default=False, description="Randomize order of items in this catalog")
 
 
 class UserSettings(BaseModel):
@@ -27,6 +29,8 @@ def get_default_settings() -> UserSettings:
                 enabled=True,
                 enabled_movie=True,
                 enabled_series=True,
+                display_at_home=True,
+                shuffle=False,
             ),
             CatalogConfig(
                 id="watchly.loved",
@@ -34,6 +38,8 @@ def get_default_settings() -> UserSettings:
                 enabled=True,
                 enabled_movie=True,
                 enabled_series=True,
+                display_at_home=True,
+                shuffle=False,
             ),
             CatalogConfig(
                 id="watchly.watched",
@@ -41,6 +47,8 @@ def get_default_settings() -> UserSettings:
                 enabled=True,
                 enabled_movie=True,
                 enabled_series=True,
+                display_at_home=True,
+                shuffle=False,
             ),
             CatalogConfig(
                 id="watchly.theme",
@@ -48,6 +56,8 @@ def get_default_settings() -> UserSettings:
                 enabled=True,
                 enabled_movie=True,
                 enabled_series=True,
+                display_at_home=True,
+                shuffle=False,
             ),
             CatalogConfig(
                 id="watchly.creators",
@@ -55,6 +65,8 @@ def get_default_settings() -> UserSettings:
                 enabled=False,
                 enabled_movie=True,
                 enabled_series=True,
+                display_at_home=True,
+                shuffle=False,
             ),
             CatalogConfig(
                 id="watchly.all.loved",
@@ -62,6 +74,8 @@ def get_default_settings() -> UserSettings:
                 enabled=False,
                 enabled_movie=True,
                 enabled_series=True,
+                display_at_home=True,
+                shuffle=False,
             ),
             CatalogConfig(
                 id="watchly.liked.all",
@@ -69,6 +83,8 @@ def get_default_settings() -> UserSettings:
                 enabled=False,
                 enabled_movie=True,
                 enabled_series=True,
+                display_at_home=True,
+                shuffle=False,
             ),
         ],
     )

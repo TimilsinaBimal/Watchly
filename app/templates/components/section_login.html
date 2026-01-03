@@ -4,7 +4,35 @@
         <h2 class="text-3xl font-bold text-white mb-2">Connect to Stremio</h2>
         <p class="text-slate-400">Log in to your Stremio account to enable Watchly to read your library.</p>
     </div>
-    <div class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
+
+    <!-- Logged In Status (Hidden by default, shown after login) -->
+    <div id="loginStatusSection" class="hidden bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3 flex-grow min-w-0">
+                <div class="w-10 h-10 rounded-full bg-white text-black ring-1 ring-white/10 flex items-center justify-center font-bold text-sm flex-shrink-0"
+                    id="loginStatusAvatar">
+                    <!-- Avatar initials will be generated from email -->
+                </div>
+                <div class="flex-grow min-w-0">
+                    <div class="text-xs text-slate-500 mb-0.5">Logged in as</div>
+                    <div class="text-sm text-white font-medium truncate" id="loginStatusEmail">
+                        <!-- Email will be inserted here -->
+                    </div>
+                </div>
+            </div>
+            <button type="button" id="loginStatusLogoutBtn"
+                class="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-xl transition border border-red-700 shadow-lg shadow-red-900/20 flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                    </path>
+                </svg>
+                <span>Logout</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="loginFormCard" class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
         <button type="button" id="stremioLoginBtn"
             class="w-full bg-stremio text-white font-medium py-4 rounded-xl transition flex items-center justify-center gap-3 border border-stremio-border shadow-lg shadow-stremio/20 group hover:bg-white hover:text-black hover:border-white/10">
             <img src="https://stremio.com/website/stremio-logo-small.png"

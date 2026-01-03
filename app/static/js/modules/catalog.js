@@ -62,31 +62,69 @@ function createCatalogItem(cat, index) {
     let activeMode = 'both';
     if (enabledMovie && !enabledSeries) activeMode = 'movie';
     else if (!enabledMovie && enabledSeries) activeMode = 'series';
+    // Initialize display_at_home and shuffle if not present (for backward compatibility)
+    if (cat.display_at_home === undefined) cat.display_at_home = true;
+    if (cat.shuffle === undefined) cat.shuffle = false;
+
     item.innerHTML = `
-        <div class="flex items-start gap-3 sm:items-center sm:gap-4">
-            <div class="sort-buttons flex flex-col gap-1 flex-shrink-0 mt-0.5 sm:mt-0">
-                <button type="button" class="action-btn move-up p-1 text-slate-500 hover:text-white hover:bg-white/10 rounded transition disabled:opacity-30 disabled:hover:bg-transparent" title="Move up" ${index === 0 ? 'disabled' : ''}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+        <div class="flex gap-2 sm:gap-3">
+            <div class="sort-buttons flex flex-col gap-1.5 flex-shrink-0">
+                <button type="button" class="action-btn move-up p-2 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 hover:border-blue-400/60 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-blue-500/20 disabled:cursor-not-allowed shadow-sm hover:shadow-md hover:shadow-blue-500/20" title="Move up" ${index === 0 ? 'disabled' : ''}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
                 </button>
-                <button type="button" class="action-btn move-down p-1 text-slate-500 hover:text-white hover:bg-white/10 rounded transition disabled:opacity-30 disabled:hover:bg-transparent" title="Move down" ${index === catalogs.length - 1 ? 'disabled' : ''}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-                </button>
-            </div>
-            <div class="flex-grow min-w-0 space-y-1 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
-                <div class="name-container relative flex items-center min-w-0 h-auto sm:h-9 flex-grow">
-                    <span class="catalog-name-text font-medium text-white break-words leading-snug sm:truncate cursor-default w-full">${escapeHtml(cat.name)}</span>
-                    <input type="text" class="catalog-name-input hidden absolute inset-0 w-full bg-neutral-950 border border-white/20 rounded-lg px-3 text-white outline-none text-sm font-medium shadow-sm font-mono focus:ring-2 focus:ring-white/20 focus:border-white/30" value="${escapeHtml(cat.name)}">
-                    ${isRenamable ? `<button type="button" class="action-btn rename-btn ml-2 p-1.5 flex-shrink-0 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100" title="Rename"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}
+                <div class="h-9 flex items-center">
+                    <button type="button" class="action-btn move-down p-2 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 hover:border-blue-400/60 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-blue-500/20 disabled:cursor-not-allowed shadow-sm hover:shadow-md hover:shadow-blue-500/20" title="Move down" ${index === catalogs.length - 1 ? 'disabled' : ''}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
                 </div>
-                <div class="catalog-desc sm:hidden text-xs text-slate-500 leading-relaxed">${escapeHtml(cat.description || '')}</div>
             </div>
-            <label class="switch relative inline-flex items-center cursor-pointer flex-shrink-0 ml-auto sm:ml-0">
-                <input type="checkbox" class="sr-only peer" ${cat.enabled ? 'checked' : ''} data-catalog-id="${cat.id}">
-                <div class="w-11 h-6 bg-neutral-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-white/20 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-white peer-checked:after:bg-black peer-checked:after:border-black"></div>
-            </label>
-        </div>
-        <div class="catalog-desc hidden sm:block text-xs text-slate-500 mt-2 ml-8 pl-1">${escapeHtml(cat.description || '')}</div>
-        <div class="mt-3 ml-8">
+            <div class="flex-grow min-w-0">
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <div class="name-container relative flex items-center min-w-0 h-9 flex-grow">
+                        <span class="catalog-name-text font-medium text-white break-words leading-snug sm:truncate cursor-default w-full">${escapeHtml(cat.name)}</span>
+                        <div class="catalog-name-input-wrapper hidden absolute inset-0 w-full bg-neutral-950 border border-white/20 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-white/20 focus-within:border-white/30">
+                            <input type="text" class="catalog-name-input w-full h-full bg-transparent pl-3 pr-20 text-white outline-none text-sm font-medium font-mono" value="${escapeHtml(cat.name)}">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        ${isRenamable ? `<button type="button" class="catalog-action-btn rename-btn p-2 rounded-lg transition-all text-amber-400 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 hover:border-amber-400/60 shadow-sm hover:shadow-md hover:shadow-amber-500/10" title="Rename" data-catalog-id="${cat.id}" data-action="rename">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </button>` : ''}
+                        <button type="button" class="catalog-action-btn home-btn p-2 rounded-lg transition-all ${cat.display_at_home ? 'text-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 hover:border-emerald-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-emerald-500/10" title="${cat.display_at_home ? 'Hide from Home Page - This catalog will not appear on your Stremio home screen' : 'Show on Home Page - Display this catalog on your Stremio home screen'}" data-catalog-id="${cat.id}" data-action="home">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                        </button>
+                        <button type="button" class="catalog-action-btn shuffle-btn p-2 rounded-lg transition-all ${cat.shuffle ? 'text-purple-400 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 hover:border-purple-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-purple-500/10" title="${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}" data-catalog-id="${cat.id}" data-action="shuffle">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
+                            </svg>
+                        </button>
+                        <button type="button" class="catalog-action-btn visibility-btn p-2 rounded-lg transition-all ${cat.enabled ? 'text-cyan-400 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 hover:border-cyan-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-cyan-500/10" title="${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}" data-catalog-id="${cat.id}" data-action="visibility">
+                            ${cat.enabled ? `
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            ` : `
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+                                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
+                                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
+                                    <line x1="2" x2="22" y1="2" y2="22"></line>
+                                </svg>
+                            `}
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 sm:gap-3 mt-2">
+                    <div class="catalog-desc text-xs text-slate-300 flex-grow">${escapeHtml(cat.description || '')}</div>
+                </div>
+                <div class="mt-3">
             <div class="inline-flex items-center bg-neutral-950 border border-white/10 rounded-lg p-1" role="group" aria-label="Content type selection">
                 <button type="button" class="catalog-type-btn px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeMode === 'both' ? 'bg-white text-black shadow-sm hover:text-black' : 'text-slate-400 hover:text-white'}" data-catalog-id="${cat.id}" data-mode="both">
                     Both
@@ -103,12 +141,38 @@ function createCatalogItem(cat, index) {
 
     if (isRenamable) setupRenameLogic(item, cat);
 
-    const switchInput = item.querySelector('.switch input');
-    switchInput.addEventListener('change', (e) => {
-        cat.enabled = e.target.checked;
-        if (cat.enabled) item.classList.remove('opacity-50');
-        else item.classList.add('opacity-50');
-    });
+    // Handle rename button (now always visible, triggers edit mode)
+    const renameBtn = item.querySelector('.rename-btn');
+    if (renameBtn) {
+        renameBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const nameContainer = item.querySelector('.name-container');
+            const nameText = item.querySelector('.catalog-name-text');
+            const nameInputWrapper = item.querySelector('.catalog-name-input-wrapper');
+            const nameInput = item.querySelector('.catalog-name-input');
+            const editActions = item.querySelector('.edit-actions');
+            if (nameContainer && nameText && nameInputWrapper && nameInput && editActions) {
+                nameContainer.classList.add('editing');
+                nameText.classList.add('hidden');
+                nameInputWrapper.classList.remove('hidden');
+                editActions.classList.remove('hidden');
+                editActions.classList.add('flex');
+                nameInput.focus();
+            }
+        });
+    }
+
+    // Handle visibility button toggle (replaces old switch)
+    const visibilityBtn = item.querySelector('.visibility-btn');
+    if (visibilityBtn) {
+        visibilityBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            cat.enabled = !cat.enabled;
+            updateVisibilityButton(visibilityBtn, cat.enabled);
+            if (cat.enabled) item.classList.remove('opacity-50');
+            else item.classList.add('opacity-50');
+        });
+    }
 
     // Handle movie/series toggle button changes
     const allTypeButtons = item.querySelectorAll(`.catalog-type-btn[data-catalog-id="${cat.id}"]`);
@@ -142,34 +206,98 @@ function createCatalogItem(cat, index) {
     item.querySelector('.move-up').addEventListener('click', (e) => { e.preventDefault(); moveCatalogUp(index); });
     item.querySelector('.move-down').addEventListener('click', (e) => { e.preventDefault(); moveCatalogDown(index); });
 
+    // Handle home button toggle
+    const homeBtn = item.querySelector('.home-btn');
+    if (homeBtn) {
+        homeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            cat.display_at_home = !cat.display_at_home;
+            updateHomeButton(homeBtn, cat.display_at_home);
+        });
+    }
+
+    // Handle shuffle button toggle
+    const shuffleBtn = item.querySelector('.shuffle-btn');
+    if (shuffleBtn) {
+        shuffleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            cat.shuffle = !cat.shuffle;
+            updateShuffleButton(shuffleBtn, cat.shuffle);
+        });
+    }
+
     return item;
+}
+
+function updateHomeButton(btn, isActive) {
+    if (isActive) {
+        btn.classList.remove('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
+        btn.classList.add('text-emerald-400', 'bg-emerald-500/20', 'border-emerald-500/40', 'hover:bg-emerald-500/30', 'hover:border-emerald-400/60');
+        btn.setAttribute('title', 'Hide from Home Page - This catalog will not appear on your Stremio home screen');
+    } else {
+        btn.classList.remove('text-emerald-400', 'bg-emerald-500/20', 'border-emerald-500/40', 'hover:bg-emerald-500/30', 'hover:border-emerald-400/60');
+        btn.classList.add('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
+        btn.setAttribute('title', 'Show on Home Page - Display this catalog on your Stremio home screen');
+    }
+}
+
+function updateShuffleButton(btn, isActive) {
+    if (isActive) {
+        btn.classList.remove('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
+        btn.classList.add('text-purple-400', 'bg-purple-500/20', 'border-purple-500/40', 'hover:bg-purple-500/30', 'hover:border-purple-400/60');
+        btn.setAttribute('title', 'Disable Random Order - Show items in recommended order');
+    } else {
+        btn.classList.remove('text-purple-400', 'bg-purple-500/20', 'border-purple-500/40', 'hover:bg-purple-500/30', 'hover:border-purple-400/60');
+        btn.classList.add('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
+        btn.setAttribute('title', 'Enable Random Order - Shuffle items in this catalog randomly');
+    }
+}
+
+function updateVisibilityButton(btn, isActive) {
+    const isEnabled = isActive;
+    if (isEnabled) {
+        btn.classList.remove('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
+        btn.classList.add('text-cyan-400', 'bg-cyan-500/20', 'border-cyan-500/40', 'hover:bg-cyan-500/30', 'hover:border-cyan-400/60');
+        btn.setAttribute('title', 'Disable Catalog - Hide this catalog from Stremio');
+        btn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        `;
+    } else {
+        btn.classList.remove('text-cyan-400', 'bg-cyan-500/20', 'border-cyan-500/40', 'hover:bg-cyan-500/30', 'hover:border-cyan-400/60');
+        btn.classList.add('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
+        btn.setAttribute('title', 'Enable Catalog - Show this catalog in Stremio');
+        btn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
+                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
+                <line x1="2" x2="22" y1="2" y2="22"></line>
+            </svg>
+        `;
+    }
 }
 
 function setupRenameLogic(item, cat) {
     const nameContainer = item.querySelector('.name-container');
     const nameText = item.querySelector('.catalog-name-text');
+    const nameInputWrapper = item.querySelector('.catalog-name-input-wrapper');
     const nameInput = item.querySelector('.catalog-name-input');
     const renameBtn = item.querySelector('.rename-btn');
 
     const editActions = document.createElement('div');
-    editActions.className = 'edit-actions hidden absolute right-1 top-1/2 -translate-y-1/2 flex gap-1 bg-neutral-900 pl-2 z-10';
+    editActions.className = 'edit-actions hidden absolute right-1 top-0 bottom-0 flex items-center gap-1.5 pr-1 z-10';
     editActions.innerHTML = `
-        <button type="button" class="edit-btn save p-1 text-green-500 hover:bg-green-500/10 rounded transition" title="Save"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
-        <button type="button" class="edit-btn cancel p-1 text-red-500 hover:bg-red-500/10 rounded transition" title="Cancel"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button type="button" class="edit-btn save p-1.5 h-full flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded transition" title="Save"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+        <button type="button" class="edit-btn cancel p-1.5 h-full flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition" title="Cancel"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     `;
-    nameContainer.appendChild(editActions);
+    nameInputWrapper.appendChild(editActions);
 
     const saveBtn = editActions.querySelector('.save');
     const cancelBtn = editActions.querySelector('.cancel');
 
-    function enableEdit() {
-        nameContainer.classList.add('editing');
-        nameText.classList.add('hidden');
-        nameInput.classList.remove('hidden');
-        editActions.classList.remove('hidden'); editActions.classList.add('flex');
-        if (renameBtn) renameBtn.classList.add('invisible');
-        nameInput.focus();
-    }
     function saveEdit() {
         const newName = nameInput.value.trim();
         if (newName) { cat.name = newName; nameText.textContent = newName; nameInput.value = newName; }
@@ -179,12 +307,11 @@ function setupRenameLogic(item, cat) {
     function cancelEdit() { nameInput.value = cat.name; closeEdit(); }
     function closeEdit() {
         nameContainer.classList.remove('editing');
-        nameInput.classList.add('hidden');
+        nameInputWrapper.classList.add('hidden');
         editActions.classList.add('hidden'); editActions.classList.remove('flex');
         nameText.classList.remove('hidden');
-        if (renameBtn) renameBtn.classList.remove('invisible');
     }
-    if (renameBtn) renameBtn.addEventListener('click', (e) => { e.preventDefault(); enableEdit(); });
+
     saveBtn.addEventListener('click', (e) => { e.preventDefault(); saveEdit(); });
     cancelBtn.addEventListener('click', (e) => { e.preventDefault(); cancelEdit(); });
     nameInput.addEventListener('keydown', (e) => {
