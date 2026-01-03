@@ -14,7 +14,7 @@ class RPDBService:
             response = await client.get(url)
             return response.status_code == 200
 
-    def get_poster(
+    def get_poster_url(
         self,
         api_key: str,
         provider: Literal["imdb", "tmdb", "tvdb"],

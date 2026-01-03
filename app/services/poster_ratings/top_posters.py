@@ -16,7 +16,7 @@ class TopPostersService:
             json_data = response.json()
             return json_data.get("valid", False)
 
-    def get_poster(self, api_key: str, provider: Literal["imdb", "tmdb", "tvdb"], item_id: str, **kwargs) -> str | None:
+    def get_poster_url(self, api_key: str, provider: Literal["imdb", "tmdb", "tvdb"], item_id: str, **kwargs) -> str:
         url = f"{self.base_url}/{api_key}/{provider}/poster-default/{item_id}.jpg"
 
         poster_url = f"{url}?{urlencode(kwargs)}"

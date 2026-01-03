@@ -105,7 +105,6 @@ async function initializeFormSubmission() {
             if (window.validatePosterRatingApiKey) {
                 const isValid = await window.validatePosterRatingApiKey();
                 if (!isValid) {
-                    showError("generalError", "Please enter a valid API key for the selected provider.");
                     return;
                 }
             }

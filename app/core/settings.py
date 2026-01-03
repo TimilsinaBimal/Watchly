@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.services.poster_ratings.factory import PosterProvider
+
 
 class CatalogConfig(BaseModel):
     id: str  # "watchly.rec", "watchly.theme", "watchly.item"
@@ -14,7 +16,7 @@ class CatalogConfig(BaseModel):
 class PosterRatingConfig(BaseModel):
     """Configuration for poster rating provider."""
 
-    provider: str = Field(description="Provider name: 'rpdb' or 'top_posters'")
+    provider: PosterProvider = Field(description="Provider name: 'rpdb' or 'top_posters'")
     api_key: str = Field(description="API key for the provider")
 
 

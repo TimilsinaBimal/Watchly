@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.services.poster_ratings.factory import PosterProvider, poster_ratings_factory
@@ -40,4 +41,5 @@ async def validate_api_key(payload: ValidateApiKeyRequest) -> ValidateApiKeyResp
         else:
             return ValidateApiKeyResponse(valid=False, message="Invalid API key")
     except Exception as e:
-        return ValidateApiKeyResponse(valid=False, message=f"Validation failed: {str(e)}")
+        logger.error(f"Validation failed: {str(e)}")
+        return ValidateApiKeyResponse(valid=False, message="Validation failed due to an internal error.")
