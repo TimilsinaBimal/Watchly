@@ -30,6 +30,14 @@ def should_shuffle(user_settings: UserSettings, catalog_id: str) -> bool:
     return getattr(config, "shuffle", False) if config else False
 
 
+def shuffle_data_if_needed(
+    user_settings: UserSettings, catalog_id: str, data: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    if should_shuffle(user_settings, catalog_id):
+        random.shuffle(data)
+    return data
+
+
 def _clean_meta(meta: dict) -> dict:
     """Return a sanitized Stremio meta object without internal fields.
 
@@ -109,8 +117,7 @@ class CatalogService:
         if cached_data:
             logger.debug(f"[{redact_token(token)}...] Using cached catalog for {content_type}/{catalog_id}")
             meta_data = cached_data["metas"]
-            if should_shuffle(user_settings, catalog_id):
-                random.shuffle(meta_data)
+            meta_data = shuffle_data_if_needed(user_settings, catalog_id, meta_data)
             cached_data["metas"] = meta_data
             return cached_data, headers
 
@@ -184,8 +191,7 @@ class CatalogService:
             cleaned = [_clean_meta(m) for m in recommendations]
             cleaned = [m for m in cleaned if m is not None]
 
-            if should_shuffle(user_settings, catalog_id):
-                random.shuffle(cleaned)
+            cleaned = shuffle_data_if_needed(user_settings, catalog_id, cleaned)
 
             data = {"metas": cleaned}
             # if catalog data is not empty, set the cache
