@@ -131,7 +131,7 @@ function createCatalogItem(cat, index) {
                     </div>
                 </div>
                 <div class="flex items-center gap-2 sm:gap-3 mt-2">
-                    <div class="catalog-desc text-xs text-slate-300 flex-grow">${escapeHtml(cat.description || '')}</div>
+                    <div class="catalog-desc text-xs text-slate-400 flex-grow">${escapeHtml(cat.description || '')}</div>
                 </div>
                 <div class="mt-3">
             <div class="inline-flex items-center bg-neutral-950 border border-white/10 rounded-lg p-1" role="group" aria-label="Content type selection">

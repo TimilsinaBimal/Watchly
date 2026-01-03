@@ -31,6 +31,7 @@ export function initializeForm(domElements, catalogState) {
     initializeLanguageSelect();
     initializePasswordToggles();
     initializeSuccessActions();
+    initializePosterRatingProvider();
 }
 
 // Form Submission
@@ -45,7 +46,8 @@ async function initializeFormSubmission() {
         const email = emailInput?.value.trim();
         const password = passwordInput?.value;
         const language = languageSelect.value;
-        const rpdbKey = document.getElementById("rpdbKey").value.trim();
+        const posterRatingProvider = document.getElementById("posterRatingProvider")?.value || "";
+        const posterRatingApiKey = document.getElementById("posterRatingApiKey")?.value.trim() || "";
         const excludedMovieGenres = Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value);
         const excludedSeriesGenres = Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value);
 
@@ -101,13 +103,22 @@ async function initializeFormSubmission() {
         setLoading(true);
 
         try {
+            // Build poster_rating payload
+            let posterRating = null;
+            if (posterRatingProvider && posterRatingApiKey) {
+                posterRating = {
+                    provider: posterRatingProvider,
+                    api_key: posterRatingApiKey
+                };
+            }
+
             const payload = {
                 authKey: sAuthKey || undefined,
                 email: email || undefined,
                 password: password || undefined,
                 catalogs: catalogsToSend,
                 language: language,
-                rpdb_key: rpdbKey,
+                poster_rating: posterRating,
                 excluded_movie_genres: excludedMovieGenres,
                 excluded_series_genres: excludedSeriesGenres
             };
@@ -158,6 +169,48 @@ function renderGenreList(container, genres, namePrefix) {
 
 function initializeLanguageSelect() {
     if (!languageSelect) return;
+}
+
+// Poster Rating Provider
+function initializePosterRatingProvider() {
+    const providerSelect = document.getElementById("posterRatingProvider");
+    const apiKeyContainer = document.getElementById("posterRatingApiKeyContainer");
+    const apiKeyInput = document.getElementById("posterRatingApiKey");
+    const helpContainer = document.getElementById("posterRatingHelp");
+    const helpText = document.getElementById("posterRatingHelpText");
+
+    if (!providerSelect || !apiKeyContainer || !apiKeyInput || !helpContainer || !helpText) return;
+
+    const providerInfo = {
+        "rpdb": {
+            name: "RPDB (RatingPosterDB)",
+            url: "https://ratingposterdb.com",
+            description: "Enable ratings on posters via RatingPosterDB"
+        },
+        "top_posters": {
+            name: "Top Posters",
+            url: "https://api.top-streaming.stream/",
+            description: "Enable ratings on posters via Top Posters"
+        }
+    };
+
+    function updateUI() {
+        const selectedProvider = providerSelect.value;
+
+        if (selectedProvider && providerInfo[selectedProvider]) {
+            const info = providerInfo[selectedProvider];
+            apiKeyContainer.style.display = "block";
+            helpContainer.style.display = "block";
+            helpText.innerHTML = `${info.description}. Get your API key from <a href="${info.url}" target="_blank" class="text-slate-300 hover:text-white underline">${info.name}</a>.`;
+        } else {
+            apiKeyContainer.style.display = "none";
+            helpContainer.style.display = "none";
+            apiKeyInput.value = "";
+        }
+    }
+
+    providerSelect.addEventListener("change", updateUI);
+    updateUI(); // Initialize on load
 }
 
 // Password Toggles

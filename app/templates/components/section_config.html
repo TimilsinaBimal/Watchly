@@ -51,10 +51,27 @@
 
     <div class="border-t border-white/10"></div>
 
-    <!-- RPDB -->
+    <!-- Poster Rating Provider -->
     <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">RPDB API Key (Optional)</label>
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Poster Rating Provider (Optional)</label>
+
+        <!-- Provider Dropdown -->
         <div class="relative">
+            <select id="posterRatingProvider"
+                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
+                <option value="">None</option>
+                <option value="rpdb">RPDB (RatingPosterDB)</option>
+                <option value="top_posters">Top Posters</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- API Key Input -->
+        <div class="relative" id="posterRatingApiKeyContainer" style="display: none;">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -62,13 +79,15 @@
                     </path>
                 </svg>
             </div>
-            <input type="text" id="rpdbKey"
+            <input type="text" id="posterRatingApiKey"
                 class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
-                placeholder="Paste your RPDB API key here">
+                placeholder="Paste your API key here">
         </div>
-        <p class="text-xs text-slate-500">Enable ratings on posters via <a
-                href="https://ratingposterdb.com" target="_blank"
-                class="text-slate-300 hover:text-white underline">RatingPosterDB</a>.</p>
+
+        <!-- Help Text -->
+        <div id="posterRatingHelp" class="text-xs text-slate-500" style="display: none;">
+            <p id="posterRatingHelpText"></p>
+        </div>
     </div>
     <div class="pt-4 flex justify-end">
         <button type="button" id="configNextBtn"

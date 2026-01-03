@@ -4,7 +4,7 @@ from typing import Any
 from loguru import logger
 
 from app.core.constants import DEFAULT_CONCURRENCY_LIMIT
-from app.services.rpdb import RPDBService
+from app.services.poster_ratings.factory import PosterProvider, poster_ratings_factory
 
 
 class RecommendationMetadata:
@@ -93,12 +93,24 @@ class RecommendationMetadata:
         return meta_data
 
     @staticmethod
-    def _get_poster_url(details: dict, stremio_id: str, user_settings: Any) -> str | None:
-        """Resolve poster URL using RPDB if configured, otherwise TMDB."""
-        if user_settings and user_settings.rpdb_key:
-            return RPDBService.get_poster_url(user_settings.rpdb_key, stremio_id)
+    def _get_poster_url(details: dict, item_id: str, user_settings: Any) -> str | None:
+        """Resolve poster URL using poster rating provider if configured, otherwise TMDB."""
         path = details.get("poster_path")
-        return f"https://image.tmdb.org/t/p/w500{path}" if path else None
+        poster_url = f"https://image.tmdb.org/t/p/w500{path}"
+
+        if user_settings:
+            poster_rating = user_settings.poster_rating
+            if poster_rating and poster_rating.api_key:
+                try:
+                    provider_enum = PosterProvider(poster_rating.provider)
+                    poster_url = poster_ratings_factory.get_poster_url(
+                        provider_enum, poster_rating.api_key, "imdb", item_id, fallback=poster_url
+                    )
+                except ValueError as e:
+                    logger.warning(f"Error getting poster URL for item ID {item_id}: {e}")
+                    pass
+
+        return poster_url
 
     @staticmethod
     def _get_backdrop_url(details: dict) -> str | None:
