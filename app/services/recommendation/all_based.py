@@ -119,8 +119,6 @@ class AllBasedService:
                         profile=profile,
                         scorer=self.scorer,
                         mtype=mtype,
-                        is_ranked=False,
-                        is_fresh=False,
                     )
 
                     # Apply genre multiplier (if whitelist available)

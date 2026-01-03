@@ -1,4 +1,5 @@
 import asyncio
+import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -17,6 +18,7 @@ from app.services.profile.constants import (
 )
 from app.services.profile.sampling import SmartSampler
 from app.services.profile.scorer import ProfileScorer
+from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
 from app.services.recommendation.utils import content_type_to_mtype, filter_watched_by_imdb, resolve_tmdb_id
@@ -70,7 +72,6 @@ class TopPicksService:
         Returns:
             List of recommended items
         """
-        import time
 
         start_time = time.time()
 
@@ -98,15 +99,11 @@ class TopPicksService:
         scored_candidates = []
         for item in filtered_candidates:
             try:
-                is_ranked = item.get("_ranked_candidate", False)
-                is_fresh = item.get("_fresh_boost", False)
                 final_score = RecommendationScoring.calculate_final_score(
                     item=item,
                     profile=profile,
                     scorer=self.scorer,
                     mtype=mtype,
-                    is_ranked=is_ranked,
-                    is_fresh=is_fresh,
                 )
                 scored_candidates.append((final_score, item))
             except Exception as e:
@@ -214,8 +211,6 @@ class TopPicksService:
         Returns:
             List of candidate items
         """
-        # Get excluded genres
-        from app.services.recommendation.filtering import RecommendationFiltering
 
         excluded_genre_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
         without_genres = "|".join(str(g) for g in excluded_genre_ids) if excluded_genre_ids else None
@@ -371,7 +366,7 @@ class TopPicksService:
         Apply diversity caps to ensure balanced results.
 
         Caps:
-        - Recency: max 15% from items released in last 6 months
+        - Recency: max 15% from items released in last year
         - Genre: max 50% per genre
         - Creator: max 3 items per creator
         - Era: max 50% per era

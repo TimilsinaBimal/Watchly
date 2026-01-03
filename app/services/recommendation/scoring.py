@@ -92,12 +92,8 @@ class RecommendationScoring:
         return m_raw, alpha
 
     @staticmethod
-    def apply_quality_adjustments(
-        score: float, wr: float, vote_count: int, popularity: float, is_ranked: bool, is_fresh: bool
-    ) -> float:
+    def apply_quality_adjustments(score: float, wr: float, vote_count: int, popularity: float) -> float:
         """Apply simple quality boost for high-confidence items only."""
-        # Simplified: only boost proven high-quality items, no penalties
-        # Trust the weighted rating formula to handle low vote counts naturally
         if vote_count >= 1000 and wr >= 7.5 and popularity <= MAXIMUM_POPULARITY_SCORE:
             # Proven gem: high confidence, high quality
             return score * 1.10
@@ -105,7 +101,6 @@ class RecommendationScoring:
             # Good confidence and quality
             return score * 1.05
 
-        # Everything else: trust the base scoring
         return score
 
     @staticmethod
@@ -114,8 +109,6 @@ class RecommendationScoring:
         profile: Any,
         scorer: Any,
         mtype: str,
-        is_ranked: bool = False,
-        is_fresh: bool = False,
     ) -> float:  # noqa: E501
         """
         Calculate final recommendation score combining profile similarity and quality.
@@ -125,8 +118,6 @@ class RecommendationScoring:
             profile: User taste profile
             scorer: ProfileScorer instance
             mtype: Media type (movie/tv) to determine minimum rating
-            is_ranked: Whether item is from ranked source
-            is_fresh: Whether item should get freshness boost
             minimum_rating_tv: Minimum rating constant for TV
             minimum_rating_movie: Minimum rating constant for movies
 
@@ -155,8 +146,6 @@ class RecommendationScoring:
         # light boost for high-confidence items (no penalties!)
         vote_count = item.get("vote_count", 0)
         popularity = item.get("popularity", 0)
-        final_score = RecommendationScoring.apply_quality_adjustments(
-            base_score, wr, vote_count, popularity, is_ranked=is_ranked, is_fresh=is_fresh
-        )
+        final_score = RecommendationScoring.apply_quality_adjustments(base_score, wr, vote_count, popularity)
 
         return final_score
