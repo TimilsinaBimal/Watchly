@@ -221,6 +221,15 @@
 <body class="min-h-screen text-slate-200 font-sans antialiased overflow-x-hidden">
     {% block content %}{% endblock %}
 
+    <!-- Inject backend constants for frontend -->
+    <script>
+        // Default catalog configurations from backend
+        window.DEFAULT_CATALOGS = {{ default_catalogs | tojson }};
+
+        // Genre constants from backend
+        window.MOVIE_GENRES = {{ movie_genres | tojson }};
+        window.SERIES_GENRES = {{ series_genres | tojson }};
+    </script>
     <script type="module" src="/app/static/js/main.js"></script>
 </body>
 </html>

@@ -13,3 +13,6 @@ LIBRARY_ITEMS_KEY: str = "watchly:library_items:{token}"
 PROFILE_KEY: str = "watchly:profile:{token}:{content_type}"
 WATCHED_SETS_KEY: str = "watchly:watched_sets:{token}:{content_type}"
 CATALOG_KEY: str = "watchly:catalog:{token}:{type}:{id}"
+
+
+DISCOVER_ONLY_EXTRA: list[dict] = [{"name": "genre", "isRequired": True, "options": ["All"], "optionsLimit": 1}]

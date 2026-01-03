@@ -5,6 +5,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.constants import DISCOVER_ONLY_EXTRA
 from app.core.settings import CatalogConfig, UserSettings
 from app.services.profile.integration import ProfileIntegration
 from app.services.row_generator import RowGeneratorService
@@ -42,10 +43,7 @@ class DynamicCatalogService:
 
         name = item.get("name")
 
-        extra = []
-        if not display_at_home:
-            # only display in discover section
-            extra = [{"name": "genre", "isRequired": True, "options": ["All"], "optionsLimit": 1}]
+        extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
 
         return {
             "type": self.normalize_type(item.get("type")),
@@ -156,10 +154,7 @@ class DynamicCatalogService:
         # 4. Assembly with error handling
         catalogs = []
 
-        extra = []
-        if not display_at_home:
-            # only display in discover section
-            extra = [{"name": "genre", "isRequired": True, "options": ["All"], "optionsLimit": 1}]
+        extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
 
         for result in results:
             if isinstance(result, Exception):
