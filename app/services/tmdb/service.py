@@ -51,13 +51,13 @@ class TMDBService:
             logger.exception(f"Error finding TMDB ID for IMDB {imdb_id}: {e}")
             return None, None
 
-    @alru_cache(maxsize=500)
+    @alru_cache(maxsize=500, ttl=86400)
     async def get_movie_details(self, movie_id: int) -> dict[str, Any]:
         """Get details of a specific movie with credits and keywords."""
         params = {"append_to_response": "credits,external_ids,keywords"}
         return await self.client.get(f"/movie/{movie_id}", params=params)
 
-    @alru_cache(maxsize=500)
+    @alru_cache(maxsize=500, ttl=86400)
     async def get_tv_details(self, tv_id: int) -> dict[str, Any]:
         """Get details of a specific TV series with credits and keywords."""
         params = {"append_to_response": "credits,external_ids,keywords"}
