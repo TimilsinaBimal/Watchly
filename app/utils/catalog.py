@@ -1,3 +1,4 @@
+from app.core.constants import DISCOVER_ONLY_EXTRA
 from app.core.settings import UserSettings
 from app.services.profile.integration import ProfileIntegration
 from app.services.stremio.service import StremioBundle
@@ -20,10 +21,7 @@ def get_catalogs_from_config(
         enabled_series = getattr(config, "enabled_series", default_series) if config else default_series
         display_at_home = getattr(config, "display_at_home", True) if config else True
 
-        extra = []
-        if not display_at_home:
-            # only display in discover section
-            extra = [{"name": "genre", "isRequired": True, "options": ["All"], "optionsLimit": 1}]
+        extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
 
         if enabled_movie:
             catalogs.append({"type": "movie", "id": cat_id, "name": name, "extra": extra})

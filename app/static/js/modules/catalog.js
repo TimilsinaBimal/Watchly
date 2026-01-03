@@ -229,55 +229,74 @@ function createCatalogItem(cat, index) {
     return item;
 }
 
-function updateHomeButton(btn, isActive) {
+// Helper function to update button state with active/inactive classes and tooltips
+function updateButtonState(btn, isActive, activeClasses, inactiveTooltip, activeTooltip, activeHTML = null, inactiveHTML = null) {
+    const inactiveClasses = ['text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60'];
+
     if (isActive) {
-        btn.classList.remove('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
-        btn.classList.add('text-emerald-400', 'bg-emerald-500/20', 'border-emerald-500/40', 'hover:bg-emerald-500/30', 'hover:border-emerald-400/60');
-        btn.setAttribute('title', 'Hide from Home Page - This catalog will not appear on your Stremio home screen');
+        btn.classList.remove(...inactiveClasses);
+        btn.classList.add(...activeClasses);
+        btn.setAttribute('title', activeTooltip);
+        if (activeHTML !== null) {
+            btn.innerHTML = activeHTML;
+        }
     } else {
-        btn.classList.remove('text-emerald-400', 'bg-emerald-500/20', 'border-emerald-500/40', 'hover:bg-emerald-500/30', 'hover:border-emerald-400/60');
-        btn.classList.add('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
-        btn.setAttribute('title', 'Show on Home Page - Display this catalog on your Stremio home screen');
+        btn.classList.remove(...activeClasses);
+        btn.classList.add(...inactiveClasses);
+        btn.setAttribute('title', inactiveTooltip);
+        if (inactiveHTML !== null) {
+            btn.innerHTML = inactiveHTML;
+        }
     }
+}
+
+function updateHomeButton(btn, isActive) {
+    const activeClasses = ['text-emerald-400', 'bg-emerald-500/20', 'border-emerald-500/40', 'hover:bg-emerald-500/30', 'hover:border-emerald-400/60'];
+    updateButtonState(
+        btn,
+        isActive,
+        activeClasses,
+        'Show on Home Page - Display this catalog on your Stremio home screen',
+        'Hide from Home Page - This catalog will not appear on your Stremio home screen'
+    );
 }
 
 function updateShuffleButton(btn, isActive) {
-    if (isActive) {
-        btn.classList.remove('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
-        btn.classList.add('text-purple-400', 'bg-purple-500/20', 'border-purple-500/40', 'hover:bg-purple-500/30', 'hover:border-purple-400/60');
-        btn.setAttribute('title', 'Disable Random Order - Show items in recommended order');
-    } else {
-        btn.classList.remove('text-purple-400', 'bg-purple-500/20', 'border-purple-500/40', 'hover:bg-purple-500/30', 'hover:border-purple-400/60');
-        btn.classList.add('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
-        btn.setAttribute('title', 'Enable Random Order - Shuffle items in this catalog randomly');
-    }
+    const activeClasses = ['text-purple-400', 'bg-purple-500/20', 'border-purple-500/40', 'hover:bg-purple-500/30', 'hover:border-purple-400/60'];
+    updateButtonState(
+        btn,
+        isActive,
+        activeClasses,
+        'Enable Random Order - Shuffle items in this catalog randomly',
+        'Disable Random Order - Show items in recommended order'
+    );
 }
 
 function updateVisibilityButton(btn, isActive) {
-    const isEnabled = isActive;
-    if (isEnabled) {
-        btn.classList.remove('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
-        btn.classList.add('text-cyan-400', 'bg-cyan-500/20', 'border-cyan-500/40', 'hover:bg-cyan-500/30', 'hover:border-cyan-400/60');
-        btn.setAttribute('title', 'Disable Catalog - Hide this catalog from Stremio');
-        btn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-                <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-        `;
-    } else {
-        btn.classList.remove('text-cyan-400', 'bg-cyan-500/20', 'border-cyan-500/40', 'hover:bg-cyan-500/30', 'hover:border-cyan-400/60');
-        btn.classList.add('text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60');
-        btn.setAttribute('title', 'Enable Catalog - Show this catalog in Stremio');
-        btn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
-                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
-                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
-                <line x1="2" x2="22" y1="2" y2="22"></line>
-            </svg>
-        `;
-    }
+    const activeClasses = ['text-cyan-400', 'bg-cyan-500/20', 'border-cyan-500/40', 'hover:bg-cyan-500/30', 'hover:border-cyan-400/60'];
+    const activeHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+    `;
+    const inactiveHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+            <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
+            <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
+            <line x1="2" x2="22" y1="2" y2="22"></line>
+        </svg>
+    `;
+    updateButtonState(
+        btn,
+        isActive,
+        activeClasses,
+        'Enable Catalog - Show this catalog in Stremio',
+        'Disable Catalog - Hide this catalog from Stremio',
+        activeHTML,
+        inactiveHTML
+    );
 }
 
 function setupRenameLogic(item, cat) {
@@ -319,5 +338,3 @@ function setupRenameLogic(item, cat) {
         else if (e.key === 'Escape') { cancelEdit(); }
     });
 }
-
-// catalogs is exported via getCatalogs() to maintain proper state management

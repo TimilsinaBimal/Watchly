@@ -19,6 +19,21 @@ class UserSettings(BaseModel):
     excluded_series_genres: list[str] = Field(default_factory=list)
 
 
+# Catalog descriptions for frontend
+CATALOG_DESCRIPTIONS = {
+    "watchly.rec": "Personalized recommendations based on your library",
+    "watchly.loved": "Recommendations similar to content you explicitly loved",
+    "watchly.watched": "Recommendations based on your recent watch history",
+    "watchly.creators": "Movies and series from your top 5 favorite directors and top 5 favorite actors",
+    "watchly.all.loved": "Recommendations based on all your loved items",
+    "watchly.liked.all": "Recommendations based on all your liked items",
+    "watchly.theme": (
+        "Dynamic catalogs based on your favorite genres, keyword, countries and many more."
+        "Just like netflix. Example: American Horror, Based on Novel or Book etc."
+    ),
+}
+
+
 def get_default_settings() -> UserSettings:
     return UserSettings(
         language="en-US",
@@ -88,6 +103,26 @@ def get_default_settings() -> UserSettings:
             ),
         ],
     )
+
+
+def get_default_catalogs_for_frontend() -> list[dict]:
+    """Get default catalogs formatted for frontend JavaScript."""
+    settings = get_default_settings()
+    catalogs = []
+    for catalog in settings.catalogs:
+        catalogs.append(
+            {
+                "id": catalog.id,
+                "name": catalog.name or "",
+                "enabled": catalog.enabled,
+                "enabledMovie": catalog.enabled_movie,
+                "enabledSeries": catalog.enabled_series,
+                "display_at_home": catalog.display_at_home,
+                "shuffle": catalog.shuffle,
+                "description": CATALOG_DESCRIPTIONS.get(catalog.id, ""),
+            }
+        )
+    return catalogs
 
 
 class Credentials(BaseModel):

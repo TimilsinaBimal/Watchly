@@ -1,3 +1,4 @@
+import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,7 +12,9 @@ from loguru import logger
 
 from app.api.endpoints.meta import fetch_languages_list
 from app.api.main import api_router
+from app.core.settings import get_default_catalogs_for_frontend
 from app.services.redis_service import redis_service
+from app.services.tmdb.genre import movie_genres, series_genres
 from app.services.token_store import token_store
 
 from .config import settings
@@ -82,6 +85,7 @@ if static_dir.exists():
 
 # Initialize Jinja2 templates
 jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
+jinja_env.filters["tojson"] = lambda v: json.dumps(v)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -95,6 +99,13 @@ async def configure_page(request: Request, _token: str | None = None):
         logger.warning(f"Failed to fetch languages for template: {e}")
         languages = [{"iso_639_1": "en-US", "language": "English", "country": "US"}]
 
+    # Format default catalogs for frontend
+    default_catalogs = get_default_catalogs_for_frontend()
+
+    # Format genres for frontend
+    movie_genres_list = [{"id": str(id), "name": name} for id, name in movie_genres.items()]
+    series_genres_list = [{"id": str(id), "name": name} for id, name in series_genres.items()]
+
     template = jinja_env.get_template("index.html")
     html_content = template.render(
         request=request,
@@ -102,6 +113,9 @@ async def configure_page(request: Request, _token: str | None = None):
         app_host=settings.HOST_NAME,
         announcement_html=settings.ANNOUNCEMENT_HTML or "",
         languages=languages,
+        default_catalogs=default_catalogs,
+        movie_genres=movie_genres_list,
+        series_genres=series_genres_list,
     )
     return HTMLResponse(content=html_content, media_type="text/html")
 
