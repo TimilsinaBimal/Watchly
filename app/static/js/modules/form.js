@@ -100,6 +100,17 @@ async function initializeFormSubmission() {
             return;
         }
 
+        // Validate poster rating API key if provided
+        if (posterRatingProvider && posterRatingApiKey) {
+            if (window.validatePosterRatingApiKey) {
+                const isValid = await window.validatePosterRatingApiKey();
+                if (!isValid) {
+                    showError("generalError", "Please enter a valid API key for the selected provider.");
+                    return;
+                }
+            }
+        }
+
         setLoading(true);
 
         try {
@@ -178,6 +189,11 @@ function initializePosterRatingProvider() {
     const apiKeyInput = document.getElementById("posterRatingApiKey");
     const helpContainer = document.getElementById("posterRatingHelp");
     const helpText = document.getElementById("posterRatingHelpText");
+    const validateBtn = document.getElementById("posterRatingApiKeyValidate");
+    const toggleBtn = document.getElementById("posterRatingApiKeyToggle");
+    const eyeIcon = document.getElementById("posterRatingApiKeyEye");
+    const eyeOffIcon = document.getElementById("posterRatingApiKeyEyeOff");
+    const validationMessage = document.getElementById("posterRatingValidationMessage");
 
     if (!providerSelect || !apiKeyContainer || !apiKeyInput || !helpContainer || !helpText) return;
 
@@ -194,6 +210,92 @@ function initializePosterRatingProvider() {
         }
     };
 
+    let isValidated = false;
+
+    // Eye toggle functionality
+    if (toggleBtn && eyeIcon && eyeOffIcon) {
+        toggleBtn.addEventListener("click", () => {
+            const isPassword = apiKeyInput.type === "password";
+            apiKeyInput.type = isPassword ? "text" : "password";
+            eyeIcon.classList.toggle("hidden", !isPassword);
+            eyeOffIcon.classList.toggle("hidden", isPassword);
+        });
+    }
+
+    // Validation function
+    async function validateApiKey() {
+        const selectedProvider = providerSelect.value;
+        const apiKey = apiKeyInput.value.trim();
+
+        if (!selectedProvider || !apiKey) {
+            showValidationMessage("Please select a provider and enter an API key", "error");
+            return false;
+        }
+
+        if (!validateBtn) return false;
+
+        // Show loading state
+        validateBtn.disabled = true;
+        validateBtn.classList.add("opacity-50", "cursor-not-allowed");
+        const originalHTML = validateBtn.innerHTML;
+        validateBtn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
+        try {
+            const response = await fetch("/poster-rating/validate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ provider: selectedProvider, api_key: apiKey })
+            });
+
+            const data = await response.json();
+
+            if (data.valid) {
+                showValidationMessage("API key is valid ✓", "success");
+                isValidated = true;
+                return true;
+            } else {
+                showValidationMessage(data.message || "Invalid API key", "error");
+                apiKeyInput.value = ""; // Clear invalid key
+                isValidated = false;
+                return false;
+            }
+        } catch (error) {
+            showValidationMessage("Validation failed. Please try again.", "error");
+            isValidated = false;
+            return false;
+        } finally {
+            validateBtn.disabled = false;
+            validateBtn.classList.remove("opacity-50", "cursor-not-allowed");
+            validateBtn.innerHTML = originalHTML;
+        }
+    }
+
+    // Show validation message
+    function showValidationMessage(message, type) {
+        if (!validationMessage) return;
+        validationMessage.textContent = message;
+        validationMessage.className = `mt-2 text-xs ${type === "success" ? "text-green-400" : "text-red-400"}`;
+        validationMessage.classList.remove("hidden");
+    }
+
+    // Clear validation message
+    function clearValidationMessage() {
+        if (validationMessage) {
+            validationMessage.classList.add("hidden");
+        }
+    }
+
+    // Validate button click
+    if (validateBtn) {
+        validateBtn.addEventListener("click", validateApiKey);
+    }
+
+    // Clear validation when API key changes
+    apiKeyInput.addEventListener("input", () => {
+        isValidated = false;
+        clearValidationMessage();
+    });
+
     function updateUI() {
         const selectedProvider = providerSelect.value;
 
@@ -202,15 +304,30 @@ function initializePosterRatingProvider() {
             apiKeyContainer.style.display = "block";
             helpContainer.style.display = "block";
             helpText.innerHTML = `${info.description}. Get your API key from <a href="${info.url}" target="_blank" class="text-slate-300 hover:text-white underline">${info.name}</a>.`;
+            // Don't clear the API key when switching providers - just reset validation
+            isValidated = false;
+            clearValidationMessage();
         } else {
+            // Only clear when provider is set to "None"
             apiKeyContainer.style.display = "none";
             helpContainer.style.display = "none";
             apiKeyInput.value = "";
+            isValidated = false;
+            clearValidationMessage();
         }
     }
 
-    providerSelect.addEventListener("change", updateUI);
+    // Handle provider change - preserve API key value, just reset validation
+    providerSelect.addEventListener("change", () => {
+        isValidated = false;
+        clearValidationMessage();
+        updateUI();
+    });
+
     updateUI(); // Initialize on load
+
+    // Export validate function for form submission
+    window.validatePosterRatingApiKey = validateApiKey;
 }
 
 // Password Toggles
