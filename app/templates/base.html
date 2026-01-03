@@ -216,6 +216,73 @@
         #user-profile-chevron {
             transition: transform 200ms ease;
         }
+
+        /* Custom tooltip styles */
+        .tooltip-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .custom-tooltip {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(15, 23, 42, 0.95);
+            color: #e2e8f0;
+            text-align: left;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+            pointer-events: none;
+            transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+            transform: translateX(-50%) translateY(4px);
+            min-width: 200px;
+            max-width: 320px;
+            white-space: normal;
+            line-height: 1.4;
+            word-wrap: break-word;
+            hyphens: auto;
+        }
+
+        .custom-tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: rgba(15, 23, 42, 0.95);
+        }
+
+        .tooltip-wrapper:hover .custom-tooltip {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Tooltip positioning for edge cases */
+        .tooltip-wrapper.tooltip-right .custom-tooltip {
+            left: auto;
+            right: 0;
+            transform: translateX(0) translateY(4px);
+        }
+
+        .tooltip-wrapper.tooltip-right:hover .custom-tooltip {
+            transform: translateX(0) translateY(0);
+        }
+
+        .tooltip-wrapper.tooltip-right .custom-tooltip::after {
+            left: auto;
+            right: 12px;
+            transform: translateX(0);
+        }
     </style>
 </head>
 <body class="min-h-screen text-slate-200 font-sans antialiased overflow-x-hidden">

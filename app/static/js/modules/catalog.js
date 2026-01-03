@@ -93,32 +93,41 @@ function createCatalogItem(cat, index) {
                                 <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                         </button>` : ''}
-                        <button type="button" class="catalog-action-btn home-btn p-2 rounded-lg transition-all ${cat.display_at_home ? 'text-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 hover:border-emerald-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-emerald-500/10" title="${cat.display_at_home ? 'Hide from Home Page - This catalog will not appear on your Stremio home screen' : 'Show on Home Page - Display this catalog on your Stremio home screen'}" data-catalog-id="${cat.id}" data-action="home">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                            </svg>
-                        </button>
-                        <button type="button" class="catalog-action-btn shuffle-btn p-2 rounded-lg transition-all ${cat.shuffle ? 'text-purple-400 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 hover:border-purple-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-purple-500/10" title="${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}" data-catalog-id="${cat.id}" data-action="shuffle">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
-                            </svg>
-                        </button>
-                        <button type="button" class="catalog-action-btn visibility-btn p-2 rounded-lg transition-all ${cat.enabled ? 'text-cyan-400 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 hover:border-cyan-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-cyan-500/10" title="${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}" data-catalog-id="${cat.id}" data-action="visibility">
-                            ${cat.enabled ? `
+                        <div class="tooltip-wrapper">
+                            <button type="button" class="catalog-action-btn home-btn p-2 rounded-lg transition-all ${cat.display_at_home ? 'text-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 hover:border-emerald-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-emerald-500/10" data-catalog-id="${cat.id}" data-action="home">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
                                 </svg>
-                            ` : `
+                            </button>
+                            <span class="custom-tooltip" data-tooltip-text="${cat.display_at_home ? 'Hide from Home Page - This catalog will not appear on your Stremio home screen' : 'Show on Home Page - Display this catalog on your Stremio home screen'}">${cat.display_at_home ? 'Hide from Home Page- Only display this catalog in discover section.' : 'Show on Home Page as well as Discover section.'}</span>
+                        </div>
+                        <div class="tooltip-wrapper">
+                            <button type="button" class="catalog-action-btn shuffle-btn p-2 rounded-lg transition-all ${cat.shuffle ? 'text-purple-400 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 hover:border-purple-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-purple-500/10" data-catalog-id="${cat.id}" data-action="shuffle">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
-                                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
-                                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
-                                    <line x1="2" x2="22" y1="2" y2="22"></line>
+                                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
                                 </svg>
-                            `}
-                        </button>
+                            </button>
+                            <span class="custom-tooltip" data-tooltip-text="${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}">${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}</span>
+                        </div>
+                        <div class="tooltip-wrapper">
+                            <button type="button" class="catalog-action-btn visibility-btn p-2 rounded-lg transition-all ${cat.enabled ? 'text-cyan-400 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 hover:border-cyan-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-cyan-500/10" data-catalog-id="${cat.id}" data-action="visibility">
+                                ${cat.enabled ? `
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                ` : `
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+                                        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
+                                        <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
+                                        <line x1="2" x2="22" y1="2" y2="22"></line>
+                                    </svg>
+                                `}
+                            </button>
+                            <span class="custom-tooltip" data-tooltip-text="${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}">${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}</span>
+                        </div>
                     </div>
                 </div>
                 <div class="flex items-center gap-2 sm:gap-3 mt-2">
@@ -233,17 +242,27 @@ function createCatalogItem(cat, index) {
 function updateButtonState(btn, isActive, activeClasses, inactiveTooltip, activeTooltip, activeHTML = null, inactiveHTML = null) {
     const inactiveClasses = ['text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60'];
 
+    // Find the tooltip element (it's a sibling in the tooltip-wrapper)
+    const tooltipWrapper = btn.closest('.tooltip-wrapper');
+    const tooltip = tooltipWrapper ? tooltipWrapper.querySelector('.custom-tooltip') : null;
+
     if (isActive) {
         btn.classList.remove(...inactiveClasses);
         btn.classList.add(...activeClasses);
-        btn.setAttribute('title', activeTooltip);
+        if (tooltip) {
+            tooltip.textContent = activeTooltip;
+            tooltip.setAttribute('data-tooltip-text', activeTooltip);
+        }
         if (activeHTML !== null) {
             btn.innerHTML = activeHTML;
         }
     } else {
         btn.classList.remove(...activeClasses);
         btn.classList.add(...inactiveClasses);
-        btn.setAttribute('title', inactiveTooltip);
+        if (tooltip) {
+            tooltip.textContent = inactiveTooltip;
+            tooltip.setAttribute('data-tooltip-text', inactiveTooltip);
+        }
         if (inactiveHTML !== null) {
             btn.innerHTML = inactiveHTML;
         }
