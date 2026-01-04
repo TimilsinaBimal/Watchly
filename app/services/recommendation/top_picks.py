@@ -1,7 +1,7 @@
 import asyncio
 import time
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any
 
 from loguru import logger
@@ -14,7 +14,6 @@ from app.services.profile.constants import (
     TOP_PICKS_GENRE_CAP,
     TOP_PICKS_MIN_RATING,
     TOP_PICKS_MIN_VOTE_COUNT,
-    TOP_PICKS_RECENCY_CAP,
 )
 from app.services.profile.sampling import SmartSampler
 from app.services.profile.scorer import ProfileScorer
@@ -129,12 +128,12 @@ class TopPicksService:
         )
         logger.info(f"Enriched {len(enriched)} items with full metadata")
 
-        # Apply creator cap (after enrichment, we have full metadata)
-        final = self._apply_creator_cap(enriched, len(enriched))
-        logger.info(f"After creator cap: {len(final)} items")
+        # # Apply creator cap (after enrichment, we have full metadata)
+        # final = self._apply_creator_cap(enriched, len(enriched))
+        # logger.info(f"After creator cap: {len(final)} items")
 
         # Final filter (remove watched by IMDB ID)
-        filtered = filter_watched_by_imdb(final, watched_imdb)
+        filtered = filter_watched_by_imdb(enriched, watched_imdb)
 
         elapsed_time = time.time() - start_time
         logger.info(
@@ -340,9 +339,7 @@ class TopPicksService:
         Apply diversity caps to ensure balanced results.
 
         Caps:
-        - Recency: max 15% from items released in last year
         - Genre: max 50% per genre
-        - Creator: max 3 items per creator
         - Era: max 50% per era
         - Quality: minimum vote_count and rating
 
@@ -357,11 +354,7 @@ class TopPicksService:
         result = []
         genre_counts = defaultdict(int)
         era_counts = defaultdict(int)
-        recent_count = 0
 
-        # Determine recent threshold (1 year ago)
-        recent_threshold = datetime.now() - timedelta(days=365)
-        max_recent = int(limit * TOP_PICKS_RECENCY_CAP)
         max_per_genre = int(limit * TOP_PICKS_GENRE_CAP)
         max_per_era = int(limit * TOP_PICKS_ERA_CAP)
 
@@ -383,12 +376,6 @@ class TopPicksService:
             if wr < TOP_PICKS_MIN_RATING:
                 continue
 
-            # Check recency cap (15% max from items released in last 6 months)
-            # Check release date against threshold
-            is_recent = self._is_recent_release(item, recent_threshold, mtype)
-            if is_recent and recent_count >= max_recent:
-                continue
-
             # Check genre cap (50% max per genre)
             genre_ids = item.get("genre_ids", [])
             if genre_ids:
@@ -406,9 +393,6 @@ class TopPicksService:
             # Add item
             result.append(item)
 
-            # Update counts
-            if is_recent:
-                recent_count += 1
             if genre_ids:
                 genre_counts[top_genre] += 1
             if year:
