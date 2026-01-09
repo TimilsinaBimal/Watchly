@@ -131,17 +131,17 @@ function createCatalogItem(cat, index) {
                     </div>
                 </div>
                 <div class="flex items-center gap-2 sm:gap-3 mt-2">
-                    <div class="catalog-desc text-xs text-slate-300 flex-grow">${escapeHtml(cat.description || '')}</div>
+                    <div class="catalog-desc text-xs text-slate-400 flex-grow">${escapeHtml(cat.description || '')}</div>
                 </div>
                 <div class="mt-3">
-            <div class="inline-flex items-center bg-neutral-950 border border-white/10 rounded-lg p-1" role="group" aria-label="Content type selection">
-                <button type="button" class="catalog-type-btn px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeMode === 'both' ? 'bg-white text-black shadow-sm hover:text-black' : 'text-slate-400 hover:text-white'}" data-catalog-id="${cat.id}" data-mode="both">
+            <div class="inline-flex items-center bg-neutral-900/60 border border-white/10 rounded-xl p-1 backdrop-blur-sm" role="group" aria-label="Content type selection">
+                <button type="button" class="catalog-type-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none ${activeMode === 'both' ? 'bg-white/10 text-white border border-white/20 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}" data-catalog-id="${cat.id}" data-mode="both">
                     Both
                 </button>
-                <button type="button" class="catalog-type-btn px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeMode === 'movie' ? 'bg-white text-black shadow-sm hover:text-black' : 'text-slate-400 hover:text-white'}" data-catalog-id="${cat.id}" data-mode="movie">
+                <button type="button" class="catalog-type-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none ${activeMode === 'movie' ? 'bg-white/10 text-white border border-white/20 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}" data-catalog-id="${cat.id}" data-mode="movie">
                     Movie
                 </button>
-                <button type="button" class="catalog-type-btn px-3 py-1.5 text-sm font-medium rounded-md transition-all ${activeMode === 'series' ? 'bg-white text-black shadow-sm hover:text-black' : 'text-slate-400 hover:text-white'}" data-catalog-id="${cat.id}" data-mode="series">
+                <button type="button" class="catalog-type-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none ${activeMode === 'series' ? 'bg-white/10 text-white border border-white/20 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}" data-catalog-id="${cat.id}" data-mode="series">
                     Series
                 </button>
             </div>
@@ -204,11 +204,11 @@ function createCatalogItem(cat, index) {
 
             // Update UI
             allTypeButtons.forEach(b => {
-                b.classList.remove('bg-white', 'text-black', 'shadow-sm', 'hover:text-black');
-                b.classList.add('text-slate-400', 'hover:text-white');
+                b.classList.remove('bg-white/10', 'text-white', 'border-white/20', 'shadow-sm');
+                b.classList.add('text-slate-400', 'hover:text-white', 'hover:bg-white/5', 'border-transparent');
             });
-            e.target.classList.remove('text-slate-400', 'hover:text-white');
-            e.target.classList.add('bg-white', 'text-black', 'shadow-sm', 'hover:text-black');
+            e.target.classList.remove('text-slate-400', 'hover:text-white', 'hover:bg-white/5', 'border-transparent');
+            e.target.classList.add('bg-white/10', 'text-white', 'border-white/20', 'shadow-sm');
         });
     });
 

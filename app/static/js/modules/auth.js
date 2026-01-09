@@ -276,7 +276,25 @@ async function fetchStremioIdentity(authKey) {
         if (data.settings) {
             const s = data.settings;
             if (s.language && languageSelect) languageSelect.value = s.language;
-            if (s.rpdb_key && document.getElementById('rpdbKey')) document.getElementById('rpdbKey').value = s.rpdb_key;
+
+            // Handle poster rating: prefer new format, fallback to old rpdb_key
+            const posterRatingProvider = document.getElementById('posterRatingProvider');
+            const posterRatingApiKey = document.getElementById('posterRatingApiKey');
+            if (posterRatingProvider && posterRatingApiKey) {
+                if (s.poster_rating && s.poster_rating.provider && s.poster_rating.api_key) {
+                    // New format
+                    posterRatingProvider.value = s.poster_rating.provider;
+                    posterRatingApiKey.value = s.poster_rating.api_key;
+                    // Trigger change event to show/hide fields
+                    posterRatingProvider.dispatchEvent(new Event('change'));
+                } else if (s.rpdb_key) {
+                    // Old format - migrate to new format in UI
+                    posterRatingProvider.value = 'rpdb';
+                    posterRatingApiKey.value = s.rpdb_key;
+                    // Trigger change event to show/hide fields
+                    posterRatingProvider.dispatchEvent(new Event('change'));
+                }
+            }
 
             // Genres (Checked = Excluded)
             document.querySelectorAll('input[name="movie-genre"]').forEach(cb => cb.checked = false);
@@ -301,6 +319,8 @@ async function fetchStremioIdentity(authKey) {
                         if (remote.name) local.name = remote.name;
                         if (typeof remote.enabled_movie === 'boolean') local.enabledMovie = remote.enabled_movie;
                         if (typeof remote.enabled_series === 'boolean') local.enabledSeries = remote.enabled_series;
+                        if (typeof remote.display_at_home === 'boolean') local.display_at_home = remote.display_at_home;
+                        if (typeof remote.shuffle === 'boolean') local.shuffle = remote.shuffle;
                     }
                 });
                 if (renderCatalogList) renderCatalogList();

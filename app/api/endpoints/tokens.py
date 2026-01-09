@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.security import redact_token
-from app.core.settings import CatalogConfig, UserSettings, get_default_settings
+from app.core.settings import CatalogConfig, PosterRatingConfig, UserSettings, get_default_settings
 from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
@@ -20,7 +20,7 @@ class TokenRequest(BaseModel):
     password: str | None = Field(default=None, description="Stremio account password (stored securely)")
     catalogs: list[CatalogConfig] | None = Field(default=None, description="Optional catalog configuration")
     language: str = Field(default="en-US", description="Language for TMDB API")
-    rpdb_key: str | None = Field(default=None, description="Optional RPDB API Key")
+    poster_rating: PosterRatingConfig | None = Field(default=None, description="Poster rating provider configuration")
     excluded_movie_genres: list[str] = Field(default_factory=list, description="List of movie genre IDs to exclude")
     excluded_series_genres: list[str] = Field(default_factory=list, description="List of series genre IDs to exclude")
 
@@ -78,10 +78,11 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
 
     # 3. Construct Settings
     default_settings = get_default_settings()
+    poster_rating = payload.poster_rating
     user_settings = UserSettings(
         language=payload.language or default_settings.language,
         catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
-        rpdb_key=payload.rpdb_key.strip() if payload.rpdb_key else None,
+        poster_rating=poster_rating,
         excluded_movie_genres=payload.excluded_movie_genres,
         excluded_series_genres=payload.excluded_series_genres,
     )

@@ -51,24 +51,72 @@
 
     <div class="border-t border-white/10"></div>
 
-    <!-- RPDB -->
+    <!-- Poster Rating Provider -->
     <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">RPDB API Key (Optional)</label>
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Poster Rating Provider (Optional)</label>
+
+        <!-- Provider Dropdown -->
         <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
-                    </path>
+            <select id="posterRatingProvider"
+                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
+                <option value="">None</option>
+                <option value="rpdb">RPDB (RatingPosterDB)</option>
+                <option value="top_posters">Top Posters</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
             </div>
-            <input type="text" id="rpdbKey"
-                class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
-                placeholder="Paste your RPDB API key here">
         </div>
-        <p class="text-xs text-slate-500">Enable ratings on posters via <a
-                href="https://ratingposterdb.com" target="_blank"
-                class="text-slate-300 hover:text-white underline">RatingPosterDB</a>.</p>
+
+        <!-- API Key Input -->
+        <div id="posterRatingApiKeyContainer" style="display: none;">
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                        </path>
+                    </svg>
+                </div>
+                <input type="password" id="posterRatingApiKey"
+                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-32 sm:pr-24 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
+                    placeholder="Paste your API key here">
+                <!-- Eye toggle button -->
+                <div class="absolute inset-y-0 right-12">
+                    <button type="button" id="posterRatingApiKeyToggle"
+                        class="flex items-center px-3 h-full text-slate-400 hover:text-white transition-colors">
+                        <svg id="posterRatingApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <svg id="posterRatingApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
+                        </svg>
+                    </button>
+                </div>
+                <!-- Validate button -->
+                <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
+                    <button type="button" id="posterRatingApiKeyValidate"
+                        class="flex items-center px-4 h-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors border-l border-slate-700 rounded-r-xl">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </button>
+                    <span class="custom-tooltip" data-tooltip-text="Validate API key - Click to verify your key is valid">Validate API key - Click to verify your key is valid</span>
+                </div>
+            </div>
+            <!-- Validation message -->
+            <div id="posterRatingValidationMessage" class="mt-2 text-xs hidden"></div>
+        </div>
+
+        <!-- Help Text -->
+        <div id="posterRatingHelp" class="text-xs text-slate-500" style="display: none;">
+            <p id="posterRatingHelpText"></p>
+        </div>
     </div>
     <div class="pt-4 flex justify-end">
         <button type="button" id="configNextBtn"

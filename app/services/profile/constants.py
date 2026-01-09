@@ -52,10 +52,10 @@ TOP_PICKS_RECENCY_CAP: Final[float] = 0.15  # Max 15% recent items (from trendin
 TOP_PICKS_GENRE_CAP: Final[float] = 0.50  # Max 50% per genre
 TOP_PICKS_CREATOR_CAP: Final[int] = 3  # Max 3 items per creator (director/actor)
 TOP_PICKS_ERA_CAP: Final[float] = 0.50  # Max 50% per era
-TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 250  # Lower noise filter
-TOP_PICKS_MIN_RATING: Final[float] = 7.2  # Minimum weighted rating
+TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 200  # Lower noise filter
+TOP_PICKS_MIN_RATING: Final[float] = 7.0  # Minimum weighted rating
 
-MAXIMUM_POPULARITY_SCORE: Final[float] = 15
+MAXIMUM_POPULARITY_SCORE: Final[float] = 10.0
 
 # Genre whitelist limit (top N genres)
 GENRE_WHITELIST_LIMIT: Final[int] = 7

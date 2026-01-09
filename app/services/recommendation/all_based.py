@@ -66,7 +66,10 @@ class AllBasedService:
         """
         # Get all loved or liked items for the content type
         items = library_items.get(item_type, [])
+
         typed_items = [it for it in items if it.get("type") == content_type]
+
+        logger.info(f"Typed items: {len(typed_items)}")
 
         if not typed_items or len(typed_items) == 0:
             return []
@@ -79,6 +82,8 @@ class AllBasedService:
         # Fetch recommendations for each item in parallel
         all_candidates = {}
         tasks = []
+
+        logger.info(f"Fetching recommendations for {len(top_items)} top items")
 
         for item in top_items:
             item_id = item.get("_id", "")
@@ -101,6 +106,8 @@ class AllBasedService:
                 if candidate_id:
                     all_candidates[candidate_id] = candidate
 
+        logger.info(f"Fetched {len(all_candidates)} candidates")
+
         # Convert to list
         candidates = list(all_candidates.values())
 
@@ -108,6 +115,8 @@ class AllBasedService:
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
         whitelist = whitelist or set()
         filtered = filter_by_genres(candidates, watched_tmdb, whitelist, excluded_ids)
+
+        logger.info(f"Filtered {len(filtered)} candidates")
 
         # Score with profile if available
         if profile:
@@ -134,10 +143,14 @@ class AllBasedService:
             scored.sort(key=lambda x: x[0], reverse=True)
             filtered = [item for _, item in scored]
 
+        logger.info(f"Scored {len(scored)} candidates")
+
         # Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
             self.tmdb_service, filtered, content_type, user_settings=self.user_settings
         )
+
+        logger.info(f"Enriched {len(enriched)} items")
 
         # Final filter (remove watched by IMDB ID)
         final = filter_watched_by_imdb(enriched, watched_imdb)

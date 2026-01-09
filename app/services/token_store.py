@@ -89,6 +89,20 @@ class TokenStore:
                 # Do not store plaintext passwords
                 raise RuntimeError("PASSWORD_ENCRYPT_FAILED")
 
+        # Encrypt poster_rating API key if present
+        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
+            poster_rating = storage_data["settings"].get("poster_rating")
+            if poster_rating and isinstance(poster_rating, dict) and poster_rating.get("api_key"):
+                try:
+                    # Only encrypt if it's not already encrypted (check if it's a valid encrypted string)
+                    api_key = poster_rating["api_key"]
+                    # Simple check: encrypted tokens are base64-like and longer
+                    # If it looks like plaintext, encrypt it
+                    # Fernet encrypted tokens start with "gAAAAAB"
+                    if not api_key.startswith("gAAAAAB"):
+                        poster_rating["api_key"] = self.encrypt_token(api_key)
+                except Exception as exc:
+                    logger.warning(f"Failed to encrypt poster_rating api_key for {redact_token(user_id)}: {exc}")
         json_str = json.dumps(storage_data)
 
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
@@ -124,6 +138,60 @@ class TokenStore:
         user_id = self.get_user_id_from_token(token)
         return await self.store_user_data(user_id, payload)
 
+    async def _migrate_poster_rating_format_raw(self, token: str, redis_key: str, data: dict) -> dict | None:
+        """Migrate old rpdb_key format to new poster_rating format in raw Redis data if needed."""
+        if not data:
+            return None
+
+        settings_dict = data.get("settings")
+        if not settings_dict or not isinstance(settings_dict, dict):
+            return None
+
+        rpdb_key = settings_dict.get("rpdb_key")
+        poster_rating = settings_dict.get("poster_rating")
+        needs_save = False
+
+        # Case 1: Migrate rpdb_key to poster_rating if rpdb_key exists and poster_rating doesn't
+        if rpdb_key and not poster_rating:
+            logger.info(f"[MIGRATION] Migrating rpdb_key to poster_rating format for {redact_token(token)}")
+            settings_dict["poster_rating"] = {
+                "provider": "rpdb",
+                "api_key": self.encrypt_token(rpdb_key),  # Encrypt the API key
+            }
+            needs_save = True
+
+        # Case 2: Clean up deprecated rpdb_key field if it exists (even if empty/null)
+        # Remove it since we've migrated to poster_rating or it's no longer needed
+        if "rpdb_key" in settings_dict:
+            settings_dict.pop("rpdb_key")
+            if not needs_save:  # Only log if we didn't already log migration
+                logger.info(f"[MIGRATION] Removing deprecated rpdb_key field for {redact_token(token)}")
+            needs_save = True
+
+        # Save back to redis if any changes were made
+        if needs_save:
+            try:
+                if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
+                    await redis_service.set(redis_key, json.dumps(data), settings.TOKEN_TTL_SECONDS)
+                else:
+                    await redis_service.set(redis_key, json.dumps(data))
+
+                # Invalidate cache so next read gets the migrated data
+                try:
+                    self.get_user_data.cache_invalidate(token)
+                except Exception:
+                    pass
+
+                logger.info(
+                    "[MIGRATION] Successfully migrated and encrypted poster_rating " f"format for {redact_token(token)}"
+                )
+                return data
+            except Exception as e:
+                logger.warning(f"[MIGRATION] Failed to save migrated data for {redact_token(token)}: {e}")
+                return None
+
+        return None
+
     @alru_cache(maxsize=2000, ttl=43200)
     async def get_user_data(self, token: str) -> dict[str, Any] | None:
         # Short-circuit for tokens known to be missing
@@ -151,6 +219,10 @@ class TokenStore:
         except json.JSONDecodeError:
             return None
 
+        updated_data = await self._migrate_poster_rating_format_raw(token, key, data)
+        if updated_data:
+            data = updated_data
+
         # Decrypt fields individually; do not fail entire record on decryption errors
         if data.get("authKey"):
             try:
@@ -166,6 +238,19 @@ class TokenStore:
                 logger.warning(f"Decryption failed for password associated with {redact_token(token)}: {e}")
                 # require re-login path when needed
                 data["password"] = None
+
+        # Decrypt poster_rating API key if present
+        if data.get("settings") and isinstance(data["settings"], dict):
+            poster_rating = data["settings"].get("poster_rating")
+            if poster_rating and isinstance(poster_rating, dict) and poster_rating.get("api_key"):
+                try:
+                    poster_rating["api_key"] = self.decrypt_token(poster_rating["api_key"])
+                except Exception as e:
+                    logger.warning(
+                        "Decryption failed for poster_rating api_key associated " f"with {redact_token(token)}: {e}"
+                    )
+                    poster_rating["api_key"] = None
+
         return data
 
     async def delete_token(self, token: str = None, key: str = None) -> None:

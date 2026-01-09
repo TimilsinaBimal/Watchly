@@ -55,7 +55,12 @@ class StremioLibraryService:
                 loved_movies_task, loved_series_task, liked_movies_task, liked_series_task
             )
 
-            all_loved_ids = set(loved_movies + loved_series + liked_movies + liked_series)
+            logger.info(
+                f"Found {len(loved_movies)} loved movies, {len(loved_series)} loved series,"
+                f" {len(liked_movies)} liked movies, {len(liked_series)} liked series"
+            )
+
+            # all_loved_ids = set(loved_movies + loved_series + liked_movies + liked_series)
 
             # 3. Categorize items
             watched: list[dict] = []
@@ -67,7 +72,7 @@ class StremioLibraryService:
             # Create sets for faster lookup
             loved_set = set(loved_movies + loved_series)
             liked_set = set(liked_movies + liked_series)
-            all_loved_ids = loved_set.union(liked_set)
+            # all_loved_ids = loved_set.union(liked_set)
 
             for item in all_raw_items:
                 # Basic validation
@@ -88,39 +93,34 @@ class StremioLibraryService:
                 is_completion_high = duration > 0 and (time_watched / duration) >= 0.7
                 is_watched = times_watched > 0 or flagged_watched > 0 or is_completion_high
 
-                if is_watched:
-                    # Set flags for recommendation engine compatibility
-                    is_item_loved = False
-                    is_item_liked = False
-                    if item_id in loved_set:
-                        item["_is_loved"] = True
-                        is_item_loved = True
-                    if item_id in liked_set:
-                        item["_is_liked"] = True
-                        is_item_liked = True
+                # if item is loved or liked and but not watched, then also we need to add it
+                # as users might not have watched it in stremio itself.
+                if item_id in loved_set:
+                    item["_is_loved"] = True
+                    loved.append(item)
 
+                elif item_id in liked_set:
+                    item["_is_liked"] = True
+                    liked.append(item)
+
+                elif is_watched:
                     watched.append(item)
-                    if is_item_loved:
-                        loved.append(item)
-                    if is_item_liked:
-                        liked.append(item)
+
+                elif not item.get("removed") and not item.get("temp"):
+                    # item has not removed and item is not temporary meaning item is not
+                    # added by stremio itself on user watch
+                    added.append(item)
                 else:
-                    if item_id in all_loved_ids:
-                        # if item is loved but not watched, do nothing
-                        pass
-                    elif not item.get("removed") and not item.get("temp"):
-                        # item has not removed and item is not temporary meaning item is not
-                        # added by stremio itself on user watch
-                        added.append(item)
-                    elif item.get("removed"):
-                        # do not do anything with removed items
-                        # removed.append(item)
-                        continue
+                    continue
+                # elif item.get("removed"):
+                #     # do not do anything with removed items
+                #     # removed.append(item)
+                #     continue
 
             # 4. Sort watched items by recency
             def sort_by_recency(x: dict):
                 state = x.get("state", {}) or {}
-                return (str(state.get("lastWatched") or ""), str(x.get("_mtime") or ""))
+                return (str(state.get("lastWatched") or str(x.get("_mtime") or "")), x.get("_mtime") or "")
 
             watched.sort(key=sort_by_recency, reverse=True)
             loved.sort(key=sort_by_recency, reverse=True)
