@@ -108,7 +108,7 @@ class ProfileScorer:
         credits = item_metadata.get("credits", {}) or {}
         crew_list = credits.get("crew", []) or []
         for crew_member in crew_list:
-            if isinstance(crew_member, dict) and crew_member.get("job") == "Director":
+            if isinstance(crew_member, dict) and crew_member.get("job").lower() in ["director", "creator", "producer"]:
                 director_id = crew_member.get("id")
                 if director_id:
                     director_ids.append(director_id)

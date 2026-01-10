@@ -99,6 +99,11 @@ class TMDBService:
         """Get details of a specific keyword."""
         return await self.client.get(f"/keyword/{keyword_id}")
 
+    @alru_cache(maxsize=500, ttl=86400)
+    async def get_person_details(self, person_id: int) -> dict[str, Any]:
+        """Get details of a specific person (actor/director)."""
+        return await self.client.get(f"/person/{person_id}")
+
     async def get_trending(self, media_type: str, time_window: str = "week", page: int = 1) -> dict[str, Any]:
         """Get trending content."""
         mt = "movie" if media_type == "movie" else "tv"

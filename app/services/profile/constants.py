@@ -9,10 +9,11 @@ EVIDENCE_WEIGHT_ADDED: Final[float] = 0.3
 
 # Feature Weights (relative importance of different feature types)
 FEATURE_WEIGHT_GENRE: Final[float] = 1.0  # Most important
-FEATURE_WEIGHT_KEYWORD: Final[float] = 0.8
+FEATURE_WEIGHT_KEYWORD: Final[float] = 0.9
 FEATURE_WEIGHT_CREATOR: Final[float] = 0.9  # Very important when available
 FEATURE_WEIGHT_ERA: Final[float] = 0.6
-FEATURE_WEIGHT_COUNTRY: Final[float] = 0.4  # Less important
+FEATURE_WEIGHT_RUNTIME: Final[float] = 0.3  # Runtime bucket preference
+FEATURE_WEIGHT_COUNTRY: Final[float] = 0.3  # Less important
 
 # Position Weights for Cast (lead actors matter more)
 CAST_POSITION_LEAD: Final[float] = 1.0
@@ -24,8 +25,8 @@ GENRE_POSITION_WEIGHTS: Final[list[float]] = [1.0, 0.6, 0.3]  # First, second, t
 GENRE_MAX_POSITIONS: Final[int] = 3  # Only consider top 3 genres
 
 # Crew Job Weights (directors matter most)
-CREW_JOB_DIRECTOR: Final[float] = 1.0
-CREW_JOB_OTHER: Final[float] = 0.5  # All other crew roles
+CREW_JOB_DIRECTOR: Final[float] = 0.7  # more focus on cast then crew
+CREW_JOB_OTHER: Final[float] = 0.1  # All other crew roles
 
 # Score Caps (prevent unbounded growth)
 CAP_GENRE: Final[float] = 50.0
@@ -33,6 +34,7 @@ CAP_KEYWORD: Final[float] = 40.0
 CAP_DIRECTOR: Final[float] = 30.0
 CAP_CAST: Final[float] = 30.0
 CAP_ERA: Final[float] = 25.0
+CAP_RUNTIME: Final[float] = 25.0
 CAP_COUNTRY: Final[float] = 20.0
 
 # Recency Decay (exponential decay parameters)
@@ -52,10 +54,14 @@ TOP_PICKS_RECENCY_CAP: Final[float] = 0.15  # Max 15% recent items (from trendin
 TOP_PICKS_GENRE_CAP: Final[float] = 0.50  # Max 50% per genre
 TOP_PICKS_CREATOR_CAP: Final[int] = 3  # Max 3 items per creator (director/actor)
 TOP_PICKS_ERA_CAP: Final[float] = 0.50  # Max 50% per era
-TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 200  # Lower noise filter
+TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 250  # Lower noise filter
 TOP_PICKS_MIN_RATING: Final[float] = 7.0  # Minimum weighted rating
 
-MAXIMUM_POPULARITY_SCORE: Final[float] = 10.0
+MAXIMUM_POPULARITY_SCORE: Final[float] = 15.0
 
 # Genre whitelist limit (top N genres)
 GENRE_WHITELIST_LIMIT: Final[int] = 7
+
+# Runtime Bucket Boundaries (in minutes)
+RUNTIME_BUCKET_SHORT_MAX: Final[int] = 30  # < 30 min
+RUNTIME_BUCKET_MEDIUM_MAX: Final[int] = 60  # 30-60 min, > 60 is long

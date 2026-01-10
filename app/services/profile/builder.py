@@ -14,6 +14,7 @@ from app.services.profile.constants import (
     CAP_ERA,
     CAP_GENRE,
     CAP_KEYWORD,
+    CAP_RUNTIME,
     CREW_JOB_DIRECTOR,
     CREW_JOB_OTHER,
     FEATURE_WEIGHT_COUNTRY,
@@ -21,6 +22,7 @@ from app.services.profile.constants import (
     FEATURE_WEIGHT_ERA,
     FEATURE_WEIGHT_GENRE,
     FEATURE_WEIGHT_KEYWORD,
+    FEATURE_WEIGHT_RUNTIME,
     FREQUENCY_ENABLED,
     FREQUENCY_MULTIPLIER_BASE,
     FREQUENCY_MULTIPLIER_LOG_FACTOR,
@@ -34,12 +36,6 @@ from app.services.profile.vectorizer import ItemVectorizer
 class ProfileBuilder:
     """
     Builds taste profile using additive accumulation.
-
-    Design principles:
-    - Pure accumulation: score += weight (no conditionals)
-    - Same weight to all metadata of an item
-    - No normalization at write time
-    - Easy to debug: print(profile.genre_scores)
     """
 
     def __init__(self, vectorizer: ItemVectorizer):
@@ -74,7 +70,12 @@ class ProfileBuilder:
             "countries": defaultdict(int),
             "directors": defaultdict(int),
             "cast": defaultdict(int),
+            "runtime_buckets": defaultdict(int),
         }
+
+        # Track weighted average for episodes (series only)
+        total_weighted_episodes = 0.0
+        total_weight_for_episodes = 0.0
 
         # Process all items in parallel
         tasks = [self._process_item(item, content_type) for item in scored_items]
@@ -89,10 +90,17 @@ class ProfileBuilder:
             if not result:
                 continue
 
-            features, evidence_weight = result
+            features, evidence_weight, is_loved = result
 
             # Accumulate scores (pure addition)
-            self._accumulate_features(profile, features, evidence_weight, feature_frequencies)
+            self._accumulate_features(profile, features, evidence_weight, is_loved, feature_frequencies)
+
+            # Track weighted episodes for average calculation (series only)
+            if profile.content_type == "series" or profile.content_type is None:
+                episode_count = features.get("episode_count")
+                if episode_count and isinstance(episode_count, (int, float)):
+                    total_weighted_episodes += float(episode_count) * evidence_weight
+                    total_weight_for_episodes += evidence_weight
 
         # Second pass: apply frequency multipliers if enabled
         if FREQUENCY_ENABLED:
@@ -100,6 +108,10 @@ class ProfileBuilder:
 
         # Apply caps
         self._apply_caps(profile)
+
+        # Calculate average episodes (series only)
+        if total_weight_for_episodes > 0:
+            profile.average_episodes = total_weighted_episodes / total_weight_for_episodes
 
         return profile
 
@@ -125,28 +137,31 @@ class ProfileBuilder:
 
         # Calculate evidence weight
         evidence_weight = self.evidence_calculator.calculate_evidence_weight(item)
+        is_loved = item.item.is_loved or item.item.is_liked
 
-        return features, evidence_weight
+        return features, evidence_weight, is_loved
 
     def _accumulate_features(
         self,
         profile: TasteProfile,
         features: dict[str, Any],
         evidence_weight: float,
+        is_loved: bool,
         frequencies: dict[str, dict[Any, int]],
     ) -> None:
         """
         Accumulate features into profile (pure addition).
 
         Same evidence_weight applied to all features of the item.
-        No conditionals, no derived features.
 
         Args:
             profile: Profile to update
             features: Extracted features
             evidence_weight: Weight for this item
+            is_loved: Whether the item is loved/liked
             frequencies: Frequency tracker for optional multipliers
         """
+
         # Genres (with position-based decay - only top 3)
         genres = features.get("genres", [])[:GENRE_MAX_POSITIONS]
         for idx, genre_id in enumerate(genres):
@@ -158,7 +173,9 @@ class ProfileBuilder:
                 frequencies["genres"][genre_id] += 1
 
         # Keywords
-        for keyword_id in features.get("keywords", []):
+        keywords = features.get("keywords", [])
+
+        for keyword_id in keywords:
             if keyword_id:
                 weight = evidence_weight * FEATURE_WEIGHT_KEYWORD
                 profile.keyword_scores[keyword_id] = profile.keyword_scores.get(keyword_id, 0.0) + weight
@@ -190,9 +207,16 @@ class ProfileBuilder:
                     job = ""
 
                 if crew_id:
+                    # Frequency mapping: use constant base weight instead of evidence_weight
+                    # Boost by small fraction if loved/liked
+                    base_freq = 1.1 if is_loved else 1.0
+
                     # Director gets full weight, others get 0.5
-                    job_weight = CREW_JOB_DIRECTOR if job == "director" else CREW_JOB_OTHER
-                    weight = evidence_weight * FEATURE_WEIGHT_CREATOR * job_weight
+                    job_weight = (
+                        CREW_JOB_DIRECTOR if job.lower() in ["director", "creator", "producer"] else CREW_JOB_OTHER
+                    )
+
+                    weight = base_freq * FEATURE_WEIGHT_CREATOR * job_weight
                     profile.director_scores[crew_id] = profile.director_scores.get(crew_id, 0.0) + weight
                     frequencies["directors"][crew_id] += 1
 
@@ -206,9 +230,21 @@ class ProfileBuilder:
                 position_weight = 1.0
 
             if cast_id:
-                weight = evidence_weight * FEATURE_WEIGHT_CREATOR * position_weight
+                # Frequency mapping: use constant base weight instead of evidence_weight
+                # Boost by small fraction if loved/liked
+                base_freq = 1.10 if is_loved else 1.0
+
+                weight = base_freq * FEATURE_WEIGHT_CREATOR * position_weight
                 profile.cast_scores[cast_id] = profile.cast_scores.get(cast_id, 0.0) + weight
                 frequencies["cast"][cast_id] += 1
+
+        # Runtime buckets
+        runtime_bucket = features.get("runtime_bucket")
+        if runtime_bucket:
+            weight = evidence_weight * FEATURE_WEIGHT_RUNTIME
+            current_score = profile.runtime_bucket_scores.get(runtime_bucket, 0.0)
+            profile.runtime_bucket_scores[runtime_bucket] = current_score + weight
+            frequencies["runtime_buckets"][runtime_bucket] += 1
 
     def _apply_frequency_multipliers(self, profile: TasteProfile, frequencies: dict[str, dict[Any, int]]) -> None:
         """
@@ -242,6 +278,12 @@ class ProfileBuilder:
                 multiplier = FREQUENCY_MULTIPLIER_BASE + (math.log(freq) * FREQUENCY_MULTIPLIER_LOG_FACTOR)
                 profile.cast_scores[cast_id] *= multiplier
 
+        # Runtime buckets
+        for runtime_bucket, freq in frequencies["runtime_buckets"].items():
+            if freq > 1:
+                multiplier = FREQUENCY_MULTIPLIER_BASE + (math.log(freq) * FREQUENCY_MULTIPLIER_LOG_FACTOR)
+                profile.runtime_bucket_scores[runtime_bucket] *= multiplier
+
     @staticmethod
     def _apply_caps(profile: TasteProfile) -> None:
         """
@@ -273,3 +315,8 @@ class ProfileBuilder:
         # Cap countries
         for country in profile.country_scores:
             profile.country_scores[country] = min(profile.country_scores[country], CAP_COUNTRY)
+
+        # Cap runtime buckets
+        for runtime_bucket in profile.runtime_bucket_scores:
+            current_score = profile.runtime_bucket_scores[runtime_bucket]
+            profile.runtime_bucket_scores[runtime_bucket] = min(current_score, CAP_RUNTIME)

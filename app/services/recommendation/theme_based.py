@@ -164,6 +164,27 @@ class ThemeBasedService:
                 # Keywords: k123 or k123-456
                 kw_str = part[1:].replace("-", "|")
                 params["with_keywords"] = kw_str
+            elif part.startswith("c") and not part.startswith("ct"):
+                # Creators: c123 (director/actor IDs)
+                # For movies: use with_crew for directors, with_cast for actors
+                # For TV: use with_people for directors, with_cast for actors
+                creator_id = part[1:]
+                is_tv = content_type in ("tv", "series")
+                # Try with_cast first (works for both), then with_crew/with_people
+                if "with_cast" not in params:
+                    params["with_cast"] = creator_id
+                else:
+                    # If multiple creators, combine them
+                    existing = params.get("with_cast", "")
+                    params["with_cast"] = f"{existing}|{creator_id}" if existing else creator_id
+            elif part.startswith("r"):
+                # Runtime bucket: rshort, rmedium, rlong
+                # Note: TMDB doesn't have direct runtime filtering in discover API
+                # This is stored for potential future use or filtering logic
+                runtime_bucket = part[1:]
+                logger.debug(f"Runtime bucket in theme: {runtime_bucket}")
+                # We could add custom filtering logic here if needed
+                pass
             elif part.startswith("ct"):
                 # Country: ctUS
                 params["with_origin_country"] = part[2:]

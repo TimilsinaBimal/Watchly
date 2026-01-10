@@ -10,7 +10,6 @@ from app.core.settings import UserSettings
 from app.models.taste_profile import TasteProfile
 from app.services.profile.constants import (
     TOP_PICKS_CREATOR_CAP,
-    TOP_PICKS_ERA_CAP,
     TOP_PICKS_GENRE_CAP,
     TOP_PICKS_MIN_RATING,
     TOP_PICKS_MIN_VOTE_COUNT,
@@ -137,11 +136,11 @@ class TopPicksService:
 
         elapsed_time = time.time() - start_time
         logger.info(
-            f"✓ Top picks complete: {len(filtered)} items returned in {elapsed_time:.2f}s "
+            f"Top picks complete: {len(filtered)} items returned in {elapsed_time:.2f}s "
             f"(target: {limit}, candidates: {len(all_candidates)}, scored: {len(scored_candidates)})"
         )
 
-        return filtered
+        return filtered[:limit]
 
     async def _fetch_recommendations_from_top_items(
         self, library_items: dict[str, list[dict[str, Any]]], content_type: str, mtype: str
@@ -353,10 +352,10 @@ class TopPicksService:
         """
         result = []
         genre_counts = defaultdict(int)
-        era_counts = defaultdict(int)
+        # era_counts = defaultdict(int)
 
         max_per_genre = int(limit * TOP_PICKS_GENRE_CAP)
-        max_per_era = int(limit * TOP_PICKS_ERA_CAP)
+        # max_per_era = int(limit * TOP_PICKS_ERA_CAP)
 
         for score, item in scored_candidates:
             if len(result) >= limit:
@@ -383,21 +382,21 @@ class TopPicksService:
                 if genre_counts[top_genre] >= max_per_genre:
                     continue
 
-            # Check era cap (50% max per era)
-            year = self._extract_year(item)
-            if year:
-                era = self._year_to_era(year)
-                if era_counts[era] >= max_per_era:
-                    continue
+            # # Check era cap (50% max per era)
+            # year = self._extract_year(item)
+            # if year:
+            #     era = self._year_to_era(year)
+            #     if era_counts[era] >= max_per_era:
+            #         continue
 
             # Add item
             result.append(item)
 
             if genre_ids:
                 genre_counts[top_genre] += 1
-            if year:
-                era = self._year_to_era(year)
-                era_counts[era] += 1
+            # if year:
+            #     era = self._year_to_era(year)
+            #     era_counts[era] += 1
 
         return result
 
@@ -467,7 +466,7 @@ class TopPicksService:
 
     @staticmethod
     def _is_recent_release(item: dict[str, Any], threshold: datetime, mtype: str) -> bool:
-        """Check if item was released within the threshold (e.g., last 6 months)."""
+        """Check if item was released within the threshold (e.g., last 3 months)."""
         release_date_str = item.get("release_date") if mtype == "movie" else item.get("first_air_date")
         if not release_date_str:
             return False

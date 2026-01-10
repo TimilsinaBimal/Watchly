@@ -94,16 +94,13 @@ class RecommendationScoring:
     @staticmethod
     def apply_quality_adjustments(score: float, wr: float, vote_count: int, popularity: float) -> float:
         """Apply simple quality boost for high-confidence items only."""
-        # if vote_count >= 1000 and wr >= 7.5 and popularity <= MAXIMUM_POPULARITY_SCORE:
-        #     # Proven gem: high confidence, high quality
-        #     return score * 1.10
         if (
             vote_count >= TOP_PICKS_MIN_VOTE_COUNT
             and wr >= TOP_PICKS_MIN_RATING
             and popularity <= MAXIMUM_POPULARITY_SCORE
         ):
             # Good confidence and quality Strong boost
-            return score * 1.30
+            return score * 1.20
 
         return score
 
