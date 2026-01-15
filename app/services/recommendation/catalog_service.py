@@ -87,7 +87,12 @@ class CatalogService:
         self._validate_inputs(token, content_type, catalog_id)
 
         # Prepare response headers
-        headers: dict[str, Any] = {"Cache-Control": f"public, max-age={settings.CATALOG_CACHE_TTL}"}
+
+        headers: dict[str, Any] = {
+            "Cache-Control": f"public, max-age={settings.CATALOG_CACHE_TTL}, immutable",
+            "Vary": "Origin",
+            "Content-Type": "application/json",
+        }
 
         logger.info(f"[{redact_token(token)}...] Fetching catalog for {content_type} with id {catalog_id}")
 
