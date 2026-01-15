@@ -277,6 +277,16 @@ async function fetchStremioIdentity(authKey) {
             const s = data.settings;
             if (s.language && languageSelect) languageSelect.value = s.language;
 
+            // Popularity & Year Range
+            const popularitySelect = document.getElementById('popularitySelect');
+            const yearMinInput = document.getElementById('yearMin');
+            const yearMaxInput = document.getElementById('yearMax');
+
+            if (s.popularity && popularitySelect) popularitySelect.value = s.popularity;
+            if (s.year_min && yearMinInput) yearMinInput.value = s.year_min;
+            if (s.year_max && yearMaxInput) yearMaxInput.value = s.year_max;
+            if (window.updateYearSlider) window.updateYearSlider();
+
             // Handle poster rating: prefer new format, fallback to old rpdb_key
             const posterRatingProvider = document.getElementById('posterRatingProvider');
             const posterRatingApiKey = document.getElementById('posterRatingApiKey');

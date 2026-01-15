@@ -30,6 +30,11 @@ class UserSettings(BaseModel):
     poster_rating: PosterRatingConfig | None = Field(default=None, description="Poster rating provider configuration")
     excluded_movie_genres: list[str] = Field(default_factory=list)
     excluded_series_genres: list[str] = Field(default_factory=list)
+    year_min: int = Field(default=1970, description="Minimum release year")
+    year_max: int = Field(default=2026, description="Maximum release year")
+    popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(
+        default="balanced", description="Popularity preference"
+    )
 
 
 # Catalog descriptions for frontend

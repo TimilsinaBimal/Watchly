@@ -1,4 +1,19 @@
 <!-- SECTION 2: CONFIGURE -->
+<style>
+    /* Custom Range Slider Styles */
+    input[type='range']::-webkit-slider-thumb {
+        pointer-events: auto;
+    }
+
+    input[type='range']::-moz-range-thumb {
+        pointer-events: auto;
+    }
+
+    /* Ensure the active slider is on top */
+    .year-slider-active {
+        z-index: 40 !important;
+    }
+</style>
 <section id="sect-config" class="space-y-8 hidden animate-fade-in">
     <div class="mb-6">
         <h2 class="text-3xl font-bold text-white mb-2">Preferences</h2>
@@ -23,6 +38,57 @@
                 </svg>
             </div>
         </div>
+    </div>
+
+    <div class="border-t border-white/10"></div>
+
+    <!-- Popularity & Quality -->
+    <div class="space-y-4">
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Discovery Style
+            (Popularity)</label>
+        <div class="relative">
+            <select id="popularitySelect"
+                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
+                <option value="mainstream">Mainstream (All well-known titles)</option>
+                <option value="balanced" selected>Balanced (Popular & hidden gems mix)</option>
+                <option value="gems">Hidden Gems (Highly rated, less popular)</option>
+                <option value="all">Everything (No popularity filters)</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div class="border-t border-white/10"></div>
+
+    <!-- Year Range -->
+    <div class="space-y-6">
+        <div class="flex items-center justify-between">
+            <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Release Year Range</label>
+            <div class="text-sm font-mono text-white">
+                <span id="yearMinLabel">1980</span> — <span id="yearMaxLabel">{{ current_year }}</span>
+            </div>
+        </div>
+
+        <div class="relative h-6 flex items-center group">
+            <!-- Background Track -->
+            <div class="absolute w-full h-1.5 bg-slate-800 rounded-full"></div>
+            <!-- Progress Track (Selected portion) -->
+            <div id="yearSliderTrack" class="absolute h-1.5 bg-white rounded-full" style="left: 0%; right: 0%;"></div>
+
+            <!-- Hidden Dual Sliders -->
+            <input type="range" id="yearMin" min="1970" max="2026" value="1980" step="1"
+                class="absolute w-full appearance-none bg-transparent pointer-events-none z-30 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-black [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-black [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-lg">
+
+            <input type="range" id="yearMax" min="1970" max="2026" value="2026" step="1"
+                class="absolute w-full appearance-none bg-transparent pointer-events-none z-30 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-black [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-black [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-lg">
+        </div>
+
+        <p class="text-xs text-slate-500">Note: Setting max year to current year includes all new releases up to today (the
+            day recommendations are fetched).</p>
     </div>
 
     <div class="border-t border-white/10"></div>

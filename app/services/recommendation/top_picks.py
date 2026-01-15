@@ -19,7 +19,13 @@ from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
-from app.services.recommendation.utils import content_type_to_mtype, filter_watched_by_imdb, resolve_tmdb_id
+from app.services.recommendation.utils import (
+    apply_discover_filters,
+    content_type_to_mtype,
+    filter_items_by_settings,
+    filter_watched_by_imdb,
+    resolve_tmdb_id,
+)
 from app.services.scoring import ScoringService
 from app.services.tmdb.service import TMDBService
 
@@ -80,6 +86,9 @@ class TopPicksService:
 
         # 1. Fetch recommendations from top items (loved/watched/liked/added)
         rec_candidates = await self._fetch_recommendations_from_top_items(library_items, content_type, mtype)
+        # Apply global settings filter to recommendations
+        # (since TMDB recommendations API doesn't support early filtering)
+        rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings)
         for item in rec_candidates:
             if item.get("id"):
                 all_candidates[item["id"]] = item
@@ -200,13 +209,17 @@ class TopPicksService:
         Add a discover task to the list of tasks with default parameters.
         """
         params = {
-            "sort_by": "popularity.asc",
-            "vote_count_gte": TOP_PICKS_MIN_VOTE_COUNT,
-            "vote_average_gte": TOP_PICKS_MIN_RATING,
+            "sort_by": "popularity.desc",
+            "vote_count.gte": TOP_PICKS_MIN_VOTE_COUNT,
+            "vote_average.gte": TOP_PICKS_MIN_RATING,
             **kwargs,
         }
         if without_genres:
             params["without_genres"] = without_genres
+
+        # Apply global user filters (year range, popularity)
+        params = apply_discover_filters(params, self.user_settings)
+
         tasks.append(self.tmdb_service.get_discover(mtype, **params))
 
     async def _fetch_discover_with_profile(

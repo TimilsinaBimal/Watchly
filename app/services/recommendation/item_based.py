@@ -8,6 +8,7 @@ from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.utils import (
     content_type_to_mtype,
     filter_by_genres,
+    filter_items_by_settings,
     filter_watched_by_imdb,
     resolve_tmdb_id,
 )
@@ -66,6 +67,9 @@ class ItemBasedService:
         # Fetch candidates (similar + recommendations, 2 pages each)
         candidates = await self._fetch_candidates(tmdb_id, mtype)
 
+        # Apply global settings filter (years, popularity)
+        candidates = filter_items_by_settings(candidates, self.user_settings)
+
         # Filter by genres and watched items
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
         filtered = filter_by_genres(candidates, watched_tmdb, whitelist, excluded_ids)
@@ -95,7 +99,7 @@ class ItemBasedService:
 
         async def fetch_and_combine(fetch_method, source_name):
             results = await asyncio.gather(
-                *[fetch_method(tmdb_id, mtype, page=p) for p in [1, 2]],
+                *[fetch_method(tmdb_id, mtype, page=p) for p in [1, 2, 3]],
                 return_exceptions=True,
             )
             for res in results:
@@ -109,7 +113,7 @@ class ItemBasedService:
 
         await fetch_and_combine(self.tmdb_service.get_recommendations, "recommendations")
 
-        if not combined:
+        if not combined or len(combined) < 50:
             await fetch_and_combine(self.tmdb_service.get_similar, "similar")
 
         return list(combined.values())

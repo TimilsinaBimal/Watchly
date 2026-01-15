@@ -32,6 +32,7 @@ export function initializeForm(domElements, catalogState) {
     initializePasswordToggles();
     initializeSuccessActions();
     initializePosterRatingProvider();
+    initializeYearSlider();
 }
 
 // Form Submission
@@ -46,6 +47,9 @@ async function initializeFormSubmission() {
         const email = emailInput?.value.trim();
         const password = passwordInput?.value;
         const language = languageSelect.value;
+        const popularity = document.getElementById("popularitySelect")?.value || "balanced";
+        const yearMin = parseInt(document.getElementById("yearMin")?.value || "1980");
+        const yearMax = parseInt(document.getElementById("yearMax")?.value || "2026");
         const posterRatingProvider = document.getElementById("posterRatingProvider")?.value || "";
         const posterRatingApiKey = document.getElementById("posterRatingApiKey")?.value.trim() || "";
         const excludedMovieGenres = Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value);
@@ -128,6 +132,9 @@ async function initializeFormSubmission() {
                 password: password || undefined,
                 catalogs: catalogsToSend,
                 language: language,
+                year_min: yearMin,
+                year_max: yearMax,
+                popularity: popularity,
                 poster_rating: posterRating,
                 excluded_movie_genres: excludedMovieGenres,
                 excluded_series_genres: excludedSeriesGenres
@@ -481,4 +488,59 @@ function showSuccess(url) {
         sections.success.classList.remove('hidden');
         document.getElementById('addonUrl').textContent = url;
     }
+}
+
+// Year Slider Logic
+function initializeYearSlider() {
+    const yearMin = document.getElementById('yearMin');
+    const yearMax = document.getElementById('yearMax');
+    const yearMinLabel = document.getElementById('yearMinLabel');
+    const yearMaxLabel = document.getElementById('yearMaxLabel');
+    const track = document.getElementById('yearSliderTrack');
+
+    if (!yearMin || !yearMax || !yearMinLabel || !yearMaxLabel || !track) return;
+
+    function updateSlider() {
+        const minVal = parseInt(yearMin.value);
+        const maxVal = parseInt(yearMax.value);
+
+        if (minVal > maxVal) {
+            // Prevent crossing: if min > max, snap them
+            // This is handled by input listeners to avoid jerky movement
+        }
+
+        yearMinLabel.textContent = minVal;
+        yearMaxLabel.textContent = maxVal;
+
+        const range = yearMin.max - yearMin.min;
+        const left = ((minVal - yearMin.min) / range) * 100;
+        const right = ((yearMin.max - maxVal) / range) * 100;
+
+        track.style.left = left + '%';
+        track.style.right = right + '%';
+    }
+
+    yearMin.addEventListener('input', () => {
+        if (parseInt(yearMin.value) > parseInt(yearMax.value)) {
+            yearMin.value = yearMax.value;
+        }
+        yearMin.classList.add('year-slider-active');
+        yearMax.classList.remove('year-slider-active');
+        updateSlider();
+    });
+
+    yearMax.addEventListener('input', () => {
+        if (parseInt(yearMax.value) < parseInt(yearMin.value)) {
+            yearMax.value = yearMin.value;
+        }
+        yearMax.classList.add('year-slider-active');
+        yearMin.classList.remove('year-slider-active');
+        updateSlider();
+    });
+
+    // Initial update
+    updateSlider();
+
+    // Export update function for external population
+    window.updateYearSlider = updateSlider;
 }

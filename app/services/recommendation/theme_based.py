@@ -10,7 +10,12 @@ from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
-from app.services.recommendation.utils import content_type_to_mtype, filter_by_genres, filter_watched_by_imdb
+from app.services.recommendation.utils import (
+    apply_discover_filters,
+    content_type_to_mtype,
+    filter_by_genres,
+    filter_watched_by_imdb,
+)
 from app.services.tmdb.service import TMDBService
 
 
@@ -251,6 +256,10 @@ class ThemeBasedService:
             List of candidate items
         """
         candidates = []
+
+        # Apply global user filters (year range, popularity)
+        params = apply_discover_filters(params, self.user_settings)
+
         tasks = [self.tmdb_service.get_discover(content_type, page=p, **params) for p in pages]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)

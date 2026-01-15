@@ -12,6 +12,7 @@ from app.services.recommendation.scoring import RecommendationScoring
 from app.services.recommendation.utils import (
     content_type_to_mtype,
     filter_by_genres,
+    filter_items_by_settings,
     filter_watched_by_imdb,
     resolve_tmdb_id,
 )
@@ -110,6 +111,9 @@ class AllBasedService:
 
         # Convert to list
         candidates = list(all_candidates.values())
+
+        # Apply global settings filter (years, popularity)
+        candidates = filter_items_by_settings(candidates, self.user_settings)
 
         # Filter by genres and watched items
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
