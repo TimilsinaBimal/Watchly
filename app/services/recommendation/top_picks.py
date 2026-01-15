@@ -104,6 +104,7 @@ class TopPicksService:
 
         #  Score all candidates with profile
         scored_candidates = []
+        rotation_seed = RecommendationScoring.generate_rotation_seed()  # Daily rotation for fresh recommendations
         for item in filtered_candidates:
             try:
                 final_score = RecommendationScoring.calculate_final_score(
@@ -111,6 +112,7 @@ class TopPicksService:
                     profile=profile,
                     scorer=self.scorer,
                     mtype=mtype,
+                    rotation_seed=rotation_seed,
                 )
                 scored_candidates.append((final_score, item))
             except Exception as e:

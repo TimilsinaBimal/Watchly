@@ -108,6 +108,7 @@ class ThemeBasedService:
         if profile:
             scored = []
             mtype = content_type_to_mtype(content_type)
+            rotation_seed = RecommendationScoring.generate_rotation_seed()  # Daily rotation for fresh recommendations
             for item in filtered:
                 try:
 
@@ -116,6 +117,7 @@ class ThemeBasedService:
                         profile=profile,
                         scorer=self.scorer,
                         mtype=mtype,
+                        rotation_seed=rotation_seed,
                     )
 
                     # Apply genre multiplier (if whitelist available)
