@@ -28,6 +28,8 @@ from app.services.profile.constants import (
     FREQUENCY_MULTIPLIER_LOG_FACTOR,
     GENRE_MAX_POSITIONS,
     GENRE_POSITION_WEIGHTS,
+    PROFILE_DECAY_ENABLED,
+    PROFILE_DECAY_FACTOR,
 )
 from app.services.profile.evidence import EvidenceCalculator
 from app.services.profile.vectorizer import ItemVectorizer
@@ -77,12 +79,15 @@ class ProfileBuilder:
         total_weighted_episodes = 0.0
         total_weight_for_episodes = 0.0
 
+        # Track processed items
+        processed_ids = set()
+
         # Process all items in parallel
         tasks = [self._process_item(item, content_type) for item in scored_items]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # First pass: accumulate scores and track frequencies
-        for result in results:
+        for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.debug(f"Failed to process item: {result}")
                 continue
@@ -90,7 +95,20 @@ class ProfileBuilder:
             if not result:
                 continue
 
-            features, evidence_weight, is_loved = result
+            # Add to processed IDs
+            processed_ids.add(scored_items[i].item.id)
+
+            # Try to unpack as 3-tuple first (new format)
+            try:
+                features, evidence_weight, is_loved = result  # type: ignore
+            except (ValueError, TypeError):
+                # Try to unpack as 2-tuple (old format)
+                try:
+                    features, evidence_weight = result  # type: ignore
+                    is_loved = False
+                except (ValueError, TypeError):
+                    logger.debug(f"Failed to unpack result: {result}")
+                    continue
 
             # Accumulate scores (pure addition)
             self._accumulate_features(profile, features, evidence_weight, is_loved, feature_frequencies)
@@ -113,9 +131,12 @@ class ProfileBuilder:
         if total_weight_for_episodes > 0:
             profile.average_episodes = total_weighted_episodes / total_weight_for_episodes
 
+        profile.processed_items = processed_ids
         return profile
 
-    async def _process_item(self, item: ScoredItem, content_type: str | None) -> tuple[dict[str, Any], float] | None:
+    async def _process_item(
+        self, item: ScoredItem, content_type: str | None
+    ) -> tuple[dict[str, Any], float, bool] | None:
         """
         Process a single item and extract features.
 
@@ -124,7 +145,7 @@ class ProfileBuilder:
             content_type: Filter by content type
 
         Returns:
-            Tuple of (features_dict, evidence_weight) or None
+            Tuple of (features_dict, evidence_weight, is_loved) or None
         """
         # Filter by content type
         if content_type and item.item.type != content_type:
@@ -320,3 +341,95 @@ class ProfileBuilder:
         for runtime_bucket in profile.runtime_bucket_scores:
             current_score = profile.runtime_bucket_scores[runtime_bucket]
             profile.runtime_bucket_scores[runtime_bucket] = min(current_score, CAP_RUNTIME)
+
+    async def update_profile_incrementally(
+        self,
+        existing_profile: TasteProfile,
+        new_items: list[ScoredItem],
+        content_type: str | None = None,
+    ) -> TasteProfile:
+        """
+        Update existing profile with new items only.
+
+        Args:
+            existing_profile: Existing TasteProfile to update
+            new_items: List of new ScoredItem to add
+            content_type: Content type filter (movie/series) or None
+
+        Returns:
+            Updated TasteProfile
+        """
+        if not existing_profile:
+            # No existing profile, build from scratch
+            return await self.build_profile(new_items, content_type)
+
+        # Apply gentle age decay if enabled
+        if PROFILE_DECAY_ENABLED:
+            self._apply_age_decay(existing_profile)
+
+        # Process new items and accumulate features
+        tasks = [self._process_item(item, content_type) for item in new_items]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.debug(f"Failed to process incremental item: {result}")
+                continue
+
+            if not result:
+                continue
+
+            # Add to processed IDs
+            existing_profile.processed_items.add(new_items[i].item.id)
+
+            # Try to unpack as 3-tuple first (new format)
+            try:
+                features, evidence_weight, is_loved = result  # type: ignore
+            except (ValueError, TypeError):
+                # Try to unpack as 2-tuple (old format)
+                try:
+                    features, evidence_weight = result  # type: ignore
+                    is_loved = False
+                except (ValueError, TypeError):
+                    logger.debug(f"Failed to unpack result: {result}")
+                    continue
+
+            # Simple frequency tracking
+            frequencies = {
+                "genres": {},
+                "keywords": {},
+                "eras": {},
+                "countries": {},
+                "directors": {},
+                "cast": {},
+                "runtime_buckets": {},
+            }
+
+            self._accumulate_features(existing_profile, features, evidence_weight, is_loved, frequencies)
+
+        # Apply caps to prevent unbounded growth
+        self._apply_caps(existing_profile)
+
+        return existing_profile
+
+    def _apply_age_decay(self, profile: TasteProfile) -> None:
+        """
+        Apply gentle age decay to keep profile fresh.
+
+        Args:
+            profile: Profile to apply decay to
+        """
+        # Apply configured decay to all scores
+        decay_factor = PROFILE_DECAY_FACTOR
+
+        for score_dict in [
+            profile.genre_scores,
+            profile.keyword_scores,
+            profile.director_scores,
+            profile.cast_scores,
+            profile.era_scores,
+            profile.country_scores,
+            profile.runtime_bucket_scores,
+        ]:
+            for key in score_dict:
+                score_dict[key] *= decay_factor

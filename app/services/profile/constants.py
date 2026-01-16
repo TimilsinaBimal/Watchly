@@ -65,3 +65,8 @@ GENRE_WHITELIST_LIMIT: Final[int] = 7
 # Runtime Bucket Boundaries (in minutes)
 RUNTIME_BUCKET_SHORT_MAX: Final[int] = 30  # < 30 min
 RUNTIME_BUCKET_MEDIUM_MAX: Final[int] = 60  # 30-60 min, > 60 is long
+
+# Profile Decay Settings
+PROFILE_DECAY_ENABLED: Final[bool] = True
+PROFILE_DECAY_FACTOR: Final[float] = 0.98  # 2% decay per update
+PROFILE_DECAY_DAYS_THRESHOLD: Final[int] = 30  # Apply decay after 7 days

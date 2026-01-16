@@ -24,7 +24,8 @@ class TasteProfile(BaseModel):
     director_scores: dict[int, float] = Field(default_factory=dict, description="Director ID → accumulated score")
     cast_scores: dict[int, float] = Field(default_factory=dict, description="Actor ID → accumulated score")
     runtime_bucket_scores: dict[str, float] = Field(
-        default_factory=dict, description="Runtime bucket (short/medium/long) → accumulated score"
+        default_factory=dict,
+        description="Runtime bucket (short/medium/long) → accumulated score",
     )
 
     # Metadata
@@ -33,6 +34,10 @@ class TasteProfile(BaseModel):
     )
     last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     content_type: str | None = Field(default=None, description="movie or series")
+    processed_items: set[str] = Field(
+        default_factory=set,
+        description="Set of processed item IDs to prevent double counting",
+    )
 
     class Config:
         """Pydantic configuration."""

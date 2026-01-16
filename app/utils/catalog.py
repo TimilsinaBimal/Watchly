@@ -42,9 +42,11 @@ async def cache_profile_and_watched_sets(
     Build and cache profile and watched sets for a user and content type.
     Uses the centralized UserCacheService for caching.
     """
-    profile, watched_tmdb, watched_imdb = await integration_service.build_profile_from_library(
-        library_items, content_type, bundle, auth_key
-    )
+    (
+        profile,
+        watched_tmdb,
+        watched_imdb,
+    ) = await integration_service.build_profile_incremental(library_items, content_type, token, bundle, auth_key)
 
     await user_cache.set_profile_and_watched_sets(token, content_type, profile, watched_tmdb, watched_imdb)
     return profile, watched_tmdb, watched_imdb
