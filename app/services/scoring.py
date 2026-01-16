@@ -40,7 +40,12 @@ class ScoringService:
             source_type="loved" if item.is_loved else ("liked" if item.is_liked else "watched"),
         )
 
-    def calculate_score(self, item: dict | StremioLibraryItem, is_loved: bool = False, is_liked: bool = False) -> float:
+    def calculate_score(
+        self,
+        item: dict | StremioLibraryItem,
+        is_loved: bool = False,
+        is_liked: bool = False,
+    ) -> float:
         """
         Backwards compatible method to just get the float score.
         Accepts either a raw dict or a StremioLibraryItem.
@@ -118,9 +123,7 @@ class ScoringService:
                     else:
                         ratio_component = max((float(state.timesWatched) - 1.0) * 20.0, 0.0)
             except Exception as e:
-                from loguru import logger
-
-                logger.debug(f"Math error in rewatch score calculation for {item.item.id}: {e}")
+                logger.debug(f"Math error in rewatch score calculation for {item.id}: {e}")
                 ratio_component = 0.0
 
             # Combine components but clamp to reasonable bounds
@@ -137,15 +140,14 @@ class ScoringService:
             if last_watched.tzinfo is None:
                 last_watched = last_watched.replace(tzinfo=timezone.utc)
 
-            days_since = (now - last_watched).days
+            days_since = max((now - last_watched).days, 0)
 
             MAX_RECENCY_SCORE = 100.0
             HALF_LIFE_DAYS = 60.0  # Days for score to halve
 
-            if days_since >= 0:
-                recency_score = MAX_RECENCY_SCORE * math.exp(-days_since / HALF_LIFE_DAYS)
-                # Mark as recent if watched within last 30 days
-                is_recent = days_since < 30
+            recency_score = MAX_RECENCY_SCORE * math.exp(-days_since / HALF_LIFE_DAYS)
+            # Mark as recent if watched within last 30 days
+            is_recent = days_since < 30
 
         # 4. Explicit Rating Score
         rating_score = 0.0

@@ -30,6 +30,13 @@ async def lifespan(app: FastAPI):
     """
     Manage application lifespan events (startup/shutdown).
     """
+    # Startup checks
+    if settings.TOKEN_SALT == "change-me" and settings.APP_ENV == "production":
+        logger.warning(
+            "Security Warning: TOKEN_SALT is set to default 'change-me' in production environment! "
+            "Please set the TOKEN_SALT environment variable."
+        )
+
     yield
     try:
         await redis_service.close()

@@ -144,6 +144,9 @@ async def pad_to_min(
         logger.debug(f"Error fetching trending/top-rated for padding: {e}")
         return existing
 
+    # Filter pool by user settings (years, popularity)
+    pool = filter_items_by_settings(pool, user_settings)
+
     # Get existing TMDB IDs
     existing_tmdb = set()
     for it in existing:
@@ -285,7 +288,12 @@ def apply_discover_filters(params: dict[str, Any], user_settings: Any) -> dict[s
     # 2. Popularity & Quality
     # If the local params already have popularity/vote filters, we generally respect the stricter one.
     # However, global popularity setting typically defines the "floor".
-    for key in ["popularity.gte", "popularity.lte", "vote_count.gte", "vote_average.gte"]:
+    for key in [
+        "popularity.gte",
+        "popularity.lte",
+        "vote_count.gte",
+        "vote_average.gte",
+    ]:
         global_val = global_params.get(key)
         local_val = params.get(key)
 
