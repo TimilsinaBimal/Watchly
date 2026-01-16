@@ -15,6 +15,12 @@ async def get_catalog(response: Response, type: str, id: str, token: str, extra:
 
     This endpoint delegates all logic to CatalogService facade.
     """
+    if type not in ("movie", "series"):
+        raise HTTPException(status_code=400, detail="Invalid content type. Must be 'movie' or 'series'.")
+
+    if len(token) > 30:  # normal stremio tokens are 24 length. But we are using this just to be safe.
+        raise HTTPException(status_code=400, detail="Invalid token.")
+
     try:
         # Delegate to catalog service facade
         recommendations, headers = await catalog_service.get_catalog(token, type, id)

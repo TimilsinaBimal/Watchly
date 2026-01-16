@@ -126,6 +126,28 @@ class RedisService:
             logger.error(f"Failed to delete keys matching pattern '{pattern}' in Redis: {exc}")
             return 0
 
+    async def set_nx(self, key: str, value: Any, ttl: int | None = None) -> bool:
+        """
+        Set key only if it doesn't exist (Distributed Lock).
+
+        Args:
+            key: The key to set
+            value: The value to store
+            ttl: Optional time-to-live in seconds
+
+        Returns:
+            True if key was set, False if it already existed
+        """
+        try:
+            client = await self.get_client()
+            str_value = str(value)
+            # nx=True ensures we only set if not exists
+            result = await client.set(key, str_value, ex=ttl, nx=True)
+            return bool(result)
+        except (redis.RedisError, OSError) as exc:
+            logger.error(f"Failed to set_nx key '{key}' in Redis: {exc}")
+            return False
+
     async def close(self) -> None:
         """Close and disconnect the Redis client"""
         if self._client is not None:

@@ -396,13 +396,13 @@ class ProfileBuilder:
 
             # Simple frequency tracking
             frequencies = {
-                "genres": {},
-                "keywords": {},
-                "eras": {},
-                "countries": {},
-                "directors": {},
-                "cast": {},
-                "runtime_buckets": {},
+                "genres": defaultdict(int),
+                "keywords": defaultdict(int),
+                "eras": defaultdict(int),
+                "countries": defaultdict(int),
+                "directors": defaultdict(int),
+                "cast": defaultdict(int),
+                "runtime_buckets": defaultdict(int),
             }
 
             self._accumulate_features(existing_profile, features, evidence_weight, is_loved, frequencies)
