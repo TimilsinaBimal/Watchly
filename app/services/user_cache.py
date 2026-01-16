@@ -337,7 +337,7 @@ class UserCacheService:
         await self.invalidate_all_catalogs(token)
         logger.debug(f"[{redact_token(token)}...] Invalidated all user data cache")
 
-    async def get_catalog(self, token: str, type: str, id: str) -> dict[str, Any] | None:
+    async def get_catalog(self, token: str, type: str, id: str) -> tuple[dict[str, Any], int] | None:
         """
         Get cached catalog for a user and content type.
 
@@ -345,11 +345,23 @@ class UserCacheService:
             token: User token
             type: Content type (movie or series)
             id: Catalog ID
+
+        Returns:
+            Tuple of (catalog_data, timestamp) or None if not found
         """
         key = CATALOG_KEY.format(token=token, type=type, id=id)
         cached = await redis_service.get(key)
         if cached:
-            return json.loads(cached)
+            try:
+                data = json.loads(cached)
+                # Handle new format with timestamp wrapper
+                if "data" in data and "created_at" in data:
+                    return data["data"], data["created_at"]
+                # Handle legacy format (raw catalog dict)
+                # Return 0 timestamp to force refresh if it exceeds window
+                return data, 0
+            except json.JSONDecodeError:
+                return None
         return None
 
     async def set_catalog(
@@ -371,7 +383,12 @@ class UserCacheService:
             ttl: Time to live for the cache (in seconds)
         """
         key = CATALOG_KEY.format(token=token, type=type, id=id)
-        await redis_service.set(key, json.dumps(catalog), ttl)
+        # Store with timestamp for stale-while-revalidate logic
+        wrapped_data = {
+            "data": catalog,
+            "created_at": int(time.time()),
+        }
+        await redis_service.set(key, json.dumps(wrapped_data), ttl)
         logger.debug(f"[{redact_token(token)}...] Cached catalog for {type}/{id}")
 
     async def invalidate_catalog(self, token: str, type: str, id: str) -> None:

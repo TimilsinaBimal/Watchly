@@ -1,5 +1,6 @@
 import random
 import re
+import time
 from typing import Any
 
 from fastapi import HTTPException
@@ -38,7 +39,7 @@ def shuffle_data_if_needed(
     return data
 
 
-def _clean_meta(meta: dict) -> dict:
+def _clean_meta(meta: dict) -> dict | None:
     """Return a sanitized Stremio meta object without internal fields.
 
     Keeps only public keys and drops internal scoring/IDs/keywords/cast, etc.
@@ -71,7 +72,7 @@ class CatalogService:
 
     async def get_catalog(
         self, token: str, content_type: str, catalog_id: str
-    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         """
         Get catalog recommendations.
 
@@ -81,7 +82,7 @@ class CatalogService:
             catalog_id: Catalog ID (watchly.rec, watchly.creators, watchly.theme.*, etc.)
 
         Returns:
-            Tuple of (recommendations list, response headers dict)
+            Tuple of (recommendations dict, response headers dict)
         """
         # Validate inputs
         self._validate_inputs(token, content_type, catalog_id)
@@ -100,7 +101,10 @@ class CatalogService:
         credentials = await token_store.get_user_data(token)
         if not credentials:
             logger.error("No credentials found for token")
-            raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired token. Please reconfigure the addon.",
+            )
 
         # Trigger lazy update if needed
         if settings.AUTO_UPDATE_CATALOGS:
@@ -113,24 +117,43 @@ class CatalogService:
                 pass
 
         bundle = StremioBundle()
-        # Resolve auth and settings
-        auth_key = await self._resolve_auth(bundle, credentials, token)
-        user_settings = self._extract_settings(credentials)
-
-        # get cached catalog
-        cached_data = await user_cache.get_catalog(token, content_type, catalog_id)
-        if cached_data:
-            logger.debug(f"[{redact_token(token)}...] Using cached catalog for {content_type}/{catalog_id}")
-            meta_data = cached_data["metas"]
-            meta_data = shuffle_data_if_needed(user_settings, catalog_id, meta_data)
-            cached_data["metas"] = meta_data
-            return cached_data, headers
-
-        logger.info(
-            f"[{redact_token(token)}...] Catalog not cached for {content_type}/{catalog_id}, building from" " scratch"
-        )
+        user_settings = None
+        stale_data = None
 
         try:
+            # get cached catalog
+            cached_result = await user_cache.get_catalog(token, content_type, catalog_id)
+
+            if cached_result:
+                data, created_at = cached_result
+                age = int(time.time()) - created_at
+
+                # If data is fresh enough (within refresh interval), return it
+                if age < settings.CATALOG_REFRESH_INTERVAL_SECONDS:
+                    logger.debug(f"[{redact_token(token)}...] Using cached catalog for {content_type}/{catalog_id}")
+                    # Try to extract settings from credentials for shuffling, even on cached path
+                    user_settings = self._extract_settings(credentials)
+                    meta_data = data["metas"]
+                    meta_data = shuffle_data_if_needed(user_settings, catalog_id, meta_data)
+                    data["metas"] = meta_data
+                    return data, headers
+
+                # If data is stale, keep it for fallback
+                stale_data = data
+                logger.info(
+                    f"[{redact_token(token)}...] Catalog is stale (age: {age}s) for {content_type}/{catalog_id},"
+                    "refreshing..."
+                )
+            else:
+                logger.info(
+                    f"[{redact_token(token)}...] Catalog not cached for {content_type}/{catalog_id}, building from"
+                    " scratch"
+                )
+
+            # Resolve auth and settings
+            auth_key = await self._resolve_auth(bundle, credentials, token)
+            user_settings = self._extract_settings(credentials)
+
             language = user_settings.language if user_settings else "en-US"
 
             # Try to get cached library items first
@@ -158,8 +181,17 @@ class CatalogService:
             else:
                 # Build profile if not cached
                 logger.info(f"[{redact_token(token)}...] Profile not cached for {content_type}, building from library")
-                profile, watched_tmdb, watched_imdb = await cache_profile_and_watched_sets(
-                    token, content_type, integration_service, library_items, bundle, auth_key
+                (
+                    profile,
+                    watched_tmdb,
+                    watched_imdb,
+                ) = await cache_profile_and_watched_sets(
+                    token,
+                    content_type,
+                    integration_service,
+                    library_items,
+                    bundle,
+                    auth_key,
                 )
 
             whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
@@ -199,11 +231,30 @@ class CatalogService:
             cleaned = shuffle_data_if_needed(user_settings, catalog_id, cleaned)
 
             data = {"metas": cleaned}
-            # if catalog data is not empty, set the cache
+            # if catalog data is not empty, set the cache with STALE_TTL (7 days)
+            # This ensures we have fallback data available if the next refresh fails
             if cleaned:
-                await user_cache.set_catalog(token, content_type, catalog_id, data, settings.CATALOG_CACHE_TTL)
+                await user_cache.set_catalog(token, content_type, catalog_id, data, settings.CATALOG_STALE_TTL)
 
             return data, headers
+
+        except Exception as e:
+            logger.error(f"[{redact_token(token)}...] Failed to generate catalog: {e}")
+
+            # Fallback 1: Return Stale Data if available
+            if stale_data:
+                logger.warning(
+                    f"[{redact_token(token)}...] Serving stale content for {content_type}/{catalog_id} due to error"
+                )
+                # Shuffle stale data too if needed
+                user_settings = user_settings or self._extract_settings(credentials)
+                meta_data = stale_data.get("metas", [])
+                meta_data = shuffle_data_if_needed(user_settings, catalog_id, meta_data)
+                stale_data["metas"] = meta_data
+                return stale_data, headers
+
+            # Fallback 2: Return Empty (prevents 500 error)
+            return {"metas": []}, headers
 
         finally:
             await bundle.close()
@@ -220,7 +271,12 @@ class CatalogService:
             raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
 
         # Supported IDs
-        supported_base = ["watchly.rec", "watchly.creators", "watchly.all.loved", "watchly.liked.all"]
+        supported_base = [
+            "watchly.rec",
+            "watchly.creators",
+            "watchly.all.loved",
+            "watchly.liked.all",
+        ]
         supported_prefixes = ("watchly.theme.", "watchly.loved.", "watchly.watched.")
         if catalog_id not in supported_base and not any(catalog_id.startswith(p) for p in supported_prefixes):
             logger.warning(f"Invalid id: {catalog_id}")

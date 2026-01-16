@@ -31,14 +31,15 @@ class Settings(BaseSettings):
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire
     ANNOUNCEMENT_HTML: str = ""
     AUTO_UPDATE_CATALOGS: bool = True
-    CATALOG_REFRESH_INTERVAL_SECONDS: int = 43200  # 12 hours
+    CATALOG_REFRESH_INTERVAL_SECONDS: int = 86400  # 24 hours
     APP_ENV: Literal["development", "production", "vercel"] = "production"
     HOST_NAME: str = "https://1ccea4301587-watchly.baby-beamup.club"
 
     RECOMMENDATION_SOURCE_ITEMS_LIMIT: int = 10
     LIBRARY_ITEMS_LIMIT: int = 20
 
-    CATALOG_CACHE_TTL: int = 43200  # 12 hours
+    CATALOG_CACHE_TTL: int = 43200  # 24 hours
+    CATALOG_STALE_TTL: int = 604800  # 7 days (soft expiration fallback)
 
     # AI
     DEFAULT_GEMINI_MODEL: str = "gemma-3-27b-it"
