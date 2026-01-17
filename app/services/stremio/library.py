@@ -17,16 +17,18 @@ class StremioLibraryService:
         self.likes_client = likes_client
 
     @alru_cache(maxsize=100, ttl=3600)
-    async def get_likes_by_type(self, auth_token: str, media_type: str, status: str = "loved") -> list[str]:
+    async def get_likes_by_type(self, auth_token: str, media_type: str, status: str = "loved") -> list[dict[str, Any]]:
         """
-        Fetch IDs of items liked or loved by the user.
+        Fetch items liked or loved by the user.
         status: 'loved' or 'liked'
+        Returns list of full item metadata.
         """
         path = f"/addons/{status}/movies-shows/{auth_token}/catalog/{media_type}/stremio-{status}-{media_type}.json"
         try:
             data = await self.likes_client.get(path)
             metas = data.get("metas", [])
-            return [meta.get("id") for meta in metas if meta.get("id")]
+            # Return valid items
+            return [meta for meta in metas if meta.get("id")]
         except Exception as e:
             logger.exception(f"Failed to fetch {status} {media_type} items: {e}")
             return []
@@ -45,14 +47,22 @@ class StremioLibraryService:
             data = await self.client.post("/api/datastoreGet", json=payload)
             all_raw_items = data.get("result", [])
 
-            # 2. Fetch loved/liked IDs in parallel
+            # 2. Fetch loved/liked items in parallel (now returns full metadata)
             loved_movies_task = self.get_likes_by_type(auth_key, "movie", "loved")
             loved_series_task = self.get_likes_by_type(auth_key, "series", "loved")
             liked_movies_task = self.get_likes_by_type(auth_key, "movie", "liked")
             liked_series_task = self.get_likes_by_type(auth_key, "series", "liked")
 
-            loved_movies, loved_series, liked_movies, liked_series = await asyncio.gather(
-                loved_movies_task, loved_series_task, liked_movies_task, liked_series_task
+            (
+                loved_movies,
+                loved_series,
+                liked_movies,
+                liked_series,
+            ) = await asyncio.gather(
+                loved_movies_task,
+                loved_series_task,
+                liked_movies_task,
+                liked_series_task,
             )
 
             logger.info(
@@ -60,7 +70,46 @@ class StremioLibraryService:
                 f" {len(liked_movies)} liked movies, {len(liked_series)} liked series"
             )
 
-            # all_loved_ids = set(loved_movies + loved_series + liked_movies + liked_series)
+            # Create sets of IDs for faster lookup
+            loved_set = {item.get("id") for item in (loved_movies + loved_series) if item.get("id")}
+            liked_set = {item.get("id") for item in (liked_movies + liked_series) if item.get("id")}
+
+            # Identify existing library items to avoid duplicates
+            existing_library_ids = {item.get("_id") for item in all_raw_items if item.get("_id")}
+
+            # Inject missing loved/liked items into all_raw_items
+            # This handles items the user loved/liked elsewhere but hasn't watched/added
+            for source_items, is_loved in [
+                (loved_movies + loved_series, True),
+                (liked_movies + liked_series, False),
+            ]:
+                for item in source_items:
+                    item_id = item.get("id")
+                    if item_id and item_id not in existing_library_ids:
+                        # Construct a "virtual" library item
+                        # Use metadata from the Likes API to populate it
+                        virtual_item = {
+                            "_id": item_id,
+                            "name": item.get("name", ""),
+                            "type": item.get("type", "movie"),
+                            "poster": item.get("poster"),
+                            "background": item.get("background"),
+                            "logo": item.get("logo"),
+                            "year": item.get("year"),
+                            "removed": False,
+                            "temp": False,
+                            # Important: Mark as loved/liked so the next loop categorizes it correctly
+                            "_is_loved": is_loved,
+                            "_is_liked": not is_loved,
+                            # Populate state to indicate item has been watched (as implied by love/like)
+                            "state": {
+                                "timesWatched": 1,
+                                "flaggedWatched": 1,
+                            },
+                            "_source": "likes_api",  # Marker for debugging
+                        }
+                        all_raw_items.append(virtual_item)
+                        existing_library_ids.add(item_id)
 
             # 3. Categorize items
             watched: list[dict] = []
@@ -70,9 +119,8 @@ class StremioLibraryService:
             liked: list[dict] = []
 
             # Create sets for faster lookup
-            loved_set = set(loved_movies + loved_series)
-            liked_set = set(liked_movies + liked_series)
-            # all_loved_ids = loved_set.union(liked_set)
+            # loved_set = set(loved_movies + loved_series)
+            # liked_set = set(liked_movies + liked_series)
 
             for item in all_raw_items:
                 # Basic validation
@@ -120,7 +168,10 @@ class StremioLibraryService:
             # 4. Sort watched items by recency
             def sort_by_recency(x: dict):
                 state = x.get("state", {}) or {}
-                return (str(state.get("lastWatched") or str(x.get("_mtime") or "")), x.get("_mtime") or "")
+                return (
+                    str(state.get("lastWatched") or str(x.get("_mtime") or "")),
+                    x.get("_mtime") or "",
+                )
 
             watched.sort(key=sort_by_recency, reverse=True)
             loved.sort(key=sort_by_recency, reverse=True)
@@ -129,8 +180,9 @@ class StremioLibraryService:
             removed.sort(key=sort_by_recency, reverse=True)
 
             logger.info(
-                f"Processed {len(watched)} watched items, {len(loved)} loved items,"
-                f"{len(liked)} liked items, {len(added)} added items, {len(removed)} removed items"
+                f"Found {len(all_raw_items)} library items. Processed {len(watched)} watched items,"
+                f" {len(loved)} loved items,{len(liked)} liked items, {len(added)} added items,"
+                f" {len(removed)} removed items"
             )
 
             return {
