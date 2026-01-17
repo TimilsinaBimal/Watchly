@@ -5,7 +5,6 @@ from typing import Any
 from loguru import logger
 
 from app.models.taste_profile import TasteProfile
-from app.services.profile.constants import TOP_PICKS_MIN_RATING, TOP_PICKS_MIN_VOTE_COUNT
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
@@ -111,7 +110,6 @@ class ThemeBasedService:
             rotation_seed = RecommendationScoring.generate_rotation_seed()  # Daily rotation for fresh recommendations
             for item in filtered:
                 try:
-
                     final_score = RecommendationScoring.calculate_final_score(
                         item=item,
                         profile=profile,
@@ -214,15 +212,16 @@ class ThemeBasedService:
                     pass
             elif part == "sort-vote":
                 params["sort_by"] = "vote_average.desc"
-                params["vote_count.gte"] = TOP_PICKS_MIN_VOTE_COUNT
 
         # Default sort
         if "sort_by" not in params:
-            params["sort_by"] = "popularity.desc"
+            # params["sort_by"] = "popularity.desc"
+            params["sort_by"] = RecommendationFiltering.get_sort_by_preference(self.user_settings)
 
-        # add default vote count and vote average
-        params["vote_count.gte"] = TOP_PICKS_MIN_VOTE_COUNT
-        params["vote_average.gte"] = TOP_PICKS_MIN_RATING
+        # Dynamically set quality thresholds based on user settings
+        min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
+        params["vote_count.gte"] = min_votes
+        params["vote_average.gte"] = min_rating
 
         return params
 

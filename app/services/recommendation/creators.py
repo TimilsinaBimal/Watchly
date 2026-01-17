@@ -72,12 +72,23 @@ class CreatorsService:
                 else:
                     discover_params = {"with_crew": str(dir_id), "page": page}
 
+                # Apply dynamic filters
+                min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
+                discover_params["vote_count.gte"] = min_votes
+                discover_params["vote_average.gte"] = min_rating
+
                 tasks.append(self._fetch_discover_page(mtype, discover_params, dir_id, "director"))
 
         # Create tasks for cast (fetch 2 pages each)
         for cast_id, _ in selected_cast:
             for page in [1, 2]:
                 discover_params = {"with_cast": str(cast_id), "page": page}
+
+                # Apply dynamic filters
+                min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
+                discover_params["vote_count.gte"] = min_votes
+                discover_params["vote_average.gte"] = min_rating
+
                 tasks.append(self._fetch_discover_page(mtype, discover_params, cast_id, "cast"))
 
         # Execute all tasks in parallel
@@ -121,7 +132,11 @@ class CreatorsService:
         return final
 
     async def _fetch_discover_page(
-        self, mtype: str, discover_params: dict[str, Any], creator_id: int, creator_type: str
+        self,
+        mtype: str,
+        discover_params: dict[str, Any],
+        creator_id: int,
+        creator_type: str,
     ) -> list[dict[str, Any]]:
         try:
             results = await self.tmdb_service.get_discover(mtype, **discover_params)

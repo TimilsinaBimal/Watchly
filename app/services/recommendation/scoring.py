@@ -4,7 +4,6 @@ from collections.abc import Callable
 from typing import Any
 
 from app.core.constants import DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE, DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
-from app.services.profile.constants import MAXIMUM_POPULARITY_SCORE, TOP_PICKS_MIN_RATING, TOP_PICKS_MIN_VOTE_COUNT
 
 
 class RecommendationScoring:
@@ -113,13 +112,14 @@ class RecommendationScoring:
     @staticmethod
     def apply_quality_adjustments(score: float, wr: float, vote_count: int, popularity: float) -> float:
         """Apply simple quality boost for high-confidence items only."""
-        if (
-            vote_count >= TOP_PICKS_MIN_VOTE_COUNT
-            and wr >= TOP_PICKS_MIN_RATING
-            and popularity <= MAXIMUM_POPULARITY_SCORE
-        ):
+
+        # If item is extremely popular, give it a small boost to ensure it surfaces
+        if popularity > 500.0 and wr > 7.5:
+            return score * 1.05
+
+        if vote_count >= 100 and wr >= 7.0 and popularity <= 100.0:
             # Good confidence and quality Strong boost
-            return score * 1.20
+            return score * 1.10
 
         return score
 
@@ -169,7 +169,6 @@ class RecommendationScoring:
         vote_count = item.get("vote_count", 0)
         popularity = item.get("popularity", 0)
         final_score = RecommendationScoring.apply_quality_adjustments(base_score, wr, vote_count, popularity)
-
         # Apply daily rotation epsilon for tie-breaking (if seed provided)
         if rotation_seed:
             tmdb_id = item.get("id", 0)

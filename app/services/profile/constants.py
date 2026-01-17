@@ -8,8 +8,8 @@ EVIDENCE_WEIGHT_WATCHED_MEDIUM: Final[float] = 0.5  # Completion 40-79%
 EVIDENCE_WEIGHT_ADDED: Final[float] = 0.3
 
 # Feature Weights (relative importance of different feature types)
-FEATURE_WEIGHT_GENRE: Final[float] = 1.0  # Most important
-FEATURE_WEIGHT_KEYWORD: Final[float] = 0.9
+FEATURE_WEIGHT_GENRE: Final[float] = 0.9  # Most important
+FEATURE_WEIGHT_KEYWORD: Final[float] = 0.7
 FEATURE_WEIGHT_CREATOR: Final[float] = 0.9  # Very important when available
 FEATURE_WEIGHT_ERA: Final[float] = 0.6
 FEATURE_WEIGHT_RUNTIME: Final[float] = 0.3  # Runtime bucket preference
@@ -21,7 +21,7 @@ CAST_POSITION_SUPPORTING: Final[float] = 0.5
 CAST_POSITION_MINOR: Final[float] = 0.2
 
 # Genre Position Weights (primary genre matters most)
-GENRE_POSITION_WEIGHTS: Final[list[float]] = [1.0, 0.6, 0.3]  # First, second, third
+GENRE_POSITION_WEIGHTS: Final[list[float]] = [1.0, 0.8, 0.5]  # First, second, third
 GENRE_MAX_POSITIONS: Final[int] = 3  # Only consider top 3 genres
 
 # Crew Job Weights (directors matter most)
@@ -38,7 +38,7 @@ CAP_RUNTIME: Final[float] = 25.0
 CAP_COUNTRY: Final[float] = 20.0
 
 # Recency Decay (exponential decay parameters)
-RECENCY_HALF_LIFE_DAYS: Final[float] = 15.0  # 15-day half-life
+RECENCY_HALF_LIFE_DAYS: Final[float] = 30.0
 RECENCY_DECAY_RATE: Final[float] = 0.98  # Daily decay multiplier (soft decay)
 
 # Smart Sampling
@@ -54,10 +54,10 @@ TOP_PICKS_RECENCY_CAP: Final[float] = 0.15  # Max 15% recent items (from trendin
 TOP_PICKS_GENRE_CAP: Final[float] = 0.50  # Max 50% per genre
 TOP_PICKS_CREATOR_CAP: Final[int] = 3  # Max 3 items per creator (director/actor)
 TOP_PICKS_ERA_CAP: Final[float] = 0.50  # Max 50% per era
-TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 250  # Lower noise filter
-TOP_PICKS_MIN_RATING: Final[float] = 7.0  # Minimum weighted rating
+TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 100  # Default base (dynamic based on settings)
+TOP_PICKS_MIN_RATING: Final[float] = 6.0  # Default base (dynamic based on settings)
 
-MAXIMUM_POPULARITY_SCORE: Final[float] = 15.0
+MAXIMUM_POPULARITY_SCORE: Final[float] = 100.0  # Increased from 15.0 to allow popular items
 
 # Genre whitelist limit (top N genres)
 GENRE_WHITELIST_LIMIT: Final[int] = 7

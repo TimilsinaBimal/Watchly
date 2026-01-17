@@ -35,7 +35,9 @@ class RecommendationFiltering:
 
     @staticmethod
     async def get_exclusion_sets(
-        stremio_service: Any, library_data: dict | None = None, auth_key: str | None = None
+        stremio_service: Any,
+        library_data: dict | None = None,
+        auth_key: str | None = None,
     ) -> tuple[set[str], set[int]]:
         """
         Fetch library items and build exclusion sets for watched/loved content.
@@ -45,10 +47,13 @@ class RecommendationFiltering:
                 return set(), set()
             library_data = await stremio_service.library.get_library_items(auth_key)
 
+        library_data = library_data or {}
+
         all_items = (
             library_data.get("loved", [])
             + library_data.get("watched", [])
-            + library_data.get("removed", [] + library_data.get("liked"))
+            + library_data.get("removed", [])
+            + library_data.get("liked", [])
         )
 
         imdb_ids = set()
@@ -121,6 +126,41 @@ class RecommendationFiltering:
 
             filtered.append(item)
         return filtered
+
+    @staticmethod
+    def get_quality_thresholds(user_settings: Any) -> tuple[float, int]:
+        """
+        Get dynamic quality thresholds (min_rating, min_votes) based on popularity preference.
+        """
+
+        quality_rating_mapping = {
+            "mainstream": (6.2, 500),  # (min_rating, min_votes)
+            "balanced": (6.7, 250),
+            "gems": (7.2, 100),
+            "all": (5.0, 50),
+        }
+        if not user_settings:
+            return quality_rating_mapping.get("balanced")
+
+        pop_pref = getattr(user_settings, "popularity", "balanced")
+        return quality_rating_mapping.get(pop_pref)
+
+    @staticmethod
+    def get_sort_by_preference(user_settings: Any) -> str:
+        """
+        Get optimal sort order based on popularity preference.
+        """
+        if not user_settings:
+            return "popularity.desc"
+
+        pop_pref = getattr(user_settings, "popularity", "balanced")
+
+        if pop_pref == "gems":
+            # For hidden gems, we want high quality first, not high popularity
+            return "vote_average.desc"
+
+        # For Mainstream/Balanced/All, popularity is the best proxy for "good suggestions"
+        return "popularity.desc"
 
     @staticmethod
     def get_excluded_genre_ids(user_settings: Any, content_type: str) -> list[int]:

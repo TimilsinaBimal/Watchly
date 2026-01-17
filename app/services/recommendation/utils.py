@@ -285,9 +285,18 @@ def apply_discover_filters(params: dict[str, Any], user_settings: Any) -> dict[s
         elif global_lte:
             params[f"{prefix}.lte"] = global_lte
 
-    # 2. Popularity & Quality
-    # If the local params already have popularity/vote filters, we generally respect the stricter one.
-    # However, global popularity setting typically defines the "floor".
+    # 2. Popularity & Quality (Dynamic)
+    # If local params define filters, respect strictness, but use dynamic defaults otherwise.
+    min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(user_settings)
+
+    # Apply dynamic thresholds if not overridden by stricter local params
+    if "vote_count.gte" not in params:
+        params["vote_count.gte"] = min_votes
+
+    if "vote_average.gte" not in params:
+        params["vote_average.gte"] = min_rating
+
+    # Legacy Popularity Handling (still useful for high-level filtering)
     for key in [
         "popularity.gte",
         "popularity.lte",
@@ -321,6 +330,10 @@ def filter_items_by_settings(items: list[dict[str, Any]], user_settings: Any) ->
     pop_pref = getattr(user_settings, "popularity", "balanced")
 
     filtered = []
+
+    # Get dynamic thresholds
+    min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(user_settings)
+
     for item in items:
         # 1. Year Filtering
         release_date = item.get("release_date") or item.get("first_air_date")
@@ -333,19 +346,32 @@ def filter_items_by_settings(items: list[dict[str, Any]], user_settings: Any) ->
                 pass
 
         # 2. Popularity/Quality Filtering
+        # Apply the dynamic filters logic
         pop = item.get("popularity", 0.0)
         vote_avg = item.get("vote_average", 0.0)
         vote_count = item.get("vote_count", 0)
 
+        # Basic sanity check (always exclude junk)
+        if vote_count < 5:
+            continue
+
+        # Respect user settings strictly for Gems/Mainstream
         if pop_pref == "mainstream":
-            if pop < 50.0:
+            if pop < 50.0 or vote_count < min_votes:
                 continue
         elif pop_pref == "balanced":
-            if pop < 10.0:
-                continue
+            if vote_avg < min_rating or vote_count < min_votes:
+                # Allow high popularity items to bypass strict rating slightly
+                if pop > 50.0 and vote_avg >= 6.0:
+                    pass
+                else:
+                    continue
         elif pop_pref == "gems":
-            # Gems must be high quality but lower popularity
-            if pop > 35.0 or vote_avg < 7.0 or vote_count < 100:
+            if pop > 35.0 or vote_avg < min_rating or vote_count < min_votes:
+                continue
+        elif pop_pref == "all":
+            # Just basic sanity
+            if vote_count < min_votes:
                 continue
 
         filtered.append(item)

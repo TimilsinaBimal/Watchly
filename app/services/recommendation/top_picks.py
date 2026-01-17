@@ -8,12 +8,7 @@ from loguru import logger
 
 from app.core.settings import UserSettings
 from app.models.taste_profile import TasteProfile
-from app.services.profile.constants import (
-    TOP_PICKS_CREATOR_CAP,
-    TOP_PICKS_GENRE_CAP,
-    TOP_PICKS_MIN_RATING,
-    TOP_PICKS_MIN_VOTE_COUNT,
-)
+from app.services.profile.constants import TOP_PICKS_CREATOR_CAP, TOP_PICKS_GENRE_CAP
 from app.services.profile.sampling import SmartSampler
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
@@ -154,7 +149,10 @@ class TopPicksService:
         return filtered[:limit]
 
     async def _fetch_recommendations_from_top_items(
-        self, library_items: dict[str, list[dict[str, Any]]], content_type: str, mtype: str
+        self,
+        library_items: dict[str, list[dict[str, Any]]],
+        content_type: str,
+        mtype: str,
     ) -> list[dict[str, Any]]:
         """
         Fetch recommendations from top items (loved/watched/liked/added).
@@ -210,10 +208,13 @@ class TopPicksService:
         """
         Add a discover task to the list of tasks with default parameters.
         """
+        # Get dynamic thresholds
+        min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
+        sort_by = RecommendationFiltering.get_sort_by_preference(self.user_settings)
         params = {
-            "sort_by": "popularity.desc",
-            "vote_count.gte": TOP_PICKS_MIN_VOTE_COUNT,
-            "vote_average.gte": TOP_PICKS_MIN_RATING,
+            "sort_by": sort_by,
+            "vote_count.gte": min_votes,
+            "vote_average.gte": min_rating,
             **kwargs,
         }
         if without_genres:
@@ -259,7 +260,11 @@ class TopPicksService:
         if top_genres:
             genre_ids = [g[0] for g in top_genres]
             self._add_discover_task(
-                tasks, mtype, without_genres, with_genres="|".join(str(g) for g in genre_ids), page=1
+                tasks,
+                mtype,
+                without_genres,
+                with_genres="|".join(str(g) for g in genre_ids),
+                page=1,
             )
 
         # Discover with keywords
@@ -267,20 +272,34 @@ class TopPicksService:
             keyword_ids = [k[0] for k in top_keywords]
             for page in range(1, 3):  # 2 pages
                 self._add_discover_task(
-                    tasks, mtype, without_genres, with_keywords="|".join(str(k) for k in keyword_ids), page=page
+                    tasks,
+                    mtype,
+                    without_genres,
+                    with_keywords="|".join(str(k) for k in keyword_ids),
+                    page=page,
                 )
 
         # Discover with directors
         if top_directors:
             director_ids = [d[0] for d in top_directors]
             self._add_discover_task(
-                tasks, mtype, without_genres, with_crew="|".join(str(d) for d in director_ids), page=1
+                tasks,
+                mtype,
+                without_genres,
+                with_crew="|".join(str(d) for d in director_ids),
+                page=1,
             )
 
         # Discover with cast
         if top_cast:
             cast_ids = [c[0] for c in top_cast]
-            self._add_discover_task(tasks, mtype, without_genres, with_cast="|".join(str(c) for c in cast_ids), page=1)
+            self._add_discover_task(
+                tasks,
+                mtype,
+                without_genres,
+                with_cast="|".join(str(c) for c in cast_ids),
+                page=1,
+            )
 
         # Discover with era (year range)
         if top_eras:
@@ -288,7 +307,9 @@ class TopPicksService:
             year_start = self._era_to_year_start(era)
             if year_start:
                 prefix = "first_air_date" if mtype == "tv" else "primary_release_date"
-                lte_prefix = date.today().isoformat() if year_start + 9 > date.today().year else f"{year_start+9}-12-31"
+                lte_prefix = (
+                    date.today().isoformat() if year_start + 9 > date.today().year else f"{year_start + 9}-12-31"
+                )
                 params = {
                     f"{prefix}.gte": f"{year_start}-01-01",
                     f"{prefix}.lte": lte_prefix,
@@ -347,7 +368,10 @@ class TopPicksService:
         return candidates
 
     def _apply_diversity_caps(
-        self, scored_candidates: list[tuple[float, dict[str, Any]]], limit: int, mtype: str
+        self,
+        scored_candidates: list[tuple[float, dict[str, Any]]],
+        limit: int,
+        mtype: str,
     ) -> list[dict[str, Any]]:
         """
         Apply diversity caps to ensure balanced results.
@@ -383,35 +407,31 @@ class TopPicksService:
             # Quality threshold
             vote_count = item.get("vote_count", 0)
             vote_avg = item.get("vote_average", 0)
-            if vote_count < TOP_PICKS_MIN_VOTE_COUNT:
+
+            # Dynamic check
+            min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
+
+            if vote_count < min_votes:
                 continue
 
+            # We keep weighted rating check but use dynamic base
             wr = RecommendationScoring.weighted_rating(vote_avg, vote_count, C=7.2 if mtype == "tv" else 6.8)
-            if wr < TOP_PICKS_MIN_RATING:
+            if wr < min_rating:
                 continue
 
             # Check genre cap (50% max per genre)
             genre_ids = item.get("genre_ids", [])
-            if genre_ids:
-                top_genre = genre_ids[0]  # Primary genre
+            top_genre = genre_ids[0] if genre_ids else None
+
+            if top_genre:
                 if genre_counts[top_genre] >= max_per_genre:
                     continue
-
-            # # Check era cap (50% max per era)
-            # year = self._extract_year(item)
-            # if year:
-            #     era = self._year_to_era(year)
-            #     if era_counts[era] >= max_per_era:
-            #         continue
 
             # Add item
             result.append(item)
 
-            if genre_ids:
+            if top_genre:
                 genre_counts[top_genre] += 1
-            # if year:
-            #     era = self._year_to_era(year)
-            #     era_counts[era] += 1
 
         return result
 
