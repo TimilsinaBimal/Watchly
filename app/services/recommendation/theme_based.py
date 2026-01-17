@@ -73,17 +73,25 @@ class ThemeBasedService:
                     combined_p["without_genres"] = "|".join(str(g) for g in without)
             fetch_tasks.append(self._fetch_discover_candidates(content_type, combined_p, pages=[1, 2, 3]))
 
-        # Seeds 2+: Individual Anchors (OR logic for fullness)
-        seed_axes = list(anchors.items()) if anchors else [(None, None)]
-        for name, val in seed_axes:
-            p = self._axes_to_params({name: val} if name else {}, content_type)
-            if excluded_ids:
-                with_ids = {int(g) for g in p.get("with_genres", "").split("|") if g}
-                without = [g for g in excluded_ids if g not in with_ids]
-                if without:
-                    p["without_genres"] = "|".join(str(g) for g in without)
+        perfect_match_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+        perfect_match_candidates = []
+        for res in perfect_match_results:
+            if isinstance(res, list):
+                perfect_match_candidates.extend(res)
 
-            fetch_tasks.append(self._fetch_discover_candidates(content_type, p, pages=[1, 2]))
+        if len(perfect_match_candidates) < 2 * limit:
+            fetch_tasks = []
+            # Seeds 2+: Individual Anchors (OR logic for fullness)
+            seed_axes = list(anchors.items()) if anchors else [(None, None)]
+            for name, val in seed_axes:
+                p = self._axes_to_params({name: val} if name else {}, content_type)
+                if excluded_ids:
+                    with_ids = {int(g) for g in p.get("with_genres", "").split("|") if g}
+                    without = [g for g in excluded_ids if g not in with_ids]
+                    if without:
+                        p["without_genres"] = "|".join(str(g) for g in without)
+
+                fetch_tasks.append(self._fetch_discover_candidates(content_type, p, pages=[1, 2]))
 
         # 4. Execute and Merge
         results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
@@ -91,6 +99,8 @@ class ThemeBasedService:
         for res in results:
             if isinstance(res, list):
                 candidates.extend(res)
+
+        candidates = perfect_match_candidates + candidates
 
         # 5. Expansion Logic if sparse
         if len(candidates) < limit and anchors:
@@ -147,11 +157,24 @@ class ThemeBasedService:
         parts = theme_id.replace("watchly.theme.", "").split(".")
         anchors, flavors, fallbacks = {}, {}, {}
 
-        for part in parts:
+        roles = {"a": anchors, "f": flavors, "b": fallbacks}
+
+        for idx, part in enumerate(parts):
             if ":" not in part:
-                continue
-            role, val = part.split(":", 1)
-            target = {"a": anchors, "f": flavors, "b": fallbacks}.get(role)
+                # old format
+                if idx == 0:
+                    target = anchors
+                elif idx == 1:
+                    target = flavors
+                elif idx == 2:
+                    target = fallbacks
+                else:
+                    continue
+                val = part
+            else:
+                role, val = part.split(":", 1)
+                target = roles.get(role)
+
             if target is None:
                 continue
 
