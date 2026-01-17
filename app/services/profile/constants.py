@@ -63,8 +63,10 @@ MAXIMUM_POPULARITY_SCORE: Final[float] = 100.0  # Increased from 15.0 to allow p
 GENRE_WHITELIST_LIMIT: Final[int] = 7
 
 # Runtime Bucket Boundaries (in minutes)
-RUNTIME_BUCKET_SHORT_MAX: Final[int] = 30  # < 30 min
-RUNTIME_BUCKET_MEDIUM_MAX: Final[int] = 60  # 30-60 min, > 60 is long
+RUNTIME_BUCKET_SHORT_MAX_SERIES: Final[int] = 30  # < 30 min
+RUNTIME_BUCKET_MEDIUM_MAX_SERIES: Final[int] = 60  # 30-60 min, > 60 is long
+RUNTIME_BUCKET_SHORT_MAX_MOVIE: Final[int] = 120  # < 120 min
+RUNTIME_BUCKET_MEDIUM_MAX_MOVIE: Final[int] = 180  # 120-180 min, > 180 is long
 
 # Profile Decay Settings
 PROFILE_DECAY_ENABLED: Final[bool] = True

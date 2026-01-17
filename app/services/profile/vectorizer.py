@@ -5,8 +5,10 @@ from app.services.cinemeta_service import CinemetaService, cinemeta_service
 from app.services.profile.constants import (
     CAST_POSITION_LEAD,
     CAST_POSITION_MINOR,
-    RUNTIME_BUCKET_MEDIUM_MAX,
-    RUNTIME_BUCKET_SHORT_MAX,
+    RUNTIME_BUCKET_MEDIUM_MAX_MOVIE,
+    RUNTIME_BUCKET_MEDIUM_MAX_SERIES,
+    RUNTIME_BUCKET_SHORT_MAX_MOVIE,
+    RUNTIME_BUCKET_SHORT_MAX_SERIES,
 )
 from app.services.tmdb.service import TMDBService
 
@@ -273,6 +275,7 @@ class ItemVectorizer:
 
         # fetch metadata from cinemeta for runtime.
         runtime = 0
+        content_type = cinemeta_metadata.get("type")
 
         runtime_str = cinemeta_metadata.get("runtime", "0 min")
         if runtime_str:
@@ -281,9 +284,16 @@ class ItemVectorizer:
         if not runtime or not isinstance(runtime, (int, float)):
             return None
 
-        if runtime < RUNTIME_BUCKET_SHORT_MAX:
+        short_runtime_max = (
+            RUNTIME_BUCKET_SHORT_MAX_MOVIE if content_type == "movie" else RUNTIME_BUCKET_SHORT_MAX_SERIES
+        )
+        medium_runtime_max = (
+            RUNTIME_BUCKET_MEDIUM_MAX_MOVIE if content_type == "movie" else RUNTIME_BUCKET_MEDIUM_MAX_SERIES
+        )
+
+        if runtime < short_runtime_max:
             return "short"
-        elif runtime < RUNTIME_BUCKET_MEDIUM_MAX:
+        elif runtime < medium_runtime_max:
             return "medium"
         else:
             return "long"

@@ -1,10 +1,15 @@
 import asyncio
-from datetime import datetime
 from typing import Any
 
 from loguru import logger
 
 from app.models.taste_profile import TasteProfile
+from app.services.profile.constants import (
+    RUNTIME_BUCKET_MEDIUM_MAX_MOVIE,
+    RUNTIME_BUCKET_MEDIUM_MAX_SERIES,
+    RUNTIME_BUCKET_SHORT_MAX_MOVIE,
+    RUNTIME_BUCKET_SHORT_MAX_SERIES,
+)
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
@@ -20,14 +25,14 @@ from app.services.tmdb.service import TMDBService
 
 class ThemeBasedService:
     """
-    Handles theme-based recommendations (genre+keyword, keyword+keyword, etc.).
+    Handles theme-based recommendations using role-based axis recipes.
 
     Strategy:
-    1. Parse theme ID to extract filters (genres, keywords, country, year)
-    2. Fetch from TMDB discover API (multiple pages based on excluded genres)
-    3. Score candidates with ProfileScorer (similarity + quality)
-    4. Filter watched/excluded genres
-    5. Return ranked results
+    1. Parse role-based theme ID (a: anchor, f: flavor, b: fallback)
+    2. Primary discovery using Anchors
+    3. Weighted scoring: anchor (1.0) + flavor (0.7) + fallback (0.3)
+    4. Profile-aware ranking
+    5. Expansion logic if results are sparse
     """
 
     def __init__(self, tmdb_service: Any, user_settings: Any = None):
@@ -45,185 +50,239 @@ class ThemeBasedService:
         limit: int = 20,
         whitelist: set[int] | None = None,
     ) -> list[dict[str, Any]]:
-        """
-        Get recommendations for a theme (genre+keyword, etc.).
-
-        Args:
-            theme_id: Theme ID (e.g., "watchly.theme.g123.k456")
-            content_type: Content type (movie/series)
-            profile: Optional profile for scoring (if None, uses popularity only)
-            watched_tmdb: Set of watched TMDB IDs
-            watched_imdb: Set of watched IMDB IDs
-            limit: Number of items to return
-
-        Returns:
-            List of recommended items
-        """
+        """Get recommendations for a role-based theme."""
         watched_tmdb = watched_tmdb or set()
         watched_imdb = watched_imdb or set()
 
-        # Parse theme ID to extract filters
-        params = self._parse_theme_id(theme_id, content_type)
+        # 1. Parse roles and values
+        anchors, flavors, fallbacks = self._parse_theme_id(theme_id)
 
-        # Add excluded genres
+        # 2. Prepare common excluded genres
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
-        if excluded_ids:
-            with_ids = set()
-            if params.get("with_genres"):
-                try:
-                    with_ids = {int(g) for g in params["with_genres"].split("|") if g}
-                except Exception:
-                    pass
-            final_without = [g for g in excluded_ids if g not in with_ids]
-            if final_without:
-                params["without_genres"] = "|".join(str(g) for g in final_without)
 
-        # Determine pages to fetch based on excluded genres
-        pages_to_fetch = self._calculate_pages_to_fetch(len(excluded_ids))
+        # 3. Parallel Fetching (Intersection + Individual Anchors)
+        fetch_tasks = []
 
-        # Fetch candidates
-        candidates = await self._fetch_discover_candidates(content_type, params, pages_to_fetch)
+        # Seed 1: The 'Perfect Match' (AND logic) - High Priority
+        if len(anchors) > 1:
+            combined_p = self._axes_to_params(anchors, content_type)
+            if excluded_ids:
+                with_ids = {int(g) for g in combined_p.get("with_genres", "").split("|") if g}
+                without = [g for g in excluded_ids if g not in with_ids]
+                if without:
+                    combined_p["without_genres"] = "|".join(str(g) for g in without)
+            fetch_tasks.append(self._fetch_discover_candidates(content_type, combined_p, pages=[1, 2, 3]))
 
-        # # Use provided whitelist (or empty set if not provided)
-        # whitelist = whitelist or set()
+        # Seeds 2+: Individual Anchors (OR logic for fullness)
+        seed_axes = list(anchors.items()) if anchors else [(None, None)]
+        for name, val in seed_axes:
+            p = self._axes_to_params({name: val} if name else {}, content_type)
+            if excluded_ids:
+                with_ids = {int(g) for g in p.get("with_genres", "").split("|") if g}
+                without = [g for g in excluded_ids if g not in with_ids]
+                if without:
+                    p["without_genres"] = "|".join(str(g) for g in without)
 
-        # # Initial filter (watched + genre whitelist)
-        # filtered = self._filter_candidates(candidates, watched_tmdb, whitelist)
+            fetch_tasks.append(self._fetch_discover_candidates(content_type, p, pages=[1, 2]))
 
-        filtered = candidates
+        # 4. Execute and Merge
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+        candidates = []
+        for res in results:
+            if isinstance(res, list):
+                candidates.extend(res)
 
-        # If not enough candidates, fetch more pages
-        if len(filtered) < limit * 2 and max(pages_to_fetch) < 15:
-            additional_pages = list(range(max(pages_to_fetch) + 1, min(max(pages_to_fetch) + 6, 20)))
-            if additional_pages:
-                additional_candidates = await self._fetch_discover_candidates(content_type, params, additional_pages)
-                existing_ids = {it.get("id") for it in filtered}
-                additional_filtered = self._filter_candidates(
-                    additional_candidates, watched_tmdb, whitelist, existing_ids
+        # 5. Expansion Logic if sparse
+        if len(candidates) < limit and anchors:
+            # Expansion strategy: Relax constraints on the primary anchor
+            primary_axis = dict([next(iter(anchors.items()))])
+            base_p = self._axes_to_params(primary_axis, content_type)
+            expanded = await self._expand_search(content_type, base_p, anchors, flavors)
+            candidates.extend(expanded)
+
+        # 6. Weighted Scoring
+        scored = []
+        rotation_seed = RecommendationScoring.generate_rotation_seed()
+        mtype = content_type_to_mtype(content_type)
+
+        for item in candidates:
+            # Theme Match Score
+            theme_match = self._calculate_theme_score(item, anchors, flavors, fallbacks)
+
+            # Profile & Quality Score
+            if profile:
+                base_score = RecommendationScoring.calculate_final_score(
+                    item=item,
+                    profile=profile,
+                    scorer=self.scorer,
+                    mtype=mtype,
+                    rotation_seed=rotation_seed,
                 )
-                filtered.extend(additional_filtered)
+            else:
+                base_score = RecommendationScoring.normalize(item.get("vote_average", 0))
 
-        # Score with profile if available
-        if profile:
-            scored = []
-            mtype = content_type_to_mtype(content_type)
-            rotation_seed = RecommendationScoring.generate_rotation_seed()  # Daily rotation for fresh recommendations
-            for item in filtered:
-                try:
-                    final_score = RecommendationScoring.calculate_final_score(
-                        item=item,
-                        profile=profile,
-                        scorer=self.scorer,
-                        mtype=mtype,
-                        rotation_seed=rotation_seed,
-                    )
+            # Combine: theme match is the primary sorter for catalog rows
+            final_score = (theme_match * 0.7) + (base_score * 0.3)
 
-                    # Apply genre multiplier (if whitelist available)
-                    genre_mult = RecommendationFiltering.get_genre_multiplier(item.get("genre_ids"), whitelist)
-                    final_score *= genre_mult
+            scored.append((final_score, item))
 
-                    scored.append((final_score, item))
-                except Exception as e:
-                    logger.debug(f"Failed to score item {item.get('id')}: {e}")
-                    continue
+        # 7. Rank and Enrich
+        scored.sort(key=lambda x: x[0], reverse=True)
+        unique_results = []
+        seen = set()
+        for _, item in scored:
+            if item["id"] not in seen and item["id"] not in watched_tmdb:
+                unique_results.append(item)
+                seen.add(item["id"])
+            if len(unique_results) >= limit * 2:
+                break
 
-            # Sort by score
-            scored.sort(key=lambda x: x[0], reverse=True)
-            filtered = [item for _, item in scored]
-
-        # limit items to limit *2
-        filtered = filtered[: limit * 2]
-
-        # Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, filtered, content_type, user_settings=self.user_settings
+            self.tmdb_service, unique_results, content_type, user_settings=self.user_settings
         )
+        return filter_watched_by_imdb(enriched, watched_imdb)[:limit]
 
-        # Final filter (remove watched by IMDB ID)
-        final = filter_watched_by_imdb(enriched, watched_imdb)
-
-        return final
-
-    def _parse_theme_id(self, theme_id: str, content_type: str) -> dict[str, Any]:
-        """
-        Parse theme ID to extract discover API parameters.
-
-        Format: watchly.theme.g123.k456.ctUS.y1990
-
-        Args:
-            theme_id: Theme ID string
-            content_type: Content type for date field selection
-
-        Returns:
-            Dictionary of discover API parameters
-        """
-        params = {}
+    def _parse_theme_id(self, theme_id: str) -> tuple[dict, dict, dict]:
+        """Parse role-based ID: watchly.theme.a:g123.f:k456.b:y1990"""
         parts = theme_id.replace("watchly.theme.", "").split(".")
+        anchors, flavors, fallbacks = {}, {}, {}
 
         for part in parts:
-            if part.startswith("g"):
-                # Genres: g123 or g123-456
-                genre_str = part[1:].replace("-", ",")
-                params["with_genres"] = genre_str.replace(",", "|")
-            elif part.startswith("k"):
-                # Keywords: k123 or k123-456
-                kw_str = part[1:].replace("-", "|")
-                params["with_keywords"] = kw_str
-            elif part.startswith("c") and not part.startswith("ct"):
-                # Creators: c123 (director/actor IDs)
-                # For movies: use with_crew for directors, with_cast for actors
-                # For TV: use with_people for directors, with_cast for actors
-                creator_id = part[1:]
-                is_tv = content_type in ("tv", "series")
-                # Try with_cast first (works for both), then with_crew/with_people
-                if "with_cast" not in params:
-                    params["with_cast"] = creator_id
+            if ":" not in part:
+                continue
+            role, val = part.split(":", 1)
+            target = {"a": anchors, "f": flavors, "b": fallbacks}.get(role)
+            if target is None:
+                continue
+
+            if val.startswith("g"):
+                target["genre"] = val[1:]
+            elif val.startswith("k"):
+                target["keyword"] = val[1:]
+            elif val.startswith("ct"):
+                target["country"] = val[2:]
+            elif val.startswith("y"):
+                target["era"] = val[1:]
+            elif val.startswith("r"):
+                target["runtime"] = val[1:]
+            elif val.startswith("cr"):
+                target["creator"] = val[2:]
+
+        return anchors, flavors, fallbacks
+
+    def _axes_to_params(self, axes: dict, content_type: str) -> dict:
+        """Convert axes to TMDB discover params."""
+        params = {}
+        if "genre" in axes:
+            params["with_genres"] = axes["genre"].replace("-", "|")
+        if "keyword" in axes:
+            params["with_keywords"] = axes["keyword"].replace("-", "|")
+        if "country" in axes:
+            params["with_origin_country"] = axes["country"]
+        if "era" in axes:
+            try:
+                # Value can be single year or range
+                val = axes["era"]
+                if "-" in val:
+                    start_year = int(val.split("-")[0])
+                    end_year = int(val.split("-")[1])
                 else:
-                    # If multiple creators, combine them
-                    existing = params.get("with_cast", "")
-                    params["with_cast"] = f"{existing}|{creator_id}" if existing else creator_id
-            elif part.startswith("r"):
-                # Runtime bucket: rshort, rmedium, rlong
-                # Note: TMDB doesn't have direct runtime filtering in discover API
-                # This is stored for potential future use or filtering logic
-                runtime_bucket = part[1:]
-                logger.debug(f"Runtime bucket in theme: {runtime_bucket}")
-                # We could add custom filtering logic here if needed
+                    start_year = int(val)
+                    end_year = start_year + 9
+
+                prefix = "first_air_date" if content_type in ("tv", "series") else "primary_release_date"
+                params[f"{prefix}.gte"] = f"{start_year}-01-01"
+                params[f"{prefix}.lte"] = f"{end_year}-12-31"
+            except Exception:
+                logger.error("Failed to parse era axis: {}", axes["era"])
                 pass
-            elif part.startswith("ct"):
-                # Country: ctUS
-                params["with_origin_country"] = part[2:]
-            elif part.startswith("y"):
-                # Year: y1990 (decade)
-                try:
-                    year = int(part[1:])
-                    is_tv = content_type in ("tv", "series")
-                    prefix = "first_air_date" if is_tv else "primary_release_date"
-                    params[f"{prefix}.gte"] = f"{year}-01-01"
-                    end_year = year + 9
-                    end_date_str = f"{end_year}-12-31"
-                    today_str = datetime.now().strftime("%Y-%m-%d")
-                    # If the calculated end date is after today, use today
-                    if end_date_str > today_str:
-                        params[f"{prefix}.lte"] = today_str
-                    else:
-                        params[f"{prefix}.lte"] = end_date_str
-                except Exception:
-                    pass
-            elif part == "sort-vote":
-                params["sort_by"] = "vote_average.desc"
-
-        # Default sort
-        if "sort_by" not in params:
-            # params["sort_by"] = "popularity.desc"
-            params["sort_by"] = RecommendationFiltering.get_sort_by_preference(self.user_settings)
-
-        # Dynamically set quality thresholds based on user settings
-        min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
-        params["vote_count.gte"] = min_votes
-        params["vote_average.gte"] = min_rating
-
+        if "runtime" in axes:
+            bucket = axes["runtime"]
+            is_movie = content_type == "movie"
+            s_max = RUNTIME_BUCKET_SHORT_MAX_MOVIE if is_movie else RUNTIME_BUCKET_SHORT_MAX_SERIES
+            m_max = RUNTIME_BUCKET_MEDIUM_MAX_MOVIE if is_movie else RUNTIME_BUCKET_MEDIUM_MAX_SERIES
+            if bucket == "short":
+                params["with_runtime.lte"] = s_max
+            elif bucket == "medium":
+                params["with_runtime.gte"] = s_max
+                params["with_runtime.lte"] = m_max
+            elif bucket == "long":
+                params["with_runtime.gte"] = m_max
         return params
+
+    def _calculate_theme_score(self, item: dict, anchors: dict, flavors: dict, fallbacks: dict) -> float:
+        """Calculate weighted score based on axis matches."""
+        score = 0.0
+
+        def check_match(axis_name, value):
+            if axis_name == "genre":
+                item_genres = [str(gid) for gid in item.get("genre_ids", [])]
+                target_genres = str(value).split("-")
+                return any(tg in item_genres for tg in target_genres)
+            if axis_name == "keyword":
+                return True  # Optimistic match for discovery items
+            if axis_name == "country":
+                item_countries = item.get("origin_country", [])
+                return value in item_countries
+            if axis_name == "era":
+                rel = item.get("release_date") or item.get("first_air_date")
+                if rel:
+                    try:
+                        y = int(rel[:4])
+                        if "-" in value:
+                            start, end = map(int, value.split("-"))
+                        else:
+                            start = int(value)
+                            end = start + 9
+                        return start <= y <= end
+                    except Exception:
+                        logger.error("Failed to parse era axis: {}", value)
+                        pass
+            if axis_name == "runtime":
+                # Runtimes are hard to match exactly from discover results without metadata enrichment
+                return True
+            return False
+
+        total_anchors = len(anchors)
+        matched_anchors = 0
+        for name, val in anchors.items():
+            if check_match(name, val):
+                score += 1.0
+                matched_anchors += 1
+
+        # Perfect Match Bonus: Significant boost for items satisfying all anchors
+        if total_anchors > 1 and matched_anchors == total_anchors:
+            score += 2.0
+        elif total_anchors > 0:
+            # Proportion boost to differentiate partial matches
+            score += (matched_anchors / total_anchors) * 0.5
+
+        for name, val in flavors.items():
+            if check_match(name, val):
+                score += 0.7
+        for name, val in fallbacks.items():
+            if check_match(name, val):
+                score += 0.3
+
+        return score
+
+    async def _expand_search(self, content_type: str, params: dict, anchors: dict, flavors: dict) -> list[dict]:
+        """Expansion logic if results are sparse."""
+        # 1. Relax Keyword: Remove keyword constraint
+        if "with_keywords" in params:
+            new_params = params.copy()
+            del new_params["with_keywords"]
+            return await self._fetch_discover_candidates(content_type, new_params, pages=[1, 2])
+
+        # 2. Widen Era: remove era constraint
+        prefix = "first_air_date" if content_type in ("tv", "series") else "primary_release_date"
+        if f"{prefix}.gte" in params:
+            new_params = params.copy()
+            del new_params[f"{prefix}.gte"]
+            del new_params[f"{prefix}.lte"]
+            return await self._fetch_discover_candidates(content_type, new_params, pages=[1, 2])
+
+        return []
 
     def _calculate_pages_to_fetch(self, num_excluded_genres: int) -> list[int]:
         """

@@ -9,6 +9,7 @@ Generates 3 personalized catalog rows using a tiered sampling system:
 
 import asyncio
 import random
+from enum import Enum
 from typing import Any
 
 from loguru import logger
@@ -31,6 +32,19 @@ AXIS_COUNTRY = "country"
 AXIS_ERA = "era"
 AXIS_RUNTIME = "runtime"
 AXIS_CREATOR = "creator"
+
+
+class AxisRole(str, Enum):
+    ANCHOR = "anchor"  # strong signal, near-required
+    FLAVOR = "flavor"  # boosts relevance, optional
+    FALLBACK = "fallback"  # ranking only, never filtering
+
+
+class RowAxis(BaseModel):
+    name: str
+    value: Any
+    role: AxisRole
+    weight: float = 1.0
 
 
 def normalize_keyword(kw: str) -> str:
@@ -68,9 +82,9 @@ def decade_to_display(decade: int) -> str:
 def runtime_to_modifier(bucket: str) -> str | None:
     """Get display modifier for runtime bucket."""
     modifiers = {
-        "short": "Quick",
+        "short": "Short & Sweet",
         "medium": None,  # No modifier for medium
-        "long": "Bingeworthy",
+        "long": "Epic",
     }
     return modifiers.get(bucket)
 
@@ -98,24 +112,36 @@ def sample_from_gold_silver(items: list[tuple[Any, float]], count: int = 1) -> l
     return sample_from_tier(items, 0, SILVER_TIER_END, count)
 
 
-def build_row_id(components: dict[str, Any]) -> str:
-    """Build a unique row ID from components."""
+def build_row_id(axes: list[RowAxis]) -> str:
+    """Build a unique row ID from axes and their roles."""
     parts = ["watchly.theme"]
 
-    if components.get("genres"):
-        for g in components["genres"]:
-            parts.append(f"g{g}")
-    if components.get("keywords"):
-        for k in components["keywords"]:
-            parts.append(f"k{k}")
-    if components.get("country"):
-        parts.append(f"ct{components['country']}")
-    if components.get("year_range"):
-        parts.append(f"y{components['year_range'][0]}")
-    if components.get("runtime"):
-        parts.append(f"r{components['runtime']}")
-    if components.get("creator"):
-        parts.append(f"cr{components['creator']}")
+    role_map = {
+        AxisRole.ANCHOR: "a",
+        AxisRole.FLAVOR: "f",
+        AxisRole.FALLBACK: "b",
+    }
+
+    # Sort axes for consistent IDs
+    sorted_axes = sorted(axes, key=lambda x: (x.role, x.name, str(x.value)))
+
+    for axis in sorted_axes:
+        role_pfx = role_map.get(axis.role, "f")
+        axis_pfx = {
+            AXIS_GENRE: "g",
+            AXIS_KEYWORD: "k",
+            AXIS_COUNTRY: "ct",
+            AXIS_ERA: "y",
+            AXIS_RUNTIME: "r",
+            AXIS_CREATOR: "cr",
+        }.get(axis.name, "x")
+
+        # Handle value formatting
+        val = axis.value
+        if isinstance(val, (list, tuple)):
+            val = "-".join(str(v) for v in val)
+
+        parts.append(f"{role_pfx}:{axis_pfx}{val}")
 
     return ".".join(parts)
 
@@ -125,27 +151,20 @@ class RowDefinition(BaseModel):
 
     title: str
     id: str
-    genres: list[int] = []
-    keywords: list[int] = []
-    country: str | None = None
-    year_range: tuple[int, int] | None = None
-    runtime: str | None = None
-    creator: int | None = None
+    axes: list[RowAxis] = []
+    explanation: str | None = None
+    expansion_strategy: str | None = None
 
     @property
     def is_valid(self) -> bool:
-        return bool(self.genres or self.keywords or self.country or self.year_range or self.runtime or self.creator)
+        return len(self.axes) > 0
 
 
 class RowComponents(BaseModel):
     """Internal structure for building a row."""
 
-    genres: list[int] = []
-    keywords: list[int] = []
-    country: str | None = None
-    year_range: tuple[int, int] | None = None
-    runtime: str | None = None
-    creator: int | None = None
+    axes: list[RowAxis] = []
+    explanation: str | None = None
 
     # For title generation
     prompt_parts: list[str] = []
@@ -162,12 +181,8 @@ class RowComponents(BaseModel):
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for row building."""
         return {
-            "genres": self.genres,
-            "keywords": self.keywords,
-            "country": self.country,
-            "year_range": self.year_range,
-            "runtime": self.runtime,
-            "creator": self.creator,
+            "axes": self.axes,
+            "explanation": self.explanation,
         }
 
 
@@ -202,98 +217,59 @@ class ExtractedFeatures:
 
 
 class RowBuilder:
-    """Builds a single row by sampling from axes."""
+    """Builds a single row by sampling from axes with specific roles."""
 
     def __init__(self, features: ExtractedFeatures):
         self.features = features
         self.components = RowComponents()
-        self.used_genres: set[int] = set()
-        self.used_keywords: set[int] = set()
+        self.used_axes: set[str] = set()
 
-    def add_genre(self, genre_id: int) -> "RowBuilder":
-        """Add a genre to the row."""
-        self.components.genres.append(genre_id)
-        name = self.features.get_genre_name(genre_id)
-        self.components.prompt_parts.append(f"Genre: {name}")
-        self.components.fallback_parts.append(name)
-        self.used_genres.add(genre_id)
+    def add_axis(self, name: str, value: Any, role: AxisRole, weight: float = 1.0) -> "RowBuilder":
+        """Add an axis with a specific role and weight."""
+        axis = RowAxis(name=name, value=value, role=role, weight=weight)
+        self.components.axes.append(axis)
+
+        # Build prompt and fallback title parts
+        display_val = self._get_display_value(name, value)
+        if display_val:
+            prefix = ""
+            if role == AxisRole.ANCHOR:
+                prefix = "Anchor: "
+            elif role == AxisRole.FLAVOR:
+                prefix = "Flavor: "
+
+            self.components.prompt_parts.append(f"{prefix}{name.title()}: {display_val}")
+
+            # For fallback title, we prioritize Anchor and Flavor
+            if role in (AxisRole.ANCHOR, AxisRole.FLAVOR):
+                if name == AXIS_COUNTRY:
+                    self.components.fallback_parts.insert(0, display_val)
+                else:
+                    self.components.fallback_parts.append(display_val)
+
+        self.used_axes.add(f"{name}:{value}")
         return self
 
-    def add_keyword(self, keyword_id: int) -> "RowBuilder":
-        """Add a keyword to the row."""
-        name = self.features.get_keyword_name(keyword_id)
-        if name:
-            self.components.keywords.append(keyword_id)
-            self.components.prompt_parts.append(f"Keyword: {normalize_keyword(name)}")
-            self.components.fallback_parts.append(normalize_keyword(name))
-            self.used_keywords.add(keyword_id)
-        return self
-
-    def add_country(self, country_code: str) -> "RowBuilder":
-        """Add a country to the row."""
-        adj = get_country_adjective(country_code)
-        if adj:
-            self.components.country = country_code
-            self.components.prompt_parts.append(f"Country: {adj}")
-            self.components.fallback_parts.insert(0, adj)  # Country goes first
-        return self
-
-    def add_era(self, decade: int) -> "RowBuilder":
-        """Add an era to the row."""
-        if 1960 <= decade <= 2020:
-            self.components.year_range = (decade, decade + 9)
-            display = decade_to_display(decade)
-            self.components.prompt_parts.append(f"Era: {display}")
-            self.components.fallback_parts.insert(0, display)
-        return self
-
-    def add_runtime(self, bucket: str) -> "RowBuilder":
-        """Add a runtime bucket to the row."""
-        modifier = runtime_to_modifier(bucket)
-        if modifier:
-            self.components.runtime = bucket
-            self.components.prompt_parts.append(f"Runtime: {modifier}")
-            self.components.fallback_parts.insert(0, modifier)
-        return self
+    def _get_display_value(self, name: str, value: Any) -> str | None:
+        """Get human-readable value for an axis."""
+        if name == AXIS_GENRE:
+            return self.features.get_genre_name(value)
+        if name == AXIS_KEYWORD:
+            return normalize_keyword(self.features.get_keyword_name(value) or "")
+        if name == AXIS_COUNTRY:
+            return get_country_adjective(value)
+        if name == AXIS_ERA:
+            return decade_to_display(value[0]) if isinstance(value, (list, tuple)) else f"{value}s"
+        if name == AXIS_RUNTIME:
+            return runtime_to_modifier(value)
+        return str(value)
 
     def build(self) -> RowComponents | None:
-        """Build and return the row components if valid."""
-        if self.components.prompt_parts:
+        """Build and return the row components if valid (has at least one anchor)."""
+        has_anchor = any(a.role == AxisRole.ANCHOR for a in self.components.axes)
+        if has_anchor:
             return self.components
         return None
-
-
-def get_core_recipes() -> list[list[str]]:
-    """Get recipes for 'The Core' row (2-3 axes from Gold tier)."""
-    return [
-        [AXIS_GENRE, AXIS_KEYWORD, AXIS_RUNTIME],
-        [AXIS_GENRE, AXIS_KEYWORD, AXIS_KEYWORD],
-        [AXIS_KEYWORD, AXIS_KEYWORD, AXIS_RUNTIME],
-        [AXIS_GENRE, AXIS_KEYWORD],
-        [AXIS_KEYWORD, AXIS_KEYWORD],
-    ]
-
-
-def get_blend_recipes() -> list[list[str]]:
-    """Get recipes for 'The Blend' row (3-4 axes from Gold+Silver)."""
-    return [
-        [AXIS_GENRE, AXIS_KEYWORD, AXIS_ERA],
-        [AXIS_GENRE, AXIS_KEYWORD, AXIS_COUNTRY],
-        [AXIS_GENRE, AXIS_COUNTRY, AXIS_RUNTIME],
-        [AXIS_KEYWORD, AXIS_COUNTRY, AXIS_ERA],
-        [AXIS_GENRE, AXIS_ERA, AXIS_RUNTIME],
-    ]
-
-
-def get_rising_star_recipes() -> list[list[str]]:
-    """Get recipes for 'The Rising Star' row (2 axes from Silver tier)."""
-    return [
-        [AXIS_KEYWORD, AXIS_COUNTRY],
-        [AXIS_GENRE, AXIS_KEYWORD],
-        [AXIS_KEYWORD, AXIS_ERA],
-        [AXIS_GENRE, AXIS_ERA],
-        [AXIS_KEYWORD, AXIS_RUNTIME],
-    ]
 
 
 class RowGeneratorService:
@@ -304,55 +280,67 @@ class RowGeneratorService:
 
     async def generate_rows(self, profile: TasteProfile, content_type: str = "movie") -> list[RowDefinition]:
         """
-        Generate 3 dynamic rows using the tiered persona system.
+        Generate exactly 3 personalized catalog rows: One Core, One Blend, One Rising Star.
+        Total 6 rows across both content types (movie/series).
 
         Returns:
-            List of RowDefinition (up to 3 rows)
+            List of RowDefinition
         """
         # 1. Extract all features from profile
         features = await self._extract_features(profile, content_type)
 
-        # 2. Build rows for each persona
+        # 2. Build exactly one of each persona with inter-row diversity
         rows_data = []
+        used_genres = set()
+        used_keywords = set()
 
-        # Row 1: The Core (Gold tier sampling)
-        core_row = self._build_core_row(features)
+        # Row 1: The Core (Strongest matches)
+        core_row = self._build_core_row(features, exclude_genres=used_genres, exclude_keywords=used_keywords)
         if core_row:
             rows_data.append(core_row)
+            self._update_used_axes(core_row, used_genres, used_keywords)
 
-        # Row 2: The Blend (Gold+Silver tier sampling)
-        blend_row = self._build_blend_row(features, exclude_keywords=core_row.keywords if core_row else [])
+        # Row 2: The Blend (Mixing themes)
+        blend_row = self._build_blend_row(features, exclude_genres=used_genres, exclude_keywords=used_keywords)
         if blend_row:
             rows_data.append(blend_row)
+            self._update_used_axes(blend_row, used_genres, used_keywords)
 
-        # Row 3: The Rising Star (Silver tier sampling)
-        rising_row = self._build_rising_star_row(
-            features,
-            exclude_keywords=(core_row.keywords if core_row else []) + (blend_row.keywords if blend_row else []),
-        )
+        # Row 3: The Rising Star (Exploration)
+        rising_row = self._build_rising_star_row(features, exclude_genres=used_genres, exclude_keywords=used_keywords)
         if rising_row:
             rows_data.append(rising_row)
 
         # 3. Generate titles via Gemini (parallel)
-        final_rows = await self._generate_titles(rows_data)
+        # We limit to 3 rows total per call
+        final_rows = await self._generate_titles(rows_data[:3])
 
-        logger.info(f"Generated {len(final_rows)} dynamic rows for {content_type}")
+        logger.info(f"Generated {len(final_rows)} dynamic rows (Core/Blend/Rising) for {content_type}")
         return final_rows
+
+    def _update_used_axes(self, row: RowComponents, used_genres: set, used_keywords: set):
+        """Track used genres and keywords to ensure row diversity."""
+        for axis in row.axes:
+            if axis.name == AXIS_GENRE:
+                used_genres.add(axis.value)
+            elif axis.name == AXIS_KEYWORD:
+                used_keywords.add(axis.value)
 
     async def _extract_features(self, profile: TasteProfile, content_type: str) -> ExtractedFeatures:
         """Extract all features from profile and resolve keyword names."""
         # Get raw features
-        genres = profile.get_top_genres(limit=10)
-        keywords = profile.get_top_keywords(limit=15)
-        countries = profile.get_top_countries(limit=5)
-        eras = profile.get_top_eras(limit=5)
+        genres = profile.get_top_genres(limit=5)
+        keywords = profile.get_top_keywords(limit=10)
+        countries = profile.get_top_countries(limit=2)
+        eras = profile.get_top_eras(limit=2)
         runtimes = sorted(profile.runtime_bucket_scores.items(), key=lambda x: x[1], reverse=True)
-        creators = profile.get_top_creators(limit=10)
+        creators = profile.get_top_creators(limit=5)
 
         # Fetch keyword names in parallel
         keyword_ids = [k_id for k_id, _ in keywords]
         keyword_names_raw = await asyncio.gather(
-            *[self._get_keyword_name(kid) for kid in keyword_ids], return_exceptions=True
+            *[self._get_keyword_name(kid) for kid in keyword_ids],
+            return_exceptions=True,
         )
         keyword_names = {
             kid: name for kid, name in zip(keyword_ids, keyword_names_raw) if name and not isinstance(name, Exception)
@@ -377,105 +365,182 @@ class RowGeneratorService:
         except Exception:
             return None
 
-    def _build_core_row(self, features: ExtractedFeatures) -> RowComponents | None:
-        """Build 'The Core' row from Gold tier (Top 1-3)."""
-        recipes = get_core_recipes()
-        random.shuffle(recipes)
+    def _build_core_row(
+        self,
+        features: ExtractedFeatures,
+        exclude_genres: set[int] | None = None,
+        exclude_keywords: set[int] | None = None,
+    ) -> RowComponents | None:
+        """
+        Build 'The Core' row:
+        Anchor: GENRE (Gold)
+        Flavor: 1-2 KEYWORDS (Gold)
+        Fallback: ERA or RUNTIME (Gold/Silver)
+        """
+        exclude_genres = exclude_genres or set()
+        exclude_keywords = exclude_keywords or set()
+        builder = RowBuilder(features)
 
-        for recipe in recipes:
-            builder = RowBuilder(features)
-            if self._apply_recipe(builder, recipe, features, tier="gold"):
-                return builder.build()
+        # 1. Anchor: Genre
+        available_genres = [g for g in features.genres if g[0] not in exclude_genres]
+        genres = sample_from_gold(available_genres, 1) if available_genres else sample_from_gold(features.genres, 1)
+        if not genres:
+            return None
+        builder.add_axis(AXIS_GENRE, genres[0][0], AxisRole.ANCHOR, 1.0)
 
-        return None
+        # 2. Flavor: 1-2 Keywords
+        available_keywords = [k for k in features.keywords if k[0] not in exclude_keywords]
+        keywords = sample_from_gold(available_keywords, random.randint(1, 2)) if available_keywords else []
+        for k_id, _ in keywords:
+            builder.add_axis(AXIS_KEYWORD, k_id, AxisRole.FLAVOR, 0.7)
+
+        # 3. Fallback: Era or Runtime
+        if random.random() < 0.5 and features.eras:
+            era = sample_from_gold_silver(features.eras, 1)
+            decade = era_to_decade(era[0][0])
+            if decade:
+                builder.add_axis(AXIS_ERA, (decade, decade + 9), AxisRole.FALLBACK, 0.3)
+        elif features.runtimes:
+            runtime = random.choice(features.runtimes[:2])
+            builder.add_axis(AXIS_RUNTIME, runtime[0], AxisRole.FALLBACK, 0.3)
+
+        row = builder.build()
+        if row:
+            row.explanation = "The Core: Based on your absolute favorite genres and recurring themes."
+        return row
 
     def _build_blend_row(
-        self, features: ExtractedFeatures, exclude_keywords: list[int] | None = None
+        self,
+        features: ExtractedFeatures,
+        exclude_genres: set[int] | None = None,
+        exclude_keywords: set[int] | None = None,
     ) -> RowComponents | None:
-        """Build 'The Blend' row from Gold+Silver tier (Top 1-8)."""
-        recipes = get_blend_recipes()
-        random.shuffle(recipes)
+        """
+        Build 'The Blend' row:
+        Anchor: GENRE (Gold)
+        Flavor: COUNTRY or ERA or secondary GENRE (Gold/Silver)
+        """
+        exclude_genres = exclude_genres or set()
+        builder = RowBuilder(features)
 
-        for recipe in recipes:
-            builder = RowBuilder(features)
-            if self._apply_recipe(builder, recipe, features, tier="gold_silver", exclude_keywords=exclude_keywords):
-                return builder.build()
+        # 1. Anchor: Genre
+        available_genres = [g for g in features.genres if g[0] not in exclude_genres]
+        genres = sample_from_gold(available_genres, 1) if available_genres else sample_from_gold(features.genres, 1)
+        if not genres:
+            return None
+        builder.add_axis(AXIS_GENRE, genres[0][0], AxisRole.ANCHOR, 1.0)
 
-        return None
+        # 2. Flavor: Country, Era, or Secondary Genre
+        flavor_type = random.choice([AXIS_COUNTRY, AXIS_ERA, AXIS_GENRE])
+
+        if flavor_type == AXIS_COUNTRY and features.countries:
+            country = sample_from_gold_silver(features.countries, 1)
+            builder.add_axis(AXIS_COUNTRY, country[0][0], AxisRole.FLAVOR, 0.7)
+        elif flavor_type == AXIS_ERA and features.eras:
+            era = sample_from_gold_silver(features.eras, 1)
+            decade = era_to_decade(era[0][0])
+            if decade:
+                builder.add_axis(AXIS_ERA, (decade, decade + 9), AxisRole.FLAVOR, 0.7)
+        elif flavor_type == AXIS_GENRE:
+            other_genres = [g for g in features.genres if g[0] != genres[0][0]]
+            if other_genres:
+                sec_genre = sample_from_gold_silver(other_genres, 1)
+                builder.add_axis(AXIS_GENRE, sec_genre[0][0], AxisRole.FLAVOR, 0.7)
+
+        row = builder.build()
+        if row:
+            row.explanation = "The Blend: Mixing your top genres with preferred eras or international flavor."
+        return row
 
     def _build_rising_star_row(
-        self, features: ExtractedFeatures, exclude_keywords: list[int] | None = None
-    ) -> RowComponents | None:
-        """Build 'The Rising Star' row from Silver tier (Rank 4-10)."""
-        recipes = get_rising_star_recipes()
-        random.shuffle(recipes)
-
-        for recipe in recipes:
-            builder = RowBuilder(features)
-            if self._apply_recipe(builder, recipe, features, tier="silver", exclude_keywords=exclude_keywords):
-                return builder.build()
-
-        # Fallback: try Gold tier if Silver is empty
-        for recipe in recipes:
-            builder = RowBuilder(features)
-            if self._apply_recipe(builder, recipe, features, tier="gold", exclude_keywords=exclude_keywords):
-                return builder.build()
-
-        return None
-
-    def _apply_recipe(
         self,
-        builder: RowBuilder,
-        recipe: list[str],
         features: ExtractedFeatures,
-        tier: str,
-        exclude_keywords: list[int] | None = None,
-    ) -> bool:
-        """Apply a recipe to the builder. Returns True if successful."""
-        exclude_keywords = exclude_keywords or []
+        exclude_genres: set[int] | None = None,
+        exclude_keywords: set[int] | None = None,
+    ) -> RowComponents | None:
+        """
+        Build 'The Rising Star' row:
+        Anchor: recent KEYWORD or ERA (Silver)
+        Flavor: GENRE (Silver)
+        Fallback: COUNTRY (Gold/Silver)
+        """
+        exclude_genres = exclude_genres or set()
+        exclude_keywords = exclude_keywords or set()
+        builder = RowBuilder(features)
 
-        # Select sampler based on tier
-        if tier == "gold":
-            sampler = sample_from_gold
-        elif tier == "silver":
-            sampler = sample_from_silver
-        else:
-            sampler = sample_from_gold_silver
+        # 1. Anchor: Recent Keyword or Era (Sampling from Silver to promote exploration)
+        anchor_type = random.choice([AXIS_KEYWORD, AXIS_ERA])
 
-        for axis in recipe:
-            if axis == AXIS_GENRE:
-                sampled = sampler(features.genres, 1)
-                if sampled:
-                    builder.add_genre(sampled[0][0])
+        if anchor_type == AXIS_KEYWORD:
+            available_keywords = [k for k in features.keywords if k[0] not in exclude_keywords]
+            keywords = sample_from_silver(available_keywords, 1) if available_keywords else []
+            if keywords:
+                builder.add_axis(AXIS_KEYWORD, keywords[0][0], AxisRole.ANCHOR, 1.0)
+        elif anchor_type == AXIS_ERA:
+            eras = sample_from_silver(features.eras, 1)
+            if eras:
+                decade = era_to_decade(eras[0][0])
+                if decade:
+                    builder.add_axis(AXIS_ERA, (decade, decade + 9), AxisRole.ANCHOR, 1.0)
 
-            elif axis == AXIS_KEYWORD:
-                # Filter out already used keywords
-                available = [
-                    (k, s) for k, s in features.keywords if k not in exclude_keywords and k not in builder.used_keywords
-                ]
-                sampled = sampler(available, 1) if tier != "silver" else sample_from_silver(available, 1)
-                if sampled:
-                    builder.add_keyword(sampled[0][0])
+        # If we couldn't add an anchor, this row fails
+        if not builder.components.axes:
+            return None
 
-            elif axis == AXIS_COUNTRY:
-                sampled = sampler(features.countries, 1)
-                if sampled:
-                    builder.add_country(sampled[0][0])
+        # 2. Flavor: Genre (Silver)
+        available_genres = [g for g in features.genres if g[0] not in exclude_genres]
+        genres = sample_from_silver(available_genres, 1) if available_genres else []
+        if genres:
+            builder.add_axis(AXIS_GENRE, genres[0][0], AxisRole.FLAVOR, 0.7)
 
-            elif axis == AXIS_ERA:
-                sampled = sampler(features.eras, 1)
-                if sampled:
-                    decade = era_to_decade(sampled[0][0])
-                    if decade:
-                        builder.add_era(decade)
+        # 3. Fallback: Country
+        if features.countries:
+            country = sample_from_gold_silver(features.countries, 1)
+            builder.add_axis(AXIS_COUNTRY, country[0][0], AxisRole.FALLBACK, 0.3)
 
-            elif axis == AXIS_RUNTIME:
-                if features.runtimes:
-                    # Runtime: just pick the top one
-                    builder.add_runtime(features.runtimes[0][0])
+        row = builder.build()
+        if row:
+            row.explanation = "The Rising Star: Exploring emerging interests and newer themes in your history."
+        return row
 
-        # Check if we added enough components
-        return len(builder.components.prompt_parts) >= 2
+    def _build_signature_rows(self, features: ExtractedFeatures) -> list[RowComponents]:
+        """Generate dynamic signature recipes from user history."""
+        signature_rows = []
+
+        # 1. Top genre × dominant keyword
+        if features.genres and features.keywords:
+            builder = RowBuilder(features)
+            builder.add_axis(AXIS_GENRE, features.genres[0][0], AxisRole.ANCHOR, 1.0)
+            builder.add_axis(AXIS_KEYWORD, features.keywords[0][0], AxisRole.FLAVOR, 0.7)
+            row = builder.build()
+            if row:
+                row.explanation = "Signature: Your #1 genre paired with your most frequent theme."
+                signature_rows.append(row)
+
+        # 2. Top genre × preferred runtime
+        if features.genres and features.runtimes:
+            builder = RowBuilder(features)
+            builder.add_axis(AXIS_GENRE, features.genres[0][0], AxisRole.ANCHOR, 1.0)
+            builder.add_axis(AXIS_RUNTIME, features.runtimes[0][0], AxisRole.FLAVOR, 0.7)
+            row = builder.build()
+            if row:
+                row.explanation = "Signature: Favorite genre fit for your preferred watch duration."
+                signature_rows.append(row)
+
+        # 3. Recent watch era × genre
+        if features.eras and features.genres:
+            builder = RowBuilder(features)
+            era = features.eras[0][0]
+            decade = era_to_decade(era)
+            if decade:
+                builder.add_axis(AXIS_ERA, (decade, decade + 9), AxisRole.ANCHOR, 1.0)
+                builder.add_axis(AXIS_GENRE, features.genres[0][0], AxisRole.FLAVOR, 0.7)
+                row = builder.build()
+                if row:
+                    row.explanation = "Signature: Exploring your favorite genre within your most watched era."
+                    signature_rows.append(row)
+
+        return signature_rows
 
     async def _generate_titles(self, rows_data: list[RowComponents]) -> list[RowDefinition]:
         """Generate titles for all rows via Gemini."""
@@ -501,7 +566,7 @@ class RowGeneratorService:
                 title = row.build_fallback()
 
             # Build the row ID
-            row_id = build_row_id(row.to_dict())
+            row_id = build_row_id(row.axes)
 
             final_rows.append(
                 RowDefinition(
