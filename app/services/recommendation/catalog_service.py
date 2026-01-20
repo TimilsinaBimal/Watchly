@@ -90,9 +90,12 @@ class CatalogService:
         # Prepare response headers
 
         headers: dict[str, Any] = {
-            "Cache-Control": f"public, max-age={settings.CATALOG_CACHE_TTL}, immutable",
-            "Vary": "Origin",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
             "Content-Type": "application/json",
+            "Cache-Control": (
+                f"public, max-age={settings.CATALOG_CACHE_TTL}," "stale-while-revalidate=3600, stale-if-error=1800"
+            ),
         }
 
         logger.info(f"[{redact_token(token)}...] Fetching catalog for {content_type} with id {catalog_id}")
