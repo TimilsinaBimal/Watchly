@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from loguru import logger
@@ -23,6 +24,11 @@ class TokenRequest(BaseModel):
     poster_rating: PosterRatingConfig | None = Field(default=None, description="Poster rating provider configuration")
     excluded_movie_genres: list[str] = Field(default_factory=list, description="List of movie genre IDs to exclude")
     excluded_series_genres: list[str] = Field(default_factory=list, description="List of series genre IDs to exclude")
+    popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(
+        default="balanced", description="Popularity for TMDB API"
+    )
+    year_min: int = Field(default=2010, description="Minimum release year for TMDB API")
+    year_max: int = Field(default=2025, description="Maximum release year for TMDB API")
 
 
 class TokenResponse(BaseModel):
@@ -85,6 +91,9 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         poster_rating=poster_rating,
         excluded_movie_genres=payload.excluded_movie_genres,
         excluded_series_genres=payload.excluded_series_genres,
+        year_min=payload.year_min,
+        year_max=payload.year_max,
+        popularity=payload.popularity,
     )
 
     # 4. Prepare payload to store

@@ -48,3 +48,9 @@ logs/
 *.ipynb
 .vercel
 migration.py
+
+
+.cursor
+.github
+.pytest_cache
+.ruff_cache
