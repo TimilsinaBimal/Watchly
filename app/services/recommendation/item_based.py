@@ -113,7 +113,7 @@ class ItemBasedService:
 
         await fetch_and_combine(self.tmdb_service.get_recommendations, "recommendations")
 
-        if not combined or len(combined) < 50:
+        if not combined or len(combined) < 30:
             await fetch_and_combine(self.tmdb_service.get_similar, "similar")
 
         return list(combined.values())
