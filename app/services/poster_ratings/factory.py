@@ -3,6 +3,7 @@ from typing import Literal
 
 from app.services.poster_ratings.rpdb import RPDBService
 from app.services.poster_ratings.top_posters import TopPostersService
+from app.services.token_store import token_store
 
 
 class PosterProvider(Enum):
@@ -23,6 +24,13 @@ class PosterRatingsFactory:
         item_id: str,
         **kwargs,
     ) -> str:
+
+        if api_key.startswith("gAAAAA"):
+            api_key = token_store.decrypt_token(api_key)
+
+        # if still gAAA, then return original url
+        if api_key.startswith("gAAAAA"):
+            return kwargs.get("fallback")
 
         poster_provider_map = {
             PosterProvider.RPDB: self.rpdb_service,
