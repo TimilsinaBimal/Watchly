@@ -171,7 +171,7 @@ class ProfileBuilder:
         features: dict[str, Any],
         evidence_weight: float,
         is_loved: bool,
-        frequencies: dict[str, dict[Any, int]],
+        frequencies: dict[str, dict[Any, int]] | None = None,
     ) -> None:
         """
         Accumulate features into profile (pure addition).
@@ -194,7 +194,8 @@ class ProfileBuilder:
                 position_weight = GENRE_POSITION_WEIGHTS[idx] if idx < len(GENRE_POSITION_WEIGHTS) else 0.1
                 weight = evidence_weight * FEATURE_WEIGHT_GENRE * position_weight
                 profile.genre_scores[genre_id] = profile.genre_scores.get(genre_id, 0.0) + weight
-                frequencies["genres"][genre_id] += 1
+                if frequencies is not None:
+                    frequencies["genres"][genre_id] += 1
 
         # Keywords
         keywords = features.get("keywords", [])
@@ -203,21 +204,24 @@ class ProfileBuilder:
             if keyword_id:
                 weight = evidence_weight * FEATURE_WEIGHT_KEYWORD
                 profile.keyword_scores[keyword_id] = profile.keyword_scores.get(keyword_id, 0.0) + weight
-                frequencies["keywords"][keyword_id] += 1
+                if frequencies is not None:
+                    frequencies["keywords"][keyword_id] += 1
 
         # Eras
         era = features.get("era")
         if era:
             weight = evidence_weight * FEATURE_WEIGHT_ERA
             profile.era_scores[era] = profile.era_scores.get(era, 0.0) + weight
-            frequencies["eras"][era] += 1
+            if frequencies is not None:
+                frequencies["eras"][era] += 1
 
         # Countries
         for country_code in features.get("countries", []):
             if country_code:
                 weight = evidence_weight * FEATURE_WEIGHT_COUNTRY
                 profile.country_scores[country_code] = profile.country_scores.get(country_code, 0.0) + weight
-                frequencies["countries"][country_code] += 1
+                if frequencies is not None:
+                    frequencies["countries"][country_code] += 1
 
         crew_list = features.get("crew", [])
         if isinstance(crew_list, list):
@@ -234,7 +238,8 @@ class ProfileBuilder:
                     if job in ["director", "creator"]:
                         weight = evidence_weight * FEATURE_WEIGHT_CREATOR
                         profile.director_scores[crew_id] = profile.director_scores.get(crew_id, 0.0) + weight
-                        frequencies["directors"][crew_id] += 1
+                        if frequencies is not None:
+                            frequencies["directors"][crew_id] += 1
 
         for cast_item in features.get("cast", []):
             if isinstance(cast_item, dict):
@@ -248,7 +253,8 @@ class ProfileBuilder:
                 # Use evidence weight multiplied by position weight
                 weight = evidence_weight * FEATURE_WEIGHT_CREATOR * position_weight
                 profile.cast_scores[cast_id] = profile.cast_scores.get(cast_id, 0.0) + weight
-                frequencies["cast"][cast_id] += 1
+                if frequencies is not None:
+                    frequencies["cast"][cast_id] += 1
 
         # Runtime buckets
         runtime_bucket = features.get("runtime_bucket")
@@ -256,7 +262,8 @@ class ProfileBuilder:
             weight = evidence_weight * FEATURE_WEIGHT_RUNTIME
             current_score = profile.runtime_bucket_scores.get(runtime_bucket, 0.0)
             profile.runtime_bucket_scores[runtime_bucket] = current_score + weight
-            frequencies["runtime_buckets"][runtime_bucket] += 1
+            if frequencies is not None:
+                frequencies["runtime_buckets"][runtime_bucket] += 1
 
     def _apply_frequency_multipliers(self, profile: TasteProfile, frequencies: dict[str, dict[Any, int]]) -> None:
         """
@@ -385,18 +392,7 @@ class ProfileBuilder:
                     logger.debug(f"Failed to unpack result: {result}")
                     continue
 
-            # Simple frequency tracking
-            frequencies = {
-                "genres": defaultdict(int),
-                "keywords": defaultdict(int),
-                "eras": defaultdict(int),
-                "countries": defaultdict(int),
-                "directors": defaultdict(int),
-                "cast": defaultdict(int),
-                "runtime_buckets": defaultdict(int),
-            }
-
-            self._accumulate_features(existing_profile, features, evidence_weight, is_loved, frequencies)
+            self._accumulate_features(existing_profile, features, evidence_weight, is_loved)
 
         # Apply caps to prevent unbounded growth
         self._apply_caps(existing_profile)
