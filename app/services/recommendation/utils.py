@@ -302,15 +302,19 @@ def filter_items_by_settings(items: list[dict[str, Any]], user_settings: Any) ->
             "lte": lambda x, y: x <= y,
         }
 
+        passes_all_checks = True
         for param in params:
             t_param, param_ops = param.split(".")
-
             param_operator = ops.get(param_ops)
             if not param_operator:
                 continue
-            if not param_operator(item.get(t_param), params[param]):
-                continue
 
-        filtered.append(item)
+            item_value = item.get(t_param)
+            if item_value is None or not param_operator(item_value, params[param]):
+                passes_all_checks = False
+                break
+
+        if passes_all_checks:
+            filtered.append(item)
 
     return filtered

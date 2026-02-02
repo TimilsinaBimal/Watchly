@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     RECOMMENDATION_SOURCE_ITEMS_LIMIT: int = 10
     LIBRARY_ITEMS_LIMIT: int = 20
 
-    CATALOG_CACHE_TTL: int = 43200  # 24 hours
+    CATALOG_CACHE_TTL: int = 43200  # 12 hours
     CATALOG_STALE_TTL: int = 604800  # 7 days (soft expiration fallback)
 
     # AI

@@ -257,7 +257,6 @@ class TokenStore:
                     except Exception as e:
                         logger.debug(f"First decryption attempt failed for poster_rating api_key: {e}. Retrying...")
                         await asyncio.sleep(0.5)
-                poster_rating["api_key"] = None
 
         return data
 
