@@ -50,6 +50,7 @@ async function initializeFormSubmission() {
         const popularity = document.getElementById("popularitySelect")?.value || "balanced";
         const yearMin = parseInt(document.getElementById("yearMin")?.value || "1980");
         const yearMax = parseInt(document.getElementById("yearMax")?.value || "2026");
+        const sortingOrder = document.getElementById("sortingOrderSelect")?.value || "default";
         const posterRatingProvider = document.getElementById("posterRatingProvider")?.value || "";
         const posterRatingApiKey = document.getElementById("posterRatingApiKey")?.value.trim() || "";
         const excludedMovieGenres = Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value);
@@ -135,6 +136,7 @@ async function initializeFormSubmission() {
                 year_min: yearMin,
                 year_max: yearMax,
                 popularity: popularity,
+                sorting_order: sortingOrder,
                 poster_rating: posterRating,
                 excluded_movie_genres: excludedMovieGenres,
                 excluded_series_genres: excludedSeriesGenres

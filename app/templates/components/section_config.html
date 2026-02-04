@@ -64,6 +64,27 @@
 
     <div class="border-t border-white/10"></div>
 
+    <!-- Sorting Order -->
+    <div class="space-y-4">
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Sorting Order (Movie vs Series)</label>
+        <div class="relative">
+            <select id="sortingOrderSelect"
+                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
+                <option value="default" selected>Default (Interleaved)</option>
+                <option value="movies_first">Movies First</option>
+                <option value="series_first">Series First</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+        </div>
+        <p class="text-xs text-slate-500">Choose whether to group movies first, series first, or keep them interleaved by category.</p>
+    </div>
+
+    <div class="border-t border-white/10"></div>
+
     <!-- Year Range -->
     <div class="space-y-6">
         <div class="flex items-center justify-between">

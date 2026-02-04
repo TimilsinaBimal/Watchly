@@ -29,6 +29,9 @@ class TokenRequest(BaseModel):
     )
     year_min: int = Field(default=2010, description="Minimum release year for TMDB API")
     year_max: int = Field(default=2025, description="Maximum release year for TMDB API")
+    sorting_order: Literal["default", "movies_first", "series_first"] = Field(
+        default="default", description="Order of movies and series catalogs"
+    )
 
 
 class TokenResponse(BaseModel):
@@ -94,6 +97,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         year_min=payload.year_min,
         year_max=payload.year_max,
         popularity=payload.popularity,
+        sorting_order=payload.sorting_order,
     )
 
     # 4. Prepare payload to store
@@ -186,7 +190,14 @@ async def check_stremio_identity(payload: TokenRequest):
 
     response = {"user_id": user_id, "email": email, "exists": exists}
     if exists and user_data:
-        response["settings"] = user_data.get("settings")
+        # Reconstruct UserSettings to ensure defaults (like sorting_order) are included for old accounts
+        raw_settings = user_data.get("settings", {})
+        try:
+            user_settings = UserSettings(**raw_settings)
+            response["settings"] = user_settings.model_dump()
+        except Exception as e:
+            logger.warning(f"Failed to normalize settings for user {user_id}: {e}")
+            response["settings"] = raw_settings
     return response
 
 

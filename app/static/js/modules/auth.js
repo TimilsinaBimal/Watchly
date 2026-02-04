@@ -252,6 +252,11 @@ async function fetchStremioIdentity(authKey) {
         payload.email = emailInput.value.trim();
         payload.password = passwordInput.value;
     }
+
+    const sortingOrderSelect = document.getElementById("sortingOrderSelect");
+    if (sortingOrderSelect) {
+        payload.sorting_order = sortingOrderSelect.value;
+    }
     const res = await fetch('/tokens/stremio-identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -286,6 +291,9 @@ async function fetchStremioIdentity(authKey) {
             if (s.year_min && yearMinInput) yearMinInput.value = s.year_min;
             if (s.year_max && yearMaxInput) yearMaxInput.value = s.year_max;
             if (window.updateYearSlider) window.updateYearSlider();
+
+            const sortingOrderSelect = document.getElementById('sortingOrderSelect');
+            if (s.sorting_order && sortingOrderSelect) sortingOrderSelect.value = s.sorting_order;
 
             // Handle poster rating: prefer new format, fallback to old rpdb_key
             const posterRatingProvider = document.getElementById('posterRatingProvider');

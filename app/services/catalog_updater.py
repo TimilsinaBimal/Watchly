@@ -13,7 +13,7 @@ from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
-from app.utils.catalog import get_config_id
+from app.utils.catalog import sort_catalogs
 
 
 class CatalogUpdater:
@@ -132,11 +132,9 @@ class CatalogUpdater:
                             logger.warning(f"Failed to translate catalog name '{name}': {e}")
                             continue
 
-            logger.info(f"[{redact_token(token)}] Prepared {len(catalogs)} catalogs for background refresh")
             # sort catalogs by order in user settings
             if user_settings:
-                order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
-                catalogs.sort(key=lambda x: order_map.get(get_config_id(x), 999))
+                catalogs = sort_catalogs(catalogs, user_settings)
 
             success = await bundle.addons.update_catalogs(auth_key, catalogs)
 

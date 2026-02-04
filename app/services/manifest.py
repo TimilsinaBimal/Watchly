@@ -13,7 +13,7 @@ from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
 from app.services.user_cache import user_cache
-from app.utils.catalog import cache_profile_and_watched_sets, get_config_id
+from app.utils.catalog import cache_profile_and_watched_sets, sort_catalogs
 
 
 class ManifestService:
@@ -163,9 +163,7 @@ class ManifestService:
         if not user_settings:
             return catalogs
 
-        order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
-        sorted_catalogs = sorted(catalogs, key=lambda x: order_map.get(get_config_id(x), 999))
-        return sorted_catalogs
+        return sort_catalogs(catalogs, user_settings)
 
     async def get_manifest_for_token(self, token: str) -> dict[str, Any]:
         """

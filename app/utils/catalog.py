@@ -1,3 +1,5 @@
+from typing import Any
+
 from app.core.constants import DISCOVER_ONLY_EXTRA
 from app.core.settings import UserSettings
 from app.services.profile.integration import ProfileIntegration
@@ -61,3 +63,40 @@ def get_config_id(catalog) -> str | None:
     if catalog_id.startswith("watchly.watched."):
         return "watchly.watched"
     return catalog_id
+
+
+def sort_catalogs(catalogs: list[dict[str, Any]], user_settings: UserSettings) -> list[dict[str, Any]]:
+    """
+    Sort catalogs according to user settings and sorting order choice.
+
+    Sorting Orders:
+    - default: Interleaved (by category priority, then movie then series)
+    - movies_first: Group all movies first, then all series
+    - series_first: Group all series first, then all movies
+    """
+    if not user_settings:
+        return catalogs
+
+    # Get the original order index from user settings for each catalog category
+    order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
+
+    # Base sorting key: setting index (priority)
+    def get_setting_index(cat):
+        return order_map.get(get_config_id(cat), 999)
+
+    sorting_order = getattr(user_settings, "sorting_order", "default")
+
+    if sorting_order == "movies_first":
+        # Group movies first, then series
+        # movies: type_priority=0, series: type_priority=1
+        sorted_catalogs = sorted(catalogs, key=lambda x: (0 if x.get("type") == "movie" else 1, get_setting_index(x)))
+    elif sorting_order == "series_first":
+        # Group series first, then movies
+        # series: type_priority=0, movies: type_priority=1
+        sorted_catalogs = sorted(catalogs, key=lambda x: (0 if x.get("type") == "series" else 1, get_setting_index(x)))
+    else:
+        # Default: Interleaved (by category priority)
+        # Python's sorted is stable, preserving movie then series within same priority
+        sorted_catalogs = sorted(catalogs, key=get_setting_index)
+
+    return sorted_catalogs
