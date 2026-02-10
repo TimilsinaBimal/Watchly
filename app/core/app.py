@@ -106,6 +106,13 @@ async def configure_page(request: Request, _token: str | None = None):
         logger.warning(f"Failed to fetch languages for template: {e}")
         languages = [{"iso_639_1": "en-US", "language": "English", "country": "US"}]
 
+    # Get total users count
+    total_users = 0
+    try:
+        total_users = await token_store.count_users()
+    except Exception as e:
+        logger.warning(f"Failed to get total users for template: {e}")
+
     # Format default catalogs for frontend
     default_catalogs = get_default_catalogs_for_frontend()
 
@@ -117,6 +124,7 @@ async def configure_page(request: Request, _token: str | None = None):
     html_content = template.render(
         request=request,
         app_version=__version__,
+        total_users=total_users,
         app_host=settings.HOST_NAME,
         announcement_html=settings.ANNOUNCEMENT_HTML or "",
         languages=languages,
