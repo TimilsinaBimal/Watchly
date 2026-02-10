@@ -24,6 +24,7 @@ from app.services.recommendation.utils import (
     resolve_tmdb_id,
 )
 from app.services.scoring import ScoringService
+from app.services.simkl import simkl_service
 from app.services.tmdb.service import TMDBService
 
 
@@ -81,8 +82,18 @@ class TopPicksService:
         mtype = content_type_to_mtype(content_type)
         all_candidates = {}
 
-        # 1. Fetch recommendations from top items (loved/watched/liked/added)
-        rec_candidates = await self._fetch_recommendations_from_top_items(library_items, content_type, mtype)
+        # 1. Fetch recommendations from top items
+        # Use Simkl if API key available, otherwise fall back to TMDB
+        simkl_api_key = self.user_settings.simkl_api_key if self.user_settings else None
+        if simkl_api_key:
+            rec_candidates = await self._fetch_simkl_recommendations(library_items, content_type, mtype)
+            if not rec_candidates:
+                # Fallback to TMDB if Simkl returns nothing
+                logger.info("Simkl returned no results, falling back to TMDB")
+                rec_candidates = await self._fetch_recommendations_from_top_items(library_items, content_type, mtype)
+        else:
+            rec_candidates = await self._fetch_recommendations_from_top_items(library_items, content_type, mtype)
+
         for item in rec_candidates:
             if item.get("id"):
                 all_candidates[item["id"]] = item
@@ -204,6 +215,65 @@ class TopPicksService:
             logger.info(f"{failed_count}/{len(tasks)} recommendation fetches failed (expected for items with no recs)")
         logger.debug(f"Fetched {len(candidates)} candidates from top items")
 
+        return candidates
+
+    async def _fetch_simkl_recommendations(
+        self,
+        library_items: dict[str, list[dict[str, Any]]],
+        content_type: str,
+        mtype: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Fetch recommendations from Simkl for top library items.
+
+        Args:
+            library_items: Library items dict
+            content_type: Content type
+            mtype: TMDB media type (movie/tv)
+
+        Returns:
+            List of candidate items in TMDB-compatible format
+        """
+        simkl_api_key = self.user_settings.simkl_api_key if self.user_settings else None
+        if not simkl_api_key:
+            logger.warning("Simkl API key not found, skipping Simkl recommendations")
+            return []
+
+        # Sample top items (same as TMDB flow - 15 items)
+        top_items = self.smart_sampler.sample_items(library_items, content_type, max_items=15)
+
+        # Extract IMDB IDs
+        imdb_ids = []
+        for scored_item in top_items:
+            item_id = scored_item.item.id
+            if item_id and item_id.startswith("tt"):
+                imdb_ids.append(item_id)
+
+        if not imdb_ids:
+            logger.warning("No valid IMDB IDs found for Simkl recommendations")
+            return []
+
+        logger.info(f"Fetching Simkl recommendations for {len(imdb_ids)} items")
+
+        # Get year range for filtering
+        year_min = getattr(self.user_settings, "year_min", None)
+        year_max = getattr(self.user_settings, "year_max", None)
+
+        # Fetch from Simkl (batch optimized with early year filtering)
+        try:
+            candidates = await simkl_service.get_recommendations_batch(
+                imdb_ids,
+                mtype,
+                simkl_api_key,
+                max_per_item=8,
+                year_min=year_min,
+                year_max=year_max,
+            )
+        except Exception as e:
+            logger.error(f"Error fetching Simkl recommendations: {e}")
+            return []
+
+        logger.info(f"Fetched {len(candidates)} candidates from Simkl")
         return candidates
 
     def _add_discover_task(self, tasks: list, mtype: str, without_genres: str | None, **kwargs: Any) -> None:

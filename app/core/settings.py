@@ -38,6 +38,7 @@ class UserSettings(BaseModel):
     sorting_order: Literal["default", "movies_first", "series_first"] = Field(
         default="default", description="Order of movies and series catalogs"
     )
+    simkl_api_key: str | None = Field(default=None, description="Simkl API Key for the user")
 
 
 # Catalog descriptions for frontend

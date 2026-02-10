@@ -32,6 +32,7 @@ class TokenRequest(BaseModel):
     sorting_order: Literal["default", "movies_first", "series_first"] = Field(
         default="default", description="Order of movies and series catalogs"
     )
+    simkl_api_key: str | None = Field(default=None, description="Simkl API Key for the user")
 
 
 class TokenResponse(BaseModel):
@@ -98,6 +99,7 @@ async def create_token(payload: TokenRequest, request: Request) -> TokenResponse
         year_max=payload.year_max,
         popularity=payload.popularity,
         sorting_order=payload.sorting_order,
+        simkl_api_key=payload.simkl_api_key,
     )
 
     # 4. Prepare payload to store

@@ -257,6 +257,10 @@ async function fetchStremioIdentity(authKey) {
     if (sortingOrderSelect) {
         payload.sorting_order = sortingOrderSelect.value;
     }
+    const simklApiKeyInput = document.getElementById("simklApiKey");
+    if (simklApiKeyInput) {
+        payload.simkl_api_key = simklApiKeyInput.value.trim();
+    }
     const res = await fetch('/tokens/stremio-identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -313,6 +317,9 @@ async function fetchStremioIdentity(authKey) {
                     posterRatingProvider.dispatchEvent(new Event('change'));
                 }
             }
+
+            const simklApiKeyInput = document.getElementById('simklApiKey');
+            if (s.simkl_api_key && simklApiKeyInput) simklApiKeyInput.value = s.simkl_api_key;
 
             // Genres (Checked = Excluded)
             document.querySelectorAll('input[name="movie-genre"]').forEach(cb => cb.checked = false);

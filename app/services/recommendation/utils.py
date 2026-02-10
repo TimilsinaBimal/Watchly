@@ -283,7 +283,7 @@ def filter_items_by_settings(items: list[dict[str, Any]], user_settings: Any) ->
 
     for item in items:
         # 1. Year Filtering
-        release_date = item.get("release_date") or item.get("first_air_date")
+        release_date = item.get("release_date") or item.get("first_air_date") or item.get("released")
         if release_date:
             try:
                 year = int(release_date.split("-")[0])

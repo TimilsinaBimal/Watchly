@@ -27,7 +27,7 @@
             <select id="languageSelect"
                 class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
                 {% for lang in languages %}
-                <option value="{{ lang.iso_639_1 }}" {% if lang.iso_639_1 == 'en-US' %}selected{% endif %}>
+                <option value="{{ lang.iso_639_1 }}" {% if lang.iso_639_1=='en-US' %}selected{% endif %}>
                     {{ lang.language }} ({{ lang.country }})
                 </option>
                 {% endfor %}
@@ -66,7 +66,8 @@
 
     <!-- Sorting Order -->
     <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Sorting Order (Movie vs Series)</label>
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Sorting Order (Movie vs
+            Series)</label>
         <div class="relative">
             <select id="sortingOrderSelect"
                 class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
@@ -80,7 +81,8 @@
                 </svg>
             </div>
         </div>
-        <p class="text-xs text-slate-500">Choose whether to group movies first, series first, or keep them interleaved by category.</p>
+        <p class="text-xs text-slate-500">Choose whether to group movies first, series first, or keep them interleaved
+            by category.</p>
     </div>
 
     <div class="border-t border-white/10"></div>
@@ -108,7 +110,8 @@
                 class="absolute w-full appearance-none bg-transparent pointer-events-none z-30 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-black [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-black [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-lg">
         </div>
 
-        <p class="text-xs text-slate-500">Note: Setting max year to current year includes all new releases up to today (the
+        <p class="text-xs text-slate-500">Note: Setting max year to current year includes all new releases up to today
+            (the
             day recommendations are fetched).</p>
     </div>
 
@@ -140,7 +143,8 @@
 
     <!-- Poster Rating Provider -->
     <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Poster Rating Provider (Optional)</label>
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Poster Rating Provider
+            (Optional)</label>
 
         <!-- Provider Dropdown -->
         <div class="relative">
@@ -174,14 +178,20 @@
                 <div class="absolute inset-y-0 right-12">
                     <button type="button" id="posterRatingApiKeyToggle"
                         class="flex items-center px-3 h-full text-slate-400 hover:text-white transition-colors">
-                        <svg id="posterRatingApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+                        <svg id="posterRatingApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
                             <circle cx="12" cy="12" r="3"></circle>
                         </svg>
-                        <svg id="posterRatingApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31"></path>
+                        <svg id="posterRatingApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31">
+                            </path>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
                         </svg>
                     </button>
                 </div>
@@ -190,10 +200,13 @@
                     <button type="button" id="posterRatingApiKeyValidate"
                         class="flex items-center px-4 h-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors border-l border-slate-700 rounded-r-xl">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </button>
-                    <span class="custom-tooltip" data-tooltip-text="Validate API key - Click to verify your key is valid">Validate API key - Click to verify your key is valid</span>
+                    <span class="custom-tooltip"
+                        data-tooltip-text="Validate API key - Click to verify your key is valid">Validate API key -
+                        Click to verify your key is valid</span>
                 </div>
             </div>
             <!-- Validation message -->
@@ -203,6 +216,73 @@
         <!-- Help Text -->
         <div id="posterRatingHelp" class="text-xs text-slate-500" style="display: none;">
             <p id="posterRatingHelpText"></p>
+        </div>
+    </div>
+    <div class="border-t border-white/10"></div>
+
+    <!-- Simkl Integration -->
+    <div class="space-y-4">
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Simkl Integration
+            (Optional)</label>
+        <div class="space-y-4">
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                        </path>
+                    </svg>
+                </div>
+                <input type="password" id="simklApiKey"
+                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-32 sm:pr-24 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
+                    placeholder="Paste your Simkl API key here">
+                <!-- Eye toggle button -->
+                <div class="absolute inset-y-0 right-12">
+                    <button type="button" id="simklApiKeyToggle"
+                        class="flex items-center px-3 h-full text-slate-400 hover:text-white transition-colors">
+                        <svg id="simklApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <svg id="simklApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31">
+                            </path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
+                        </svg>
+                    </button>
+                </div>
+                <!-- Validate button -->
+                <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
+                    <button type="button" id="simklApiKeyValidate"
+                        class="flex items-center px-4 h-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors border-l border-slate-700 rounded-r-xl">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </button>
+                    <span class="custom-tooltip"
+                        data-tooltip-text="Validate key - Click to verify your Simkl key is valid">Validate key - Click
+                        to
+                        verify your Simkl key is valid</span>
+                </div>
+            </div>
+            <!-- Validation message -->
+            <div id="simklValidationMessage" class="mt-2 text-xs hidden"></div>
+
+            <div class="text-xs text-slate-500">
+                <p>Enter your Simkl API key to get better recommendations. Please note, this will not use your watch
+                    history from
+                    Simkl. The system will use resources from simkl to show better recommendations. Get your API key
+                    from
+                    <a href="https://simkl.com/settings/apps/" target="_blank"
+                        class="text-slate-300 hover:text-white underline">Simkl Settings</a>.
+                </p>
+            </div>
         </div>
     </div>
     <div class="pt-4 flex justify-end">
