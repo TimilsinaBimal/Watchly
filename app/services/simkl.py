@@ -72,8 +72,6 @@ class SimklService:
             response = await self.client.get(url, params=params, follow_redirects=True)
             response.raise_for_status()
             json_response = response.json()
-            # convert rank to tmdb popularity scale
-            json_response["popularity"] = get_popularity(json_response.get("rank"))
             return json_response
 
         except Exception as e:
