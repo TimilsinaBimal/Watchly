@@ -11,7 +11,7 @@ from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
 from app.api.endpoints.meta import fetch_languages_list
-from app.api.main import api_router
+from app.api.router import api_router
 from app.core.settings import get_default_catalogs_for_frontend
 from app.services.redis_service import redis_service
 from app.services.tmdb.genre import movie_genres, series_genres
