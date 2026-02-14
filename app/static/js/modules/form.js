@@ -32,6 +32,7 @@ export function initializeForm(domElements, catalogState) {
     initializePasswordToggles();
     initializeSuccessActions();
     initializePosterRatingProvider();
+    initializeTmdb();
     initializeSimkl();
     initializeGemini();
     initializeYearSlider();
@@ -57,6 +58,7 @@ async function initializeFormSubmission() {
         const posterRatingApiKey = document.getElementById("posterRatingApiKey")?.value.trim() || "";
         const excludedMovieGenres = Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value);
         const excludedSeriesGenres = Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value);
+        const tmdbApiKey = document.getElementById("tmdbApiKey")?.value.trim() || "";
         const simklApiKey = document.getElementById("simklApiKey")?.value.trim() || "";
         const geminiApiKey = document.getElementById("geminiApiKey")?.value.trim() || "";
 
@@ -109,6 +111,16 @@ async function initializeFormSubmission() {
             return;
         }
 
+        if (!tmdbApiKey) {
+            showError("generalError", "TMDB API key is required.");
+            const tmdbInput = document.getElementById("tmdbApiKey");
+            if (tmdbInput) {
+                tmdbInput.focus();
+                tmdbInput.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
+        }
+
         // Validate poster rating API key if provided
         if (posterRatingProvider && posterRatingApiKey) {
             if (window.validatePosterRatingApiKey) {
@@ -142,6 +154,7 @@ async function initializeFormSubmission() {
                 popularity: popularity,
                 sorting_order: sortingOrder,
                 poster_rating: posterRating,
+                tmdb_api_key: tmdbApiKey || undefined,
                 simkl_api_key: simklApiKey,
                 gemini_api_key: geminiApiKey,
                 excluded_movie_genres: excludedMovieGenres,
@@ -342,6 +355,68 @@ function initializePosterRatingProvider() {
 
     // Export validate function for form submission
     window.validatePosterRatingApiKey = validateApiKey;
+}
+
+// TMDB API Key (Required)
+function initializeTmdb() {
+    const apiKeyInput = document.getElementById("tmdbApiKey");
+    const validateBtn = document.getElementById("tmdbApiKeyValidate");
+    const toggleBtn = document.getElementById("tmdbApiKeyToggle");
+    const eyeIcon = document.getElementById("tmdbApiKeyEye");
+    const eyeOffIcon = document.getElementById("tmdbApiKeyEyeOff");
+    const validationMessage = document.getElementById("tmdbValidationMessage");
+
+    if (!apiKeyInput || !validationMessage) return;
+
+    if (toggleBtn && eyeIcon && eyeOffIcon) {
+        toggleBtn.addEventListener("click", () => {
+            const isPassword = apiKeyInput.type === "password";
+            apiKeyInput.type = isPassword ? "text" : "password";
+            eyeIcon.classList.toggle("hidden", !isPassword);
+            eyeOffIcon.classList.toggle("hidden", isPassword);
+        });
+    }
+
+    function showTmdbValidationMessage(message, type) {
+        validationMessage.textContent = message;
+        validationMessage.className = `mt-2 text-xs ${type === "success" ? "text-green-400" : "text-red-400"}`;
+        validationMessage.classList.remove("hidden");
+    }
+
+    if (validateBtn) {
+        validateBtn.addEventListener("click", async () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                showTmdbValidationMessage("Please enter a TMDB API key", "error");
+                return;
+            }
+            validateBtn.disabled = true;
+            validateBtn.classList.add("opacity-50", "cursor-not-allowed");
+            const originalHTML = validateBtn.innerHTML;
+            validateBtn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+            try {
+                const response = await fetch("/tmdb/validation", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ api_key: apiKey })
+                });
+                const data = await response.json();
+                if (data.valid) {
+                    showTmdbValidationMessage("TMDB API key is valid ✓", "success");
+                } else {
+                    showTmdbValidationMessage(data.message || "Invalid TMDB API key", "error");
+                }
+            } catch (error) {
+                showTmdbValidationMessage("Validation failed. Please try again.", "error");
+            } finally {
+                validateBtn.disabled = false;
+                validateBtn.classList.remove("opacity-50", "cursor-not-allowed");
+                validateBtn.innerHTML = originalHTML;
+            }
+        });
+    }
+
+    apiKeyInput.addEventListener("input", () => validationMessage.classList.add("hidden"));
 }
 
 // Simkl Integration

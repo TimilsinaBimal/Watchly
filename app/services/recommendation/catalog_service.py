@@ -9,7 +9,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.constants import DEFAULT_CATALOG_LIMIT, DEFAULT_MIN_ITEMS
 from app.core.security import redact_token
-from app.core.settings import UserSettings, get_default_settings
+from app.core.settings import UserSettings, get_default_settings, resolve_tmdb_api_key
 from app.models.taste_profile import TasteProfile
 from app.services.catalog_updater import catalog_updater
 from app.services.profile.integration import ProfileIntegration
@@ -210,6 +210,7 @@ class CatalogService:
                 whitelist=whitelist,
                 library_items=library_items,
                 limit=DEFAULT_CATALOG_LIMIT,
+                user_settings=user_settings,
             )
 
             # Pad if needed to meet minimum of 8 items
@@ -326,12 +327,16 @@ class CatalogService:
         settings_dict = credentials.get("settings", {})
         return UserSettings(**settings_dict) if settings_dict else get_default_settings()
 
-    async def _get_trending_fallback(self, content_type: str, limit: int = 20) -> list[dict[str, Any]]:
+    async def _get_trending_fallback(
+        self, content_type: str, limit: int = 20, user_settings: UserSettings | None = None
+    ) -> list[dict[str, Any]]:
         """Get trending items for new users without profiles."""
         from app.services.recommendation.utils import content_type_to_mtype
 
         mtype = content_type_to_mtype(content_type)
-        tmdb_service = get_tmdb_service()
+        tmdb_key = resolve_tmdb_api_key(user_settings)
+        language = user_settings.language if user_settings else "en-US"
+        tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
 
         try:
             # Fetch trending week
@@ -347,10 +352,11 @@ class CatalogService:
             return []
 
     def _initialize_services(self, language: str, user_settings: UserSettings) -> dict[str, Any]:
-        tmdb_service = get_tmdb_service(language=language)
+        tmdb_key = resolve_tmdb_api_key(user_settings)
+        tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
         return {
             "tmdb": tmdb_service,
-            "integration": ProfileIntegration(language=language),
+            "integration": ProfileIntegration(language=language, tmdb_api_key=tmdb_key),
             "item": ItemBasedService(tmdb_service, user_settings),
             "theme": ThemeBasedService(tmdb_service, user_settings),
             "top_picks": TopPicksService(tmdb_service, user_settings),
@@ -369,6 +375,7 @@ class CatalogService:
         whitelist: set[int],
         library_items: dict,
         limit: int,
+        user_settings: UserSettings | None = None,
     ) -> list[dict[str, Any]]:
         """Route to appropriate recommendation service based on catalog ID."""
         # Item-based recommendations
@@ -423,7 +430,7 @@ class CatalogService:
                 )
             else:
                 logger.info(f"No profile for creators, showing trending {content_type}")
-                recommendations = await self._get_trending_fallback(content_type, limit)
+                recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
             logger.info(f"Found {len(recommendations)} recommendations from creators")
 
         # Top picks
@@ -441,7 +448,7 @@ class CatalogService:
                 )
             else:
                 logger.info(f"No profile for top picks, showing trending {content_type}")
-                recommendations = await self._get_trending_fallback(content_type, limit)
+                recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
             logger.info(f"Found {len(recommendations)} top picks for {content_type}")
 
         # Based on what you loved

@@ -5,7 +5,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.security import redact_token
-from app.core.settings import UserSettings
+from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.core.version import __version__
 from app.services.catalog import DynamicCatalogService
 from app.services.profile.integration import ProfileIntegration
@@ -98,7 +98,8 @@ class ManifestService:
 
         # Build and cache profiles for both movie and series
         language = user_settings.language
-        integration_service = ProfileIntegration(language=language)
+        tmdb_key = resolve_tmdb_api_key(user_settings)
+        integration_service = ProfileIntegration(language=language, tmdb_api_key=tmdb_key)
 
         for content_type in ["movie", "series"]:
             try:
@@ -137,7 +138,8 @@ class ManifestService:
             library_items = await self._ensure_library_and_profiles_cached(bundle, auth_key, user_settings, token)
             await user_cache.set_library_items(token, library_items)
 
-        dynamic_catalog_service = DynamicCatalogService(language=user_settings.language)
+        tmdb_key = resolve_tmdb_api_key(user_settings)
+        dynamic_catalog_service = DynamicCatalogService(language=user_settings.language, tmdb_api_key=tmdb_key)
         return await dynamic_catalog_service.get_dynamic_catalogs(library_items, user_settings, token=token)
 
     async def _translate_catalogs(self, catalogs: list[dict[str, Any]], language: str | None) -> list[dict[str, Any]]:

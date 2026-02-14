@@ -21,10 +21,10 @@ class DynamicCatalogService:
     Generates dynamic catalog rows based on user library and preferences.
     """
 
-    def __init__(self, language: str = "en-US"):
-        self.tmdb_service = get_tmdb_service(language=language)
+    def __init__(self, language: str = "en-US", tmdb_api_key: str | None = None):
+        self.tmdb_service = get_tmdb_service(language=language, api_key=tmdb_api_key)
         self.scoring_service = ScoringService()
-        self.profile_integration = ProfileIntegration(language=language)
+        self.profile_integration = ProfileIntegration(language=language, tmdb_api_key=tmdb_api_key)
         self.row_generator = RowGeneratorService(tmdb_service=self.tmdb_service)
         self.PROFILE_MAX_ITEMS = 50
 

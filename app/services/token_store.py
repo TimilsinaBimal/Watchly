@@ -123,6 +123,16 @@ class TokenStore:
                         storage_data["settings"]["gemini_api_key"] = self.encrypt_token(gemini_api_key)
                 except Exception as exc:
                     logger.warning(f"Failed to encrypt gemini_api_key for {redact_token(user_id)}: {exc}")
+
+        # Encrypt tmdb_api_key if present
+        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
+            tmdb_api_key = storage_data["settings"].get("tmdb_api_key")
+            if tmdb_api_key:
+                try:
+                    if not tmdb_api_key.startswith("gAAAAAB"):
+                        storage_data["settings"]["tmdb_api_key"] = self.encrypt_token(tmdb_api_key)
+                except Exception as exc:
+                    logger.warning(f"Failed to encrypt tmdb_api_key for {redact_token(user_id)}: {exc}")
         json_str = json.dumps(storage_data)
 
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
@@ -291,6 +301,14 @@ class TokenStore:
                         data["settings"]["gemini_api_key"] = self.decrypt_token(gemini_api_key)
                 except Exception as e:
                     logger.debug(f"Decryption failed for gemini_api_key associated with {redact_token(token)}: {e}")
+
+            tmdb_api_key = data["settings"].get("tmdb_api_key")
+            if tmdb_api_key:
+                try:
+                    if tmdb_api_key.startswith("gAAAAA"):
+                        data["settings"]["tmdb_api_key"] = self.decrypt_token(tmdb_api_key)
+                except Exception as e:
+                    logger.debug(f"Decryption failed for tmdb_api_key associated with {redact_token(token)}: {e}")
 
         return data
 

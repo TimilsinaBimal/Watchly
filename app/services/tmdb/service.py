@@ -139,8 +139,11 @@ class TMDBService:
         return await self.client.get("/configuration/primary_translations")
 
 
-@functools.lru_cache(maxsize=16)
-def get_tmdb_service(language: str = "en-US") -> TMDBService:
+@functools.lru_cache(maxsize=128)
+def get_tmdb_service(language: str = "en-US", api_key: str | None = None) -> TMDBService:
     from app.core.config import settings
 
-    return TMDBService(api_key=settings.TMDB_API_KEY, language=language)
+    key = api_key or settings.TMDB_API_KEY
+    if not key:
+        raise ValueError("TMDB API key is required (set in settings or TMDB_API_KEY env).")
+    return TMDBService(api_key=key, language=language)

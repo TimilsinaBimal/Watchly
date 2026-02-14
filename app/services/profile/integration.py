@@ -18,10 +18,10 @@ class ProfileIntegration:
     Helper class to integrate taste profile services with existing systems.
     """
 
-    def __init__(self, language: str = "en-US"):
+    def __init__(self, language: str = "en-US", tmdb_api_key: str | None = None):
         self.scoring_service = ScoringService()
         self.sampler = SmartSampler(self.scoring_service)
-        tmdb_service = get_tmdb_service(language=language)
+        tmdb_service = get_tmdb_service(language=language, api_key=tmdb_api_key)
         vectorizer = ItemVectorizer(tmdb_service)
         self.builder = ProfileBuilder(vectorizer)
 

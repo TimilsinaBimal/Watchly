@@ -257,6 +257,10 @@ async function fetchStremioIdentity(authKey) {
     if (sortingOrderSelect) {
         payload.sorting_order = sortingOrderSelect.value;
     }
+    const tmdbApiKeyInput = document.getElementById("tmdbApiKey");
+    if (tmdbApiKeyInput) {
+        payload.tmdb_api_key = tmdbApiKeyInput.value.trim();
+    }
     const simklApiKeyInput = document.getElementById("simklApiKey");
     if (simklApiKeyInput) {
         payload.simkl_api_key = simklApiKeyInput.value.trim();
@@ -321,6 +325,9 @@ async function fetchStremioIdentity(authKey) {
                     posterRatingProvider.dispatchEvent(new Event('change'));
                 }
             }
+
+            const tmdbApiKeyInput = document.getElementById('tmdbApiKey');
+            if (s.tmdb_api_key && tmdbApiKeyInput) tmdbApiKeyInput.value = s.tmdb_api_key;
 
             const simklApiKeyInput = document.getElementById('simklApiKey');
             if (s.simkl_api_key && simklApiKeyInput) simklApiKeyInput.value = s.simkl_api_key;

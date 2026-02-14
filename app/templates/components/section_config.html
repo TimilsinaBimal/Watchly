@@ -220,6 +220,65 @@
     </div>
     <div class="border-t border-white/10"></div>
 
+    <!-- TMDB API Key (Required) -->
+    <div class="space-y-4">
+        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">TMDB API Key
+            <span class="text-amber-400/90">(Required)</span></label>
+        <div class="space-y-4">
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+                        </path>
+                    </svg>
+                </div>
+                <input type="password" id="tmdbApiKey" required
+                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-32 sm:pr-24 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
+                    placeholder="Paste your TMDB API key here">
+                <!-- Eye toggle button -->
+                <div class="absolute inset-y-0 right-12 flex items-center border-l border-slate-700">
+                    <button type="button" id="tmdbApiKeyToggle"
+                        class="flex items-center justify-center w-12 h-full text-slate-400 hover:text-white transition-colors">
+                        <svg id="tmdbApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <svg id="tmdbApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31">
+                            </path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
+                        </svg>
+                    </button>
+                </div>
+                <!-- Validate button -->
+                <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
+                    <button type="button" id="tmdbApiKeyValidate"
+                        class="flex items-center px-4 h-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors border-l border-slate-700 rounded-r-xl">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </button>
+                    <span class="custom-tooltip"
+                        data-tooltip-text="Validate key - Click to verify your TMDB key is valid">Validate key</span>
+                </div>
+            </div>
+            <div id="tmdbValidationMessage" class="mt-2 text-xs hidden"></div>
+            <div class="text-xs text-slate-500">
+                <p>Required for metadata and recommendations. Get a free API key from
+                    <a href="https://www.themoviedb.org/settings/api" target="_blank"
+                        class="text-slate-300 hover:text-white underline">TMDB API</a>.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="border-t border-white/10"></div>
+
     <!-- Simkl Integration -->
     <div class="space-y-4">
         <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Simkl Integration

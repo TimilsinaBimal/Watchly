@@ -114,8 +114,12 @@ class CatalogUpdater:
             library_items = await manifest_service.cache_library_and_profiles(bundle, auth_key, user_settings, token)
             language = user_settings.language if user_settings else "en-US"
 
+            from app.core.settings import resolve_tmdb_api_key
+
+            tmdb_key = resolve_tmdb_api_key(user_settings)
             dynamic_catalog_service = DynamicCatalogService(
                 language=language,
+                tmdb_api_key=tmdb_key,
             )
 
             catalogs = await dynamic_catalog_service.get_dynamic_catalogs(

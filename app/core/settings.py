@@ -40,6 +40,7 @@ class UserSettings(BaseModel):
     )
     simkl_api_key: str | None = Field(default=None, description="Simkl API Key for the user")
     gemini_api_key: str | None = Field(default=None, description="Gemini API Key for AI-powered features")
+    tmdb_api_key: str | None = Field(default=None, description="TMDB API Key (used if set; else server config)")
 
 
 # Catalog descriptions for frontend
@@ -158,6 +159,15 @@ def get_default_catalogs_for_frontend() -> list[dict]:
             }
         )
     return catalogs
+
+
+def resolve_tmdb_api_key(user_settings: UserSettings | None) -> str | None:
+    """Use TMDB API key from user settings (Redis) if set, else from server config."""
+    from app.core.config import settings
+
+    if user_settings and user_settings.tmdb_api_key:
+        return user_settings.tmdb_api_key
+    return settings.TMDB_API_KEY
 
 
 class Credentials(BaseModel):
