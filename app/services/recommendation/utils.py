@@ -267,7 +267,9 @@ def apply_discover_filters(params: dict[str, Any], user_settings: Any) -> dict[s
     return params
 
 
-def filter_items_by_settings(items: list[dict[str, Any]], user_settings: Any) -> list[dict[str, Any]]:
+def filter_items_by_settings(
+    items: list[dict[str, Any]], user_settings: Any, simkl: bool = False
+) -> list[dict[str, Any]]:
     """
     Filter items post-fetch based on global user settings (years, popularity).
     Used for items from recommendations/similar APIs that don't support early filtering.
@@ -307,6 +309,10 @@ def filter_items_by_settings(items: list[dict[str, Any]], user_settings: Any) ->
             t_param, param_ops = param.split(".")
             param_operator = ops.get(param_ops)
             if not param_operator:
+                continue
+
+            # skip popularity params if simkl
+            if simkl and t_param == "popularity":
                 continue
 
             item_value = item.get(t_param)

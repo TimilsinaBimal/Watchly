@@ -9,12 +9,7 @@ router = APIRouter()
 
 @router.get("/{token}/catalog/{type}/{id}.json")
 @router.get("/{token}/catalog/{type}/{id}/{extra}.json")
-async def get_catalog(response: Response, type: str, id: str, token: str, extra: str | None = None):
-    """
-    Get catalog recommendations.
-
-    This endpoint delegates all logic to CatalogService facade.
-    """
+async def get_catalog(response: Response, type: str, id: str, token: str, extra: str | None = None) -> dict:
     if type not in ("movie", "series"):
         raise HTTPException(status_code=400, detail="Invalid content type. Must be 'movie' or 'series'.")
 
@@ -29,10 +24,14 @@ async def get_catalog(response: Response, type: str, id: str, token: str, extra:
         for key, value in headers.items():
             response.headers[key] = value
 
+        # if recommendations are none or empty, then set cache header to no-cache
+        if recommendations and not recommendations.get("meta"):
+            response.headers["Cache-Control"] = "no-cache"
+
         return recommendations
 
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(f"[{redact_token(token)}] Error fetching catalog for {type}/{id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Something went wrong. Please try again. Error: {e}")

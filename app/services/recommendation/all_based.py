@@ -84,6 +84,9 @@ class AllBasedService:
         # Fetch recommendations
         all_candidates = {}
 
+        simkl_candidates = []
+        tmdb_candidates = []
+
         # Use Simkl if API key available, otherwise fall back to TMDB
         simkl_api_key = self.user_settings.simkl_api_key if self.user_settings else None
         if simkl_api_key:
@@ -94,11 +97,16 @@ class AllBasedService:
                     if candidate_id:
                         all_candidates[candidate_id] = candidate
                 logger.info(f"Fetched {len(all_candidates)} candidates from Simkl")
+                # filter simkl candidates
+                simkl_candidates = list(all_candidates.values())
+                simkl_candidates = filter_items_by_settings(simkl_candidates, self.user_settings, simkl=True)
+                logger.info(f"Total {len(simkl_candidates)} after filtering")
             else:
                 logger.info("Simkl returned no results, falling back to TMDB")
 
         # Fall back to TMDB if no Simkl key or Simkl returned nothing
-        if not all_candidates:
+        if not simkl_candidates:
+            all_candidates = {}
             tasks = []
             logger.info(f"Fetching TMDB recommendations for {len(top_items)} top items")
 
@@ -121,11 +129,13 @@ class AllBasedService:
 
             logger.info(f"Fetched {len(all_candidates)} candidates from TMDB")
 
-        # Convert to list
-        candidates = list(all_candidates.values())
+            # Convert to list
+            tmdb_candidates = list(all_candidates.values())
 
-        # Apply global settings filter (years, popularity)
-        candidates = filter_items_by_settings(candidates, self.user_settings)
+            # Apply global settings filter (years, popularity)
+            tmdb_candidates = filter_items_by_settings(tmdb_candidates, self.user_settings)
+
+        candidates = simkl_candidates + tmdb_candidates
 
         # Filter by genres and watched items
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)

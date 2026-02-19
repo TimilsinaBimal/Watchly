@@ -91,8 +91,12 @@ class TopPicksService:
                 # Fallback to TMDB if Simkl returns nothing
                 logger.info("Simkl returned no results, falling back to TMDB")
                 rec_candidates = await self._fetch_recommendations_from_top_items(library_items, content_type, mtype)
+                # filter items
+                rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings, simkl=True)
         else:
             rec_candidates = await self._fetch_recommendations_from_top_items(library_items, content_type, mtype)
+            # filter items
+            rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings)
 
         for item in rec_candidates:
             if item.get("id"):
@@ -100,15 +104,14 @@ class TopPicksService:
 
         # 2. Fetch discover with profile features
         discover_candidates = await self._fetch_discover_with_profile(profile, content_type, mtype)
+        # filter by user settings
+        discover_candidates = filter_items_by_settings(discover_candidates, self.user_settings)
         for item in discover_candidates:
             if item.get("id"):
                 all_candidates[item["id"]] = item
 
         # Filter out watched items
         filtered_candidates = [item for item in all_candidates.values() if item.get("id") not in watched_tmdb]
-
-        # filter by user settings
-        filtered_candidates = filter_items_by_settings(filtered_candidates, self.user_settings)
 
         logger.info(f"Found {len(filtered_candidates)} candidates after filtering out watched items and user settings")
 
