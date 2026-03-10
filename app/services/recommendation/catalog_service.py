@@ -60,9 +60,21 @@ def _clean_meta(meta: dict) -> dict | None:
     # Drop empty values
     cleaned = {k: v for k, v in cleaned.items() if v not in (None, "", [], {}, ())}
 
+    # Normalize IMDb rating to a string with 1 decimal place
+    rating = cleaned.get("imdbRating")
+    if rating not in (None, ""):
+        try:
+            cleaned["imdbRating"] = f"{float(rating):.1f}"
+        except (TypeError, ValueError):
+            # Keep original value if it cannot be parsed
+            pass
+
+    imdb_id = cleaned.get("id", "")
     # if id does not start with tt, return None
-    if not cleaned.get("id", "").startswith("tt"):
+    if not imdb_id.startswith("tt"):
         return None
+    # Add Metahub logo URL (used by Stremio)
+    cleaned["logo"] = f"https://live.metahub.space/logo/medium/{imdb_id}/img"
     return cleaned
 
 
