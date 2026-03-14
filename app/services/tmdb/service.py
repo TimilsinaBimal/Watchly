@@ -138,6 +138,91 @@ class TMDBService:
         """Fetch supported primary translations from TMDB."""
         return await self.client.get("/configuration/primary_translations")
 
+    @alru_cache(maxsize=2000, ttl=86400)
+    async def get_images(self, media_type: str, tmdb_id: int, include_image_language: str = "en,fr,null") -> dict[str, Any]:
+        """
+        Fetch images (posters, logos, backdrops) for a movie or TV show.
+        include_image_language: comma-separated iso_639_1 codes + "null" for language-less images.
+        """
+        if media_type not in ("movie", "tv"):
+            return {}
+        path = f"/{media_type}/{tmdb_id}/images"
+        params = {"include_image_language": include_image_language}
+        return await self.client.get(path, params=params)
+
+    @staticmethod
+    def _pick_image_by_language(
+        images_list: list[dict[str, Any]] | None,
+        preferred_lang_codes: list[str | None],
+    ) -> str | None:
+        """
+        Pick best image from list by language preference (same logic as no-stremio-addon).
+        preferred_lang_codes: e.g. ["en", None, "fr"] -> prefer en, then no language, then fr.
+        """
+        if not images_list:
+            return None
+        for lang in preferred_lang_codes:
+            for img in images_list:
+                iso = img.get("iso_639_1")
+                if (iso or None) == (lang if lang else None):
+                    path = img.get("file_path")
+                    if path:
+                        return path
+        return images_list[0].get("file_path") if images_list else None
+
+    def _language_to_image_preference(self, language: str) -> tuple[list[str | None], str]:
+        """
+        Build preferred lang order and include_image_language param from language (e.g. en-US, fr-FR).
+        Returns (preferred_lang_codes, include_image_language).
+        """
+        primary = (language or "en-US").split("-")[0].lower() if language else "en"
+        fallbacks = [c for c in ("en", "fr", "null") if c != primary]
+        preferred = [primary, None, *[c for c in fallbacks if c != "null"]]
+        include = ",".join([primary] + fallbacks)
+        return preferred, include
+
+    async def get_images_for_title(
+        self,
+        media_type: str,
+        tmdb_id: int,
+        language: str | None = None,
+    ) -> dict[str, str]:
+        """
+        Get poster, logo and background URLs for a title in the requested language.
+        Same approach as no-stremio-addon: request images with include_image_language,
+        then pick by preferred language (requested lang, then null, then fallbacks).
+        """
+        lang = language or self.client.language
+        preferred, include = self._language_to_image_preference(lang)
+        data = await self.get_images(media_type, tmdb_id, include_image_language=include)
+        if not data:
+            return {}
+
+        base_poster_logo = "https://image.tmdb.org/t/p/w500"
+        base_backdrop = "https://image.tmdb.org/t/p/w780"
+
+        def to_url(base: str, path: str | None) -> str:
+            if not path:
+                return ""
+            return base + (path if path.startswith("/") else "/" + path)
+
+        posters = data.get("posters") or []
+        logos = data.get("logos") or []
+        backdrops = data.get("backdrops") or []
+
+        poster_path = self._pick_image_by_language(posters, preferred)
+        logo_path = self._pick_image_by_language(logos, preferred)
+        backdrop_path = self._pick_image_by_language(backdrops, preferred)
+
+        result: dict[str, str] = {}
+        if poster_path:
+            result["poster"] = to_url(base_poster_logo, poster_path)
+        if logo_path:
+            result["logo"] = to_url(base_poster_logo, logo_path)
+        if backdrop_path:
+            result["background"] = to_url(base_backdrop, backdrop_path)
+        return result
+
 
 @functools.lru_cache(maxsize=128)
 def get_tmdb_service(language: str = "en-US", api_key: str | None = None) -> TMDBService:
