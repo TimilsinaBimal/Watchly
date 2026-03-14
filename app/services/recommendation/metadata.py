@@ -28,7 +28,11 @@ class RecommendationMetadata:
 
     @classmethod
     async def format_for_stremio(
-        cls, details: dict[str, Any], media_type: str, user_settings: Any = None
+        cls,
+        details: dict[str, Any],
+        media_type: str,
+        user_settings: Any = None,
+        logo_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Format TMDB details into Stremio metadata object."""
         external_ids = details.get("external_ids", {})
@@ -69,6 +73,8 @@ class RecommendationMetadata:
             "_tmdb_id": tmdb_id_raw,
             "genre_ids": [g.get("id") for g in genres_full if isinstance(g, dict) and g.get("id") is not None],
         }
+        if logo_url:
+            meta_data["logo"] = logo_url
 
         # Extensions
         runtime_str = cls._extract_runtime_string(details)
@@ -152,9 +158,29 @@ class RecommendationMetadata:
         tasks = [_fetch_one(it.get("id")) for it in valid_items]
         details_list = await asyncio.gather(*tasks)
 
-        format_task = [
-            cls.format_for_stremio(details, media_type, user_settings) for details in details_list if details
-        ]
+        language = getattr(user_settings, "language", None) or "en-US"
+        mt = "movie" if media_type == "movie" else "tv"
+
+        async def _images_one(d: dict[str, Any]) -> dict[str, str]:
+            async with sem:
+                try:
+                    return await tmdb_service.get_images_for_title(mt, d["id"], language=language)
+                except Exception:
+                    return {}
+
+        image_tasks = [_images_one(d) for d in details_list if d]
+        images_list = await asyncio.gather(*image_tasks, return_exceptions=True)
+
+        format_task = []
+        for i, details in enumerate(details_list):
+            if not details:
+                continue
+            logo_url = None
+            if i < len(images_list):
+                imgs = images_list[i]
+                if isinstance(imgs, dict):
+                    logo_url = imgs.get("logo") or None
+            format_task.append(cls.format_for_stremio(details, media_type, user_settings, logo_url=logo_url))
 
         formatted_list = await asyncio.gather(*format_task, return_exceptions=True)
 
