@@ -7,13 +7,12 @@ from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.core.version import __version__
-from app.services.catalog import DynamicCatalogService
+from app.services.catalog import DynamicCatalogService, sort_catalogs
 from app.services.profile.integration import ProfileIntegration
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
 from app.services.user_cache import user_cache
-from app.utils.catalog import cache_profile_and_watched_sets, sort_catalogs
 
 
 class ManifestService:
@@ -71,7 +70,11 @@ class ManifestService:
         return auth_key
 
     async def cache_library_and_profiles(
-        self, bundle: StremioBundle, auth_key: str, user_settings: UserSettings, token: str
+        self,
+        bundle: StremioBundle,
+        auth_key: str,
+        user_settings: UserSettings,
+        token: str,
     ) -> dict[str, Any]:
         """
         Fetch and cache library items and profiles for a user.
@@ -104,9 +107,7 @@ class ManifestService:
         for content_type in ["movie", "series"]:
             try:
                 logger.info(f"[{redact_token(token)}] Building and caching profile for {content_type}")
-                _, _, _ = await cache_profile_and_watched_sets(
-                    token, content_type, integration_service, library_items, bundle, auth_key
-                )
+                await integration_service.build_and_cache_profile(token, content_type, library_items, bundle, auth_key)
                 logger.debug(f"[{redact_token(token)}] Cached profile and watched sets for {content_type}")
             except Exception as e:
                 logger.warning(f"[{redact_token(token)}] Failed to build/cache profile for {content_type}: {e}")
@@ -114,7 +115,11 @@ class ManifestService:
         return library_items
 
     async def _ensure_library_and_profiles_cached(
-        self, bundle: StremioBundle, auth_key: str, user_settings: UserSettings, token: str
+        self,
+        bundle: StremioBundle,
+        auth_key: str,
+        user_settings: UserSettings,
+        token: str,
     ) -> dict[str, Any]:
         """Ensure library items and profiles are cached, fetching and building if needed."""
         # Try to get cached library items first
@@ -129,18 +134,27 @@ class ManifestService:
         return await self.cache_library_and_profiles(bundle, auth_key, user_settings, token)
 
     async def _build_dynamic_catalogs(
-        self, bundle: StremioBundle, auth_key: str, user_settings: UserSettings | None, token: str
+        self,
+        bundle: StremioBundle,
+        auth_key: str,
+        user_settings: UserSettings | None,
+        token: str,
     ) -> list[dict[str, Any]]:
         """Build dynamic catalogs for the manifest."""
+        if not user_settings:
+            return []
+
+        settings_for_user = user_settings
+
         # check if cached, if not, fetch and cache
         library_items = await user_cache.get_library_items(token)
         if not library_items:
-            library_items = await self._ensure_library_and_profiles_cached(bundle, auth_key, user_settings, token)
+            library_items = await self._ensure_library_and_profiles_cached(bundle, auth_key, settings_for_user, token)
             await user_cache.set_library_items(token, library_items)
 
-        tmdb_key = resolve_tmdb_api_key(user_settings)
-        dynamic_catalog_service = DynamicCatalogService(language=user_settings.language, tmdb_api_key=tmdb_key)
-        return await dynamic_catalog_service.get_dynamic_catalogs(library_items, user_settings, token=token)
+        tmdb_key = resolve_tmdb_api_key(settings_for_user)
+        dynamic_catalog_service = DynamicCatalogService(language=settings_for_user.language, tmdb_api_key=tmdb_key)
+        return await dynamic_catalog_service.get_dynamic_catalogs(library_items, settings_for_user, token=token)
 
     async def _translate_catalogs(self, catalogs: list[dict[str, Any]], language: str | None) -> list[dict[str, Any]]:
         """Translate catalog names to target language."""
@@ -204,7 +218,7 @@ class ManifestService:
             # Resolve auth key
             auth_key = await self._resolve_auth_key(bundle, creds, token)
 
-            if auth_key:
+            if auth_key and user_settings:
                 fetched_catalogs = await self._build_dynamic_catalogs(bundle, auth_key, user_settings, token)
         except Exception as e:
             logger.exception(f"[{redact_token(token)}] Dynamic catalog build failed: {e}")

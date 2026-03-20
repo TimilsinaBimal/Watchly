@@ -205,6 +205,25 @@ class ProfileIntegration:
 
         return profile, watched_tmdb, watched_imdb
 
+    async def build_and_cache_profile(
+        self,
+        token: str,
+        content_type: str,
+        library_items: dict,
+        stremio_service: Any = None,
+        auth_key: str | None = None,
+    ) -> tuple[TasteProfile | None, set[int], set[str]]:
+        """Build profile data and cache the profile and watched sets."""
+        profile, watched_tmdb, watched_imdb = await self.build_profile_incremental(
+            library_items,
+            content_type,
+            token,
+            stremio_service,
+            auth_key,
+        )
+        await user_cache.set_profile_and_watched_sets(token, content_type, profile, watched_tmdb, watched_imdb)
+        return profile, watched_tmdb, watched_imdb
+
     async def get_genre_whitelist(
         self,
         profile: TasteProfile,

@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException
 from loguru import logger
@@ -8,12 +8,11 @@ from loguru import logger
 from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings
-from app.services.catalog import DynamicCatalogService
+from app.services.catalog import DynamicCatalogService, sort_catalogs
 from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
-from app.utils.catalog import sort_catalogs
 
 
 class CatalogUpdater:
@@ -71,13 +70,18 @@ class CatalogUpdater:
         """
         if not credentials:
             logger.warning(f"[{redact_token(token)}] Attempted to refresh catalogs with no credentials.")
-            raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or expired token. Please reconfigure the addon.",
+            )
 
         auth_key = credentials.get("authKey")
         # check if auth key is valid
         bundle = StremioBundle()
         try:
             try:
+                if not auth_key:
+                    raise ValueError("Missing auth key")
                 await bundle.auth.get_user_info(auth_key)
             except Exception as e:
                 logger.exception(f"[{redact_token(token)}] Invalid auth key. Falling back to login: {e}")
@@ -89,6 +93,11 @@ class CatalogUpdater:
                     await token_store.update_user_data(token, credentials)
                 else:
                     return True  # true since we won't be able to update it again. so no need to try again.
+
+            if not auth_key:
+                return True
+
+            resolved_auth_key = cast(str, auth_key)
 
             # 1. Check if addon is still installed
             try:
@@ -111,36 +120,44 @@ class CatalogUpdater:
                     # so no need to try again.
                     return True
 
-            library_items = await manifest_service.cache_library_and_profiles(bundle, auth_key, user_settings, token)
-            language = user_settings.language if user_settings else "en-US"
+            if not user_settings:
+                return True
+
+            resolved_settings = cast(UserSettings, user_settings)
+
+            library_items = await manifest_service.cache_library_and_profiles(
+                bundle, resolved_auth_key, resolved_settings, token
+            )
+            language = resolved_settings.language
 
             from app.core.settings import resolve_tmdb_api_key
 
-            tmdb_key = resolve_tmdb_api_key(user_settings)
+            tmdb_key = resolve_tmdb_api_key(resolved_settings)
             dynamic_catalog_service = DynamicCatalogService(
                 language=language,
                 tmdb_api_key=tmdb_key,
             )
 
             catalogs = await dynamic_catalog_service.get_dynamic_catalogs(
-                library_items=library_items, user_settings=user_settings, token=token
+                library_items=library_items,
+                user_settings=resolved_settings,
+                token=token,
             )
 
             # Translate catalogs
-            if user_settings and user_settings.language:
+            if resolved_settings.language:
                 for cat in catalogs:
                     if name := cat.get("name"):
                         try:
-                            cat["name"] = await translation_service.translate(name, user_settings.language)
+                            cat["name"] = await translation_service.translate(name, resolved_settings.language)
                         except Exception as e:
                             logger.warning(f"Failed to translate catalog name '{name}': {e}")
                             continue
 
             # sort catalogs by order in user settings
-            if user_settings:
-                catalogs = sort_catalogs(catalogs, user_settings)
+            catalogs = sort_catalogs(catalogs, resolved_settings)
 
-            success = await bundle.addons.update_catalogs(auth_key, catalogs)
+            success = await bundle.addons.update_catalogs(resolved_auth_key, catalogs)
 
             # Update timestamp and invalidate cache only on success
             if success and update_timestamp:
@@ -164,7 +181,8 @@ class CatalogUpdater:
                 description = (
                     f"Movie and series recommendations based on your Stremio library.\n\n⚠️ Status: Error\n{error_msg}"
                 )
-                await bundle.addons.update_description(auth_key, description)
+                if isinstance(auth_key, str) and auth_key:
+                    await bundle.addons.update_description(auth_key, description)
             except Exception as update_err:
                 logger.warning(f"[{redact_token(token)}] Failed to update addon description with error: {update_err}")
             return False

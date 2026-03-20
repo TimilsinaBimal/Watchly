@@ -13,7 +13,69 @@ from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
 from app.services.tmdb.service import get_tmdb_service
 from app.services.user_cache import user_cache
-from app.utils.catalog import get_catalogs_from_config
+
+
+def get_catalogs_from_config(
+    user_settings: UserSettings,
+    cat_id: str,
+    default_name: str,
+    default_movie: bool,
+    default_series: bool,
+) -> list[dict[str, Any]]:
+    catalogs = []
+    config = next((c for c in user_settings.catalogs if c.id == cat_id), None)
+
+    if config and config.enabled:
+        name = config.name if config.name else default_name
+        enabled_movie = getattr(config, "enabled_movie", default_movie)
+        enabled_series = getattr(config, "enabled_series", default_series)
+        display_at_home = getattr(config, "display_at_home", True)
+        extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
+
+        if enabled_movie:
+            catalogs.append({"type": "movie", "id": cat_id, "name": name, "extra": extra})
+        if enabled_series:
+            catalogs.append({"type": "series", "id": cat_id, "name": name, "extra": extra})
+
+    return catalogs
+
+
+def get_config_id(catalog: dict[str, Any]) -> str | None:
+    catalog_id = catalog.get("id", "")
+    if catalog_id.startswith("watchly.theme."):
+        return "watchly.theme"
+    if catalog_id.startswith("watchly.loved."):
+        return "watchly.loved"
+    if catalog_id.startswith("watchly.watched."):
+        return "watchly.watched"
+    return catalog_id
+
+
+def sort_catalogs(catalogs: list[dict[str, Any]], user_settings: UserSettings) -> list[dict[str, Any]]:
+    """Sort catalogs according to user settings and content-type order."""
+    if not user_settings:
+        return catalogs
+
+    order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
+
+    def get_setting_index(catalog: dict[str, Any]) -> int:
+        return order_map.get(get_config_id(catalog), 999)
+
+    sorting_order = getattr(user_settings, "sorting_order", "default")
+
+    if sorting_order == "movies_first":
+        return sorted(
+            catalogs,
+            key=lambda x: (0 if x.get("type") == "movie" else 1, get_setting_index(x)),
+        )
+
+    if sorting_order == "series_first":
+        return sorted(
+            catalogs,
+            key=lambda x: (0 if x.get("type") == "series" else 1, get_setting_index(x)),
+        )
+
+    return sorted(catalogs, key=get_setting_index)
 
 
 class DynamicCatalogService:
@@ -38,7 +100,10 @@ class DynamicCatalogService:
         if config_id in ["watchly.item", "watchly.loved", "watchly.watched"]:
             # New Item-based catalog format
             catalog_id = f"{config_id}.{item_id}"
-        elif item_id.startswith("tt") and config_id in ["watchly.loved", "watchly.watched"]:
+        elif item_id.startswith("tt") and config_id in [
+            "watchly.loved",
+            "watchly.watched",
+        ]:
             catalog_id = f"{config_id}.{item_id}"
         else:
             catalog_id = item_id
@@ -200,12 +265,22 @@ class DynamicCatalogService:
                 continue
             media_type, rows = result
             for row in rows:
-                catalogs.append({"type": media_type, "id": row.id, "name": row.title, "extra": extra})
+                catalogs.append(
+                    {
+                        "type": media_type,
+                        "id": row.id,
+                        "name": row.title,
+                        "extra": extra,
+                    }
+                )
 
         return catalogs
 
     async def get_dynamic_catalogs(
-        self, library_items: dict, user_settings: UserSettings | None = None, token: str | None = None
+        self,
+        library_items: dict,
+        user_settings: UserSettings | None = None,
+        token: str | None = None,
     ) -> list[dict]:
         """Generate all dynamic catalog rows based on enabled configurations."""
         catalogs = []
@@ -222,7 +297,12 @@ class DynamicCatalogService:
             enabled_series = getattr(theme_cfg, "enabled_series", True)
             display_at_home = getattr(theme_cfg, "display_at_home", True)
             theme_catalogs = await self.get_theme_based_catalogs(
-                library_items, user_settings, enabled_movie, enabled_series, display_at_home, token
+                library_items,
+                user_settings,
+                enabled_movie,
+                enabled_series,
+                display_at_home,
+                token,
             )
             catalogs.extend(theme_catalogs)
 
@@ -235,17 +315,35 @@ class DynamicCatalogService:
 
         # 5. Add watchly.creators catalog
         catalogs.extend(
-            get_catalogs_from_config(user_settings, "watchly.creators", "From your favourite Creators", False, False)
+            get_catalogs_from_config(
+                user_settings,
+                "watchly.creators",
+                "From your favourite Creators",
+                False,
+                False,
+            )
         )
 
         # 6. Add watchly.all.loved catalog
         catalogs.extend(
-            get_catalogs_from_config(user_settings, "watchly.all.loved", "Based on what you loved", True, True)
+            get_catalogs_from_config(
+                user_settings,
+                "watchly.all.loved",
+                "Based on what you loved",
+                True,
+                True,
+            )
         )
 
         # 7. Add watchly.liked.all catalog
         catalogs.extend(
-            get_catalogs_from_config(user_settings, "watchly.liked.all", "Based on what you liked", True, True)
+            get_catalogs_from_config(
+                user_settings,
+                "watchly.liked.all",
+                "Based on what you liked",
+                True,
+                True,
+            )
         )
 
         return catalogs
@@ -336,5 +434,10 @@ class DynamicCatalogService:
                 label = watched_config.name if watched_config.name else "Because you watched"
                 watched_config_display_at_home = getattr(watched_config, "display_at_home", True)
                 catalogs.append(
-                    self.build_catalog_entry(last_watched, label, "watchly.watched", watched_config_display_at_home)
+                    self.build_catalog_entry(
+                        last_watched,
+                        label,
+                        "watchly.watched",
+                        watched_config_display_at_home,
+                    )
                 )

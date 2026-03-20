@@ -23,7 +23,6 @@ from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
-from app.utils.catalog import cache_profile_and_watched_sets
 
 
 def should_shuffle(user_settings: UserSettings, catalog_id: str) -> bool:
@@ -188,10 +187,9 @@ class CatalogService:
                     profile,
                     watched_tmdb,
                     watched_imdb,
-                ) = await cache_profile_and_watched_sets(
+                ) = await integration_service.build_and_cache_profile(
                     token,
                     content_type,
-                    integration_service,
                     library_items,
                     bundle,
                     auth_key,
@@ -328,7 +326,10 @@ class CatalogService:
         return UserSettings(**settings_dict) if settings_dict else get_default_settings()
 
     async def _get_trending_fallback(
-        self, content_type: str, limit: int = 20, user_settings: UserSettings | None = None
+        self,
+        content_type: str,
+        limit: int = 20,
+        user_settings: UserSettings | None = None,
     ) -> list[dict[str, Any]]:
         """Get trending items for new users without profiles."""
         from app.services.recommendation.utils import content_type_to_mtype
