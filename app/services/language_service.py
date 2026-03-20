@@ -1,23 +1,14 @@
 import asyncio
 
-from fastapi import APIRouter, HTTPException
-from loguru import logger
-
-from app.services.tmdb.service import get_tmdb_service
-
-router = APIRouter()
+from app.services.tmdb.service import TMDBService, get_tmdb_service
 
 
-async def fetch_languages_list():
-    """
-    Fetch and format languages list from TMDB.
-    Returns a list of language dictionaries with iso_639_1, language, and country.
-    """
-    tmdb = get_tmdb_service()
+async def fetch_languages_list() -> list[dict[str, str]]:
+    tmdb_service: TMDBService = get_tmdb_service()
     tasks = [
-        tmdb.get_primary_translations(),
-        tmdb.get_languages(),
-        tmdb.get_countries(),
+        tmdb_service.get_primary_translations(),
+        tmdb_service.get_languages(),
+        tmdb_service.get_countries(),
     ]
     primary_translations, languages, countries = await asyncio.gather(*tasks)
 
@@ -45,13 +36,3 @@ async def fetch_languages_list():
             )
     result.sort(key=lambda x: (x["iso_639_1"] != "en-US", x["language"]))
     return result
-
-
-@router.get("/api/languages")
-async def get_languages():
-    try:
-        languages = await fetch_languages_list()
-        return languages
-    except Exception as e:
-        logger.error(f"Failed to fetch languages: {e}")
-        raise HTTPException(status_code=502, detail="Failed to fetch languages from TMDB")
