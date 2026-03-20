@@ -9,7 +9,7 @@ from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.core.version import __version__
 from app.services.auth import auth_service
 from app.services.catalog import DynamicCatalogService, sort_catalogs
-from app.services.profile.integration import ProfileIntegration
+from app.services.profile.service import ProfileService
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.translation import translation_service
@@ -77,7 +77,7 @@ class ManifestService:
         # Build and cache profiles for both movie and series
         language = user_settings.language
         tmdb_key = resolve_tmdb_api_key(user_settings)
-        integration_service = ProfileIntegration(language=language, tmdb_api_key=tmdb_key)
+        integration_service = ProfileService(language=language, tmdb_api_key=tmdb_key)
 
         for content_type in ["movie", "series"]:
             try:

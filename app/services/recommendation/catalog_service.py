@@ -13,7 +13,7 @@ from app.core.settings import UserSettings, get_default_settings, resolve_tmdb_a
 from app.models.taste_profile import TasteProfile
 from app.services.auth import auth_service
 from app.services.catalog_updater import catalog_updater
-from app.services.profile.integration import ProfileIntegration
+from app.services.profile.service import ProfileService
 from app.services.recommendation.all_based import AllBasedService
 from app.services.recommendation.creators import CreatorsService
 from app.services.recommendation.item_based import ItemBasedService
@@ -172,7 +172,7 @@ class CatalogService:
                 await user_cache.set_library_items(token, library_items)
 
             services = self._initialize_services(language, user_settings)
-            integration_service: ProfileIntegration = services["integration"]
+            integration_service: ProfileService = services["integration"]
 
             # Try to get cached profile and watched sets
             cached_data = await user_cache.get_profile_and_watched_sets(token, content_type)
@@ -327,7 +327,7 @@ class CatalogService:
         tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
         return {
             "tmdb": tmdb_service,
-            "integration": ProfileIntegration(language=language, tmdb_api_key=tmdb_key),
+            "integration": ProfileService(language=language, tmdb_api_key=tmdb_key),
             "item": ItemBasedService(tmdb_service, user_settings),
             "theme": ThemeBasedService(tmdb_service, user_settings),
             "top_picks": TopPicksService(tmdb_service, user_settings),

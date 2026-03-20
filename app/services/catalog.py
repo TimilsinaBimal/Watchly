@@ -8,7 +8,7 @@ from loguru import logger
 from app.core.constants import DISCOVER_ONLY_EXTRA
 from app.core.settings import CatalogConfig, UserSettings
 from app.services.interest_summary import interest_summary_service
-from app.services.profile.integration import ProfileIntegration
+from app.services.profile.service import ProfileService
 from app.services.row_generator import RowGeneratorService
 from app.services.scoring import ScoringService
 from app.services.tmdb.service import get_tmdb_service
@@ -86,7 +86,7 @@ class DynamicCatalogService:
     def __init__(self, language: str = "en-US", tmdb_api_key: str | None = None):
         self.tmdb_service = get_tmdb_service(language=language, api_key=tmdb_api_key)
         self.scoring_service = ScoringService()
-        self.profile_integration = ProfileIntegration(language=language, tmdb_api_key=tmdb_api_key)
+        self.profile_integration = ProfileService(language=language, tmdb_api_key=tmdb_api_key)
         self.row_generator = RowGeneratorService(tmdb_service=self.tmdb_service)
         self.PROFILE_MAX_ITEMS = 50
 
