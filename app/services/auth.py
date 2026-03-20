@@ -7,7 +7,6 @@ from app.api.models.tokens import TokenRequest, TokenResponse
 from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
-from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 
@@ -15,6 +14,19 @@ from app.services.token_store import token_store
 class AuthService:
     async def resolve_auth_key(self, credentials: dict, token: str | None = None) -> str | None:
         """Validate auth key. If expired, try email+password login. Update store on refresh."""
+        bundle = StremioBundle()
+        try:
+            return await self.resolve_auth_key_with_bundle(bundle, credentials, token)
+        finally:
+            await bundle.close()
+
+    async def resolve_auth_key_with_bundle(
+        self,
+        bundle: StremioBundle,
+        credentials: dict,
+        token: str | None = None,
+    ) -> str | None:
+        """Validate auth key with an existing Stremio bundle."""
         auth_key = (credentials.get("authKey") or "").strip() or None
         email = (credentials.get("email") or "").strip() or None
         password = (credentials.get("password") or "").strip() or None
@@ -22,33 +34,36 @@ class AuthService:
         if auth_key and auth_key.startswith('"') and auth_key.endswith('"'):
             auth_key = auth_key[1:-1].strip()
 
-        bundle = StremioBundle()
-        try:
-            # 1. Try existing auth key
-            if auth_key:
-                try:
-                    await bundle.auth.get_user_info(auth_key)
-                    return auth_key
-                except Exception:
-                    logger.info("Stremio auth key expired or invalid, attempting refresh with credentials")
+        # 1. Try existing auth key
+        if auth_key:
+            try:
+                await bundle.auth.get_user_info(auth_key)
+                return auth_key
+            except Exception:
+                logger.info("Stremio auth key expired or invalid, attempting refresh with credentials")
 
-            # 2. Try login if auth key failed or wasn't provided
-            if email and password:
-                try:
-                    new_key = await bundle.auth.login(email, password)
-                    if token and new_key != auth_key:
-                        existing_data = await self.get_credentials(token)
-                        if existing_data:
-                            existing_data["authKey"] = new_key
-                            await token_store.update_user_data(token, existing_data)
-                    return new_key
-                except Exception as e:
-                    logger.error(f"Stremio login failed: {e}")
-                    return None
-        finally:
-            await bundle.close()
+        # 2. Try login if auth key failed or wasn't provided
+        if email and password:
+            try:
+                new_key = await bundle.auth.login(email, password)
+                if token and new_key != auth_key:
+                    existing_data = await self.get_credentials(token)
+                    if existing_data:
+                        existing_data["authKey"] = new_key
+                        await token_store.update_user_data(token, existing_data)
+                return new_key
+            except Exception as e:
+                logger.error(f"Stremio login failed: {e}")
+                return None
 
         return None
+
+    async def require_auth_key(self, bundle: StremioBundle, credentials: dict, token: str | None = None) -> str:
+        """Resolve auth key or raise a user-facing error."""
+        auth_key = await self.resolve_auth_key_with_bundle(bundle, credentials, token)
+        if not auth_key:
+            raise HTTPException(status_code=401, detail="Stremio session expired. Please reconfigure.")
+        return auth_key
 
     async def get_credentials(self, token: str) -> dict | None:
         """Get user credentials from token store."""
@@ -75,7 +90,10 @@ class AuthService:
         auth_key = await self.resolve_auth_key(creds)
 
         if not auth_key:
-            raise HTTPException(status_code=400, detail="Failed to verify Stremio identity. Provide valid credentials.")
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to verify Stremio identity. Provide valid credentials.",
+            )
 
         bundle = StremioBundle()
         try:
@@ -182,6 +200,8 @@ class AuthService:
         logger.info(f"[{redact_token(token)}] Token deleted for user {user_id}")
 
     async def _trigger_initial_caching(self, auth_key: str, settings: UserSettings, token: str):
+        from app.services.manifest import manifest_service
+
         bundle = StremioBundle()
         try:
             logger.info(f"[{redact_token(token)}] Caching library and profiles before returning token")

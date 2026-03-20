@@ -8,6 +8,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings
+from app.services.auth import auth_service
 from app.services.catalog import DynamicCatalogService, sort_catalogs
 from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
@@ -75,25 +76,9 @@ class CatalogUpdater:
                 detail="Invalid or expired token. Please reconfigure the addon.",
             )
 
-        auth_key = credentials.get("authKey")
-        # check if auth key is valid
         bundle = StremioBundle()
         try:
-            try:
-                if not auth_key:
-                    raise ValueError("Missing auth key")
-                await bundle.auth.get_user_info(auth_key)
-            except Exception as e:
-                logger.exception(f"[{redact_token(token)}] Invalid auth key. Falling back to login: {e}")
-                email = credentials.get("email")
-                password = credentials.get("password")
-                if email and password:
-                    auth_key = await bundle.auth.login(email, password)
-                    credentials["authKey"] = auth_key
-                    await token_store.update_user_data(token, credentials)
-                else:
-                    return True  # true since we won't be able to update it again. so no need to try again.
-
+            auth_key = await auth_service.resolve_auth_key_with_bundle(bundle, credentials, token)
             if not auth_key:
                 return True
 

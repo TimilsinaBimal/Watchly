@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.core.version import __version__
+from app.services.auth import auth_service
 from app.services.catalog import DynamicCatalogService, sort_catalogs
 from app.services.profile.integration import ProfileIntegration
 from app.services.stremio.service import StremioBundle
@@ -42,32 +43,6 @@ class ManifestService:
                 ),
             },
         }
-
-    async def _resolve_auth_key(self, bundle: StremioBundle, credentials: dict[str, Any], token: str) -> str | None:
-        """Resolve and validate auth key, refreshing if needed."""
-        auth_key = credentials.get("authKey")
-        email = credentials.get("email")
-        password = credentials.get("password")
-
-        is_valid = False
-        if auth_key:
-            try:
-                await bundle.auth.get_user_info(auth_key)
-                is_valid = True
-            except Exception as e:
-                logger.debug(f"Auth key check failed for {email or 'unknown'}: {e}")
-
-        if not is_valid and email and password:
-            try:
-                auth_key = await bundle.auth.login(email, password)
-                # Update store
-                credentials["authKey"] = auth_key
-                await token_store.update_user_data(token, credentials)
-            except Exception as e:
-                logger.error(f"Failed to refresh auth key during manifest fetch: {e}")
-                return None
-
-        return auth_key
 
     async def cache_library_and_profiles(
         self,
@@ -216,7 +191,7 @@ class ManifestService:
         fetched_catalogs = []
         try:
             # Resolve auth key
-            auth_key = await self._resolve_auth_key(bundle, creds, token)
+            auth_key = await auth_service.resolve_auth_key_with_bundle(bundle, creds, token)
 
             if auth_key and user_settings:
                 fetched_catalogs = await self._build_dynamic_catalogs(bundle, auth_key, user_settings, token)

@@ -11,6 +11,7 @@ from app.core.constants import DEFAULT_CATALOG_LIMIT, DEFAULT_MIN_ITEMS
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings, resolve_tmdb_api_key
 from app.models.taste_profile import TasteProfile
+from app.services.auth import auth_service
 from app.services.catalog_updater import catalog_updater
 from app.services.profile.integration import ProfileIntegration
 from app.services.recommendation.all_based import AllBasedService
@@ -153,7 +154,7 @@ class CatalogService:
                 )
 
             # Resolve auth and settings
-            auth_key = await self._resolve_auth(bundle, credentials, token)
+            auth_key = await auth_service.require_auth_key(bundle, credentials, token)
             user_settings = self._extract_settings(credentials)
 
             language = user_settings.language if user_settings else "en-US"
@@ -289,37 +290,6 @@ class CatalogService:
                     "'watchly.theme.<params>', 'watchly.all.loved', 'watchly.liked.all'"
                 ),
             )
-
-    async def _resolve_auth(self, bundle: StremioBundle, credentials: dict, token: str) -> str:
-        auth_key = credentials.get("authKey")
-        email = credentials.get("email")
-        password = credentials.get("password")
-
-        # Validate existing auth key
-        is_valid = False
-        if auth_key:
-            try:
-                await bundle.auth.get_user_info(auth_key)
-                is_valid = True
-            except Exception as e:
-                logger.error(f"Failed to validate auth key during catalog fetch: {e}")
-                pass
-
-        # Try to refresh if invalid
-        if not is_valid and email and password:
-            try:
-                auth_key = await bundle.auth.login(email, password)
-                credentials["authKey"] = auth_key
-                # Update token store with refreshed credentials
-                await token_store.update_user_data(token, credentials)
-            except Exception as e:
-                logger.error(f"Failed to refresh auth key during catalog fetch: {e}")
-
-        if not auth_key:
-            logger.error("No auth key found during catalog fetch")
-            raise HTTPException(status_code=401, detail="Stremio session expired. Please reconfigure.")
-
-        return auth_key
 
     def _extract_settings(self, credentials: dict) -> UserSettings:
         settings_dict = credentials.get("settings", {})
