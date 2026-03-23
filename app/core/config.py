@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     RECOMMENDATION_SOURCE_ITEMS_LIMIT: int = 10
     LIBRARY_ITEMS_LIMIT: int = 20
 
+    ENABLE_TOKEN_NEGATIVE_CACHE: bool = True
+    ENABLE_TOKEN_RATE_LIMIT: bool = True
+
     CATALOG_CACHE_TTL: int = 43200  # 12 hours
     CATALOG_STALE_TTL: int = 604800  # 7 days (soft expiration fallback)
 
