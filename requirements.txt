@@ -100,7 +100,7 @@ pyyaml==6.0.3
     # via uvicorn
 redis==7.1.0
     # via watchly (pyproject.toml)
-requests==2.32.5
+requests==2.33.0
     # via
     #   deep-translator
     #   google-auth
