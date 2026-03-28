@@ -4,6 +4,7 @@ from typing import Any
 from async_lru import alru_cache
 from loguru import logger
 
+from app.models.library import LibraryCollection
 from app.services.stremio.client import StremioClient, StremioLikesClient
 
 
@@ -33,7 +34,7 @@ class StremioLibraryService:
             logger.exception(f"Failed to fetch {status} {media_type} items: {e}")
             return []
 
-    async def get_library_items(self, auth_key: str) -> dict[str, list[dict[str, Any]]]:
+    async def get_library_items(self, auth_key: str) -> LibraryCollection:
         """
         Fetch all library items and categorize them (watched, loved, added, removed).
         """
@@ -185,13 +186,13 @@ class StremioLibraryService:
                 f" {len(removed)} removed items"
             )
 
-            return {
-                "watched": watched,
-                "loved": loved,
-                "liked": liked,
-                "added": added,
-                "removed": removed,
-            }
+            return LibraryCollection(
+                watched=watched,
+                loved=loved,
+                liked=liked,
+                added=added,
+                removed=removed,
+            )
         except Exception as e:
             logger.exception(f"Error processing library items: {e}")
-            return {"watched": [], "loved": [], "liked": [], "added": [], "removed": []}
+            return LibraryCollection()

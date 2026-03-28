@@ -4,6 +4,7 @@ from typing import Any
 from loguru import logger
 
 from app.core.settings import UserSettings
+from app.models.library import LibraryCollection
 from app.models.taste_profile import TasteProfile
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
@@ -34,13 +35,13 @@ class AllBasedService:
 
     async def get_recommendations_from_all_items(
         self,
-        library_items: dict[str, list[dict[str, Any]]],
+        library_items: LibraryCollection,
         content_type: str,
         watched_tmdb: set[int],
         watched_imdb: set[str],
         whitelist: set[int] | None = None,
         limit: int = 20,
-        item_type: str = "loved",  # "loved" or "liked"
+        item_type: str = "loved",
         profile: TasteProfile | None = None,
     ) -> list[dict[str, Any]]:
         """
@@ -66,8 +67,7 @@ class AllBasedService:
         Returns:
             List of recommended items
         """
-        # Get all loved or liked items for the content type
-        items = library_items.get(item_type, [])
+        items = getattr(library_items, item_type, [])
 
         typed_items = [it for it in items if it.get("type") == content_type]
 

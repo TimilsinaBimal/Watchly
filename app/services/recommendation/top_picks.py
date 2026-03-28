@@ -8,6 +8,7 @@ from loguru import logger
 
 from app.core.constants import DEFAULT_CATALOG_LIMIT, MAX_CATALOG_ITEMS
 from app.core.settings import UserSettings
+from app.models.library import LibraryCollection
 from app.models.taste_profile import TasteProfile
 from app.services.profile.constants import TOP_PICKS_CREATOR_CAP, TOP_PICKS_GENRE_CAP
 from app.services.profile.sampling import SmartSampler
@@ -44,7 +45,7 @@ class TopPicksService:
         self,
         profile: TasteProfile,
         content_type: str,
-        library_items: dict[str, list[dict[str, Any]]],
+        library_items: LibraryCollection,
         watched_tmdb: set[int],
         watched_imdb: set[str],
         limit: int = DEFAULT_CATALOG_LIMIT,
@@ -166,7 +167,7 @@ class TopPicksService:
 
     async def _fetch_recommendations_from_top_items(
         self,
-        library_items: dict[str, list[dict[str, Any]]],
+        library_items: LibraryCollection,
         content_type: str,
         mtype: str,
     ) -> list[dict[str, Any]]:
@@ -222,7 +223,7 @@ class TopPicksService:
 
     async def _fetch_simkl_recommendations(
         self,
-        library_items: dict[str, list[dict[str, Any]]],
+        library_items: LibraryCollection,
         content_type: str,
         mtype: str,
     ) -> list[dict[str, Any]]:

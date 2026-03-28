@@ -7,8 +7,9 @@ from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.core.version import __version__
+from app.models.library import LibraryCollection
 from app.services.auth import auth_service
-from app.services.catalog import DynamicCatalogService, sort_catalogs
+from app.services.catalog_definitions import DynamicCatalogService, sort_catalogs
 from app.services.profile.service import ProfileService
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
@@ -50,7 +51,7 @@ class ManifestService:
         auth_key: str,
         user_settings: UserSettings,
         token: str,
-    ) -> dict[str, Any]:
+    ) -> LibraryCollection:
         """
         Fetch and cache library items and profiles for a user.
 
@@ -95,16 +96,14 @@ class ManifestService:
         auth_key: str,
         user_settings: UserSettings,
         token: str,
-    ) -> dict[str, Any]:
+    ) -> LibraryCollection:
         """Ensure library items and profiles are cached, fetching and building if needed."""
-        # Try to get cached library items first
         library_items = await user_cache.get_library_items(token)
 
         if library_items:
             logger.debug(f"[{redact_token(token)}] Using cached library items for manifest")
             return library_items
 
-        # If not cached, fetch and cache
         logger.info(f"[{redact_token(token)}] Library items not cached, fetching from Stremio for manifest")
         return await self.cache_library_and_profiles(bundle, auth_key, user_settings, token)
 
@@ -121,11 +120,7 @@ class ManifestService:
 
         settings_for_user = user_settings
 
-        # check if cached, if not, fetch and cache
-        library_items = await user_cache.get_library_items(token)
-        if not library_items:
-            library_items = await self._ensure_library_and_profiles_cached(bundle, auth_key, settings_for_user, token)
-            await user_cache.set_library_items(token, library_items)
+        library_items = await self._ensure_library_and_profiles_cached(bundle, auth_key, settings_for_user, token)
 
         tmdb_key = resolve_tmdb_api_key(settings_for_user)
         dynamic_catalog_service = DynamicCatalogService(language=settings_for_user.language, tmdb_api_key=tmdb_key)

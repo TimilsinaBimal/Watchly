@@ -2,6 +2,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.models.library import LibraryCollection
 from app.models.taste_profile import TasteProfile
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.constants import GENRE_WHITELIST_LIMIT
@@ -25,7 +26,7 @@ class ProfileService:
 
     async def build_profile_from_library(
         self,
-        library_items: dict,
+        library_items: LibraryCollection,
         content_type: str,
         stremio_service: Any = None,
         auth_key: str | None = None,
@@ -35,30 +36,17 @@ class ProfileService:
             stremio_service, library_items, auth_key
         )
 
-        all_items = (
-            library_items.get("loved", [])
-            + library_items.get("liked", [])
-            + library_items.get("watched", [])
-            + library_items.get("added", [])
-        )
-        typed_items = [it for it in all_items if it.get("type") == content_type]
-
-        if not typed_items:
+        typed = library_items.for_type(content_type)
+        if typed.is_empty():
             return None, watched_tmdb, watched_imdb
 
-        library_items_dict = {
-            "loved": [it for it in library_items.get("loved", []) if it.get("type") == content_type],
-            "liked": [it for it in library_items.get("liked", []) if it.get("type") == content_type],
-            "watched": [it for it in library_items.get("watched", []) if it.get("type") == content_type],
-            "added": [it for it in library_items.get("added", []) if it.get("type") == content_type],
-        }
-        sampled = self.sampler.sample_items(library_items_dict, content_type)
+        sampled = self.sampler.sample_items(typed, content_type)
         profile = await self.builder.build_profile(sampled, content_type=content_type)
         return profile, watched_tmdb, watched_imdb
 
     async def build_profile_incremental(
         self,
-        library_items: dict,
+        library_items: LibraryCollection,
         content_type: str,
         token: str,
         stremio_service: Any = None,
@@ -69,13 +57,8 @@ class ProfileService:
             stremio_service, library_items, auth_key
         )
 
-        all_items = (
-            library_items.get("loved", [])
-            + library_items.get("liked", [])
-            + library_items.get("watched", [])
-            + library_items.get("added", [])
-        )
-        typed_items = [it for it in all_items if it.get("type") == content_type]
+        typed = library_items.for_type(content_type)
+        typed_items = typed.all_items()
 
         if not typed_items:
             return None, watched_tmdb, watched_imdb
@@ -106,30 +89,17 @@ class ProfileService:
 
                     logger.debug(f"[{token[:8]}...] Found {len(new_item_ids)} new items, using incremental update")
 
-                    new_library_items_dict = {
-                        "loved": [
-                            it
-                            for it in library_items.get("loved", [])
-                            if it.get("type") == content_type and (it.get("_id") or it.get("id")) in new_item_ids
-                        ],
-                        "liked": [
-                            it
-                            for it in library_items.get("liked", [])
-                            if it.get("type") == content_type and (it.get("_id") or it.get("id")) in new_item_ids
-                        ],
-                        "watched": [
-                            it
-                            for it in library_items.get("watched", [])
-                            if it.get("type") == content_type and (it.get("_id") or it.get("id")) in new_item_ids
-                        ],
-                        "added": [
-                            it
-                            for it in library_items.get("added", [])
-                            if it.get("type") == content_type and (it.get("_id") or it.get("id")) in new_item_ids
-                        ],
-                    }
+                    def _is_new(it: dict) -> bool:
+                        return (it.get("_id") or it.get("id")) in new_item_ids
 
-                    sampled = self.sampler.sample_items(new_library_items_dict, content_type)
+                    new_library = LibraryCollection(
+                        loved=[it for it in typed.loved if _is_new(it)],
+                        liked=[it for it in typed.liked if _is_new(it)],
+                        watched=[it for it in typed.watched if _is_new(it)],
+                        added=[it for it in typed.added if _is_new(it)],
+                    )
+
+                    sampled = self.sampler.sample_items(new_library, content_type)
 
                     if not sampled:
                         return existing_profile, watched_tmdb, watched_imdb
@@ -153,7 +123,7 @@ class ProfileService:
         self,
         token: str,
         content_type: str,
-        library_items: dict,
+        library_items: LibraryCollection,
         stremio_service: Any = None,
         auth_key: str | None = None,
     ) -> tuple[TasteProfile | None, set[int], set[str]]:
@@ -179,6 +149,3 @@ class ProfileService:
         except Exception as e:
             logger.warning(f"Failed to build genre whitelist for {content_type}: {e}")
             return set()
-
-
-ProfileIntegration = ProfileService

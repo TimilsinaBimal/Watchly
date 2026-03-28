@@ -1,23 +1,7 @@
-"""
-Profile System - Additive, Transparent Design.
+"""Profile service exports."""
 
-This package implements a transparent, additive user profile system.
-No hidden interactions, easy to debug, powerful enough for all row types.
-"""
-
-from app.services.profile.builder import ProfileBuilder
-from app.services.profile.evidence import EvidenceCalculator
-from app.services.profile.sampling import SmartSampler
-from app.services.profile.scorer import ProfileScorer
-from app.services.profile.service import ProfileIntegration, ProfileService
-from app.services.profile.vectorizer import ItemVectorizer
+from app.services.profile.service import ProfileService
 
 __all__ = [
-    "ProfileBuilder",
-    "ProfileScorer",
-    "EvidenceCalculator",
-    "ItemVectorizer",
-    "SmartSampler",
     "ProfileService",
-    "ProfileIntegration",
 ]

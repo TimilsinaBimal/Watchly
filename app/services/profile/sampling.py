@@ -1,5 +1,4 @@
-from typing import Any
-
+from app.models.library import LibraryCollection
 from app.models.scoring import ScoredItem
 from app.services.profile.constants import SMART_SAMPLING_MAX_ITEMS
 from app.services.scoring import ScoringService
@@ -26,29 +25,12 @@ class SmartSampler:
 
     def sample_items(
         self,
-        library_items: dict[str, list[dict[str, Any]]],
+        library_items: LibraryCollection,
         content_type: str,
         max_items: int = SMART_SAMPLING_MAX_ITEMS,
     ) -> list[ScoredItem]:
-        """
-        Sample items for profile building.
-
-        Args:
-            library_items: Library items dict with 'loved', 'liked', 'watched', 'added' keys
-            content_type: Content type to filter (movie/series)
-            max_items: Maximum items to return
-
-        Returns:
-            List of ScoredItem objects
-        """
-        # Get all items of the requested type
-        all_items = (
-            library_items.get("loved", [])
-            + library_items.get("liked", [])
-            + library_items.get("watched", [])
-            + library_items.get("added", [])
-        )
-        typed_items = [it for it in all_items if it.get("type") == content_type]
+        """Sample items for profile building with quota-based selection."""
+        typed_items = [it for it in library_items.all_items() if it.get("type") == content_type]
 
         if not typed_items:
             return []
@@ -68,8 +50,7 @@ class SmartSampler:
         if len(unique_items) <= max_items:
             return [self.scoring_service.process_item(it) for it in unique_items.values()]
 
-        # Get set of added item IDs for classification
-        added_item_ids = {it.get("_id") for it in library_items.get("added", [])}
+        added_item_ids = {it.get("_id") for it in library_items.added}
 
         # Separate items into pools and score them
         loved_liked_pool = []

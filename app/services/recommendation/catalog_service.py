@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.constants import DEFAULT_CATALOG_LIMIT, DEFAULT_MIN_ITEMS
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings, resolve_tmdb_api_key
+from app.models.library import LibraryCollection
 from app.models.taste_profile import TasteProfile
 from app.services.auth import auth_service
 from app.services.catalog_updater import catalog_updater
@@ -159,20 +160,17 @@ class CatalogService:
 
             language = user_settings.language if user_settings else "en-US"
 
-            # Try to get cached library items first
             library_items = await user_cache.get_library_items(token)
 
             if library_items:
                 logger.debug(f"[{redact_token(token)}...] Using cached library items")
             else:
-                # Fetch library if not cached
                 logger.info(f"[{redact_token(token)}...] Library items not cached, fetching from Stremio")
                 library_items = await bundle.library.get_library_items(auth_key)
-                # Cache it for future use
                 await user_cache.set_library_items(token, library_items)
 
             services = self._initialize_services(language, user_settings)
-            integration_service: ProfileService = services["integration"]
+            profile_service: ProfileService = services["profile"]
 
             # Try to get cached profile and watched sets
             cached_data = await user_cache.get_profile_and_watched_sets(token, content_type)
@@ -188,7 +186,7 @@ class CatalogService:
                     profile,
                     watched_tmdb,
                     watched_imdb,
-                ) = await integration_service.build_and_cache_profile(
+                ) = await profile_service.build_and_cache_profile(
                     token,
                     content_type,
                     library_items,
@@ -196,7 +194,7 @@ class CatalogService:
                     auth_key,
                 )
 
-            whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
+            whitelist = await profile_service.get_genre_whitelist(profile, content_type) if profile else set()
 
             # Route to appropriate recommendation service
             recommendations = await self._get_recommendations(
@@ -327,7 +325,7 @@ class CatalogService:
         tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
         return {
             "tmdb": tmdb_service,
-            "integration": ProfileService(language=language, tmdb_api_key=tmdb_key),
+            "profile": ProfileService(language=language, tmdb_api_key=tmdb_key),
             "item": ItemBasedService(tmdb_service, user_settings),
             "theme": ThemeBasedService(tmdb_service, user_settings),
             "top_picks": TopPicksService(tmdb_service, user_settings),
@@ -344,7 +342,7 @@ class CatalogService:
         watched_tmdb: set[int],
         watched_imdb: set[str],
         whitelist: set[int],
-        library_items: dict,
+        library_items: LibraryCollection,
         limit: int,
         user_settings: UserSettings | None = None,
     ) -> list[dict[str, Any]]:

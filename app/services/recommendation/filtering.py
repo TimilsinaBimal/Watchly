@@ -1,6 +1,8 @@
 from typing import Any
 from urllib.parse import unquote
 
+from app.models.library import LibraryCollection
+
 
 def parse_identifier(identifier: str) -> tuple[str | None, int | None]:
     """Parse Stremio identifier to extract IMDB ID and TMDB ID."""
@@ -36,25 +38,19 @@ class RecommendationFiltering:
     @staticmethod
     async def get_exclusion_sets(
         stremio_service: Any,
-        library_data: dict | None = None,
+        library_data: LibraryCollection | None = None,
         auth_key: str | None = None,
     ) -> tuple[set[str], set[int]]:
-        """
-        Fetch library items and build exclusion sets for watched/loved content.
-        """
+        """Build exclusion sets for watched/loved content."""
         if library_data is None:
             if not auth_key:
                 return set(), set()
             library_data = await stremio_service.library.get_library_items(auth_key)
 
-        library_data = library_data or {}
+        if library_data is None:
+            return set(), set()
 
-        all_items = (
-            library_data.get("loved", [])
-            + library_data.get("watched", [])
-            + library_data.get("removed", [])
-            + library_data.get("liked", [])
-        )
+        all_items = library_data.all_items_with_removed()
 
         imdb_ids = set()
         tmdb_ids = set()

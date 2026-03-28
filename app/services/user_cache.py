@@ -7,6 +7,7 @@ from loguru import logger
 
 from app.core.constants import CATALOG_KEY, LIBRARY_ITEMS_KEY, PROFILE_KEY, WATCHED_SETS_KEY
 from app.core.security import redact_token
+from app.models.library import LibraryCollection
 from app.models.taste_profile import TasteProfile
 from app.services.redis_service import redis_service
 
@@ -39,42 +40,27 @@ class UserCacheService:
 
     # Library Items Methods
 
-    async def get_library_items(self, token: str) -> dict[str, Any] | None:
-        """
-        Get cached library items for a user.
-
-        Args:
-            token: User token
-
-        Returns:
-            Library items dictionary, or None if not cached
-        """
+    async def get_library_items(self, token: str) -> LibraryCollection | None:
+        """Get cached library items for a user."""
         key = self._library_items_key(token)
         cached = await redis_service.get(key)
 
         if cached:
             try:
-                return json.loads(cached)
-            except json.JSONDecodeError as e:
+                data = json.loads(cached)
+                return LibraryCollection(**data)
+            except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"Failed to decode cached library items for {redact_token(token)}...: {e}")
                 return None
 
         return None
 
-    async def set_library_items(self, token: str, library_items: dict[str, Any]) -> None:
-        """
-        Cache library items for a user.
-
-        Args:
-            token: User token
-            library_items: Library items dictionary to cache
-        """
+    async def set_library_items(self, token: str, library_items: LibraryCollection) -> None:
+        """Cache library items for a user."""
         key = self._library_items_key(token)
-        await redis_service.set(key, json.dumps(library_items))
+        await redis_service.set(key, library_items.model_dump_json())
         logger.debug(f"[{redact_token(token)}...] Cached library items")
 
-        # Invalidate all catalog caches when library items are updated
-        # This ensures catalogs are regenerated with fresh library data
         await self.invalidate_all_catalogs(token)
 
     async def invalidate_library_items(self, token: str) -> None:

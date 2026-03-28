@@ -1,15 +1,14 @@
 """
 Dynamic Row Generator Service.
 
-Generates 3 personalized catalog rows using a tiered sampling system:
-- Row 1 (The Core): User's strongest preferences (Gold tier: Top 1-3)
-- Row 2 (The Blend): Mixed preferences with higher complexity (Gold+Silver: Top 1-8)
-- Row 3 (The Rising Star): Emerging interests (Silver tier: Rank 4-10)
+Generates 3 personalized catalog rows from a user's taste profile:
+- Row 1 (Core): Strongest preferences
+- Row 2 (Blend): Mixed preferences with variety
+- Row 3 (Rising Star): Emerging/exploratory interests
 """
 
 import asyncio
 import random
-from enum import Enum
 from typing import Any
 
 from loguru import logger
@@ -21,130 +20,30 @@ from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres
 from app.services.tmdb.service import TMDBService, get_tmdb_service
 
-GOLD_TIER_LIMIT = 3  # Top 1-3 items
-SILVER_TIER_START = 3  # Rank 4+
-SILVER_TIER_END = 10  # Up to Rank 10
+GOLD_END = 3
+SILVER_START = 3
+SILVER_END = 10
 
-# Available axes for row generation
-AXIS_GENRE = "genre"
-AXIS_KEYWORD = "keyword"
-AXIS_COUNTRY = "country"
-AXIS_RUNTIME = "runtime"
-AXIS_CREATOR = "creator"
+ROLE_ANCHOR = "a"
+ROLE_FLAVOR = "f"
+ROLE_FALLBACK = "b"
 
-
-class AxisRole(str, Enum):
-    ANCHOR = "anchor"  # strong signal, near-required
-    FLAVOR = "flavor"  # boosts relevance, optional
-    FALLBACK = "fallback"  # ranking only, never filtering
-
-
-class RowAxis(BaseModel):
-    name: str
-    value: Any
-    role: AxisRole
-    weight: float = 1.0
-
-
-def normalize_keyword(kw: str) -> str:
-    """Normalize keyword for display."""
-    return kw.strip().replace("-", " ").replace("_", " ").title()
-
-
-def get_genre_name(genre_id: int, content_type: str) -> str:
-    """Get genre name from ID."""
-    genre_map = movie_genres if content_type == "movie" else series_genres
-    return genre_map.get(genre_id, "Movies" if content_type == "movie" else "Series")
-
-
-def get_country_adjective(country_code: str) -> str | None:
-    """Get country adjective (e.g., 'US' -> 'American')."""
-    adjectives = COUNTRY_ADJECTIVES.get(country_code, [])
-    return random.choice(adjectives) if adjectives else None
-
-
-def runtime_to_modifier(bucket: str) -> str | None:
-    """Get display modifier for runtime bucket."""
-    modifiers = {
-        "short": "Short & Sweet",
-        "medium": None,  # No modifier for medium
-        "long": "Epic",
-    }
-    return modifiers.get(bucket)
-
-
-def sample_from_tier(items: list[tuple[Any, float]], start: int, end: int, count: int = 1) -> list[tuple[Any, float]]:
-    """Sample random items from a specific tier range."""
-    tier_items = items[start:end]
-    if not tier_items:
-        return []
-    return random.sample(tier_items, min(count, len(tier_items)))
-
-
-def sample_from_gold(items: list[tuple[Any, float]], count: int = 1) -> list[tuple[Any, float]]:
-    """Sample from Gold tier (Top 1-3)."""
-    return sample_from_tier(items, 0, GOLD_TIER_LIMIT, count)
-
-
-def sample_from_silver(items: list[tuple[Any, float]], count: int = 1) -> list[tuple[Any, float]]:
-    """Sample from Silver tier (Rank 4-10)."""
-    return sample_from_tier(items, SILVER_TIER_START, SILVER_TIER_END, count)
-
-
-def sample_from_gold_silver(items: list[tuple[Any, float]], count: int = 1) -> list[tuple[Any, float]]:
-    """Sample from combined Gold+Silver tier (Rank 1-10)."""
-    return sample_from_tier(items, 0, SILVER_TIER_END, count)
-
-
-def build_row_id(axes: list[RowAxis]) -> str:
-    """Build a unique row ID from axes and their roles."""
-    parts = ["watchly.theme"]
-
-    role_map = {
-        AxisRole.ANCHOR: "a",
-        AxisRole.FLAVOR: "f",
-        AxisRole.FALLBACK: "b",
-    }
-
-    # Sort axes for consistent IDs
-    sorted_axes = sorted(axes, key=lambda x: (x.role, x.name, str(x.value)))
-
-    for axis in sorted_axes:
-        role_pfx = role_map.get(axis.role, "f")
-        axis_pfx = {
-            AXIS_GENRE: "g",
-            AXIS_KEYWORD: "k",
-            AXIS_COUNTRY: "ct",
-            AXIS_RUNTIME: "r",
-            AXIS_CREATOR: "cr",
-        }.get(axis.name, "x")
-
-        # Handle value formatting
-        val = axis.value
-        if isinstance(val, (list, tuple)):
-            val = "-".join(str(v) for v in val)
-
-        parts.append(f"{role_pfx}:{axis_pfx}{val}")
-
-    return ".".join(parts)
+AXIS_GENRE = "g"
+AXIS_KEYWORD = "k"
+AXIS_COUNTRY = "ct"
+AXIS_RUNTIME = "r"
+AXIS_CREATOR = "cr"
 
 
 class RowDefinition(BaseModel):
-    """Defines a dynamic catalog row."""
+    """A dynamic catalog row with an ID (encodes TMDB params) and a display title."""
 
     title: str
     id: str
-    axes: list[RowAxis] = []
-    explanation: str | None = None
-    expansion_strategy: str | None = None
-
-    @property
-    def is_valid(self) -> bool:
-        return len(self.axes) > 0
 
 
 class LLMRowTheme(BaseModel):
-    """Schema for structured LLM output - a single themed catalog row."""
+    """Schema for Gemini structured output — a single themed catalog row."""
 
     title: str = Field(description="Creative, short title for the collection (2-5 words)")
     genres: list[int] = Field(description="List of valid TMDB genre IDs")
@@ -152,400 +51,319 @@ class LLMRowTheme(BaseModel):
     country: str | None = Field(default=None, description="ISO 3166-1 country code or null")
 
 
-class RowComponents(BaseModel):
-    """Internal structure for building a row."""
-
-    axes: list[RowAxis] = []
-    explanation: str | None = None
-
-    # For title generation
-    prompt_parts: list[str] = []
-    fallback_parts: list[str] = []
-
-    def build_prompt(self) -> str:
-        """Build Gemini prompt from parts."""
-        return " + ".join(self.prompt_parts)
-
-    def build_fallback(self) -> str:
-        """Build fallback title from parts."""
-        return " ".join(self.fallback_parts)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dict for row building."""
-        return {
-            "axes": self.axes,
-            "explanation": self.explanation,
-        }
+# --- ID building (format must match theme_based.py parser) ---
 
 
-class ExtractedFeatures:
-    """Container for all extracted profile features with keyword names resolved."""
+def build_row_id(axes: list[tuple[str, str, Any]]) -> str:
+    """Build row ID from axes. Each axis is (role, axis_type, value).
 
-    def __init__(
-        self,
-        genres: list[tuple[int, float]],
-        keywords: list[tuple[int, float]],
-        countries: list[tuple[str, float]],
-        runtimes: list[tuple[str, float]],
-        creators: list[tuple[int, float]],
-        keyword_names: dict[int, str],
-        content_type: str,
-    ):
-        self.genres = genres
-        self.keywords = keywords
-        self.countries = countries
-        self.runtimes = runtimes
-        self.creators = creators
-        self.keyword_names = keyword_names
-        self.content_type = content_type
-
-    def get_keyword_name(self, keyword_id: int) -> str | None:
-        return self.keyword_names.get(keyword_id)
-
-    def get_genre_name(self, genre_id: int) -> str:
-        return get_genre_name(genre_id, self.content_type)
+    Example output: watchly.theme.a:g28.f:k1234.b:rshort
+    """
+    parts = ["watchly.theme"]
+    sorted_axes = sorted(axes, key=lambda x: (x[0], x[1], str(x[2])))
+    for role, axis_type, value in sorted_axes:
+        if isinstance(value, (list, tuple)):
+            value = "-".join(str(v) for v in value)
+        parts.append(f"{role}:{axis_type}{value}")
+    return ".".join(parts)
 
 
-class RowBuilder:
-    """Builds a single row by sampling from axes with specific roles."""
+# --- Display helpers ---
 
-    def __init__(self, features: ExtractedFeatures):
-        self.features = features
-        self.components = RowComponents()
-        self.used_axes: set[str] = set()
 
-    def add_axis(self, name: str, value: Any, role: AxisRole, weight: float = 1.0) -> "RowBuilder":
-        """Add an axis with a specific role and weight."""
-        axis = RowAxis(name=name, value=value, role=role, weight=weight)
-        self.components.axes.append(axis)
+def _genre_name(genre_id: int, content_type: str) -> str:
+    genre_map = movie_genres if content_type == "movie" else series_genres
+    return genre_map.get(genre_id, "Movies" if content_type == "movie" else "Series")
 
-        # Build prompt and fallback title parts
-        display_val = self._get_display_value(name, value)
-        if display_val:
-            prefix = ""
-            if role == AxisRole.ANCHOR:
-                prefix = "Anchor: "
-            elif role == AxisRole.FLAVOR:
-                prefix = "Flavor: "
 
-            self.components.prompt_parts.append(f"{prefix}{name.title()}: {display_val}")
+def _country_adjective(code: str) -> str | None:
+    adjs = COUNTRY_ADJECTIVES.get(code, [])
+    return random.choice(adjs) if adjs else None
 
-            # For fallback title, we prioritize Anchor and Flavor
-            if role in (AxisRole.ANCHOR, AxisRole.FLAVOR):
-                if name == AXIS_COUNTRY:
-                    self.components.fallback_parts.insert(0, display_val)
-                else:
-                    self.components.fallback_parts.append(display_val)
 
-        self.used_axes.add(f"{name}:{value}")
-        return self
+def _keyword_display(name: str) -> str:
+    return name.strip().replace("-", " ").replace("_", " ").title()
 
-    def _get_display_value(self, name: str, value: Any) -> str | None:
-        """Get human-readable value for an axis."""
-        if name == AXIS_GENRE:
-            return self.features.get_genre_name(value)
-        if name == AXIS_KEYWORD:
-            return normalize_keyword(self.features.get_keyword_name(value) or "")
-        if name == AXIS_COUNTRY:
-            return get_country_adjective(value)
-        if name == AXIS_RUNTIME:
-            return runtime_to_modifier(value)
-        return str(value)
 
-    def build(self) -> RowComponents | None:
-        """Build and return the row components if valid (has at least one anchor)."""
-        has_anchor = any(a.role == AxisRole.ANCHOR for a in self.components.axes)
-        if has_anchor:
-            return self.components
-        return None
+def _runtime_modifier(bucket: str) -> str | None:
+    return {"short": "Short & Sweet", "long": "Epic"}.get(bucket)
+
+
+def _pick(items: list, start: int, end: int, exclude: set | None = None) -> Any | None:
+    """Pick a random item from items[start:end], excluding IDs in `exclude`."""
+    pool = items[start:end]
+    if exclude:
+        pool = [x for x in pool if x[0] not in exclude]
+    if not pool:
+        pool = items[start:end]
+    return random.choice(pool) if pool else None
 
 
 class RowGeneratorService:
-    """Generates dynamic, personalized row definitions from a User Taste Profile."""
+    """Generates dynamic, personalized row definitions from a taste profile."""
 
     def __init__(self, tmdb_service: TMDBService | None = None):
         self.tmdb_service = tmdb_service or get_tmdb_service()
 
     async def generate_rows(
-        self, profile: TasteProfile, content_type: str = "movie", api_key: str | None = None
+        self,
+        profile: TasteProfile,
+        content_type: str = "movie",
+        api_key: str | None = None,
     ) -> list[RowDefinition]:
-        """
-        Generate exactly 3 personalized catalog rows.
-        If api_key is provided, uses LLM to generate creative themes.
-        Otherwise uses tiered sampling system.
-
-        Returns:
-            List of RowDefinition
-        """
-        # 1. Extract all features from profile
-        features = await self._extract_features(profile, content_type)
-
-        # 2. Try LLM generation if key is present
-        if api_key:
-            try:
-                llm_rows = await self._generate_rows_with_llm(profile, features, content_type, api_key)
-                if llm_rows:
-                    logger.info(f"Generated {len(llm_rows)} LLM-driven rows for {content_type}")
-                    return llm_rows
-            except Exception as e:
-                logger.warning(f"LLM row generation failed, falling back to tiered sampling: {e}")
-
-        # 3. Fallback to Tiered Sampling
-        rows_data = []
-        used_genres = set()
-        used_keywords = set()
-
-        # Row 1: The Core (Strongest matches)
-        core_row = self._build_core_row(features, exclude_genres=used_genres, exclude_keywords=used_keywords)
-        if core_row:
-            rows_data.append(core_row)
-            self._update_used_axes(core_row, used_genres, used_keywords)
-
-        # Row 2: The Blend (Mixing themes)
-        blend_row = self._build_blend_row(features, exclude_genres=used_genres, exclude_keywords=used_keywords)
-        if blend_row:
-            rows_data.append(blend_row)
-            self._update_used_axes(blend_row, used_genres, used_keywords)
-
-        # Row 3: The Rising Star (Exploration)
-        rising_row = self._build_rising_star_row(features, exclude_genres=used_genres, exclude_keywords=used_keywords)
-        if rising_row:
-            rows_data.append(rising_row)
-
-        # 4. Generate titles via server's default Gemini model (gemma)
-        final_rows = await self._generate_titles(rows_data[:3])
-
-        logger.info(f"Generated {len(final_rows)} dynamic rows (Tiered Sampling) for {content_type}")
-        return final_rows
-
-    def _update_used_axes(self, row: RowComponents, used_genres: set, used_keywords: set):
-        """Track used genres and keywords to ensure row diversity."""
-        for axis in row.axes:
-            if axis.name == AXIS_GENRE:
-                used_genres.add(axis.value)
-            elif axis.name == AXIS_KEYWORD:
-                used_keywords.add(axis.value)
-
-    async def _extract_features(self, profile: TasteProfile, content_type: str) -> ExtractedFeatures:
-        """Extract all features from profile and resolve keyword names."""
-        # Get raw features
+        """Generate up to 3 personalized catalog rows."""
         genres = profile.get_top_genres(limit=5)
         keywords = profile.get_top_keywords(limit=10)
         countries = profile.get_top_countries(limit=2)
         runtimes = sorted(profile.runtime_bucket_scores.items(), key=lambda x: x[1], reverse=True)
-        creators = profile.get_top_creators(limit=5)
 
-        # Fetch keyword names in parallel
-        keyword_ids = [k_id for k_id, _ in keywords]
-        keyword_names_raw = await asyncio.gather(
+        keyword_names = await self._resolve_keyword_names([kid for kid, _ in keywords])
+
+        if api_key:
+            try:
+                llm_rows = await self._generate_with_llm(
+                    profile, genres, keywords, keyword_names, content_type, api_key
+                )
+                if llm_rows:
+                    logger.info(f"Generated {len(llm_rows)} LLM-driven rows for {content_type}")
+                    return llm_rows
+            except Exception as e:
+                logger.warning(f"LLM row generation failed, using fallback: {e}")
+
+        rows = self._build_rows_fallback(genres, keywords, countries, runtimes, keyword_names, content_type)
+        titled = await self._generate_titles(rows)
+        logger.info(f"Generated {len(titled)} rows (fallback) for {content_type}")
+        return titled
+
+    # --- Fallback row building (non-LLM) ---
+
+    def _build_rows_fallback(
+        self,
+        genres: list[tuple[int, float]],
+        keywords: list[tuple[int, float]],
+        countries: list[tuple[str, float]],
+        runtimes: list[tuple[str, float]],
+        keyword_names: dict[int, str],
+        content_type: str,
+    ) -> list[tuple[list[tuple[str, str, Any]], str]]:
+        """Build up to 3 rows as (axes, fallback_title) tuples."""
+        rows = []
+        used_genres: set[int] = set()
+        used_keywords: set[int] = set()
+
+        # Row 1: Core — top genre + top keywords
+        r1 = self._build_core(genres, keywords, runtimes, keyword_names, content_type, used_genres, used_keywords)
+        if r1:
+            rows.append(r1)
+
+        # Row 2: Blend — genre + country or secondary genre
+        r2 = self._build_blend(genres, countries, content_type, used_genres)
+        if r2:
+            rows.append(r2)
+
+        # Row 3: Rising Star — emerging keyword + secondary genre + country
+        r3 = self._build_rising(genres, keywords, countries, keyword_names, content_type, used_genres, used_keywords)
+        if r3:
+            rows.append(r3)
+
+        return rows[:3]
+
+    def _build_core(self, genres, keywords, runtimes, keyword_names, content_type, used_genres, used_keywords):
+        axes = []
+        title_parts = []
+
+        g = _pick(genres, 0, GOLD_END, used_genres)
+        if not g:
+            return None
+        axes.append((ROLE_ANCHOR, AXIS_GENRE, g[0]))
+        title_parts.append(_genre_name(g[0], content_type))
+        used_genres.add(g[0])
+
+        for _ in range(random.randint(1, 2)):
+            k = _pick(keywords, 0, GOLD_END, used_keywords)
+            if k and k[0] in keyword_names:
+                axes.append((ROLE_FLAVOR, AXIS_KEYWORD, k[0]))
+                title_parts.append(_keyword_display(keyword_names[k[0]]))
+                used_keywords.add(k[0])
+
+        if runtimes:
+            rt = random.choice(runtimes[:2])
+            axes.append((ROLE_FALLBACK, AXIS_RUNTIME, rt[0]))
+            mod = _runtime_modifier(rt[0])
+            if mod:
+                title_parts.insert(0, mod)
+
+        return (axes, " ".join(title_parts))
+
+    def _build_blend(self, genres, countries, content_type, used_genres):
+        axes = []
+        title_parts = []
+
+        g = _pick(genres, 0, GOLD_END, used_genres)
+        if not g:
+            return None
+        axes.append((ROLE_ANCHOR, AXIS_GENRE, g[0]))
+        title_parts.append(_genre_name(g[0], content_type))
+        used_genres.add(g[0])
+
+        use_country = random.choice([True, False])
+        if use_country and countries:
+            c = _pick(countries, 0, SILVER_END)
+            if c:
+                axes.append((ROLE_FLAVOR, AXIS_COUNTRY, c[0]))
+                adj = _country_adjective(c[0])
+                if adj:
+                    title_parts.insert(0, adj)
+        else:
+            other = [gx for gx in genres if gx[0] != g[0]]
+            sg = _pick(other, 0, SILVER_END) if other else None
+            if sg:
+                axes.append((ROLE_FLAVOR, AXIS_GENRE, sg[0]))
+                title_parts.append(_genre_name(sg[0], content_type))
+
+        return (axes, " ".join(title_parts))
+
+    def _build_rising(self, genres, keywords, countries, keyword_names, content_type, used_genres, used_keywords):
+        axes = []
+        title_parts = []
+
+        k = _pick(keywords, SILVER_START, SILVER_END, used_keywords)
+        if not k or k[0] not in keyword_names:
+            return None
+        axes.append((ROLE_ANCHOR, AXIS_KEYWORD, k[0]))
+        title_parts.append(_keyword_display(keyword_names[k[0]]))
+        used_keywords.add(k[0])
+
+        g = _pick(genres, SILVER_START, SILVER_END, used_genres)
+        if g:
+            axes.append((ROLE_FLAVOR, AXIS_GENRE, g[0]))
+            title_parts.append(_genre_name(g[0], content_type))
+
+        if countries:
+            c = _pick(countries, 0, SILVER_END)
+            if c:
+                axes.append((ROLE_FALLBACK, AXIS_COUNTRY, c[0]))
+
+        return (axes, " ".join(title_parts))
+
+    # --- Title generation via Gemini ---
+
+    async def _generate_titles(self, rows: list[tuple[list[tuple[str, str, Any]], str]]) -> list[RowDefinition]:
+        if not rows:
+            return []
+
+        prompts = [fallback for _, fallback in rows]
+        results = await asyncio.gather(
+            *[gemini_service.generate_content_async(p) for p in prompts],
+            return_exceptions=True,
+        )
+
+        final = []
+        for i, (axes, fallback) in enumerate(rows):
+            result = results[i]
+            title = result.strip() if isinstance(result, str) else fallback
+            final.append(RowDefinition(title=title, id=build_row_id(axes)))
+        return final
+
+    # --- LLM-based generation ---
+
+    async def _generate_with_llm(
+        self,
+        profile: TasteProfile,
+        genres: list[tuple[int, float]],
+        keywords: list[tuple[int, float]],
+        keyword_names: dict[int, str],
+        content_type: str,
+        api_key: str,
+    ) -> list[RowDefinition] | None:
+        summary = profile.interest_summary or "No summary available."
+        genre_map = movie_genres if content_type == "movie" else series_genres
+        valid_genres = ", ".join(f"{name} (ID: {gid})" for gid, name in genre_map.items())
+
+        profile_keywords = [name for kid, _ in keywords[:12] if (name := keyword_names.get(kid))]
+        kw_list = f"Themes they already like: {', '.join(profile_keywords)}. " if profile_keywords else ""
+        keyword_hint = kw_list + "You can also suggest new themes for discovery."
+
+        prompt = (
+            "Using the user's interest summary below, generate exactly 3 streaming "
+            f"collections for {content_type}. "
+            "Use genres (required), keywords, and country when relevant.\n\n"
+            f"Interest Summary:\n{summary}\n\n"
+            "Generate 3 rows:\n"
+            "1. THE CORE — strongest match to their taste\n"
+            "2. MIXED PREFERENCES — blend with variety\n"
+            "3. RISING STAR — discovery, adjacent to their taste\n\n"
+            f"Genres: use ONLY these TMDB Genre IDs: {valid_genres}\n"
+            f"Keywords: {keyword_hint}\n"
+            "Country: ISO 3166-1 code or null.\n"
+            "Each row: title (2-5 words), genres (list of IDs), "
+            "keywords (list of strings), country (string or null).\n"
+            "Output a JSON array of 3 objects."
+        )
+
+        data = await gemini_service.generate_structured_async(
+            prompt=prompt,
+            response_schema=list[LLMRowTheme],
+            system_instruction=(
+                "You are a creative film curator. Design 3 catalog rows from the user's interest summary. "
+                "Row 1: strong match. Row 2: blend + variety. Row 3: discovery. "
+                "Use genres, keywords, and country. Output valid JSON only."
+            ),
+            api_key=api_key,
+        )
+
+        if not data or not isinstance(data, list):
+            return None
+
+        profile_kw_map = {name.lower(): kid for kid, name in keyword_names.items()}
+        final = []
+
+        for item in data:
+            if isinstance(item, dict):
+                title, genre_ids, kw_names, country = (
+                    item.get("title", "Recommended"),
+                    item.get("genres", []),
+                    item.get("keywords", []),
+                    item.get("country"),
+                )
+            else:
+                title, genre_ids, kw_names, country = item.title, item.genres, item.keywords, item.country
+
+            axes: list[tuple[str, str, Any]] = []
+            for gid in genre_ids:
+                if int(gid) in genre_map:
+                    axes.append((ROLE_ANCHOR, AXIS_GENRE, int(gid)))
+
+            for kw_name in kw_names:
+                kid = await self._resolve_keyword_to_id(kw_name, profile_kw_map)
+                if kid is not None:
+                    axes.append((ROLE_FLAVOR, AXIS_KEYWORD, kid))
+
+            if country:
+                axes.append((ROLE_FLAVOR, AXIS_COUNTRY, country))
+
+            if axes:
+                final.append(RowDefinition(title=title, id=build_row_id(axes)))
+
+        return final if final else None
+
+    # --- Helpers ---
+
+    async def _resolve_keyword_names(self, keyword_ids: list[int]) -> dict[int, str]:
+        results = await asyncio.gather(
             *[self._get_keyword_name(kid) for kid in keyword_ids],
             return_exceptions=True,
         )
-        keyword_names = {
-            kid: name for kid, name in zip(keyword_ids, keyword_names_raw) if name and not isinstance(name, Exception)
-        }
-
-        return ExtractedFeatures(
-            genres=genres,
-            keywords=keywords,
-            countries=countries,
-            runtimes=runtimes,
-            creators=creators,
-            keyword_names=keyword_names,
-            content_type=content_type,
-        )
+        return {kid: name for kid, name in zip(keyword_ids, results) if isinstance(name, str) and name}
 
     async def _get_keyword_name(self, keyword_id: int) -> str | None:
-        """Fetch keyword name from TMDB."""
         try:
             data = await self.tmdb_service.get_keyword_details(keyword_id)
             return data.get("name")
         except Exception:
             return None
 
-    def _build_core_row(
-        self,
-        features: ExtractedFeatures,
-        exclude_genres: set[int] | None = None,
-        exclude_keywords: set[int] | None = None,
-    ) -> RowComponents | None:
-        """
-        Build 'The Core' row:
-        Anchor: GENRE (Gold)
-        Flavor: 1-2 KEYWORDS (Gold)
-        Fallback: RUNTIME (Gold/Silver)
-        """
-        exclude_genres = exclude_genres or set()
-        exclude_keywords = exclude_keywords or set()
-        builder = RowBuilder(features)
-
-        # 1. Anchor: Genre
-        available_genres = [g for g in features.genres if g[0] not in exclude_genres]
-        genres = sample_from_gold(available_genres, 1) if available_genres else sample_from_gold(features.genres, 1)
-        if not genres:
-            return None
-        builder.add_axis(AXIS_GENRE, genres[0][0], AxisRole.ANCHOR, 1.0)
-
-        # 2. Flavor: 1-2 Keywords
-        available_keywords = [k for k in features.keywords if k[0] not in exclude_keywords]
-        keywords = sample_from_gold(available_keywords, random.randint(1, 2)) if available_keywords else []
-        for k_id, _ in keywords:
-            builder.add_axis(AXIS_KEYWORD, k_id, AxisRole.FLAVOR, 0.7)
-
-        # 3. Fallback: Runtime
-        if features.runtimes:
-            runtime = random.choice(features.runtimes[:2])
-            builder.add_axis(AXIS_RUNTIME, runtime[0], AxisRole.FALLBACK, 0.3)
-
-        row = builder.build()
-        if row:
-            row.explanation = "The Core: Based on your absolute favorite genres and recurring themes."
-        return row
-
-    def _build_blend_row(
-        self,
-        features: ExtractedFeatures,
-        exclude_genres: set[int] | None = None,
-        exclude_keywords: set[int] | None = None,
-    ) -> RowComponents | None:
-        """
-        Build 'The Blend' row:
-        Anchor: GENRE (Gold)
-        Flavor: COUNTRY or secondary GENRE (Gold/Silver)
-        """
-        exclude_genres = exclude_genres or set()
-        builder = RowBuilder(features)
-
-        # 1. Anchor: Genre
-        available_genres = [g for g in features.genres if g[0] not in exclude_genres]
-        genres = sample_from_gold(available_genres, 1) if available_genres else sample_from_gold(features.genres, 1)
-        if not genres:
-            return None
-        builder.add_axis(AXIS_GENRE, genres[0][0], AxisRole.ANCHOR, 1.0)
-
-        # 2. Flavor: Country or Secondary Genre
-        flavor_type = random.choice([AXIS_COUNTRY, AXIS_GENRE])
-
-        if flavor_type == AXIS_COUNTRY and features.countries:
-            country = sample_from_gold_silver(features.countries, 1)
-            builder.add_axis(AXIS_COUNTRY, country[0][0], AxisRole.FLAVOR, 0.7)
-        elif flavor_type == AXIS_GENRE:
-            other_genres = [g for g in features.genres if g[0] != genres[0][0]]
-            if other_genres:
-                sec_genre = sample_from_gold_silver(other_genres, 1)
-                builder.add_axis(AXIS_GENRE, sec_genre[0][0], AxisRole.FLAVOR, 0.7)
-
-        row = builder.build()
-        if row:
-            row.explanation = "The Blend: Mixing your top genres with international flavor or secondary interests."
-        return row
-
-    def _build_rising_star_row(
-        self,
-        features: ExtractedFeatures,
-        exclude_genres: set[int] | None = None,
-        exclude_keywords: set[int] | None = None,
-    ) -> RowComponents | None:
-        """
-        Build 'The Rising Star' row:
-        Anchor: recent KEYWORD (Silver)
-        Flavor: GENRE (Silver)
-        Fallback: COUNTRY (Gold/Silver)
-        """
-        exclude_genres = exclude_genres or set()
-        exclude_keywords = exclude_keywords or set()
-        builder = RowBuilder(features)
-
-        # 1. Anchor: Recent Keyword (Sampling from Silver to promote exploration)
-        available_keywords = [k for k in features.keywords if k[0] not in exclude_keywords]
-        keywords = sample_from_silver(available_keywords, 1) if available_keywords else []
-        if keywords:
-            builder.add_axis(AXIS_KEYWORD, keywords[0][0], AxisRole.ANCHOR, 1.0)
-
-        # If we couldn't add an anchor, this row fails
-        if not builder.components.axes:
-            return None
-
-        # 2. Flavor: Genre (Silver)
-        available_genres = [g for g in features.genres if g[0] not in exclude_genres]
-        genres = sample_from_silver(available_genres, 1) if available_genres else []
-        if genres:
-            builder.add_axis(AXIS_GENRE, genres[0][0], AxisRole.FLAVOR, 0.7)
-
-        # 3. Fallback: Country
-        if features.countries:
-            country = sample_from_gold_silver(features.countries, 1)
-            builder.add_axis(AXIS_COUNTRY, country[0][0], AxisRole.FALLBACK, 0.3)
-
-        row = builder.build()
-        if row:
-            row.explanation = "The Rising Star: Exploring emerging interests and newer themes in your history."
-        return row
-
-    def _build_signature_rows(self, features: ExtractedFeatures) -> list[RowComponents]:
-        """Generate dynamic signature recipes from user history."""
-        signature_rows = []
-
-        # 1. Top genre × dominant keyword
-        if features.genres and features.keywords:
-            builder = RowBuilder(features)
-            builder.add_axis(AXIS_GENRE, features.genres[0][0], AxisRole.ANCHOR, 1.0)
-            builder.add_axis(AXIS_KEYWORD, features.keywords[0][0], AxisRole.FLAVOR, 0.7)
-            row = builder.build()
-            if row:
-                row.explanation = "Signature: Your #1 genre paired with your most frequent theme."
-                signature_rows.append(row)
-
-        # 2. Top genre × preferred runtime
-        if features.genres and features.runtimes:
-            builder = RowBuilder(features)
-            builder.add_axis(AXIS_GENRE, features.genres[0][0], AxisRole.ANCHOR, 1.0)
-            builder.add_axis(AXIS_RUNTIME, features.runtimes[0][0], AxisRole.FLAVOR, 0.7)
-            row = builder.build()
-            if row:
-                row.explanation = "Signature: Favorite genre fit for your preferred watch duration."
-                signature_rows.append(row)
-
-        return signature_rows
-
-    async def _generate_titles(self, rows_data: list[RowComponents]) -> list[RowDefinition]:
-        """Generate titles for tiered sampling rows via server's default Gemini model."""
-        if not rows_data:
-            return []
-
-        # Build prompts and fire Gemini requests (uses server key + default model)
-        prompts = [row.build_prompt() for row in rows_data]
-        gemini_tasks = [gemini_service.generate_content_async(p) for p in prompts]
-        results = await asyncio.gather(*gemini_tasks, return_exceptions=True)
-
-        final_rows = []
-        for i, row in enumerate(rows_data):
-            result = results[i]
-
-            # Determine title
-            if isinstance(result, Exception):
-                logger.warning(f"Gemini failed for row {i}: {result}")
-                title = row.build_fallback()
-            elif result:
-                title = result.strip()
-            else:
-                title = row.build_fallback()
-
-            # Build the row ID
-            row_id = build_row_id(row.axes)
-
-            final_rows.append(
-                RowDefinition(
-                    title=title,
-                    id=row_id,
-                    **row.to_dict(),
-                )
-            )
-
-        return final_rows
-
     async def _resolve_keyword_to_id(self, kw_name: str, profile_kw_map: dict[str, int]) -> int | None:
-        """Resolve a keyword name to TMDB ID: profile first, then TMDB search (for discovery)."""
         kw_lower = str(kw_name).strip().lower()
         if not kw_lower:
             return None
@@ -562,97 +380,3 @@ class RowGeneratorService:
         except Exception:
             pass
         return None
-
-    async def _generate_rows_with_llm(
-        self,
-        profile: TasteProfile,
-        features: ExtractedFeatures,
-        content_type: str,
-        api_key: str,
-    ) -> list[RowDefinition] | None:
-        """Generate rows from the user's interest summary; balance personalization with discovery."""
-        try:
-            summary = profile.interest_summary or "No summary available."
-
-            current_genre_map = movie_genres if content_type == "movie" else series_genres
-            valid_genre_list = ", ".join([f"{name} (ID: {gid})" for gid, name in current_genre_map.items()])
-
-            profile_keywords = [name for k_id, _ in features.keywords[:12] if (name := features.get_keyword_name(k_id))]
-            keyword_hint = (
-                (
-                    f"Themes they already like (you can use these): {', '.join(profile_keywords)}. "
-                    if profile_keywords
-                    else ""
-                )
-                + "You can also suggest new themes for discovery—especially for Rising Star—"
-                "e.g. adjacent genres or topics they might not have tried yet. We will resolve keywords."
-            )
-
-            prompt = (
-                "Using only the user's interest summary below, generate exactly 3 streaming collections for"
-                f" {content_type}. Use genres (required), keywords, and country when relevant.\n\nInterest"
-                f" Summary:\n{summary}\n\nGenerate 3 rows in this order:\n1. THE CORE — What they will love"
-                " most: strongest match to their taste (genres + keywords + country if relevant).\n2. MIXED"
-                " PREFERENCES — Blend of their tastes with more variety (genres + keywords + country if"
-                " relevant).\n3. RISING STAR — Discovery: suggest themes they might not have explored yet but"
-                " would likely enjoy (adjacent to their taste, or natural next step). Use genres + keywords +"
-                " country; openness to new content here.\n\nRules:\n- Genres: use ONLY these TMDB Genre IDs:"
-                f" {valid_genre_list}\n- Keywords: {keyword_hint}\n- Country: ISO 3166-1 code (e.g. US, KR, JP)"
-                " or null when relevant.\n- Each row: title (2-5 words), genres (list of IDs), keywords (list"
-                " of strings), country (string or null).\n- Output a JSON array of 3 objects."
-            )
-
-            data = await gemini_service.generate_structured_async(
-                prompt=prompt,
-                response_schema=list[LLMRowTheme],
-                system_instruction=(
-                    "You are a creative film curator. Design 3 catalog rows from the user's interest summary."
-                    " Row 1 (The Core): strong match. Row 2 (Mixed): blend + variety. Row 3 (Rising Star):"
-                    " discovery—suggest new content they would enjoy, not just more of the same. Use genres,"
-                    " keywords, and country. Output valid JSON only."
-                ),
-                api_key=api_key,
-            )
-
-            if not data or not isinstance(data, list):
-                return None
-
-            final_rows = []
-            profile_kw_map = {name.lower(): kid for kid, name in features.keyword_names.items()}
-
-            for item in data:
-                if isinstance(item, dict):
-                    title = item.get("title", "Recommended")
-                    genre_ids = item.get("genres", [])
-                    kw_names = item.get("keywords", [])
-                    country = item.get("country")
-                else:
-                    title = item.title
-                    genre_ids = item.genres
-                    kw_names = item.keywords
-                    country = item.country
-
-                builder = RowBuilder(features)
-
-                for gid in genre_ids:
-                    if int(gid) in current_genre_map:
-                        builder.add_axis(AXIS_GENRE, int(gid), AxisRole.ANCHOR)
-
-                for kw_name in kw_names:
-                    kid = await self._resolve_keyword_to_id(kw_name, profile_kw_map)
-                    if kid is not None:
-                        builder.add_axis(AXIS_KEYWORD, kid, AxisRole.FLAVOR)
-
-                if country:
-                    builder.add_axis(AXIS_COUNTRY, country, AxisRole.FLAVOR)
-
-                row_comp = builder.build()
-                if row_comp and row_comp.axes:
-                    row_id = build_row_id(row_comp.axes)
-                    final_rows.append(RowDefinition(title=title, id=row_id, axes=row_comp.axes))
-
-            return final_rows if final_rows else None
-
-        except Exception as e:
-            logger.warning(f"Error in _generate_rows_with_llm: {e}")
-            return None
