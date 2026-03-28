@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from loguru import logger
 
 from app.core.config import settings
-from app.core.constants import DEFAULT_CATALOG_LIMIT, DEFAULT_MIN_ITEMS
+from app.core.constants import DEFAULT_CATALOG_LIMIT
 from app.core.security import redact_token
 from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.models.library import LibraryCollection
@@ -20,7 +20,6 @@ from app.services.recommendation.creators import CreatorsService
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
-from app.services.recommendation.utils import pad_to_min
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
@@ -155,8 +154,6 @@ class CatalogService:
                     ctx.auth_key,
                 )
 
-            whitelist = await profile_service.get_genre_whitelist(profile, content_type) if profile else set()
-
             recommendations = await self._get_recommendations(
                 catalog_id=catalog_id,
                 content_type=content_type,
@@ -164,23 +161,10 @@ class CatalogService:
                 profile=profile,
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
-                whitelist=whitelist,
                 library_items=ctx.library,
                 limit=DEFAULT_CATALOG_LIMIT,
                 user_settings=ctx.user_settings,
             )
-
-            # Pad if needed to meet minimum items
-            if recommendations and len(recommendations) < DEFAULT_MIN_ITEMS:
-                recommendations = await pad_to_min(
-                    content_type,
-                    recommendations,
-                    DEFAULT_MIN_ITEMS,
-                    services["tmdb"],
-                    ctx.user_settings,
-                    watched_tmdb,
-                    watched_imdb,
-                )
 
             logger.info(f"Returning {len(recommendations)} items for {content_type}")
 
@@ -283,7 +267,6 @@ class CatalogService:
         profile: TasteProfile | None,
         watched_tmdb: set[int],
         watched_imdb: set[str],
-        whitelist: set[int],
         library_items: LibraryCollection,
         limit: int,
         user_settings: UserSettings | None = None,
@@ -299,7 +282,6 @@ class CatalogService:
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
                 limit=limit,
-                whitelist=whitelist,
             )
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
 
@@ -313,7 +295,6 @@ class CatalogService:
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
                 limit=limit,
-                whitelist=whitelist,
             )
             logger.info(f"Found {len(recommendations)} recommendations for theme {catalog_id}")
 
@@ -358,7 +339,6 @@ class CatalogService:
                 content_type=content_type,
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
-                whitelist=whitelist,
                 limit=limit,
                 item_type=item_type,
                 profile=profile,

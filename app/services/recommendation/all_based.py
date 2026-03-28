@@ -38,7 +38,6 @@ class AllBasedService:
         content_type: str,
         watched_tmdb: set[int],
         watched_imdb: set[str],
-        whitelist: set[int] | None = None,
         limit: int = 20,
         item_type: str = "loved",
         profile: TasteProfile | None = None,
@@ -58,7 +57,6 @@ class AllBasedService:
             content_type: Content type (movie/series)
             watched_tmdb: Set of watched TMDB IDs
             watched_imdb: Set of watched IMDB IDs
-            whitelist: Genre whitelist
             limit: Number of items to return
             item_type: "loved" or "liked"
             profile: Optional profile for scoring (if None, uses popularity only)
@@ -138,15 +136,13 @@ class AllBasedService:
 
         # Filter by genres and watched items
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
-        whitelist = whitelist or set()
-        filtered = filter_by_genres(candidates, watched_tmdb, whitelist, excluded_ids)
+        filtered = filter_by_genres(candidates, watched_tmdb, excluded_ids)
 
         logger.info(f"Filtered {len(filtered)} candidates")
 
         # Score with profile if available
         scored = []
         if profile:
-            rotation_seed = RecommendationScoring.generate_rotation_seed()  # Daily rotation for fresh recommendations
             for item in filtered:
                 try:
                     final_score = RecommendationScoring.calculate_final_score(
@@ -154,12 +150,7 @@ class AllBasedService:
                         profile=profile,
                         scorer=self.scorer,
                         mtype=mtype,
-                        rotation_seed=rotation_seed,
                     )
-
-                    # Apply genre multiplier (if whitelist available)
-                    genre_mult = RecommendationFiltering.get_genre_multiplier(item.get("genre_ids"), whitelist)
-                    final_score *= genre_mult
 
                     scored.append((final_score, item))
                 except Exception as e:

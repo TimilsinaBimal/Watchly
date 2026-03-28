@@ -53,7 +53,6 @@ class TasteProfile(BaseModel):
         default_factory=set,
         description="Set of processed item IDs to prevent double counting",
     )
-    interest_summary: str | None = Field(default=None, description="LLM-generated description of user interests")
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}

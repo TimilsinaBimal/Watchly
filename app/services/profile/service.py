@@ -5,7 +5,6 @@ from loguru import logger
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
 from app.services.profile.builder import ProfileBuilder
-from app.services.profile.constants import GENRE_WHITELIST_LIMIT
 from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
 from app.services.profile.vectorizer import ItemVectorizer
@@ -136,15 +135,3 @@ class ProfileService:
         )
         await user_cache.set_profile_and_watched_sets(token, content_type, profile, watched_tmdb, watched_imdb)
         return profile, watched_tmdb, watched_imdb
-
-    async def get_genre_whitelist(self, profile: TasteProfile, content_type: str) -> set[int]:
-        """Get genre whitelist from the user's top genres in the profile."""
-        try:
-            if not profile:
-                return set()
-
-            top_genres = profile.get_top_genres(limit=GENRE_WHITELIST_LIMIT)
-            return {int(genre_id) for genre_id, _ in top_genres}
-        except Exception as e:
-            logger.warning(f"Failed to build genre whitelist for {content_type}: {e}")
-            return set()

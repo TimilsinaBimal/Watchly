@@ -171,33 +171,6 @@ class RecommendationFiltering:
             return [int(g) for g in user_settings.excluded_series_genres]
         return []
 
-    @staticmethod
-    def get_genre_multiplier(genre_ids: list[int] | None, whitelist: set[int]) -> float:
-        """Calculate a score multiplier based on genre preference. Blocks animation if not preferred."""
-        if not whitelist:
-            return 1.0
-
-        gids = set(genre_ids or [])
-        if not gids:
-            return 1.0
-
-        # If it has at least one preferred genre, full score
-        if gids & whitelist:
-            return 1.0
-
-        # Otherwise, soft penalty to prioritize whitelist items without blocking variety
-        return 0.4
-
-    @staticmethod
-    def passes_top_genre_whitelist(genre_ids: list[int] | None, whitelist: set[int]) -> bool:
-        """Check if an item's genres match the user's top genre whitelist (Softened)."""
-        if not whitelist:
-            return True
-        gids = set(genre_ids or [])
-        if not gids:
-            return True
-        return True
-
 
 # --- Standalone filtering functions (moved from utils.py) ---
 
@@ -217,11 +190,9 @@ def filter_watched_by_imdb(enriched: list[dict[str, Any]], watched_imdb: set[str
 def filter_by_genres(
     items: list[dict[str, Any]],
     watched_tmdb: set[int],
-    whitelist: set[int] | None = None,
     excluded_ids: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     """Filter items by watched set and excluded genres."""
-    whitelist = whitelist or set()
     excluded_ids = excluded_ids or []
     filtered = []
 

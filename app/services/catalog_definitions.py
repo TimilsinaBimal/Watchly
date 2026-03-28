@@ -8,7 +8,6 @@ from loguru import logger
 from app.core.constants import DISCOVER_ONLY_EXTRA
 from app.core.settings import CatalogConfig, UserSettings
 from app.models.library import LibraryCollection
-from app.services.interest_summary import interest_summary_service
 from app.services.profile.service import ProfileService
 from app.services.row_generator import RowGeneratorService
 from app.services.tmdb.service import get_tmdb_service
@@ -240,15 +239,6 @@ class DynamicCatalogService:
         if not profile:
             logger.warning(f"Failed to build profile for {media_type}")
             return media_type, []
-
-        if gemini_api_key and token:
-            try:
-                summary = await interest_summary_service.generate_summary(profile, gemini_api_key)
-                if summary:
-                    profile.interest_summary = summary
-                    logger.info(f"Interest summary generated for {media_type}: " f"{summary[:80]}...")
-            except Exception as e:
-                logger.warning(f"Failed to generate interest summary for {media_type}: {e}")
 
         if token:
             try:

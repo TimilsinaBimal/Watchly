@@ -21,7 +21,7 @@ from app.services.recommendation.filtering import (
     filter_watched_by_imdb,
 )
 from app.services.recommendation.metadata import RecommendationMetadata
-from app.services.recommendation.scoring import DailyRotation, RecommendationScoring
+from app.services.recommendation.scoring import RecommendationScoring
 from app.services.recommendation.utils import content_type_to_mtype, resolve_tmdb_id
 from app.services.simkl import simkl_service
 from app.services.tmdb.service import TMDBService
@@ -115,7 +115,6 @@ class TopPicksService:
 
         #  Score all candidates with profile
         scored_candidates = []
-        rotation_seed = RecommendationScoring.generate_rotation_seed()  # Daily rotation for fresh recommendations
         for item in filtered_candidates:
             try:
                 final_score = RecommendationScoring.calculate_final_score(
@@ -123,7 +122,6 @@ class TopPicksService:
                     profile=profile,
                     scorer=self.scorer,
                     mtype=mtype,
-                    rotation_seed=rotation_seed,
                 )
                 scored_candidates.append((final_score, item))
             except Exception as e:
@@ -152,15 +150,13 @@ class TopPicksService:
         # Final filter
         filtered = filter_watched_by_imdb(enriched, watched_imdb)
 
-        rotated = DailyRotation.rotate_items(filtered, rotation_seed)
-
         elapsed_time = time.time() - start_time
         logger.info(
-            f"Top picks complete: {len(rotated)} items returned in {elapsed_time:.2f}s "
+            f"Top picks complete: {len(filtered)} items returned in {elapsed_time:.2f}s "
             f"(target: {limit}, candidates: {len(all_candidates)}, scored: {len(scored_candidates)})"
         )
 
-        return rotated[:MAX_CATALOG_ITEMS]
+        return filtered[:MAX_CATALOG_ITEMS]
 
     async def _fetch_recommendations_from_top_items(
         self,

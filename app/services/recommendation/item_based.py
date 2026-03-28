@@ -31,7 +31,6 @@ class ItemBasedService:
         watched_tmdb: set[int] | None = None,
         watched_imdb: set[str] | None = None,
         limit: int = 20,
-        whitelist: set[int] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Get recommendations for a specific item.
@@ -40,8 +39,7 @@ class ItemBasedService:
         1. Fetch similar + recommendations from TMDB (2 pages each)
         2. Filter watched items
         3. Filter excluded genres
-        4. Apply genre whitelist
-        5. Return top N
+        4. Return top N
 
         Args:
             item_id: Item ID (tt... or tmdb:...)
@@ -76,7 +74,7 @@ class ItemBasedService:
 
         # Filter by genres and watched items
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
-        filtered = filter_by_genres(candidates, watched_tmdb, whitelist, excluded_ids)
+        filtered = filter_by_genres(candidates, watched_tmdb, excluded_ids)
 
         # Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(

@@ -1,6 +1,4 @@
-import hashlib
 import math
-import random
 from collections.abc import Callable
 from typing import Any
 
@@ -28,34 +26,6 @@ class RecommendationScoring:
         if max_v == min_v:
             return 0.0
         return max(0.0, min(1.0, (value - min_v) / (max_v - min_v)))
-
-    @staticmethod
-    def stable_epsilon(tmdb_id: int, seed: str) -> float:
-        """Generate a stable tiny epsilon to break ties deterministically."""
-        if not seed:
-            return 0.0
-        h = hashlib.md5(f"{seed}:{tmdb_id}".encode()).hexdigest()
-        eps = int(h[-6:], 16) % 1000
-        return eps / 1_000_000.0
-
-    @staticmethod
-    def generate_rotation_seed(token: str | None = None) -> str:
-        """
-        Generate a daily rotation seed for deterministic but fresh recommendations.
-
-        Args:
-            token: Optional user token for per-user variation.
-                   If None, uses a global seed (same for all users on same day).
-
-        Returns:
-            A seed string like "abc123:2026-01-15"
-        """
-        from datetime import date
-
-        today = date.today().isoformat()
-        if token:
-            return f"{token}:{today}"
-        return f"global:{today}"
 
     @staticmethod
     def get_recency_multiplier_fn(
@@ -130,8 +100,7 @@ class RecommendationScoring:
         profile: Any,
         scorer: Any,
         mtype: str,
-        rotation_seed: str | None = None,
-    ) -> float:  # noqa: E501
+    ) -> float:
         """
         Calculate final recommendation score combining profile similarity and quality.
 
@@ -140,12 +109,9 @@ class RecommendationScoring:
             profile: User taste profile
             scorer: ProfileScorer instance
             mtype: Media type (movie/tv) to determine minimum rating
-            rotation_seed: Optional seed for daily rotation (e.g., "token:2026-01-15").
-                          When provided, adds a tiny epsilon for deterministic tie-breaking
-                          that changes daily, making recommendations feel fresh.
 
         Returns:
-            Final combined score (0-1 range, with optional epsilon for rotation)
+            Final combined score (0-1 range)
         """
         # Score with profile
         profile_score = scorer.score_item(item, profile)
@@ -169,23 +135,4 @@ class RecommendationScoring:
         # light boost for high-confidence items (no penalties!)
         vote_count = item.get("vote_count", 0)
         popularity = item.get("popularity", 0)
-        final_score = RecommendationScoring.apply_quality_adjustments(base_score, wr, vote_count, popularity)
-        # Apply daily rotation epsilon for tie-breaking (if seed provided)
-        if rotation_seed:
-            tmdb_id = item.get("id", 0)
-            epsilon = RecommendationScoring.stable_epsilon(tmdb_id, rotation_seed)
-            final_score += epsilon
-
-        return final_score
-
-
-class DailyRotation:
-    """Utilities for rotating recommendations daily while maintaining quality."""
-
-    @staticmethod
-    def rotate_items(items: list, seed: str) -> list:
-        """Deterministically shuffle items based on daily seed for freshness."""
-        rng = random.Random(seed)
-        shuffled = items.copy()
-        rng.shuffle(shuffled)
-        return shuffled
+        return RecommendationScoring.apply_quality_adjustments(base_score, wr, vote_count, popularity)

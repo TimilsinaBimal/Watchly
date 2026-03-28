@@ -14,7 +14,6 @@ from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import (
     RecommendationFiltering,
     apply_discover_filters,
-    filter_by_genres,
     filter_watched_by_imdb,
 )
 from app.services.recommendation.metadata import RecommendationMetadata
@@ -48,7 +47,6 @@ class ThemeBasedService:
         watched_tmdb: set[int] | None = None,
         watched_imdb: set[str] | None = None,
         limit: int = 20,
-        whitelist: set[int] | None = None,
     ) -> list[dict[str, Any]]:
         """Get recommendations for a role-based theme."""
         watched_tmdb = watched_tmdb or set()
@@ -148,7 +146,6 @@ class ThemeBasedService:
 
         # 5. Weighted Scoring
         scored = []
-        rotation_seed = RecommendationScoring.generate_rotation_seed()
         mtype = content_type_to_mtype(content_type)
 
         for item in candidates:
@@ -162,7 +159,6 @@ class ThemeBasedService:
                     profile=profile,
                     scorer=self.scorer,
                     mtype=mtype,
-                    rotation_seed=rotation_seed,
                 )
             else:
                 base_score = RecommendationScoring.normalize(item.get("vote_average", 0))
@@ -387,34 +383,3 @@ class ThemeBasedService:
             candidates.extend(res.get("results", []))
 
         return candidates
-
-    def _filter_candidates(
-        self,
-        candidates: list[dict[str, Any]],
-        watched_tmdb: set[int],
-        whitelist: set[int],
-        existing_ids: set[int] | None = None,
-    ) -> list[dict[str, Any]]:
-        """
-        Filter candidates by watched items and genre whitelist.
-
-        Args:
-            candidates: List of candidate items
-            watched_tmdb: Set of watched TMDB IDs
-            whitelist: Set of genre IDs in whitelist
-            existing_ids: Set of IDs to exclude (for deduplication)
-
-        Returns:
-            Filtered list of items
-        """
-        existing = existing_ids or set()
-        # First filter by genres (includes watched_tmdb check)
-        filtered = filter_by_genres(candidates, watched_tmdb, whitelist, None)
-        # Then deduplicate
-        result = []
-        for item in filtered:
-            item_id = item.get("id")
-            if item_id and item_id not in existing:
-                result.append(item)
-                existing.add(item_id)
-        return result

@@ -295,19 +295,28 @@ class RowGeneratorService:
         content_type: str,
         api_key: str,
     ) -> list[RowDefinition] | None:
-        summary = profile.interest_summary or "No summary available."
         genre_map = movie_genres if content_type == "movie" else series_genres
         valid_genres = ", ".join(f"{name} (ID: {gid})" for gid, name in genre_map.items())
 
+        # Build profile context from actual data
+        top_genre_names = [genre_map.get(gid, f"ID:{gid}") for gid, _ in genres[:5]]
         profile_keywords = [name for kid, _ in keywords[:12] if (name := keyword_names.get(kid))]
-        kw_list = f"Themes they already like: {', '.join(profile_keywords)}. " if profile_keywords else ""
-        keyword_hint = kw_list + "You can also suggest new themes for discovery."
+        top_countries = profile.get_top_countries(limit=2)
+        country_list = [c for c, _ in top_countries] if top_countries else []
+
+        profile_context = f"Top genres: {', '.join(top_genre_names)}."
+        if profile_keywords:
+            profile_context += f" Themes they enjoy: {', '.join(profile_keywords)}."
+        if country_list:
+            profile_context += f" Preferred countries: {', '.join(country_list)}."
+
+        keyword_hint = "You can suggest themes from the user's preferences or new ones for discovery."
 
         prompt = (
-            "Using the user's interest summary below, generate exactly 3 streaming "
+            "Based on the user's taste profile below, generate exactly 3 streaming "
             f"collections for {content_type}. "
             "Use genres (required), keywords, and country when relevant.\n\n"
-            f"Interest Summary:\n{summary}\n\n"
+            f"User Profile:\n{profile_context}\n\n"
             "Generate 3 rows:\n"
             "1. THE CORE — strongest match to their taste\n"
             "2. MIXED PREFERENCES — blend with variety\n"
