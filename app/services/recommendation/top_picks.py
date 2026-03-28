@@ -13,6 +13,7 @@ from app.models.taste_profile import TasteProfile
 from app.services.profile.constants import TOP_PICKS_CREATOR_CAP, TOP_PICKS_GENRE_CAP
 from app.services.profile.sampling import SmartSampler
 from app.services.profile.scorer import ProfileScorer
+from app.services.profile.scoring import ScoringService
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.rotation import DailyRotation
@@ -24,7 +25,6 @@ from app.services.recommendation.utils import (
     filter_watched_by_imdb,
     resolve_tmdb_id,
 )
-from app.services.scoring import ScoringService
 from app.services.simkl import simkl_service
 from app.services.tmdb.service import TMDBService
 

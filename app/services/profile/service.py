@@ -7,9 +7,9 @@ from app.models.taste_profile import TasteProfile
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.constants import GENRE_WHITELIST_LIMIT
 from app.services.profile.sampling import SmartSampler
+from app.services.profile.scoring import ScoringService
 from app.services.profile.vectorizer import ItemVectorizer
 from app.services.recommendation.filtering import RecommendationFiltering
-from app.services.scoring import ScoringService
 from app.services.tmdb.service import get_tmdb_service
 from app.services.user_cache import user_cache
 

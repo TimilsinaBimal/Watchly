@@ -1,7 +1,7 @@
 from app.models.library import LibraryCollection
 from app.models.scoring import ScoredItem
 from app.services.profile.constants import SMART_SAMPLING_MAX_ITEMS
-from app.services.scoring import ScoringService
+from app.services.profile.scoring import ScoringService
 
 
 class SmartSampler:

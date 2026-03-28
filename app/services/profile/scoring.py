@@ -40,28 +40,6 @@ class ScoringService:
             source_type="loved" if item.is_loved else ("liked" if item.is_liked else "watched"),
         )
 
-    def calculate_score(
-        self,
-        item: dict | StremioLibraryItem,
-        is_loved: bool = False,
-        is_liked: bool = False,
-    ) -> float:
-        """
-        Backwards compatible method to just get the float score.
-        Accepts either a raw dict or a StremioLibraryItem.
-        """
-        if isinstance(item, dict):
-            # Temporarily inject flags if passed separately (legacy support)
-            if "_is_loved" not in item:
-                item["_is_loved"] = is_loved
-            if "_is_liked" not in item:
-                item["_is_liked"] = is_liked
-            model_item = StremioLibraryItem(**item)
-        else:
-            model_item = item
-
-        return self._calculate_score_components(model_item)["final_score"]
-
     def _calculate_score_components(self, item: StremioLibraryItem) -> dict:
         """Internal logic to calculate score components."""
         state = item.state
@@ -160,9 +138,6 @@ class ScoringService:
         added_to_library_score = 0.0
         if not item.temp and not item.removed:
             added_to_library_score = 100.0
-        # if item.removed:
-        #     # should we penalize for removed items?
-        #     added_to_library_score = -50.0
 
         # Calculate Final Score
         final_score = (
