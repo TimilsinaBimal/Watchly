@@ -62,9 +62,6 @@ def _clean_meta(meta: dict) -> dict | None:
 
 
 class CatalogService:
-    def __init__(self):
-        pass
-
     async def get_catalog(
         self, token: str, content_type: str, catalog_id: str
     ) -> tuple[dict[str, Any], dict[str, Any]]:
