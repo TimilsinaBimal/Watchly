@@ -1,6 +1,6 @@
 from loguru import logger
 
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.gemini import gemini_service
 from app.services.profile.constants import GENRE_MAP
 

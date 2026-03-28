@@ -5,8 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.models.scoring import ScoredItem
-from app.models.taste_profile import TasteProfile
+from app.models.profile import ScoredItem, TasteProfile
 from app.services.profile.constants import (
     CAP_CAST,
     CAP_COUNTRY,

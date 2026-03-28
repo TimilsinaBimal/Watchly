@@ -9,7 +9,7 @@ from loguru import logger
 from app.core.constants import DEFAULT_CATALOG_LIMIT, MAX_CATALOG_ITEMS
 from app.core.settings import UserSettings
 from app.models.library import LibraryCollection
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.profile.constants import TOP_PICKS_CREATOR_CAP, TOP_PICKS_GENRE_CAP
 from app.services.profile.sampling import SmartSampler
 from app.services.profile.scorer import ProfileScorer

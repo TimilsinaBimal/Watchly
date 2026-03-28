@@ -11,7 +11,7 @@ from app.core.constants import DEFAULT_CATALOG_LIMIT, DEFAULT_MIN_ITEMS
 from app.core.security import redact_token
 from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.models.library import LibraryCollection
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.catalog_updater import catalog_updater
 from app.services.context import UserContext, extract_settings, load_user_context
 from app.services.profile.service import ProfileService

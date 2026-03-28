@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 
 from loguru import logger
 
-from app.models.scoring import ScoredItem, StremioLibraryItem
+from app.models.library import StremioLibraryItem
+from app.models.profile import ScoredItem
 
 
 class ScoringService:

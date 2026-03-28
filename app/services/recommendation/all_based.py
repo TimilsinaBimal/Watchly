@@ -5,7 +5,7 @@ from loguru import logger
 
 from app.core.settings import UserSettings
 from app.models.library import LibraryCollection
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.profile.scorer import ProfileScorer
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.metadata import RecommendationMetadata

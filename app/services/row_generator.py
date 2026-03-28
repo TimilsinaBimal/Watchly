@@ -14,7 +14,7 @@ from typing import Any
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.gemini import gemini_service
 from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres

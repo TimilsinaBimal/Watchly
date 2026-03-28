@@ -3,7 +3,7 @@ from typing import Any
 from loguru import logger
 
 from app.models.library import LibraryCollection
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.constants import GENRE_WHITELIST_LIMIT
 from app.services.profile.sampling import SmartSampler

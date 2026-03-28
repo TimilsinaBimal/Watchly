@@ -2,7 +2,7 @@ import math
 from datetime import datetime, timezone
 from typing import Literal
 
-from app.models.scoring import ScoredItem
+from app.models.profile import ScoredItem
 from app.services.profile.constants import (
     EVIDENCE_WEIGHT_ADDED,
     EVIDENCE_WEIGHT_LIKED,

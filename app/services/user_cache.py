@@ -8,7 +8,7 @@ from loguru import logger
 from app.core.constants import CATALOG_KEY, LIBRARY_ITEMS_KEY, PROFILE_KEY, WATCHED_SETS_KEY
 from app.core.security import redact_token
 from app.models.library import LibraryCollection
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.redis_service import redis_service
 
 

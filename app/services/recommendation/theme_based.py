@@ -3,7 +3,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.profile.constants import (
     RUNTIME_BUCKET_MEDIUM_MAX_MOVIE,
     RUNTIME_BUCKET_MEDIUM_MAX_SERIES,
