@@ -7,16 +7,15 @@ from app.core.settings import UserSettings
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
 from app.services.profile.scorer import ProfileScorer
-from app.services.recommendation.filtering import RecommendationFiltering
-from app.services.recommendation.metadata import RecommendationMetadata
-from app.services.recommendation.scoring import RecommendationScoring
-from app.services.recommendation.utils import (
-    content_type_to_mtype,
+from app.services.recommendation.filtering import (
+    RecommendationFiltering,
     filter_by_genres,
     filter_items_by_settings,
     filter_watched_by_imdb,
-    resolve_tmdb_id,
 )
+from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.scoring import RecommendationScoring
+from app.services.recommendation.utils import content_type_to_mtype, resolve_tmdb_id
 from app.services.simkl import simkl_service
 from app.services.tmdb.service import TMDBService
 

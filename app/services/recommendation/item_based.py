@@ -3,15 +3,14 @@ from typing import Any
 
 from loguru import logger
 
-from app.services.recommendation.filtering import RecommendationFiltering
-from app.services.recommendation.metadata import RecommendationMetadata
-from app.services.recommendation.utils import (
-    content_type_to_mtype,
+from app.services.recommendation.filtering import (
+    RecommendationFiltering,
     filter_by_genres,
     filter_items_by_settings,
     filter_watched_by_imdb,
-    resolve_tmdb_id,
 )
+from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.utils import content_type_to_mtype, resolve_tmdb_id
 from app.services.simkl import simkl_service
 from app.services.tmdb.service import TMDBService
 

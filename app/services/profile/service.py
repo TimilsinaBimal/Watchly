@@ -6,7 +6,7 @@ from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.constants import GENRE_WHITELIST_LIMIT
-from app.services.profile.sampling import SmartSampler
+from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
 from app.services.profile.vectorizer import ItemVectorizer
 from app.services.recommendation.filtering import RecommendationFiltering
@@ -19,7 +19,6 @@ class ProfileService:
 
     def __init__(self, language: str = "en-US", tmdb_api_key: str | None = None):
         self.scoring_service = ScoringService()
-        self.sampler = SmartSampler(self.scoring_service)
         tmdb_service = get_tmdb_service(language=language, api_key=tmdb_api_key)
         vectorizer = ItemVectorizer(tmdb_service)
         self.builder = ProfileBuilder(vectorizer)
@@ -40,7 +39,7 @@ class ProfileService:
         if typed.is_empty():
             return None, watched_tmdb, watched_imdb
 
-        sampled = self.sampler.sample_items(typed, content_type)
+        sampled = sample_items(typed, content_type, self.scoring_service)
         profile = await self.builder.build_profile(sampled, content_type=content_type)
         return profile, watched_tmdb, watched_imdb
 
@@ -99,7 +98,7 @@ class ProfileService:
                         added=[it for it in typed.added if _is_new(it)],
                     )
 
-                    sampled = self.sampler.sample_items(new_library, content_type)
+                    sampled = sample_items(new_library, content_type, self.scoring_service)
 
                     if not sampled:
                         return existing_profile, watched_tmdb, watched_imdb

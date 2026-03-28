@@ -11,15 +11,15 @@ from app.services.profile.constants import (
     RUNTIME_BUCKET_SHORT_MAX_SERIES,
 )
 from app.services.profile.scorer import ProfileScorer
-from app.services.recommendation.filtering import RecommendationFiltering
-from app.services.recommendation.metadata import RecommendationMetadata
-from app.services.recommendation.scoring import RecommendationScoring
-from app.services.recommendation.utils import (
+from app.services.recommendation.filtering import (
+    RecommendationFiltering,
     apply_discover_filters,
-    content_type_to_mtype,
     filter_by_genres,
     filter_watched_by_imdb,
 )
+from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.scoring import RecommendationScoring
+from app.services.recommendation.utils import content_type_to_mtype
 from app.services.tmdb.service import TMDBService
 
 

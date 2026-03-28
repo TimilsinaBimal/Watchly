@@ -1,5 +1,6 @@
 import hashlib
 import math
+import random
 from collections.abc import Callable
 from typing import Any
 
@@ -176,3 +177,15 @@ class RecommendationScoring:
             final_score += epsilon
 
         return final_score
+
+
+class DailyRotation:
+    """Utilities for rotating recommendations daily while maintaining quality."""
+
+    @staticmethod
+    def rotate_items(items: list, seed: str) -> list:
+        """Deterministically shuffle items based on daily seed for freshness."""
+        rng = random.Random(seed)
+        shuffled = items.copy()
+        rng.shuffle(shuffled)
+        return shuffled

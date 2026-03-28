@@ -11,20 +11,18 @@ from app.core.settings import UserSettings
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
 from app.services.profile.constants import TOP_PICKS_CREATOR_CAP, TOP_PICKS_GENRE_CAP
-from app.services.profile.sampling import SmartSampler
+from app.services.profile.sampling import sample_items
 from app.services.profile.scorer import ProfileScorer
 from app.services.profile.scoring import ScoringService
-from app.services.recommendation.filtering import RecommendationFiltering
-from app.services.recommendation.metadata import RecommendationMetadata
-from app.services.recommendation.rotation import DailyRotation
-from app.services.recommendation.scoring import RecommendationScoring
-from app.services.recommendation.utils import (
+from app.services.recommendation.filtering import (
+    RecommendationFiltering,
     apply_discover_filters,
-    content_type_to_mtype,
     filter_items_by_settings,
     filter_watched_by_imdb,
-    resolve_tmdb_id,
 )
+from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.scoring import DailyRotation, RecommendationScoring
+from app.services.recommendation.utils import content_type_to_mtype, resolve_tmdb_id
 from app.services.simkl import simkl_service
 from app.services.tmdb.service import TMDBService
 
@@ -39,7 +37,6 @@ class TopPicksService:
         self.user_settings: UserSettings | None = user_settings
         self.scorer: ProfileScorer = ProfileScorer()
         self.scoring_service = ScoringService()
-        self.smart_sampler = SmartSampler(self.scoring_service)
 
     async def get_top_picks(
         self,
@@ -183,7 +180,7 @@ class TopPicksService:
             List of candidate items
         """
         # Get top items (loved first, then liked, then added, then top watched)
-        top_items = self.smart_sampler.sample_items(library_items, content_type, max_items=15)
+        top_items = sample_items(library_items, content_type, self.scoring_service, max_items=15)
 
         candidates = []
         tasks = []
@@ -244,7 +241,7 @@ class TopPicksService:
             return []
 
         # Sample top items (same as TMDB flow - 15 items)
-        top_items = self.smart_sampler.sample_items(library_items, content_type, max_items=15)
+        top_items = sample_items(library_items, content_type, self.scoring_service, max_items=15)
 
         # Extract IMDB IDs
         imdb_ids = []
