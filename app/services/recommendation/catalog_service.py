@@ -39,7 +39,10 @@ def shuffle_data_if_needed(
 
 
 def _clean_meta(meta: dict) -> dict | None:
-    """Return a sanitized Stremio meta object without internal fields."""
+    """Return a sanitized Stremio meta object without internal fields.
+
+    Keeps only public keys and drops internal scoring/IDs/keywords/cast, etc.
+    """
     allowed = {
         "id",
         "type",
@@ -53,10 +56,24 @@ def _clean_meta(meta: dict) -> dict | None:
         "runtime",
     }
     cleaned = {k: v for k, v in meta.items() if k in allowed}
+    # Drop empty values
     cleaned = {k: v for k, v in cleaned.items() if v not in (None, "", [], {}, ())}
 
-    if not cleaned.get("id", "").startswith("tt"):
+    # Normalize IMDb rating to a string with 1 decimal place
+    rating = cleaned.get("imdbRating")
+    if rating not in (None, ""):
+        try:
+            cleaned["imdbRating"] = f"{float(rating):.1f}"
+        except (TypeError, ValueError):
+            # Keep original value if it cannot be parsed
+            pass
+
+    imdb_id = cleaned.get("id", "")
+    # if id does not start with tt, return None
+    if not imdb_id.startswith("tt"):
         return None
+    # Add Metahub logo URL (used by Stremio)
+    cleaned["logo"] = f"https://live.metahub.space/logo/medium/{imdb_id}/img"
     return cleaned
 
 
@@ -72,7 +89,7 @@ class CatalogService:
             "Access-Control-Allow-Headers": "*",
             "Content-Type": "application/json",
             "Cache-Control": (
-                f"public, max-age={settings.CATALOG_CACHE_TTL}," "stale-while-revalidate=3600, stale-if-error=1800"
+                f"public, max-age={settings.CATALOG_CACHE_TTL},stale-while-revalidate=3600, stale-if-error=1800"
             ),
         }
 

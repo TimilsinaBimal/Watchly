@@ -68,6 +68,8 @@ IP_FAILURE_THRESHOLD = 8
 
 @app.middleware("http")
 async def block_missing_token_middleware(request: Request, call_next):
+    if not settings.ENABLE_TOKEN_RATE_LIMIT:
+        return await call_next(request)
     # Extract first path segment which is commonly the token in addon routes
     path = request.url.path.lstrip("/")
     seg = path.split("/", 1)[0] if path else ""
