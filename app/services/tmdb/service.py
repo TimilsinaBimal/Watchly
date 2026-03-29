@@ -139,7 +139,9 @@ class TMDBService:
         return await self.client.get("/configuration/primary_translations")
 
     @alru_cache(maxsize=2000, ttl=86400)
-    async def get_images(self, media_type: str, tmdb_id: int, include_image_language: str = "en,fr,null") -> dict[str, Any]:
+    async def get_images(
+        self, media_type: str, tmdb_id: int, include_image_language: str = "en,fr,null"
+    ) -> dict[str, Any]:
         """
         Fetch images (posters, logos, backdrops) for a movie or TV show.
         include_image_language: comma-separated iso_639_1 codes + "null" for language-less images.
@@ -164,7 +166,7 @@ class TMDBService:
         for lang in preferred_lang_codes:
             for img in images_list:
                 iso = img.get("iso_639_1")
-                if (iso or None) == (lang if lang else None):
+                if iso == lang:
                     path = img.get("file_path")
                     if path:
                         return path

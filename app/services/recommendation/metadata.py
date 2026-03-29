@@ -168,18 +168,15 @@ class RecommendationMetadata:
                 except Exception:
                     return {}
 
-        image_tasks = [_images_one(d) for d in details_list if d]
+        successful_details = [d for d in details_list if d]
+        image_tasks = [_images_one(d) for d in successful_details]
         images_list = await asyncio.gather(*image_tasks, return_exceptions=True)
 
         format_task = []
-        for i, details in enumerate(details_list):
-            if not details:
-                continue
+        for details, imgs in zip(successful_details, images_list):
             logo_url = None
-            if i < len(images_list):
-                imgs = images_list[i]
-                if isinstance(imgs, dict):
-                    logo_url = imgs.get("logo") or None
+            if isinstance(imgs, dict):
+                logo_url = imgs.get("logo") or None
             format_task.append(cls.format_for_stremio(details, media_type, user_settings, logo_url=logo_url))
 
         formatted_list = await asyncio.gather(*format_task, return_exceptions=True)
