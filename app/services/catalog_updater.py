@@ -12,7 +12,7 @@ from app.services.catalog import DynamicCatalogService
 from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
-from app.services.translation import translation_service
+from app.services.translation import apply_catalog_translation
 from app.utils.catalog import sort_catalogs
 
 
@@ -126,15 +126,9 @@ class CatalogUpdater:
                 library_items=library_items, user_settings=user_settings, token=token
             )
 
-            # Translate catalogs
-            if user_settings and user_settings.language:
-                for cat in catalogs:
-                    if name := cat.get("name"):
-                        try:
-                            cat["name"] = await translation_service.translate(name, user_settings.language)
-                        except Exception as e:
-                            logger.warning(f"Failed to translate catalog name '{name}': {e}")
-                            continue
+            lang = user_settings.language if user_settings else None
+            for cat in catalogs:
+                await apply_catalog_translation(cat, lang)
 
             # sort catalogs by order in user settings
             if user_settings:

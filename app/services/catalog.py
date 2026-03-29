@@ -43,14 +43,17 @@ class DynamicCatalogService:
         else:
             catalog_id = item_id
 
-        name = item.get("name")
+        title = item.get("name") or ""
 
         extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
 
         return {
             "type": self.normalize_type(item.get("type")),
             "id": catalog_id,
-            "name": f"{label} {name}",
+            "name": f"{label} {title}".strip(),
+            # Translate only the label; keep the work title unchanged (see translation.apply_catalog_translation).
+            "_catalog_name_prefix": label,
+            "_catalog_name_suffix": title,
             "extra": extra,
         }
 
