@@ -1,6 +1,6 @@
 import asyncio
-from typing import Any
 import re
+from typing import Any
 
 from async_lru import alru_cache
 from deep_translator import GoogleTranslator
