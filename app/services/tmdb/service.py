@@ -153,6 +153,58 @@ class TMDBService:
         return await self.client.get(path, params=params)
 
     @staticmethod
+    def _score_image(img: dict[str, Any]) -> tuple[float, int]:
+        """Higher is better (TMDB vote fields)."""
+        va = img.get("vote_average")
+        vc = img.get("vote_count")
+        try:
+            va_f = float(va) if va is not None else 0.0
+        except (TypeError, ValueError):
+            va_f = 0.0
+        try:
+            vc_i = int(vc) if vc is not None else 0
+        except (TypeError, ValueError):
+            vc_i = 0
+        return (va_f, vc_i)
+
+    @classmethod
+    def _pick_best_in_language_bucket(
+        cls,
+        images_list: list[dict[str, Any]],
+        iso: str | None,
+    ) -> str | None:
+        """Among images with this iso_639_1 (or None for language-neutral), pick highest-rated."""
+        if iso is None:
+            candidates = [img for img in images_list if img.get("iso_639_1") in (None, "")]
+        else:
+            iso_l = iso.lower()
+            candidates = [img for img in images_list if (img.get("iso_639_1") or "").lower() == iso_l]
+        if not candidates:
+            return None
+        best = max(candidates, key=cls._score_image)
+        path = best.get("file_path")
+        return path if path else None
+
+    @classmethod
+    def _pick_logo_by_language(
+        cls,
+        logos: list[dict[str, Any]] | None,
+        primary_iso: str,
+    ) -> str | None:
+        """
+        Logo only: exact ISO 639-1 match, else language-neutral (null). No cross-language fallback.
+
+        TMDB tags logos with iso_639_1 only (no region). Falling back to another language (e.g. another
+        "fr" market's artwork or "en") often mismatches localized titles; omit logo so Metahub/default applies.
+        """
+        if not logos:
+            return None
+        p = (primary_iso or "en").lower()
+        if path := cls._pick_best_in_language_bucket(logos, p):
+            return path
+        return cls._pick_best_in_language_bucket(logos, None)
+
+    @staticmethod
     def _pick_image_by_language(
         images_list: list[dict[str, Any]] | None,
         preferred_lang_codes: list[str | None],
@@ -191,8 +243,12 @@ class TMDBService:
     ) -> dict[str, str]:
         """
         Get poster, logo and background URLs for a title in the requested language.
-        Same approach as no-stremio-addon: request images with include_image_language,
-        then pick by preferred language (requested lang, then null, then fallbacks).
+
+        Posters/backdrops: requested language, then null, then common fallbacks (same idea as no-stremio-addon).
+
+        Logos: only the exact ISO 639-1 language or a language-neutral (null) asset — no fallback to other
+        languages, so we do not show a logo whose text targets another locale when the exact translation
+        is missing (e.g. another French market). If neither exists, no logo is returned (callers may use Metahub).
         """
         lang = language or self.client.language
         preferred, include = self._language_to_image_preference(lang)
@@ -213,7 +269,8 @@ class TMDBService:
         backdrops = data.get("backdrops") or []
 
         poster_path = self._pick_image_by_language(posters, preferred)
-        logo_path = self._pick_image_by_language(logos, preferred)
+        primary_iso = (lang or "en-US").split("-")[0].lower() if lang else "en"
+        logo_path = self._pick_logo_by_language(logos, primary_iso)
         backdrop_path = self._pick_image_by_language(backdrops, preferred)
 
         result: dict[str, str] = {}
