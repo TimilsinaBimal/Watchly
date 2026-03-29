@@ -131,6 +131,10 @@ Found a bug or have a feature request? Please [open an issue](https://github.com
 
 Thank you to everyone who has contributed to the project!
 
+<a href="https://github.com/TimilsinaBimal/watchly/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=TimilsinaBimal/watchly" />
+</a>
+
 ## Acknowledgements
 
 Special thanks to **[The Movie Database (TMDB)](https://www.themoviedb.org/)** for providing the rich metadata that powers Watchly's recommendations.

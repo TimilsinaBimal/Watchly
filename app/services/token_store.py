@@ -230,12 +230,13 @@ class TokenStore:
     @alru_cache(maxsize=2000, ttl=43200)
     async def get_user_data(self, token: str) -> dict[str, Any] | None:
         # Short-circuit for tokens known to be missing
-        try:
-            if token in self._missing_tokens:
-                logger.debug(f"[REDIS] Negative cache hit for missing token {token}")
-                return None
-        except Exception as e:
-            logger.debug(f"Failed to check negative cache for {token}: {e}")
+        if settings.ENABLE_TOKEN_NEGATIVE_CACHE:
+            try:
+                if token in self._missing_tokens:
+                    logger.debug(f"[REDIS] Negative cache hit for missing token {token}")
+                    return None
+            except Exception as e:
+                logger.debug(f"Failed to check negative cache for {token}: {e}")
 
         logger.debug(f"[REDIS] Cache miss. Fetching data from redis for {token}")
         key = self._format_key(token)
@@ -243,10 +244,11 @@ class TokenStore:
 
         if not data_raw:
             # remember negative result briefly
-            try:
-                self._missing_tokens[token] = True
-            except Exception as e:
-                logger.debug(f"Failed to set negative cache for missing token {token}: {e}")
+            if settings.ENABLE_TOKEN_NEGATIVE_CACHE:
+                try:
+                    self._missing_tokens[token] = True
+                except Exception as e:
+                    logger.debug(f"Failed to set negative cache for missing token {token}: {e}")
             return None
 
         try:
