@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -24,14 +25,32 @@ class PosterRatingConfig(BaseModel):
     api_key: str = Field(description="API key for the provider")
 
 
+def get_current_year() -> int:
+    return datetime.now().year
+
+
+DEFAULT_YEAR_MIN = 1970
+
+
+def get_default_year_max() -> int:
+    return get_current_year()
+
+
+def get_default_year_range() -> dict[str, int]:
+    return {
+        "min": DEFAULT_YEAR_MIN,
+        "max": get_default_year_max(),
+    }
+
+
 class UserSettings(BaseModel):
     catalogs: list[CatalogConfig]
     language: str = "en-US"
     poster_rating: PosterRatingConfig | None = Field(default=None, description="Poster rating provider configuration")
     excluded_movie_genres: list[str] = Field(default_factory=list)
     excluded_series_genres: list[str] = Field(default_factory=list)
-    year_min: int = Field(default=1970, description="Minimum release year")
-    year_max: int = Field(default=2026, description="Maximum release year")
+    year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year")
+    year_max: int = Field(default_factory=get_default_year_max, description="Maximum release year")
     popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(
         default="balanced", description="Popularity preference"
     )

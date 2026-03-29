@@ -4,6 +4,8 @@ import { showToast, showConfirm, escapeHtml } from './ui.js';
 import { switchSection } from './navigation.js';
 import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 
+const YEAR_RANGE_DEFAULTS = window.YEAR_RANGE_DEFAULTS || { min: 1970, max: new Date().getFullYear() };
+
 // DOM Elements - will be initialized
 let configForm = null;
 let submitBtn = null;
@@ -51,8 +53,8 @@ async function initializeFormSubmission() {
         const password = passwordInput?.value;
         const language = languageSelect.value;
         const popularity = document.getElementById("popularitySelect")?.value || "balanced";
-        const yearMin = parseInt(document.getElementById("yearMin")?.value || "1980");
-        const yearMax = parseInt(document.getElementById("yearMax")?.value || "2026");
+        const yearMin = parseInt(document.getElementById("yearMin")?.value || String(YEAR_RANGE_DEFAULTS.min));
+        const yearMax = parseInt(document.getElementById("yearMax")?.value || String(YEAR_RANGE_DEFAULTS.max));
         const sortingOrder = document.getElementById("sortingOrderSelect")?.value || "default";
         const posterRatingProvider = document.getElementById("posterRatingProvider")?.value || "";
         const posterRatingApiKey = document.getElementById("posterRatingApiKey")?.value.trim() || "";

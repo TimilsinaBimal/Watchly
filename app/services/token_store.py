@@ -191,14 +191,15 @@ class TokenStore:
             needs_save = True
 
         # Case 2: Clean up deprecated rpdb_key field if it exists (even if empty/null)
-        # Remove it since we've migrated to poster_rating or it's no longer needed
+        # Remove it since we've migrated to poster_rating or it's no longer needed.
+        # Do not overwrite a valid migrated poster_rating payload.
         if "rpdb_key" in settings_dict:
             settings_dict.pop("rpdb_key")
-            # keep empty poster_rating field for now
-            settings_dict["poster_rating"] = {
-                "provider": "rpdb",
-                "api_key": None,
-            }
+            if not settings_dict.get("poster_rating"):
+                settings_dict["poster_rating"] = {
+                    "provider": "rpdb",
+                    "api_key": None,
+                }
             if not needs_save:  # Only log if we didn't already log migration
                 logger.info(f"[MIGRATION] Removing deprecated rpdb_key field for {redact_token(token)}")
             needs_save = True

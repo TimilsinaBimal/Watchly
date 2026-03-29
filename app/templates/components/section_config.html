@@ -92,7 +92,7 @@
         <div class="flex items-center justify-between">
             <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Release Year Range</label>
             <div class="text-sm font-mono text-white">
-                <span id="yearMinLabel">1980</span> — <span id="yearMaxLabel">{{ current_year }}</span>
+                <span id="yearMinLabel">{{ year_range_defaults.min }}</span> — <span id="yearMaxLabel">{{ current_year }}</span>
             </div>
         </div>
 
@@ -103,10 +103,10 @@
             <div id="yearSliderTrack" class="absolute h-1.5 bg-white rounded-full" style="left: 0%; right: 0%;"></div>
 
             <!-- Hidden Dual Sliders -->
-            <input type="range" id="yearMin" min="1970" max="2026" value="1980" step="1"
+            <input type="range" id="yearMin" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.min }}" step="1"
                 class="absolute w-full appearance-none bg-transparent pointer-events-none z-30 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-black [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-black [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-lg">
 
-            <input type="range" id="yearMax" min="1970" max="2026" value="2026" step="1"
+            <input type="range" id="yearMax" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.max }}" step="1"
                 class="absolute w-full appearance-none bg-transparent pointer-events-none z-30 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-black [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-black [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-lg">
         </div>
 

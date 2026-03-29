@@ -3,6 +3,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from app.core.constants import DISCOVERY_SETTINGS
+from app.core.settings import DEFAULT_YEAR_MIN, get_current_year
 from app.models.library import LibraryCollection
 
 
@@ -215,9 +216,9 @@ def build_discover_params(user_settings: Any) -> dict[str, Any]:
         return params
 
     current_date = datetime.now()
-    current_year = current_date.year
+    current_year = get_current_year()
 
-    year_min = getattr(user_settings, "year_min", 1970)
+    year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
     year_max = getattr(user_settings, "year_max", current_year)
 
     for prefix in ["primary_release_date", "first_air_date"]:
@@ -255,8 +256,8 @@ def filter_items_by_settings(
     if not user_settings:
         return items
 
-    year_min = getattr(user_settings, "year_min", 1970)
-    year_max = getattr(user_settings, "year_max", 2026)
+    year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
+    year_max = getattr(user_settings, "year_max", get_current_year())
     pop_pref = getattr(user_settings, "popularity", "balanced")
 
     filtered = []
