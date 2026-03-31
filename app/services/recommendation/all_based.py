@@ -66,7 +66,7 @@ class AllBasedService:
         """
         items = getattr(library_items, item_type, [])
 
-        typed_items = [it for it in items if it.get("type") == content_type]
+        typed_items = [it for it in items if it.type == content_type]
 
         logger.info(f"Typed items: {len(typed_items)}")
 
@@ -108,7 +108,7 @@ class AllBasedService:
             logger.info(f"Fetching TMDB recommendations for {len(top_items)} top items")
 
             for item in top_items:
-                item_id = item.get("_id", "")
+                item_id = item.id
                 if not item_id:
                     continue
                 tasks.append(self._fetch_recommendations_for_item(item_id, mtype))
@@ -198,7 +198,7 @@ class AllBasedService:
         # Extract IMDB IDs
         imdb_ids = []
         for item in top_items:
-            item_id = item.get("_id", "")
+            item_id = item.id
             if item_id and item_id.startswith("tt"):
                 imdb_ids.append(item_id)
 

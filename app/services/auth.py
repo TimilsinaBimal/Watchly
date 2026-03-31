@@ -107,9 +107,13 @@ class AuthService:
         finally:
             await bundle.close()
 
-    async def create_user_token(self, payload: TokenRequest) -> TokenResponse:
+    async def create_user_token(self, payload: TokenRequest) -> tuple[TokenResponse, str, UserSettings]:
         """
-        Main logic for creating or updating a user token and caching their library.
+        Main logic for creating or updating a user token.
+
+        Returns:
+            Tuple of (TokenResponse, resolved_auth_key, user_settings) so the
+            caller can trigger caching without re-fetching credentials.
         """
         # 1. Authenticate and get user info
         user_id, resolved_email, stremio_auth_key = await self.get_stremio_user_data(payload)
@@ -134,19 +138,17 @@ class AuthService:
         # 4. Store user data
         token = await self.store_credentials(user_id, payload_to_store)
 
-        # 5. Cache library items and profiles
-        await self._trigger_initial_caching(stremio_auth_key, user_settings, token)
-
-        # 6. Build response
+        # 5. Build response
         base_url = settings.HOST_NAME
         manifest_url = f"{base_url}/{token}/manifest.json"
         expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
 
-        return TokenResponse(
+        response = TokenResponse(
             token=token,
             manifestUrl=manifest_url,
             expiresInSeconds=expires_in,
         )
+        return response, stremio_auth_key, user_settings
 
     def _build_user_settings(self, payload: TokenRequest) -> UserSettings:
         default_settings = get_default_settings()
@@ -198,22 +200,6 @@ class AuthService:
 
         await token_store.delete_token(token)
         logger.info(f"[{redact_token(token)}] Token deleted for user {user_id}")
-
-    async def _trigger_initial_caching(self, auth_key: str, settings: UserSettings, token: str):
-        from app.services.manifest import manifest_service
-
-        bundle = StremioBundle()
-        try:
-            logger.info(f"[{redact_token(token)}] Caching library and profiles before returning token")
-            await manifest_service.cache_library_and_profiles(bundle, auth_key, settings, token)
-            logger.info(f"[{redact_token(token)}] Successfully cached library and profiles")
-        except Exception as e:
-            logger.warning(
-                f"[{redact_token(token)}] Failed to cache library and profiles: {e}. "
-                "Continuing anyway - will cache on manifest request."
-            )
-        finally:
-            await bundle.close()
 
 
 auth_service = AuthService()

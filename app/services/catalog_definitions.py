@@ -102,12 +102,23 @@ class DynamicCatalogService:
 
     def build_catalog_entry(
         self,
-        item: dict[str, Any],
+        item,
         label: str,
         config_id: str,
         display_at_home: bool = True,
     ) -> dict[str, Any]:
-        item_id = item.get("_id", "")
+        from app.models.library import StremioLibraryItem
+
+        # Support both typed items and raw dicts
+        if isinstance(item, StremioLibraryItem):
+            item_id = item.id
+            item_type = item.type
+            item_name = item.name
+        else:
+            item_id = item.get("_id", "")
+            item_type = item.get("type", "")
+            item_name = item.get("name", "")
+
         if config_id in ["watchly.item", "watchly.loved", "watchly.watched"]:
             catalog_id = f"{config_id}.{item_id}"
         elif item_id.startswith("tt") and config_id in [
@@ -120,9 +131,9 @@ class DynamicCatalogService:
 
         extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
         return {
-            "type": self.normalize_type(item.get("type")),
+            "type": self.normalize_type(item_type),
             "id": catalog_id,
-            "name": f"{label} {item.get('name')}",
+            "name": f"{label} {item_name}",
             "extra": extra,
         }
 
@@ -235,16 +246,17 @@ class DynamicCatalogService:
     ) -> tuple[str, list[Any]]:
         logger.info(f"[Theme Catalogs] Building rows for {media_type}")
 
-        profile, _, _ = await self.profile_service.build_profile_from_library(library_items, media_type, None, None)
+        # Try cached profile first, build fresh if missing
+        profile = None
+        if token:
+            profile = await user_cache.get_profile(token, media_type)
+
+        if not profile:
+            profile, _, _ = await self.profile_service.build_profile_from_library(library_items, media_type, None, None)
+
         if not profile:
             logger.warning(f"Failed to build profile for {media_type}")
             return media_type, []
-
-        if token:
-            try:
-                await user_cache.set_profile(token, media_type, profile)
-            except Exception as e:
-                logger.warning(f"Failed to save profile for {media_type}: {e}")
 
         rows = await self.row_generator.generate_rows(profile, media_type, api_key=gemini_api_key)
         return media_type, rows
@@ -265,7 +277,20 @@ class DynamicCatalogService:
 
         return theme, loved, watched
 
-    def _parse_item_last_watched(self, item: dict[str, Any]) -> datetime:
+    def _parse_item_last_watched(self, item) -> datetime:
+        from app.models.library import StremioLibraryItem
+
+        if isinstance(item, StremioLibraryItem):
+            if item.state.lastWatched:
+                return item.state.lastWatched
+            if item.mtime:
+                try:
+                    return datetime.fromisoformat(str(item.mtime).replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    pass
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+        # Fallback for raw dicts
         val = item.get("state", {}).get("lastWatched")
         if val:
             try:
@@ -302,7 +327,7 @@ class DynamicCatalogService:
 
         last_loved = None
         if loved_config and loved_config.enabled and is_type_enabled(loved_config, content_type):
-            loved = [i for i in library_items.loved if i.get("type") == content_type]
+            loved = [i for i in library_items.loved if i.type == content_type]
             loved.sort(key=self._parse_item_last_watched, reverse=True)
             last_loved = random.choice(loved[:3]) if loved else None
             if last_loved:
@@ -311,11 +336,11 @@ class DynamicCatalogService:
                 catalogs.append(self.build_catalog_entry(last_loved, label, "watchly.loved", display_at_home))
 
         if watched_config and watched_config.enabled and is_type_enabled(watched_config, content_type):
-            watched = [i for i in library_items.watched if i.get("type") == content_type]
+            watched = [i for i in library_items.watched if i.type == content_type]
             watched.sort(key=self._parse_item_last_watched, reverse=True)
 
             if last_loved:
-                watched = [i for i in watched if i.get("_id") != last_loved.get("_id")]
+                watched = [i for i in watched if i.id != last_loved.id]
 
             last_watched = random.choice(watched[:3]) if watched else None
             if last_watched:

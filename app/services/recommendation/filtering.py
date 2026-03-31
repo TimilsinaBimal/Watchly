@@ -59,7 +59,7 @@ class RecommendationFiltering:
         tmdb_ids = set()
 
         for item in all_items:
-            item_id = item.get("_id", "")
+            item_id = item.id if hasattr(item, "id") else item.get("_id", "")
             if not item_id:
                 continue
 

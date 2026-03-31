@@ -48,7 +48,7 @@ class UserCacheService:
         if cached:
             try:
                 data = json.loads(cached)
-                return LibraryCollection(**data)
+                return LibraryCollection.model_validate(data)
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"Failed to decode cached library items for {redact_token(token)}...: {e}")
                 return None
@@ -58,7 +58,7 @@ class UserCacheService:
     async def set_library_items(self, token: str, library_items: LibraryCollection) -> None:
         """Cache library items for a user."""
         key = self._library_items_key(token)
-        await redis_service.set(key, library_items.model_dump_json())
+        await redis_service.set(key, library_items.model_dump_json(by_alias=True))
         logger.debug(f"[{redact_token(token)}...] Cached library items")
 
         await self.invalidate_all_catalogs(token)
@@ -215,6 +215,13 @@ class UserCacheService:
 
     # Library Change Detection Methods
 
+    @staticmethod
+    def _extract_item_id(item) -> str:
+        """Extract item ID from either a typed StremioLibraryItem or a raw dict."""
+        if hasattr(item, "id"):
+            return item.id
+        return item.get("_id", item.get("id", ""))
+
     async def has_library_changed(self, token: str, content_type: str, library_items: list) -> bool:
         """
         Check if library has changed since last profile build.
@@ -227,15 +234,12 @@ class UserCacheService:
         Returns:
             True if library has changed, False otherwise
         """
-        # Create hash of current library item IDs
-        current_ids = [item.get("_id", item.get("id", "")) for item in library_items]
+        current_ids = [self._extract_item_id(item) for item in library_items]
         current_hash = hashlib.md5("".join(sorted(current_ids)).encode()).hexdigest()
 
-        # Compare with stored hash
         stored_hash = await redis_service.get(self._library_hash_key(token, content_type))
 
         if stored_hash is None:
-            # No stored hash, consider it changed
             return True
 
         return current_hash != stored_hash.decode() if isinstance(stored_hash, bytes) else current_hash != stored_hash
@@ -249,7 +253,7 @@ class UserCacheService:
             content_type: Content type (movie or series)
             library_items: Current library items list
         """
-        current_ids = [item.get("_id", item.get("id", "")) for item in library_items]
+        current_ids = [self._extract_item_id(item) for item in library_items]
         current_hash = hashlib.md5("".join(sorted(current_ids)).encode()).hexdigest()
 
         hash_key = self._library_hash_key(token, content_type)

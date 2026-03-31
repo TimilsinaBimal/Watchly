@@ -87,8 +87,9 @@ class ProfileService:
 
                     logger.debug(f"[{token[:8]}...] Found {len(new_item_ids)} new items, using incremental update")
 
-                    def _is_new(it: dict) -> bool:
-                        return (it.get("_id") or it.get("id")) in new_item_ids
+                    def _is_new(it) -> bool:
+                        item_id = it.id if hasattr(it, "id") else (it.get("_id") or it.get("id"))
+                        return item_id in new_item_ids
 
                     new_library = LibraryCollection(
                         loved=[it for it in typed.loved if _is_new(it)],

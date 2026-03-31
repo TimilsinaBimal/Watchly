@@ -23,12 +23,11 @@ class ScoringService:
     WEIGHT_EXPLICIT_RATING = 0.35
     ADDED_TO_LIBRARY_WEIGHT = 0.08
 
-    def process_item(self, raw_item: dict) -> ScoredItem:
+    def process_item(self, raw_item: dict | StremioLibraryItem) -> ScoredItem:
         """
-        Process a raw Stremio item dictionary into a ScoredItem.
+        Process a Stremio item (dict or typed model) into a ScoredItem.
         """
-        # Convert dict to Pydantic model for validation and typing
-        item = StremioLibraryItem(**raw_item)
+        item = raw_item if isinstance(raw_item, StremioLibraryItem) else StremioLibraryItem(**raw_item)
 
         score_data = self._calculate_score_components(item)
 

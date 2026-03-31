@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -60,29 +59,29 @@ class LibraryCollection(BaseModel):
     so the rest of the app doesn't care about the source.
     """
 
-    loved: list[dict[str, Any]] = []
-    liked: list[dict[str, Any]] = []
-    watched: list[dict[str, Any]] = []
-    added: list[dict[str, Any]] = []
-    removed: list[dict[str, Any]] = []
+    loved: list[StremioLibraryItem] = []
+    liked: list[StremioLibraryItem] = []
+    watched: list[StremioLibraryItem] = []
+    added: list[StremioLibraryItem] = []
+    removed: list[StremioLibraryItem] = []
 
-    def all_items(self) -> list[dict[str, Any]]:
+    def all_items(self) -> list[StremioLibraryItem]:
         return self.loved + self.liked + self.watched + self.added
 
-    def all_items_with_removed(self) -> list[dict[str, Any]]:
+    def all_items_with_removed(self) -> list[StremioLibraryItem]:
         return self.loved + self.liked + self.watched + self.added + self.removed
 
     def for_type(self, content_type: str) -> "LibraryCollection":
         return LibraryCollection(
-            loved=[i for i in self.loved if i.get("type") == content_type],
-            liked=[i for i in self.liked if i.get("type") == content_type],
-            watched=[i for i in self.watched if i.get("type") == content_type],
-            added=[i for i in self.added if i.get("type") == content_type],
-            removed=[i for i in self.removed if i.get("type") == content_type],
+            loved=[i for i in self.loved if i.type == content_type],
+            liked=[i for i in self.liked if i.type == content_type],
+            watched=[i for i in self.watched if i.type == content_type],
+            added=[i for i in self.added if i.type == content_type],
+            removed=[i for i in self.removed if i.type == content_type],
         )
 
     def all_imdb_ids(self) -> set[str]:
-        return {i.get("_id", "") for i in self.all_items_with_removed() if i.get("_id", "").startswith("tt")}
+        return {i.id for i in self.all_items_with_removed() if i.id.startswith("tt")}
 
     def is_empty(self) -> bool:
         return not any([self.loved, self.liked, self.watched, self.added])

@@ -17,7 +17,7 @@ def sample_items(
     2. Fill remaining slots with top watched items by score
     3. Limit total to prevent excessive API calls
     """
-    typed_items = [it for it in library_items.all_items() if it.get("type") == content_type]
+    typed_items = [it for it in library_items.all_items() if it.type == content_type]
 
     if not typed_items:
         return []
@@ -26,16 +26,15 @@ def sample_items(
         return [scoring_service.process_item(it) for it in typed_items]
 
     # De-duplicate by ID
-    unique_items: dict[str, dict] = {}
+    unique_items: dict[str, any] = {}
     for it in typed_items:
-        item_id = it.get("_id")
-        if item_id:
-            unique_items[item_id] = it
+        if it.id:
+            unique_items[it.id] = it
 
     if len(unique_items) <= max_items:
         return [scoring_service.process_item(it) for it in unique_items.values()]
 
-    added_item_ids = {it.get("_id") for it in library_items.added}
+    added_item_ids = {it.id for it in library_items.added}
 
     # Separate into pools and score
     loved_liked_pool: list[ScoredItem] = []
@@ -46,7 +45,7 @@ def sample_items(
         scored = scoring_service.process_item(it)
         if scored.source_type in ["loved", "liked"]:
             loved_liked_pool.append(scored)
-        elif it.get("_id") in added_item_ids:
+        elif it.id in added_item_ids:
             added_pool.append(scored)
         else:
             watched_pool.append(scored)

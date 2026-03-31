@@ -4,7 +4,7 @@ from typing import Any
 from async_lru import alru_cache
 from loguru import logger
 
-from app.models.library import LibraryCollection
+from app.models.library import LibraryCollection, StremioLibraryItem
 from app.services.stremio.client import StremioClient, StremioLikesClient
 
 
@@ -112,16 +112,12 @@ class StremioLibraryService:
                         all_raw_items.append(virtual_item)
                         existing_library_ids.add(item_id)
 
-            # 3. Categorize items
-            watched: list[dict] = []
-            loved: list[dict] = []
-            added: list[dict] = []
-            removed: list[dict] = []
-            liked: list[dict] = []
-
-            # Create sets for faster lookup
-            # loved_set = set(loved_movies + loved_series)
-            # liked_set = set(liked_movies + liked_series)
+            # 3. Categorize items and convert to typed models at the boundary
+            watched: list[StremioLibraryItem] = []
+            loved: list[StremioLibraryItem] = []
+            added: list[StremioLibraryItem] = []
+            removed: list[StremioLibraryItem] = []
+            liked: list[StremioLibraryItem] = []
 
             for item in all_raw_items:
                 # Basic validation
@@ -142,36 +138,35 @@ class StremioLibraryService:
                 is_completion_high = duration > 0 and (time_watched / duration) >= 0.7
                 is_watched = times_watched > 0 or flagged_watched > 0 or is_completion_high
 
-                # if item is loved or liked and but not watched, then also we need to add it
-                # as users might not have watched it in stremio itself.
+                # Set enrichment flags before conversion
                 if item_id in loved_set:
                     item["_is_loved"] = True
-                    loved.append(item)
-
                 elif item_id in liked_set:
                     item["_is_liked"] = True
-                    liked.append(item)
 
+                # Convert raw dict to typed model
+                try:
+                    typed_item = StremioLibraryItem(**item)
+                except Exception:
+                    continue
+
+                # Categorize
+                if item_id in loved_set:
+                    loved.append(typed_item)
+                elif item_id in liked_set:
+                    liked.append(typed_item)
                 elif is_watched:
-                    watched.append(item)
-
+                    watched.append(typed_item)
                 elif not item.get("removed") and not item.get("temp"):
-                    # item has not removed and item is not temporary meaning item is not
-                    # added by stremio itself on user watch
-                    added.append(item)
+                    added.append(typed_item)
                 else:
                     continue
-                # elif item.get("removed"):
-                #     # do not do anything with removed items
-                #     # removed.append(item)
-                #     continue
 
-            # 4. Sort watched items by recency
-            def sort_by_recency(x: dict):
-                state = x.get("state", {}) or {}
+            # 4. Sort by recency
+            def sort_by_recency(x: StremioLibraryItem):
                 return (
-                    str(state.get("lastWatched") or str(x.get("_mtime") or "")),
-                    x.get("_mtime") or "",
+                    str(x.state.lastWatched or x.mtime or ""),
+                    x.mtime or "",
                 )
 
             watched.sort(key=sort_by_recency, reverse=True)
