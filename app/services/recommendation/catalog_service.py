@@ -49,6 +49,7 @@ def _clean_meta(meta: dict) -> dict | None:
         "type",
         "name",
         "poster",
+        "logo",
         "background",
         "description",
         "releaseInfo",
@@ -73,8 +74,9 @@ def _clean_meta(meta: dict) -> dict | None:
     # if id does not start with tt, return None
     if not imdb_id.startswith("tt"):
         return None
-    # Add Metahub logo URL (used by Stremio)
-    cleaned["logo"] = f"https://live.metahub.space/logo/medium/{imdb_id}/img"
+    # Use Metahub logo only when no language-aware logo was set (e.g. from TMDB)
+    if not cleaned.get("logo"):
+        cleaned["logo"] = f"https://live.metahub.space/logo/medium/{imdb_id}/img"
     return cleaned
 
 
