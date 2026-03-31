@@ -27,6 +27,7 @@ def clean_meta(meta: dict) -> dict | None:
         "type",
         "name",
         "poster",
+        "logo",
         "background",
         "description",
         "releaseInfo",
@@ -51,6 +52,7 @@ def clean_meta(meta: dict) -> dict | None:
     # if id does not start with tt, return None
     if not imdb_id.startswith("tt"):
         return None
-    # Add Metahub logo URL (used by Stremio)
-    cleaned["logo"] = f"https://live.metahub.space/logo/medium/{imdb_id}/img"
+    # Add Metahub logo URL as fallback (used by Stremio)
+    if not cleaned.get("logo"):
+        cleaned["logo"] = f"https://live.metahub.space/logo/medium/{imdb_id}/img"
     return cleaned

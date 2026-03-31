@@ -134,6 +134,8 @@ class DynamicCatalogService:
             "type": self.normalize_type(item_type),
             "id": catalog_id,
             "name": f"{label} {item_name}",
+            "_catalog_name_prefix": label,
+            "_catalog_name_suffix": item_name,
             "extra": extra,
         }
 

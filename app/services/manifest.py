@@ -11,7 +11,7 @@ from app.services.catalog_definitions import DynamicCatalogService, sort_catalog
 from app.services.context import load_user_context
 from app.services.profile.service import ProfileService
 from app.services.stremio.service import StremioBundle
-from app.services.translation import translation_service
+from app.services.translation import apply_catalog_translation
 from app.services.user_cache import user_cache
 
 
@@ -114,11 +114,7 @@ class ManifestService:
 
         translated_catalogs = []
         for cat in catalogs:
-            if cat.get("name"):
-                try:
-                    cat["name"] = await translation_service.translate(cat["name"], language)
-                except Exception as e:
-                    logger.warning(f"Failed to translate catalog name '{cat.get('name')}': {e}")
+            await apply_catalog_translation(cat, language)
             translated_catalogs.append(cat)
 
         return translated_catalogs
