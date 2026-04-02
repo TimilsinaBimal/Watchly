@@ -60,6 +60,12 @@ class UserSettings(BaseModel):
     simkl_api_key: str | None = Field(default=None, description="Simkl API Key for the user")
     gemini_api_key: str | None = Field(default=None, description="Gemini API Key for AI-powered features")
     tmdb_api_key: str | None = Field(default=None, description="TMDB API Key (used if set; else server config)")
+    trakt_access_token: str | None = Field(default=None, description="Trakt OAuth access token")
+    trakt_refresh_token: str | None = Field(default=None, description="Trakt OAuth refresh token")
+    simkl_access_token: str | None = Field(default=None, description="Simkl OAuth access token")
+    watch_history_source: Literal["stremio", "trakt", "simkl"] = Field(
+        default="stremio", description="Source for watch history used in profile building"
+    )
 
 
 # Catalog descriptions for frontend

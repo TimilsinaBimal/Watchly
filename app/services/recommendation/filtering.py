@@ -85,6 +85,19 @@ class RecommendationFiltering:
         return imdb_ids, tmdb_ids
 
     @staticmethod
+    def get_library_imdb_ids(library_data: dict | None) -> set[str]:
+        """Extract all IMDB IDs from Stremio library data."""
+        if not library_data:
+            return set()
+        imdb_ids: set[str] = set()
+        for category in ("loved", "liked", "watched", "added", "removed"):
+            for item in library_data.get(category, []):
+                item_id = item.get("_id", "")
+                if item_id.startswith("tt"):
+                    imdb_ids.add(item_id.split(":")[0])
+        return imdb_ids
+
+    @staticmethod
     def filter_candidates(
         candidates: list[dict[str, Any]], watched_imdb: set[str], watched_tmdb: set[int]
     ) -> list[dict[str, Any]]:

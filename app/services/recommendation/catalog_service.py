@@ -20,6 +20,7 @@ from app.services.recommendation.creators import CreatorsService
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
+from app.services.stremio.library import stremio_library_to_watch_history
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
@@ -110,14 +111,42 @@ class CatalogService:
                 profile, watched_tmdb, watched_imdb = cached_data
                 logger.debug(f"[{redact_token(ctx.token)}] Using cached profile for {content_type}")
             else:
-                logger.info(f"[{redact_token(ctx.token)}] Profile not cached for {content_type}, building")
-                profile, watched_tmdb, watched_imdb = await profile_service.build_and_cache_profile(
-                    ctx.token,
-                    content_type,
-                    ctx.library,
-                    ctx.bundle,
-                    ctx.auth_key,
-                )
+                # Build profile — use external history source if configured
+                history_source = ctx.user_settings.watch_history_source if ctx.user_settings else "stremio"
+
+                if history_source == "trakt" and ctx.user_settings and ctx.user_settings.trakt_access_token:
+                    logger.info(f"[{redact_token(ctx.token)}] Building profile from Trakt history for {content_type}")
+                    profile, watched_tmdb, watched_imdb = await self._build_from_external_history(
+                        "trakt",
+                        ctx.user_settings,
+                        content_type,
+                        profile_service,
+                        ctx.library,
+                    )
+                    await user_cache.set_profile_and_watched_sets(
+                        ctx.token, content_type, profile, watched_tmdb, watched_imdb
+                    )
+                elif history_source == "simkl" and ctx.user_settings and ctx.user_settings.simkl_access_token:
+                    logger.info(f"[{redact_token(ctx.token)}] Building profile from Simkl history for {content_type}")
+                    profile, watched_tmdb, watched_imdb = await self._build_from_external_history(
+                        "simkl",
+                        ctx.user_settings,
+                        content_type,
+                        profile_service,
+                        ctx.library,
+                    )
+                    await user_cache.set_profile_and_watched_sets(
+                        ctx.token, content_type, profile, watched_tmdb, watched_imdb
+                    )
+                else:
+                    logger.info(f"[{redact_token(ctx.token)}] Profile not cached for {content_type}, building")
+                    profile, watched_tmdb, watched_imdb = await profile_service.build_and_cache_profile(
+                        ctx.token,
+                        content_type,
+                        ctx.library,
+                        ctx.bundle,
+                        ctx.auth_key,
+                    )
 
             recommendations = await self._get_recommendations(
                 catalog_id=catalog_id,
@@ -223,6 +252,47 @@ class CatalogService:
         except Exception as e:
             logger.warning(f"Failed to fetch trending items: {e}")
             return []
+
+    async def _build_from_external_history(
+        self,
+        source: str,
+        user_settings: UserSettings,
+        content_type: str,
+        profile_service: ProfileService,
+        library: LibraryCollection,
+    ) -> tuple[TasteProfile | None, set[int], set[str]]:
+        """Build profile from external history (Trakt or Simkl), with Stremio library fallback."""
+        try:
+            if source == "trakt":
+                from app.services.trakt import trakt_service
+
+                watch_history = await trakt_service.get_history(user_settings.trakt_access_token)
+            elif source == "simkl":
+                from app.core.config import settings as app_settings
+                from app.services.simkl import simkl_service
+
+                watch_history = await simkl_service.get_history(
+                    user_settings.simkl_access_token,
+                    app_settings.SIMKL_CLIENT_ID or "",
+                )
+            else:
+                watch_history = stremio_library_to_watch_history(library)
+
+            stremio_imdb = library.all_imdb_ids()
+
+            profile, watched_imdb = await profile_service.build_profile_from_watch_history(
+                watch_history, content_type, extra_exclusion_imdb=stremio_imdb
+            )
+            return profile, set(), watched_imdb
+
+        except Exception as e:
+            logger.warning(f"External history ({source}) failed, falling back to Stremio: {e}")
+            watch_history = stremio_library_to_watch_history(library)
+            stremio_imdb = library.all_imdb_ids()
+            profile, watched_imdb = await profile_service.build_profile_from_watch_history(
+                watch_history, content_type, extra_exclusion_imdb=stremio_imdb
+            )
+            return profile, set(), watched_imdb
 
     async def _get_recommendations(
         self,

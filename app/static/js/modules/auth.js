@@ -299,6 +299,9 @@ async function fetchStremioIdentity(authKey) {
             const geminiApiKeyInput = document.getElementById('geminiApiKey');
             if (s.gemini_api_key && geminiApiKeyInput) geminiApiKeyInput.value = s.gemini_api_key;
 
+            // Watch History Source + OAuth tokens
+            restoreWatchHistoryState(s);
+
             // Genres (Checked = Excluded)
             document.querySelectorAll('input[name="movie-genre"]').forEach(cb => cb.checked = false);
             document.querySelectorAll('input[name="series-genre"]').forEach(cb => cb.checked = false);
@@ -434,4 +437,97 @@ export function setStremioLoggedOutState() {
     hideUserProfile();
 
     renderLoggedOutControls({ stremioLoginBtn, stremioLoginText, emailInput, passwordInput });
+}
+
+// Restore Watch History Source and OAuth connected state from saved settings
+function restoreWatchHistoryState(settings) {
+    const sourceSelect = document.getElementById('watchHistorySource');
+    if (!sourceSelect) return;
+
+    // Initialize global OAuth state
+    window._watchlyOAuth = window._watchlyOAuth || {};
+
+    // Restore Trakt connected state
+    if (settings.trakt_access_token) {
+        window._watchlyOAuth.trakt = {
+            access_token: settings.trakt_access_token,
+            refresh_token: settings.trakt_refresh_token || '',
+        };
+
+        const traktOption = sourceSelect.querySelector('option[value="trakt"]');
+        if (traktOption) traktOption.disabled = false;
+
+        const traktStatus = document.getElementById('traktStatus');
+        if (traktStatus) {
+            traktStatus.textContent = 'Connected';
+            traktStatus.classList.remove('text-slate-500');
+            traktStatus.classList.add('text-green-400');
+        }
+        const traktLogoutBtn = document.getElementById('traktLogoutBtn');
+        if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
+
+        // Validate token in background to show username
+        validateAndShowTraktUser(settings.trakt_access_token);
+    }
+
+    // Restore Simkl connected state
+    if (settings.simkl_access_token) {
+        window._watchlyOAuth.simkl = {
+            access_token: settings.simkl_access_token,
+        };
+
+        const simklOption = sourceSelect.querySelector('option[value="simkl"]');
+        if (simklOption) simklOption.disabled = false;
+
+        const simklSyncStatus = document.getElementById('simklSyncStatus');
+        if (simklSyncStatus) {
+            simklSyncStatus.textContent = 'Connected';
+            simklSyncStatus.classList.remove('text-slate-500');
+            simklSyncStatus.classList.add('text-green-400');
+        }
+        const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');
+        if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
+
+        // Validate token in background to show username
+        validateAndShowSimklUser(settings.simkl_access_token);
+    }
+
+    // Restore selected history source (after enabling options)
+    if (settings.watch_history_source) {
+        sourceSelect.value = settings.watch_history_source;
+    }
+}
+
+async function validateAndShowTraktUser(accessToken) {
+    try {
+        const res = await fetch('/trakt/validation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: accessToken }),
+        });
+        const data = await res.json();
+        const traktStatus = document.getElementById('traktStatus');
+        if (data.valid && traktStatus) {
+            traktStatus.textContent = data.message; // "Connected as username"
+        }
+    } catch (e) {
+        // Silently ignore — status already shows "Connected"
+    }
+}
+
+async function validateAndShowSimklUser(accessToken) {
+    try {
+        const res = await fetch('/simkl-sync/validation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ access_token: accessToken }),
+        });
+        const data = await res.json();
+        const simklSyncStatus = document.getElementById('simklSyncStatus');
+        if (data.valid && simklSyncStatus) {
+            simklSyncStatus.textContent = data.message; // "Connected as username"
+        }
+    } catch (e) {
+        // Silently ignore — status already shows "Connected"
+    }
 }

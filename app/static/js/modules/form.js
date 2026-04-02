@@ -48,6 +48,7 @@ export function initializeForm(domElements, state, actions) {
     initializeSimkl();
     initializeGemini();
     updateYearSlider = initializeYearSliderControl();
+    initializeWatchHistorySource();
 }
 
 async function postJson(url, payload) {
@@ -87,7 +88,8 @@ function getRequestPayload() {
         simkl_api_key: document.getElementById('simklApiKey')?.value.trim() || '',
         gemini_api_key: document.getElementById('geminiApiKey')?.value.trim() || '',
         excluded_movie_genres: Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value),
-        excluded_series_genres: Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value)
+        excluded_series_genres: Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value),
+        watch_history_source: document.getElementById('watchHistorySource')?.value || 'stremio',
     };
 }
 
@@ -115,7 +117,11 @@ function buildTokenPayload(formData) {
         simkl_api_key: formData.simkl_api_key,
         gemini_api_key: formData.gemini_api_key,
         excluded_movie_genres: formData.excluded_movie_genres,
-        excluded_series_genres: formData.excluded_series_genres
+        excluded_series_genres: formData.excluded_series_genres,
+        watch_history_source: formData.watch_history_source,
+        trakt_access_token: window._watchlyOAuth?.trakt?.access_token || undefined,
+        trakt_refresh_token: window._watchlyOAuth?.trakt?.refresh_token || undefined,
+        simkl_access_token: window._watchlyOAuth?.simkl?.access_token || undefined,
     };
 }
 
@@ -452,4 +458,88 @@ export function refreshYearSlider() {
 
 function showSuccess(url) {
     showSuccessSection(url);
+}
+
+// Watch History Source + OAuth
+function initializeWatchHistorySource() {
+    const sourceSelect = document.getElementById('watchHistorySource');
+    const traktLoginBtn = document.getElementById('traktLoginBtn');
+    const traktStatus = document.getElementById('traktStatus');
+    const traktLogoutBtn = document.getElementById('traktLogoutBtn');
+    const simklLoginBtn = document.getElementById('simklLoginBtn');
+    const simklSyncStatus = document.getElementById('simklSyncStatus');
+    const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');
+
+    if (!sourceSelect) return;
+
+    window._watchlyOAuth = window._watchlyOAuth || {};
+
+    window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || !data.provider || !data.tokens) return;
+
+        if (data.provider === 'trakt') {
+            window._watchlyOAuth.trakt = data.tokens;
+            if (traktStatus) {
+                traktStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
+                traktStatus.classList.remove('text-slate-500');
+                traktStatus.classList.add('text-green-400');
+            }
+            if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
+            const traktOption = sourceSelect.querySelector('option[value="trakt"]');
+            if (traktOption) traktOption.disabled = false;
+        } else if (data.provider === 'simkl') {
+            window._watchlyOAuth.simkl = data.tokens;
+            if (simklSyncStatus) {
+                simklSyncStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
+                simklSyncStatus.classList.remove('text-slate-500');
+                simklSyncStatus.classList.add('text-green-400');
+            }
+            if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
+            const simklOption = sourceSelect.querySelector('option[value="simkl"]');
+            if (simklOption) simklOption.disabled = false;
+        }
+    });
+
+    if (traktLoginBtn) {
+        traktLoginBtn.addEventListener('click', () => {
+            window.open('/auth/trakt', '_blank', 'width=600,height=700');
+        });
+    }
+
+    if (simklLoginBtn) {
+        simklLoginBtn.addEventListener('click', () => {
+            window.open('/auth/simkl', '_blank', 'width=600,height=700');
+        });
+    }
+
+    if (traktLogoutBtn) {
+        traktLogoutBtn.addEventListener('click', () => {
+            delete window._watchlyOAuth.trakt;
+            if (traktStatus) {
+                traktStatus.textContent = 'Not connected';
+                traktStatus.classList.remove('text-green-400');
+                traktStatus.classList.add('text-slate-500');
+            }
+            traktLogoutBtn.classList.add('hidden');
+            const traktOption = sourceSelect.querySelector('option[value="trakt"]');
+            if (traktOption) traktOption.disabled = true;
+            if (sourceSelect.value === 'trakt') sourceSelect.value = 'stremio';
+        });
+    }
+
+    if (simklSyncLogoutBtn) {
+        simklSyncLogoutBtn.addEventListener('click', () => {
+            delete window._watchlyOAuth.simkl;
+            if (simklSyncStatus) {
+                simklSyncStatus.textContent = 'Not connected';
+                simklSyncStatus.classList.remove('text-green-400');
+                simklSyncStatus.classList.add('text-slate-500');
+            }
+            simklSyncLogoutBtn.classList.add('hidden');
+            const simklOption = sourceSelect.querySelector('option[value="simkl"]');
+            if (simklOption) simklOption.disabled = true;
+            if (sourceSelect.value === 'simkl') sourceSelect.value = 'stremio';
+        });
+    }
 }

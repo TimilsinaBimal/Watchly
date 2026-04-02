@@ -1,11 +1,74 @@
 import asyncio
+from datetime import datetime
 from typing import Any
 
 from async_lru import alru_cache
 from loguru import logger
 
+from app.models.history import WatchHistory, WatchHistoryItem
 from app.models.library import LibraryCollection, StremioLibraryItem
 from app.services.stremio.client import StremioClient, StremioLikesClient
+
+
+def stremio_library_to_watch_history(library: LibraryCollection) -> WatchHistory:
+    """Convert typed LibraryCollection to unified WatchHistory format."""
+    items: list[WatchHistoryItem] = []
+    seen: set[str] = set()
+
+    category_items = [
+        (library.loved, True, False),
+        (library.liked, False, True),
+        (library.watched, False, False),
+        (library.added, False, False),
+    ]
+
+    for lib_items, is_loved, is_liked in category_items:
+        for item in lib_items:
+            imdb_id = item.id
+            if not imdb_id.startswith("tt") or imdb_id in seen:
+                continue
+            seen.add(imdb_id)
+
+            state = item.state
+            duration = state.duration
+            time_watched = state.timeWatched
+            times_watched = state.timesWatched
+            flagged_watched = state.flaggedWatched
+
+            if flagged_watched > 0 or times_watched > 0:
+                completion = 1.0
+            elif duration > 0:
+                completion = min(time_watched / duration, 1.0)
+            else:
+                completion = 0.0
+
+            rating: float | None = None
+            if is_loved or item.is_loved:
+                rating = 9.0
+            elif is_liked or item.is_liked:
+                rating = 7.0
+
+            last_watched: datetime | None = state.lastWatched
+            if not last_watched and item.mtime:
+                try:
+                    last_watched = datetime.fromisoformat(str(item.mtime).replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    pass
+
+            items.append(
+                WatchHistoryItem(
+                    imdb_id=imdb_id,
+                    type=item.type,
+                    name=item.name,
+                    rating=rating,
+                    watch_count=max(times_watched, 1) if completion > 0 else 0,
+                    completion=completion,
+                    last_watched=last_watched,
+                    source="stremio",
+                )
+            )
+
+    return WatchHistory(items=items, source="stremio")
 
 
 class StremioLibraryService:

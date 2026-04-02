@@ -165,6 +165,10 @@ class AuthService:
             simkl_api_key=payload.simkl_api_key,
             gemini_api_key=payload.gemini_api_key,
             tmdb_api_key=payload.tmdb_api_key,
+            trakt_access_token=payload.trakt_access_token,
+            trakt_refresh_token=payload.trakt_refresh_token,
+            simkl_access_token=payload.simkl_access_token,
+            watch_history_source=payload.watch_history_source,
         )
 
     async def get_identity_with_settings(self, payload: TokenRequest) -> dict:

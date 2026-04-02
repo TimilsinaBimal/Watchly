@@ -305,39 +305,20 @@ class ProfileBuilder:
     @staticmethod
     def _apply_caps(profile: TasteProfile) -> None:
         """
-        Apply score caps to prevent unbounded growth.
-
-        Args:
-            profile: Profile to cap
+        Apply score caps to prevent unbounded growth (both positive and negative).
         """
-        # Cap genres
-        for genre_id in profile.genre_scores:
-            profile.genre_scores[genre_id] = min(profile.genre_scores[genre_id], CAP_GENRE)
-
-        # Cap keywords
-        for keyword_id in profile.keyword_scores:
-            profile.keyword_scores[keyword_id] = min(profile.keyword_scores[keyword_id], CAP_KEYWORD)
-
-        # Cap directors
-        for director_id in profile.director_scores:
-            profile.director_scores[director_id] = min(profile.director_scores[director_id], CAP_DIRECTOR)
-
-        # Cap cast
-        for cast_id in profile.cast_scores:
-            profile.cast_scores[cast_id] = min(profile.cast_scores[cast_id], CAP_CAST)
-
-        # Cap eras
-        for era in profile.era_scores:
-            profile.era_scores[era] = min(profile.era_scores[era], CAP_ERA)
-
-        # Cap countries
-        for country in profile.country_scores:
-            profile.country_scores[country] = min(profile.country_scores[country], CAP_COUNTRY)
-
-        # Cap runtime buckets
-        for runtime_bucket in profile.runtime_bucket_scores:
-            current_score = profile.runtime_bucket_scores[runtime_bucket]
-            profile.runtime_bucket_scores[runtime_bucket] = min(current_score, CAP_RUNTIME)
+        cap_pairs = [
+            (profile.genre_scores, CAP_GENRE),
+            (profile.keyword_scores, CAP_KEYWORD),
+            (profile.director_scores, CAP_DIRECTOR),
+            (profile.cast_scores, CAP_CAST),
+            (profile.era_scores, CAP_ERA),
+            (profile.country_scores, CAP_COUNTRY),
+            (profile.runtime_bucket_scores, CAP_RUNTIME),
+        ]
+        for scores, cap in cap_pairs:
+            for key in scores:
+                scores[key] = max(-cap, min(scores[key], cap))
 
     async def update_profile_incrementally(
         self,
