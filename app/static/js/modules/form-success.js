@@ -10,9 +10,9 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
             const urlText = document.getElementById('addonUrl').textContent;
             try {
                 await navigator.clipboard.writeText(urlText);
-                const originalText = copyBtn.innerHTML;
-                copyBtn.innerHTML = 'Copied!';
-                setTimeout(() => { copyBtn.innerHTML = originalText; }, 2000);
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
             } catch (err) { /* noop */ }
         });
     }

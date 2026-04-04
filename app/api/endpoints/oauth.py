@@ -146,17 +146,17 @@ def _oauth_success_page(provider: str, username: str, tokens: dict[str, str]) ->
 
     payload = json.dumps({"provider": provider, "username": username, "tokens": tokens})
     return f"""<!DOCTYPE html>
-<html><head><title>{provider.title()} Connected</title></head>
-<body>
-<h2>Connected as {username}</h2>
-<p>You can close this window.</p>
-<script>
-  if (window.opener) {{
-    window.opener.postMessage({payload}, '*');
-  }}
-  setTimeout(function() {{ window.close(); }}, 2000);
-</script>
-</body></html>"""
+        <html><head><title>{provider.title()} Connected</title></head>
+        <body>
+        <h2>Connected as {username}</h2>
+        <p>You can close this window.</p>
+        <script>
+        if (window.opener) {{
+            window.opener.postMessage({payload}, window.location.origin);;
+        }}
+        setTimeout(function() {{ window.close(); }}, 2000);
+        </script>
+        </body></html>"""
 
 
 def _oauth_error_page(provider: str, error: str) -> str:
