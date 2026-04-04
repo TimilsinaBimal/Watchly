@@ -116,7 +116,7 @@ class ProfileService:
 
             if existing_profile:
                 processed_ids = existing_profile.processed_items
-                current_ids = {it.get("_id", it.get("id")) for it in typed_items if it.get("_id", it.get("id"))}
+                current_ids = {it.id for it in typed_items}
                 is_legacy = not processed_ids and (existing_profile.genre_scores or existing_profile.director_scores)
 
                 if not processed_ids.issubset(current_ids) or is_legacy:
