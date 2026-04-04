@@ -1,5 +1,6 @@
 import asyncio
 import re
+from typing import Any
 
 from async_lru import alru_cache
 from deep_translator import GoogleTranslator
@@ -63,7 +64,7 @@ class TranslationService:
 translation_service = TranslationService()
 
 
-async def apply_catalog_translation(cat: dict, target_lang: str | None) -> None:
+async def apply_catalog_translation(cat: dict[str, Any], target_lang: str | None) -> None:
     """
     Set catalog display name for the user's language.
 

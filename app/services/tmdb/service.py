@@ -193,6 +193,9 @@ class TMDBService:
     ) -> str | None:
         """
         Logo only: exact ISO 639-1 match, else language-neutral (null). No cross-language fallback.
+
+        TMDB tags logos with iso_639_1 only (no region). Falling back to another language (e.g. another
+        "fr" market's artwork or "en") often mismatches localized titles; omit logo so Metahub/default applies.
         """
         if not logos:
             return None
@@ -206,7 +209,10 @@ class TMDBService:
         images_list: list[dict[str, Any]] | None,
         preferred_lang_codes: list[str | None],
     ) -> str | None:
-        """Pick best image from list by language preference."""
+        """
+        Pick best image from list by language preference (same logic as no-stremio-addon).
+        preferred_lang_codes: e.g. ["en", None, "fr"] -> prefer en, then no language, then fr.
+        """
         if not images_list:
             return None
         for lang in preferred_lang_codes:
@@ -219,7 +225,10 @@ class TMDBService:
         return images_list[0].get("file_path") if images_list else None
 
     def _language_to_image_preference(self, language: str) -> tuple[list[str | None], str]:
-        """Build preferred lang order and include_image_language param."""
+        """
+        Build preferred lang order and include_image_language param from language (e.g. en-US, fr-FR).
+        Returns (preferred_lang_codes, include_image_language).
+        """
         primary = (language or "en-US").split("-")[0].lower() if language else "en"
         fallbacks = [c for c in ("en", "fr", "null") if c != primary]
         preferred = [primary, None, *[c for c in fallbacks if c != "null"]]
@@ -232,7 +241,15 @@ class TMDBService:
         tmdb_id: int,
         language: str | None = None,
     ) -> dict[str, str]:
-        """Get poster, logo and background URLs for a title in the requested language."""
+        """
+        Get poster, logo and background URLs for a title in the requested language.
+
+        Posters/backdrops: requested language, then null, then common fallbacks (same idea as no-stremio-addon).
+
+        Logos: only the exact ISO 639-1 language or a language-neutral (null) asset — no fallback to other
+        languages, so we do not show a logo whose text targets another locale when the exact translation
+        is missing (e.g. another French market). If neither exists, no logo is returned (callers may use Metahub).
+        """
         lang = language or self.client.language
         preferred, include = self._language_to_image_preference(lang)
         data = await self.get_images(media_type, tmdb_id, include_image_language=include)

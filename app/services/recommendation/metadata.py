@@ -69,6 +69,8 @@ class RecommendationMetadata:
             "_tmdb_id": tmdb_id_raw,
             "genre_ids": [g.get("id") for g in genres_full if isinstance(g, dict) and g.get("id") is not None],
         }
+        if logo_url:
+            meta_data["logo"] = logo_url
 
         if logo_url:
             meta_data["logo"] = logo_url
@@ -155,22 +157,26 @@ class RecommendationMetadata:
         tasks = [_fetch_one(it.get("id")) for it in valid_items]
         details_list = await asyncio.gather(*tasks)
 
-        # Fetch images for logo URLs
-        async def _fetch_images(tid: int):
+        language = getattr(user_settings, "language", None) or "en-US"
+        mt = "movie" if media_type == "movie" else "tv"
+
+        async def _images_one(d: dict[str, Any]) -> dict[str, str]:
             async with sem:
                 try:
-                    return await tmdb_service.get_images_for_title(query_type, tid)
+                    return await tmdb_service.get_images_for_title(mt, d["id"], language=language)
                 except Exception:
                     return {}
 
-        image_tasks = [_fetch_images(it.get("id")) for it, d in zip(valid_items, details_list) if d]
-        images_list = await asyncio.gather(*image_tasks)
+        successful_details = [d for d in details_list if d]
+        image_tasks = [_images_one(d) for d in successful_details]
+        images_list = await asyncio.gather(*image_tasks, return_exceptions=True)
 
-        valid_details = [d for d in details_list if d]
-        format_task = [
-            cls.format_for_stremio(details, media_type, user_settings, logo_url=imgs.get("logo"))
-            for details, imgs in zip(valid_details, images_list)
-        ]
+        format_task = []
+        for details, imgs in zip(successful_details, images_list):
+            logo_url = None
+            if isinstance(imgs, dict):
+                logo_url = imgs.get("logo") or None
+            format_task.append(cls.format_for_stremio(details, media_type, user_settings, logo_url=logo_url))
 
         formatted_list = await asyncio.gather(*format_task, return_exceptions=True)
 
