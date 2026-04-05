@@ -22,7 +22,7 @@ class PosterRatingConfig(BaseModel):
     provider: Literal[PosterProvider.RPDB.value, PosterProvider.TOP_POSTERS.value] = Field(
         description="Provider name: 'rpdb' or 'top_posters'"
     )
-    api_key: str = Field(description="API key for the provider")
+    api_key: str | None = Field(default=None, description="API key for the provider")
 
 
 def get_current_year() -> int:

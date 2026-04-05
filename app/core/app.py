@@ -2,7 +2,6 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from cachetools import TTLCache
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -62,9 +61,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_ip_failure_cache: TTLCache = TTLCache(maxsize=10000, ttl=600)
-IP_FAILURE_THRESHOLD = 8
-
 
 @app.middleware("http")
 async def block_missing_token_middleware(request: Request, call_next):
@@ -74,15 +70,8 @@ async def block_missing_token_middleware(request: Request, call_next):
     path = request.url.path.lstrip("/")
     seg = path.split("/", 1)[0] if path else ""
     try:
-        # If token is known-missing, short-circuit and track IP failures
+        # If token is known-missing, short-circuit to avoid repeated Redis lookups
         if seg and seg in token_store._missing_tokens:
-            ip = request.client.host if request.client else "unknown"
-            try:
-                _ip_failure_cache[ip] = _ip_failure_cache.get(ip, 0) + 1
-            except Exception:
-                pass
-            if _ip_failure_cache.get(ip, 0) > IP_FAILURE_THRESHOLD:
-                return HTMLResponse(content="Too many requests", status_code=429)
             return HTMLResponse(content="Invalid token", status_code=401)
     except Exception:
         pass
