@@ -2,6 +2,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.settings import UserSettings
 from app.models.history import WatchHistory, WatchHistoryItem
 from app.models.library import LibraryCollection, StremioLibraryItem, StremioState
 from app.models.profile import ScoredItem, TasteProfile
@@ -10,6 +11,7 @@ from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
 from app.services.profile.vectorizer import ItemVectorizer
 from app.services.recommendation.filtering import RecommendationFiltering
+from app.services.stremio.library import stremio_library_to_watch_history
 from app.services.tmdb.service import get_tmdb_service
 from app.services.user_cache import user_cache
 
@@ -188,14 +190,63 @@ class ProfileService:
         library_items: LibraryCollection,
         stremio_service: Any = None,
         auth_key: str | None = None,
+        user_settings: UserSettings | None = None,
     ) -> tuple[TasteProfile | None, set[int], set[str]]:
-        """Build profile data and cache the profile and watched sets."""
-        profile, watched_tmdb, watched_imdb = await self.build_profile_incremental(
-            library_items,
-            content_type,
-            token,
-            stremio_service,
-            auth_key,
-        )
+        """Build profile data and cache the profile and watched sets.
+
+        Dispatches on user_settings.watch_history_source: uses Trakt or Simkl
+        when the user connected those, otherwise the Stremio library.
+        """
+        source = user_settings.watch_history_source if user_settings else "stremio"
+
+        if source in ("trakt", "simkl"):
+            profile, watched_tmdb, watched_imdb = await self._build_from_external_source(
+                source, user_settings, content_type, library_items
+            )
+        else:
+            profile, watched_tmdb, watched_imdb = await self.build_profile_incremental(
+                library_items,
+                content_type,
+                token,
+                stremio_service,
+                auth_key,
+            )
+
         await user_cache.set_profile_and_watched_sets(token, content_type, profile, watched_tmdb, watched_imdb)
         return profile, watched_tmdb, watched_imdb
+
+    async def _build_from_external_source(
+        self,
+        source: str,
+        user_settings: UserSettings | None,
+        content_type: str,
+        library: LibraryCollection,
+    ) -> tuple[TasteProfile | None, set[int], set[str]]:
+        """Build a profile from an external history source, falling back to the
+        Stremio library when the external fetch fails or no token is set."""
+        watch_history: WatchHistory | None = None
+        try:
+            if source == "trakt" and user_settings and user_settings.trakt_access_token:
+                from app.services.trakt import trakt_service
+
+                watch_history = await trakt_service.get_history(user_settings.trakt_access_token)
+            elif source == "simkl" and user_settings and user_settings.simkl_access_token:
+                from app.core.config import settings as app_settings
+                from app.services.simkl import simkl_service
+
+                watch_history = await simkl_service.get_history(
+                    user_settings.simkl_access_token,
+                    app_settings.SIMKL_CLIENT_ID or "",
+                )
+        except Exception as e:
+            logger.warning(f"External history ({source}) failed, falling back to Stremio library: {e}")
+            watch_history = None
+
+        if watch_history is None:
+            watch_history = stremio_library_to_watch_history(library)
+
+        stremio_imdb = library.all_imdb_ids()
+        profile, watched_imdb = await self.build_profile_from_watch_history(
+            watch_history, content_type, extra_exclusion_imdb=stremio_imdb
+        )
+        return profile, set(), watched_imdb

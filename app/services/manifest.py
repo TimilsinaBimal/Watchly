@@ -70,7 +70,9 @@ class ManifestService:
         for content_type in ["movie", "series"]:
             try:
                 logger.info(f"[{redact_token(token)}] Building and caching profile for {content_type}")
-                await profile_service.build_and_cache_profile(token, content_type, library_items, bundle, auth_key)
+                await profile_service.build_and_cache_profile(
+                    token, content_type, library_items, bundle, auth_key, user_settings=user_settings
+                )
                 logger.debug(f"[{redact_token(token)}] Cached profile and watched sets for {content_type}")
             except Exception as e:
                 logger.warning(f"[{redact_token(token)}] Failed to build/cache profile for {content_type}: {e}")

@@ -215,9 +215,9 @@ class DynamicCatalogService:
 
         tasks = []
         if enabled_movie:
-            tasks.append(self._build_theme_rows_for_type(library_items, "movie", gemini_api_key, token))
+            tasks.append(self._build_theme_rows_for_type(library_items, "movie", gemini_api_key, token, user_settings))
         if enabled_series:
-            tasks.append(self._build_theme_rows_for_type(library_items, "series", gemini_api_key, token))
+            tasks.append(self._build_theme_rows_for_type(library_items, "series", gemini_api_key, token, user_settings))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         catalogs: list[dict[str, Any]] = []
@@ -245,16 +245,24 @@ class DynamicCatalogService:
         media_type: str,
         gemini_api_key: str | None,
         token: str | None,
+        user_settings: UserSettings | None = None,
     ) -> tuple[str, list[Any]]:
         logger.info(f"[Theme Catalogs] Building rows for {media_type}")
 
-        # Try cached profile first, build fresh if missing
+        # Try cached profile first, build fresh if missing (honors watch_history_source).
         profile = None
         if token:
             profile = await user_cache.get_profile(token, media_type)
 
         if not profile:
-            profile, _, _ = await self.profile_service.build_profile_from_library(library_items, media_type, None, None)
+            if token:
+                profile, _, _ = await self.profile_service.build_and_cache_profile(
+                    token, media_type, library_items, None, None, user_settings=user_settings
+                )
+            else:
+                profile, _, _ = await self.profile_service.build_profile_from_library(
+                    library_items, media_type, None, None
+                )
 
         if not profile:
             logger.warning(f"Failed to build profile for {media_type}")
