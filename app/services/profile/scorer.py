@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.models.taste_profile import TasteProfile
+from app.models.profile import TasteProfile
 from app.services.profile.constants import (
     FEATURE_WEIGHT_COUNTRY,
     FEATURE_WEIGHT_CREATOR,

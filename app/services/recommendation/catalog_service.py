@@ -1,4 +1,3 @@
-import random
 import re
 import time
 from typing import Any
@@ -7,114 +6,44 @@ from fastapi import HTTPException
 from loguru import logger
 
 from app.core.config import settings
-from app.core.constants import DEFAULT_CATALOG_LIMIT, DEFAULT_MIN_ITEMS
+from app.core.constants import DEFAULT_CATALOG_LIMIT
 from app.core.security import redact_token
-from app.core.settings import UserSettings, get_default_settings, resolve_tmdb_api_key
-from app.models.taste_profile import TasteProfile
+from app.core.settings import UserSettings, resolve_tmdb_api_key
+from app.models.library import LibraryCollection
+from app.models.profile import TasteProfile
 from app.services.catalog_updater import catalog_updater
-from app.services.profile.integration import ProfileIntegration
+from app.services.context import UserContext, extract_settings, load_user_context
+from app.services.profile.service import ProfileService
 from app.services.recommendation.all_based import AllBasedService
+from app.services.recommendation.catalog_utils import clean_meta, shuffle_data_if_needed
 from app.services.recommendation.creators import CreatorsService
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
-from app.services.recommendation.utils import pad_to_min
-from app.services.stremio.service import StremioBundle
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
-from app.utils.catalog import cache_profile_and_watched_sets
-
-
-def should_shuffle(user_settings: UserSettings, catalog_id: str) -> bool:
-    config = next((c for c in user_settings.catalogs if c.id == catalog_id), None)
-    return getattr(config, "shuffle", False) if config else False
-
-
-def shuffle_data_if_needed(
-    user_settings: UserSettings, catalog_id: str, data: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    if should_shuffle(user_settings, catalog_id):
-        random.shuffle(data)
-    return data
-
-
-def _clean_meta(meta: dict) -> dict | None:
-    """Return a sanitized Stremio meta object without internal fields.
-
-    Keeps only public keys and drops internal scoring/IDs/keywords/cast, etc.
-    """
-    allowed = {
-        "id",
-        "type",
-        "name",
-        "poster",
-        "logo",
-        "background",
-        "description",
-        "releaseInfo",
-        "imdbRating",
-        "genres",
-        "runtime",
-    }
-    cleaned = {k: v for k, v in meta.items() if k in allowed}
-    # Drop empty values
-    cleaned = {k: v for k, v in cleaned.items() if v not in (None, "", [], {}, ())}
-
-    # Normalize IMDb rating to a string with 1 decimal place
-    rating = cleaned.get("imdbRating")
-    if rating not in (None, ""):
-        try:
-            cleaned["imdbRating"] = f"{float(rating):.1f}"
-        except (TypeError, ValueError):
-            # Keep original value if it cannot be parsed
-            pass
-
-    imdb_id = cleaned.get("id", "")
-    # if id does not start with tt, return None
-    if not imdb_id.startswith("tt"):
-        return None
-    # Use Metahub logo only when no language-aware logo was set (e.g. from TMDB)
-    if not cleaned.get("logo"):
-        cleaned["logo"] = f"https://live.metahub.space/logo/medium/{imdb_id}/img"
-    return cleaned
 
 
 class CatalogService:
-    def __init__(self):
-        pass
-
     async def get_catalog(
         self, token: str, content_type: str, catalog_id: str
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """
-        Get catalog recommendations.
-
-        Args:
-            token: User token
-            content_type: Content type (movie/series)
-            catalog_id: Catalog ID (watchly.rec, watchly.creators, watchly.theme.*, etc.)
-
-        Returns:
-            Tuple of (recommendations dict, response headers dict)
-        """
-        # Validate inputs
+        """Get catalog recommendations."""
         self._validate_inputs(token, content_type, catalog_id)
-
-        # Prepare response headers
 
         headers: dict[str, Any] = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "*",
             "Content-Type": "application/json",
             "Cache-Control": (
-                f"public, max-age={settings.CATALOG_CACHE_TTL}," "stale-while-revalidate=3600, stale-if-error=1800"
+                f"public, max-age={settings.CATALOG_CACHE_TTL},stale-while-revalidate=3600, stale-if-error=1800"
             ),
         }
 
-        logger.info(f"[{redact_token(token)}...] Fetching catalog for {content_type} with id {catalog_id}")
+        logger.info(f"[{redact_token(token)}] Fetching catalog for {content_type} with id {catalog_id}")
 
-        # Get credentials
+        # Load credentials (needed for cache check + shuffle settings)
         credentials = await token_store.get_user_data(token)
         if not credentials:
             logger.error("No credentials found for token")
@@ -125,95 +54,75 @@ class CatalogService:
 
         # Trigger lazy update if needed
         if settings.AUTO_UPDATE_CATALOGS:
-            logger.info(f"[{redact_token(token)}...] Triggering auto update for token")
             try:
                 await catalog_updater.trigger_update(token, credentials)
             except Exception as e:
-                logger.error(f"[{redact_token(token)}...] Failed to trigger auto update: {e}")
-                # continue with the request even if the auto update fails
-                pass
+                logger.error(f"[{redact_token(token)}] Failed to trigger auto update: {e}")
 
-        bundle = StremioBundle()
-        user_settings = None
+        # Check cache first — avoids auth/library/profile loading on cache hit
         stale_data = None
+        cached_result = await user_cache.get_catalog(token, content_type, catalog_id)
 
+        if cached_result:
+            data, created_at = cached_result
+            age = int(time.time()) - created_at
+
+            if age < settings.CATALOG_REFRESH_INTERVAL_SECONDS:
+                logger.debug(f"[{redact_token(token)}] Using cached catalog for {content_type}/{catalog_id}")
+                user_settings = extract_settings(credentials)
+                data["metas"] = shuffle_data_if_needed(user_settings, catalog_id, data["metas"])
+                return data, headers
+
+            stale_data = data
+            logger.info(
+                f"[{redact_token(token)}] Catalog stale (age: {age}s) for "
+                f"{content_type}/{catalog_id}, refreshing..."
+            )
+        else:
+            logger.info(
+                f"[{redact_token(token)}] Catalog not cached for " f"{content_type}/{catalog_id}, building from scratch"
+            )
+
+        # Cache miss — load full user context
+        ctx = await load_user_context(token)
         try:
-            # get cached catalog
-            cached_result = await user_cache.get_catalog(token, content_type, catalog_id)
+            return await self._build_catalog(ctx, content_type, catalog_id, headers, stale_data)
+        finally:
+            await ctx.close()
 
-            if cached_result:
-                data, created_at = cached_result
-                age = int(time.time()) - created_at
+    async def _build_catalog(
+        self,
+        ctx: UserContext,
+        content_type: str,
+        catalog_id: str,
+        headers: dict[str, Any],
+        stale_data: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Build fresh catalog content using the loaded user context."""
+        try:
+            services = self._initialize_services(ctx.user_settings)
+            profile_service: ProfileService = services["profile"]
 
-                # If data is fresh enough (within refresh interval), return it
-                if age < settings.CATALOG_REFRESH_INTERVAL_SECONDS:
-                    logger.debug(f"[{redact_token(token)}...] Using cached catalog for {content_type}/{catalog_id}")
-                    # Try to extract settings from credentials for shuffling, even on cached path
-                    user_settings = self._extract_settings(credentials)
-                    meta_data = data["metas"]
-                    meta_data = shuffle_data_if_needed(user_settings, catalog_id, meta_data)
-                    data["metas"] = meta_data
-                    return data, headers
-
-                # If data is stale, keep it for fallback
-                stale_data = data
-                logger.info(
-                    f"[{redact_token(token)}...] Catalog is stale (age: {age}s) for {content_type}/{catalog_id},"
-                    "refreshing..."
-                )
-            else:
-                logger.info(
-                    f"[{redact_token(token)}...] Catalog not cached for {content_type}/{catalog_id}, building from"
-                    " scratch"
-                )
-
-            # Resolve auth and settings
-            auth_key = await self._resolve_auth(bundle, credentials, token)
-            user_settings = self._extract_settings(credentials)
-
-            language = user_settings.language if user_settings else "en-US"
-
-            # Try to get cached library items first
-            library_items = await user_cache.get_library_items(token)
-
-            if library_items:
-                logger.debug(f"[{redact_token(token)}...] Using cached library items")
-            else:
-                # Fetch library if not cached
-                logger.info(f"[{redact_token(token)}...] Library items not cached, fetching from Stremio")
-                library_items = await bundle.library.get_library_items(auth_key)
-                # Cache it for future use
-                await user_cache.set_library_items(token, library_items)
-
-            services = self._initialize_services(language, user_settings)
-            integration_service: ProfileIntegration = services["integration"]
-
-            # Try to get cached profile and watched sets
-            cached_data = await user_cache.get_profile_and_watched_sets(token, content_type)
+            # Load profile (cached or build fresh)
+            cached_data = await user_cache.get_profile_and_watched_sets(ctx.token, content_type)
 
             if cached_data:
-                # Use cached profile and watched sets
                 profile, watched_tmdb, watched_imdb = cached_data
-                logger.debug(f"[{redact_token(token)}...] Using cached profile and watched sets for {content_type}")
+                logger.debug(f"[{redact_token(ctx.token)}] Using cached profile for {content_type}")
             else:
-                # Build profile if not cached
-                logger.info(f"[{redact_token(token)}...] Profile not cached for {content_type}, building from library")
-                (
-                    profile,
-                    watched_tmdb,
-                    watched_imdb,
-                ) = await cache_profile_and_watched_sets(
-                    token,
+                source = ctx.user_settings.watch_history_source if ctx.user_settings else "stremio"
+                logger.info(
+                    f"[{redact_token(ctx.token)}] Profile not cached for {content_type}, building from {source}"
+                )
+                profile, watched_tmdb, watched_imdb = await profile_service.build_and_cache_profile(
+                    ctx.token,
                     content_type,
-                    integration_service,
-                    library_items,
-                    bundle,
-                    auth_key,
+                    ctx.library,
+                    ctx.bundle,
+                    ctx.auth_key,
+                    user_settings=ctx.user_settings,
                 )
 
-            whitelist = await integration_service.get_genre_whitelist(profile, content_type) if profile else set()
-
-            # Route to appropriate recommendation service
             recommendations = await self._get_recommendations(
                 catalog_id=catalog_id,
                 content_type=content_type,
@@ -221,61 +130,36 @@ class CatalogService:
                 profile=profile,
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
-                whitelist=whitelist,
-                library_items=library_items,
+                library_items=ctx.library,
                 limit=DEFAULT_CATALOG_LIMIT,
-                user_settings=user_settings,
+                user_settings=ctx.user_settings,
             )
-
-            # Pad if needed to meet minimum of 8 items
-            # # TODO: This is risky because it can fetch too many unrelated items.
-            if recommendations and len(recommendations) < DEFAULT_MIN_ITEMS:
-                recommendations = await pad_to_min(
-                    content_type,
-                    recommendations,
-                    DEFAULT_MIN_ITEMS,
-                    services["tmdb"],
-                    user_settings,
-                    watched_tmdb,
-                    watched_imdb,
-                )
 
             logger.info(f"Returning {len(recommendations)} items for {content_type}")
 
-            # Clean and format metadata
-            cleaned = [_clean_meta(m) for m in recommendations]
-            cleaned = [m for m in cleaned if m is not None]
-
-            cleaned = shuffle_data_if_needed(user_settings, catalog_id, cleaned)
+            cleaned = [m for m in (clean_meta(m) for m in recommendations) if m is not None]
+            cleaned = shuffle_data_if_needed(ctx.user_settings, catalog_id, cleaned)
 
             data = {"metas": cleaned}
-            # if catalog data is not empty, set the cache with STALE_TTL (7 days)
-            # This ensures we have fallback data available if the next refresh fails
             if cleaned:
-                await user_cache.set_catalog(token, content_type, catalog_id, data, settings.CATALOG_STALE_TTL)
+                await user_cache.set_catalog(ctx.token, content_type, catalog_id, data, settings.CATALOG_STALE_TTL)
 
             return data, headers
 
         except Exception as e:
-            logger.error(f"[{redact_token(token)}...] Failed to generate catalog: {e}")
+            logger.error(f"[{redact_token(ctx.token)}] Failed to generate catalog: {e}")
 
-            # Fallback 1: Return Stale Data if available
             if stale_data:
                 logger.warning(
-                    f"[{redact_token(token)}...] Serving stale content for {content_type}/{catalog_id} due to error"
+                    f"[{redact_token(ctx.token)}] Serving stale content for "
+                    f"{content_type}/{catalog_id} due to error"
                 )
-                # Shuffle stale data too if needed
-                user_settings = user_settings or self._extract_settings(credentials)
                 meta_data = stale_data.get("metas", [])
-                meta_data = shuffle_data_if_needed(user_settings, catalog_id, meta_data)
+                meta_data = shuffle_data_if_needed(ctx.user_settings, catalog_id, meta_data)
                 stale_data["metas"] = meta_data
                 return stale_data, headers
 
-            # Fallback 2: Return Empty (prevents 500 error)
             return {"metas": []}, headers
-
-        finally:
-            await bundle.close()
 
     def _validate_inputs(self, token: str, content_type: str, catalog_id: str) -> None:
         if not token:
@@ -288,7 +172,6 @@ class CatalogService:
             logger.warning(f"Invalid type: {content_type}")
             raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
 
-        # Supported IDs
         supported_base = [
             "watchly.rec",
             "watchly.creators",
@@ -306,43 +189,25 @@ class CatalogService:
                 ),
             )
 
-    async def _resolve_auth(self, bundle: StremioBundle, credentials: dict, token: str) -> str:
-        auth_key = credentials.get("authKey")
-        email = credentials.get("email")
-        password = credentials.get("password")
-
-        # Validate existing auth key
-        is_valid = False
-        if auth_key:
-            try:
-                await bundle.auth.get_user_info(auth_key)
-                is_valid = True
-            except Exception as e:
-                logger.error(f"Failed to validate auth key during catalog fetch: {e}")
-                pass
-
-        # Try to refresh if invalid
-        if not is_valid and email and password:
-            try:
-                auth_key = await bundle.auth.login(email, password)
-                credentials["authKey"] = auth_key
-                # Update token store with refreshed credentials
-                await token_store.update_user_data(token, credentials)
-            except Exception as e:
-                logger.error(f"Failed to refresh auth key during catalog fetch: {e}")
-
-        if not auth_key:
-            logger.error("No auth key found during catalog fetch")
-            raise HTTPException(status_code=401, detail="Stremio session expired. Please reconfigure.")
-
-        return auth_key
-
-    def _extract_settings(self, credentials: dict) -> UserSettings:
-        settings_dict = credentials.get("settings", {})
-        return UserSettings(**settings_dict) if settings_dict else get_default_settings()
+    def _initialize_services(self, user_settings: UserSettings) -> dict[str, Any]:
+        tmdb_key = resolve_tmdb_api_key(user_settings)
+        language = user_settings.language
+        tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
+        return {
+            "tmdb": tmdb_service,
+            "profile": ProfileService(language=language, tmdb_api_key=tmdb_key),
+            "item": ItemBasedService(tmdb_service, user_settings),
+            "theme": ThemeBasedService(tmdb_service, user_settings),
+            "top_picks": TopPicksService(tmdb_service, user_settings),
+            "creators": CreatorsService(tmdb_service, user_settings),
+            "all_based": AllBasedService(tmdb_service, user_settings),
+        }
 
     async def _get_trending_fallback(
-        self, content_type: str, limit: int = 20, user_settings: UserSettings | None = None
+        self,
+        content_type: str,
+        limit: int = 20,
+        user_settings: UserSettings | None = None,
     ) -> list[dict[str, Any]]:
         """Get trending items for new users without profiles."""
         from app.services.recommendation.utils import content_type_to_mtype
@@ -353,30 +218,15 @@ class CatalogService:
         tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
 
         try:
-            # Fetch trending week
             trending = await tmdb_service.get_trending(mtype, "week")
             items = trending.get("results", [])
 
-            # Enrich metadata
             from app.services.recommendation.metadata import RecommendationMetadata
 
             return await RecommendationMetadata.fetch_batch(tmdb_service, items, content_type, user_settings=None)
         except Exception as e:
             logger.warning(f"Failed to fetch trending items: {e}")
             return []
-
-    def _initialize_services(self, language: str, user_settings: UserSettings) -> dict[str, Any]:
-        tmdb_key = resolve_tmdb_api_key(user_settings)
-        tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
-        return {
-            "tmdb": tmdb_service,
-            "integration": ProfileIntegration(language=language, tmdb_api_key=tmdb_key),
-            "item": ItemBasedService(tmdb_service, user_settings),
-            "theme": ThemeBasedService(tmdb_service, user_settings),
-            "top_picks": TopPicksService(tmdb_service, user_settings),
-            "creators": CreatorsService(tmdb_service, user_settings),
-            "all_based": AllBasedService(tmdb_service, user_settings),
-        }
 
     async def _get_recommendations(
         self,
@@ -386,23 +236,13 @@ class CatalogService:
         profile: TasteProfile | None,
         watched_tmdb: set[int],
         watched_imdb: set[str],
-        whitelist: set[int],
-        library_items: dict,
+        library_items: LibraryCollection,
         limit: int,
         user_settings: UserSettings | None = None,
     ) -> list[dict[str, Any]]:
         """Route to appropriate recommendation service based on catalog ID."""
-        # Item-based recommendations
-        if any(
-            catalog_id.startswith(p)
-            for p in (
-                "watchly.loved.",
-                "watchly.watched.",
-            )
-        ):
-            # Extract item ID
+        if any(catalog_id.startswith(p) for p in ("watchly.loved.", "watchly.watched.")):
             item_id = re.sub(r"^watchly\.(loved|watched)\.", "", catalog_id)
-
             item_service: ItemBasedService = services["item"]
 
             recommendations = await item_service.get_recommendations_for_item(
@@ -411,11 +251,9 @@ class CatalogService:
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
                 limit=limit,
-                whitelist=whitelist,
             )
             logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
 
-        # Theme-based recommendations
         elif catalog_id.startswith("watchly.theme."):
             theme_service: ThemeBasedService = services["theme"]
 
@@ -426,11 +264,9 @@ class CatalogService:
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
                 limit=limit,
-                whitelist=whitelist,
             )
             logger.info(f"Found {len(recommendations)} recommendations for theme {catalog_id}")
 
-        # Creators-based recommendations
         elif catalog_id == "watchly.creators":
             creators_service: CreatorsService = services["creators"]
 
@@ -447,7 +283,6 @@ class CatalogService:
                 recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
             logger.info(f"Found {len(recommendations)} recommendations from creators")
 
-        # Top picks
         elif catalog_id == "watchly.rec":
             if profile:
                 top_picks_service: TopPicksService = services["top_picks"]
@@ -465,7 +300,6 @@ class CatalogService:
                 recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
             logger.info(f"Found {len(recommendations)} top picks for {content_type}")
 
-        # Based on what you loved
         elif catalog_id in ("watchly.all.loved", "watchly.liked.all"):
             item_type = "loved" if catalog_id == "watchly.all.loved" else "liked"
             all_based_service: AllBasedService = services["all_based"]
@@ -474,7 +308,6 @@ class CatalogService:
                 content_type=content_type,
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
-                whitelist=whitelist,
                 limit=limit,
                 item_type=item_type,
                 profile=profile,

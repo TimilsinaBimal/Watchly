@@ -2,7 +2,9 @@ from typing import Any
 
 from loguru import logger
 
-from app.models.taste_profile import TasteProfile
+from app.models.history import WatchHistory, WatchHistoryItem
+from app.models.library import StremioLibraryItem, StremioState
+from app.models.profile import ScoredItem, TasteProfile
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.constants import GENRE_WHITELIST_LIMIT
 from app.services.profile.sampling import SmartSampler
@@ -11,6 +13,49 @@ from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.scoring import ScoringService
 from app.services.tmdb.service import get_tmdb_service
 from app.services.user_cache import user_cache
+
+
+def _watch_history_item_to_scored(item: WatchHistoryItem) -> ScoredItem:
+    """Convert a WatchHistoryItem to a ScoredItem for the existing vectorizer pipeline."""
+    state_kwargs: dict[str, Any] = {}
+    if item.last_watched:
+        state_kwargs["lastWatched"] = item.last_watched
+    state_kwargs["timesWatched"] = item.watch_count
+
+    # Synthesize duration/timeWatched from completion ratio
+    if item.completion < 1.0:
+        state_kwargs["duration"] = 6000  # 100 min in seconds
+        state_kwargs["timeWatched"] = int(6000 * item.completion)
+    else:
+        state_kwargs["timesWatched"] = max(item.watch_count, 1)
+        state_kwargs["flaggedWatched"] = 1
+
+    state = StremioState(**state_kwargs)
+
+    is_loved = item.rating is not None and item.rating >= 9.0
+    is_liked = item.rating is not None and 7.0 <= item.rating < 9.0
+
+    lib_item = StremioLibraryItem(
+        _id=item.imdb_id,
+        type=item.type,
+        name=item.name,
+        state=state,
+        temp=False,
+        removed=False,
+        _is_loved=is_loved,
+        _is_liked=is_liked,
+    )
+
+    source_type = "loved" if is_loved else ("liked" if is_liked else "watched")
+
+    return ScoredItem(
+        item=lib_item,
+        score=50.0,
+        completion_rate=item.completion,
+        is_rewatched=item.watch_count > 1,
+        is_recent=False,
+        source_type=source_type,
+    )
 
 
 class ProfileIntegration:
@@ -204,6 +249,40 @@ class ProfileIntegration:
         await user_cache.update_library_hash(token, content_type, typed_items)
 
         return profile, watched_tmdb, watched_imdb
+
+    async def build_profile_from_watch_history(
+        self,
+        watch_history: WatchHistory,
+        content_type: str,
+        extra_exclusion_imdb: set[str] | None = None,
+    ) -> tuple[TasteProfile | None, set[str]]:
+        """
+        Build taste profile from external watch history (Trakt/Simkl).
+
+        Args:
+            watch_history: WatchHistory from external source
+            content_type: Content type (movie/series)
+            extra_exclusion_imdb: Additional IMDB IDs to exclude (e.g. Stremio library)
+
+        Returns:
+            Tuple of (profile, watched_imdb_ids)
+        """
+        typed_items = [it for it in watch_history.items if it.type == content_type]
+        if not typed_items:
+            return None, extra_exclusion_imdb or set()
+
+        # Convert to ScoredItems for the existing pipeline
+        scored_items = [_watch_history_item_to_scored(it) for it in typed_items]
+
+        # Build profile
+        profile = await self.builder.build_profile(scored_items, content_type=content_type)
+
+        # Exclusion set: union of external history + any extra (Stremio library)
+        watched_imdb = watch_history.imdb_ids()
+        if extra_exclusion_imdb:
+            watched_imdb |= extra_exclusion_imdb
+
+        return profile, watched_imdb
 
     async def get_genre_whitelist(
         self,

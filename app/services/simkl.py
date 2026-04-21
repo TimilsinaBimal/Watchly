@@ -1,9 +1,12 @@
 import asyncio
+from datetime import datetime
 from typing import Any
 
 from cachetools import TTLCache
 from httpx import AsyncClient
 from loguru import logger
+
+from app.models.history import WatchHistory, WatchHistoryItem
 
 
 def get_popularity(rank: int | None, N: int = 100000, K: int = 100) -> float:
@@ -106,6 +109,78 @@ class SimklService:
         except Exception as e:
             logger.error(f"Error fetching details from Simkl: {e}")
             return {}
+
+    async def get_history(self, access_token: str, client_id: str) -> WatchHistory:
+        """Fetch watch history from Simkl using OAuth access token."""
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+            "simkl-api-key": client_id,
+        }
+
+        movies_coro = self.client.get(
+            f"{self.base_url}/sync/all-items/movies",
+            headers=headers,
+            follow_redirects=True,
+        )
+        shows_coro = self.client.get(
+            f"{self.base_url}/sync/all-items/shows",
+            headers=headers,
+            follow_redirects=True,
+        )
+
+        results = await asyncio.gather(movies_coro, shows_coro, return_exceptions=True)
+
+        items: list[WatchHistoryItem] = []
+        seen: set[str] = set()
+
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.warning(f"Simkl sync request failed: {result}")
+                continue
+            try:
+                result.raise_for_status()
+                data = result.json()
+            except Exception as e:
+                logger.warning(f"Failed to parse Simkl sync response: {e}")
+                continue
+
+            mtype = "movie" if idx == 0 else "series"
+            entries = data.get("movies", []) if idx == 0 else data.get("shows", [])
+
+            for entry in entries:
+                media = entry.get("movie") or entry.get("show") or {}
+                imdb_id = media.get("ids", {}).get("imdb")
+                if not imdb_id or imdb_id in seen:
+                    continue
+                seen.add(imdb_id)
+
+                user_rating = entry.get("user_rating")
+                rating = float(user_rating) if user_rating is not None else None
+
+                last_watched = None
+                raw_date = entry.get("last_watched_at")
+                if raw_date:
+                    try:
+                        last_watched = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        pass
+
+                items.append(
+                    WatchHistoryItem(
+                        imdb_id=imdb_id,
+                        type=mtype,
+                        name=media.get("title", ""),
+                        rating=rating,
+                        watch_count=1,
+                        completion=1.0,
+                        last_watched=last_watched,
+                        source="simkl",
+                    )
+                )
+
+        logger.info(f"Simkl history: {len(items)} items")
+        return WatchHistory(items=items, source="simkl")
 
     async def get_recommendations(self, imdb_id: str, mtype: str, api_key: str) -> list[dict[str, Any]]:
         """Get recommendations for a single item (original method for item-based)."""

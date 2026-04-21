@@ -28,11 +28,7 @@ class RecommendationMetadata:
 
     @classmethod
     async def format_for_stremio(
-        cls,
-        details: dict[str, Any],
-        media_type: str,
-        user_settings: Any = None,
-        logo_url: str | None = None,
+        cls, details: dict[str, Any], media_type: str, user_settings: Any = None, logo_url: str | None = None
     ) -> dict[str, Any] | None:
         """Format TMDB details into Stremio metadata object."""
         external_ids = details.get("external_ids", {})
@@ -73,6 +69,9 @@ class RecommendationMetadata:
             "_tmdb_id": tmdb_id_raw,
             "genre_ids": [g.get("id") for g in genres_full if isinstance(g, dict) and g.get("id") is not None],
         }
+        if logo_url:
+            meta_data["logo"] = logo_url
+
         if logo_url:
             meta_data["logo"] = logo_url
 

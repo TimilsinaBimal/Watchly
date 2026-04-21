@@ -3,10 +3,25 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.models.library import StremioLibraryItem
+
+
+class ScoredItem(BaseModel):
+    """A processed library item with calculated interest scores.
+
+    Output of the ScoringService — used by the profile builder and sampler.
+    """
+
+    item: StremioLibraryItem
+    score: float
+    completion_rate: float
+    is_rewatched: bool
+    is_recent: bool
+    source_type: str  # 'loved' | 'watched' | 'liked'
+
 
 class TasteProfile(BaseModel):
-    """
-    Transparent, additive taste profile.
+    """Transparent, additive taste profile.
 
     Answers one question: "Which item is more likely to be liked by this user?"
 
@@ -38,11 +53,8 @@ class TasteProfile(BaseModel):
         default_factory=set,
         description="Set of processed item IDs to prevent double counting",
     )
-    interest_summary: str | None = Field(default=None, description="LLM-generated description of user interests")
 
     class Config:
-        """Pydantic configuration."""
-
         json_encoders = {datetime: lambda v: v.isoformat()}
 
     def get_top_genres(self, limit: int = 5) -> list[tuple[int, float]]:
@@ -70,18 +82,12 @@ class TasteProfile(BaseModel):
         return sorted(self.cast_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
 
     def get_top_creators(self, limit: int = 5) -> list[tuple[int, float]]:
-        """
-        Get top N creators (directors + cast merged) by score.
-
-        Runtime merge for convenience. Profile stores them separately.
-        """
-        # Merge directors and cast for combined ranking
+        """Get top N creators (directors + cast merged) by score."""
         all_creators = {**self.director_scores, **self.cast_scores}
         return sorted(all_creators.items(), key=lambda x: x[1], reverse=True)[:limit]
 
     def normalize_for_ranking(self) -> dict[str, dict[Any, float]]:
-        """
-        Normalize scores for ranking (read-time only).
+        """Normalize scores for ranking (read-time only).
 
         Returns normalized scores (0-1 range) for each feature type.
         Used only when generating recommendations, never during profile updates.

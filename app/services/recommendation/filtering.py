@@ -1,5 +1,10 @@
+from datetime import datetime
 from typing import Any
 from urllib.parse import unquote
+
+from app.core.constants import DISCOVERY_SETTINGS
+from app.core.settings import DEFAULT_YEAR_MIN, get_current_year
+from app.models.library import LibraryCollection
 
 
 def parse_identifier(identifier: str) -> tuple[str | None, int | None]:
@@ -36,31 +41,25 @@ class RecommendationFiltering:
     @staticmethod
     async def get_exclusion_sets(
         stremio_service: Any,
-        library_data: dict | None = None,
+        library_data: LibraryCollection | None = None,
         auth_key: str | None = None,
     ) -> tuple[set[str], set[int]]:
-        """
-        Fetch library items and build exclusion sets for watched/loved content.
-        """
+        """Build exclusion sets for watched/loved content."""
         if library_data is None:
             if not auth_key:
                 return set(), set()
             library_data = await stremio_service.library.get_library_items(auth_key)
 
-        library_data = library_data or {}
+        if library_data is None:
+            return set(), set()
 
-        all_items = (
-            library_data.get("loved", [])
-            + library_data.get("watched", [])
-            + library_data.get("removed", [])
-            + library_data.get("liked", [])
-        )
+        all_items = library_data.all_items_with_removed()
 
         imdb_ids = set()
         tmdb_ids = set()
 
         for item in all_items:
-            item_id = item.get("_id", "")
+            item_id = item.id if hasattr(item, "id") else item.get("_id", "")
             if not item_id:
                 continue
 
@@ -84,6 +83,19 @@ class RecommendationFiltering:
                     pass
 
         return imdb_ids, tmdb_ids
+
+    @staticmethod
+    def get_library_imdb_ids(library_data: dict | None) -> set[str]:
+        """Extract all IMDB IDs from Stremio library data."""
+        if not library_data:
+            return set()
+        imdb_ids: set[str] = set()
+        for category in ("loved", "liked", "watched", "added", "removed"):
+            for item in library_data.get(category, []):
+                item_id = item.get("_id", "")
+                if item_id.startswith("tt"):
+                    imdb_ids.add(item_id.split(":")[0])
+        return imdb_ids
 
     @staticmethod
     def filter_candidates(
@@ -173,29 +185,128 @@ class RecommendationFiltering:
             return [int(g) for g in user_settings.excluded_series_genres]
         return []
 
-    @staticmethod
-    def get_genre_multiplier(genre_ids: list[int] | None, whitelist: set[int]) -> float:
-        """Calculate a score multiplier based on genre preference. Blocks animation if not preferred."""
-        if not whitelist:
-            return 1.0
 
-        gids = set(genre_ids or [])
-        if not gids:
-            return 1.0
+# --- Standalone filtering functions (moved from utils.py) ---
 
-        # If it has at least one preferred genre, full score
-        if gids & whitelist:
-            return 1.0
 
-        # Otherwise, soft penalty to prioritize whitelist items without blocking variety
-        return 0.4
+def filter_watched_by_imdb(enriched: list[dict[str, Any]], watched_imdb: set[str]) -> list[dict[str, Any]]:
+    """Filter enriched items by watched IMDB IDs."""
+    final = []
+    for item in enriched:
+        if item.get("id") in watched_imdb:
+            continue
+        if item.get("_external_ids", {}).get("imdb_id") in watched_imdb:
+            continue
+        final.append(item)
+    return final
 
-    @staticmethod
-    def passes_top_genre_whitelist(genre_ids: list[int] | None, whitelist: set[int]) -> bool:
-        """Check if an item's genres match the user's top genre whitelist (Softened)."""
-        if not whitelist:
-            return True
-        gids = set(genre_ids or [])
-        if not gids:
-            return True
-        return True
+
+def filter_by_genres(
+    items: list[dict[str, Any]],
+    watched_tmdb: set[int],
+    excluded_ids: list[int] | None = None,
+) -> list[dict[str, Any]]:
+    """Filter items by watched set and excluded genres."""
+    excluded_ids = excluded_ids or []
+    filtered = []
+
+    for item in items:
+        item_id = item.get("id")
+        if not item_id or item_id in watched_tmdb:
+            continue
+        genre_ids = item.get("genre_ids", [])
+        if excluded_ids and any(gid in excluded_ids for gid in genre_ids):
+            continue
+        filtered.append(item)
+
+    return filtered
+
+
+def build_discover_params(user_settings: Any) -> dict[str, Any]:
+    """Build TMDB discover API parameters based on user settings."""
+    params: dict[str, Any] = {}
+    if not user_settings:
+        return params
+
+    current_date = datetime.now()
+    current_year = get_current_year()
+
+    year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
+    year_max = getattr(user_settings, "year_max", current_year)
+
+    for prefix in ["primary_release_date", "first_air_date"]:
+        params[f"{prefix}.gte"] = f"{year_min}-01-01"
+        if year_max >= current_year:
+            params[f"{prefix}.lte"] = current_date.strftime("%Y-%m-%d")
+        else:
+            params[f"{prefix}.lte"] = f"{year_max}-12-31"
+
+    return params
+
+
+def apply_discover_filters(params: dict[str, Any], user_settings: Any) -> dict[str, Any]:
+    """Merge discover params with global user settings (years, popularity)."""
+    if not user_settings:
+        return params
+
+    global_params = build_discover_params(user_settings)
+    params = {**global_params, **params}
+
+    min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(user_settings)
+
+    if "vote_count.gte" not in params:
+        params["vote_count.gte"] = min_votes
+    if "vote_average.gte" not in params:
+        params["vote_average.gte"] = min_rating
+
+    return params
+
+
+def filter_items_by_settings(
+    items: list[dict[str, Any]], user_settings: Any, simkl: bool = False
+) -> list[dict[str, Any]]:
+    """Filter items post-fetch based on user settings (years, popularity)."""
+    if not user_settings:
+        return items
+
+    year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
+    year_max = getattr(user_settings, "year_max", get_current_year())
+    pop_pref = getattr(user_settings, "popularity", "balanced")
+
+    filtered = []
+    for item in items:
+        release_date = item.get("release_date") or item.get("first_air_date") or item.get("released")
+        if release_date:
+            try:
+                year = int(release_date.split("-")[0])
+                if year < year_min or year > year_max:
+                    continue
+            except (ValueError, IndexError):
+                pass
+
+        params = DISCOVERY_SETTINGS.get(pop_pref, {})
+        if not params:
+            continue
+
+        ops = {
+            "gte": lambda x, y: x >= y,
+            "lte": lambda x, y: x <= y,
+        }
+
+        passes_all = True
+        for param in params:
+            t_param, param_ops = param.split(".")
+            param_operator = ops.get(param_ops)
+            if not param_operator:
+                continue
+            if simkl and t_param == "popularity":
+                continue
+            item_value = item.get(t_param)
+            if item_value is None or not param_operator(item_value, params[param]):
+                passes_all = False
+                break
+
+        if passes_all:
+            filtered.append(item)
+
+    return filtered

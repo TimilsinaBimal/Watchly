@@ -2,7 +2,7 @@ from typing import Any
 
 import httpx
 
-from app.models.scoring import ScoredItem
+from app.models.profile import ScoredItem
 from app.services.cinemeta_service import CinemetaService, cinemeta_service
 from app.services.profile.constants import (
     CAST_POSITION_LEAD,

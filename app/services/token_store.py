@@ -133,6 +133,28 @@ class TokenStore:
                         storage_data["settings"]["tmdb_api_key"] = self.encrypt_token(tmdb_api_key)
                 except Exception as exc:
                     logger.warning(f"Failed to encrypt tmdb_api_key for {redact_token(user_id)}: {exc}")
+
+        # Encrypt trakt tokens if present
+        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
+            for trakt_field in ("trakt_access_token", "trakt_refresh_token"):
+                value = storage_data["settings"].get(trakt_field)
+                if value:
+                    try:
+                        if not value.startswith("gAAAAAB"):
+                            storage_data["settings"][trakt_field] = self.encrypt_token(value)
+                    except Exception as exc:
+                        logger.warning(f"Failed to encrypt {trakt_field} for {redact_token(user_id)}: {exc}")
+
+        # Encrypt simkl_access_token if present
+        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
+            simkl_access_token = storage_data["settings"].get("simkl_access_token")
+            if simkl_access_token:
+                try:
+                    if not simkl_access_token.startswith("gAAAAAB"):
+                        storage_data["settings"]["simkl_access_token"] = self.encrypt_token(simkl_access_token)
+                except Exception as exc:
+                    logger.warning(f"Failed to encrypt simkl_access_token for {redact_token(user_id)}: {exc}")
+
         json_str = json.dumps(storage_data)
 
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
@@ -191,14 +213,15 @@ class TokenStore:
             needs_save = True
 
         # Case 2: Clean up deprecated rpdb_key field if it exists (even if empty/null)
-        # Remove it since we've migrated to poster_rating or it's no longer needed
+        # Remove it since we've migrated to poster_rating or it's no longer needed.
+        # Do not overwrite a valid migrated poster_rating payload.
         if "rpdb_key" in settings_dict:
             settings_dict.pop("rpdb_key")
-            # keep empty poster_rating field for now
-            settings_dict["poster_rating"] = {
-                "provider": "rpdb",
-                "api_key": None,
-            }
+            if not settings_dict.get("poster_rating"):
+                settings_dict["poster_rating"] = {
+                    "provider": "rpdb",
+                    "api_key": None,
+                }
             if not needs_save:  # Only log if we didn't already log migration
                 logger.info(f"[MIGRATION] Removing deprecated rpdb_key field for {redact_token(token)}")
             needs_save = True
@@ -311,6 +334,25 @@ class TokenStore:
                         data["settings"]["tmdb_api_key"] = self.decrypt_token(tmdb_api_key)
                 except Exception as e:
                     logger.debug(f"Decryption failed for tmdb_api_key associated with {redact_token(token)}: {e}")
+
+            # Decrypt trakt tokens
+            for trakt_field in ("trakt_access_token", "trakt_refresh_token"):
+                value = data["settings"].get(trakt_field)
+                if value:
+                    try:
+                        if value.startswith("gAAAAA"):
+                            data["settings"][trakt_field] = self.decrypt_token(value)
+                    except Exception as e:
+                        logger.debug(f"Decryption failed for {trakt_field} associated with {redact_token(token)}: {e}")
+
+            # Decrypt simkl_access_token
+            simkl_access_token = data["settings"].get("simkl_access_token")
+            if simkl_access_token:
+                try:
+                    if simkl_access_token.startswith("gAAAAA"):
+                        data["settings"]["simkl_access_token"] = self.decrypt_token(simkl_access_token)
+                except Exception as e:
+                    logger.debug(f"Decryption failed for simkl_access_token associated with {redact_token(token)}: {e}")
 
         return data
 

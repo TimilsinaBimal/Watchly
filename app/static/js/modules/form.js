@@ -1,181 +1,190 @@
 // Form Submission and UI Helpers
 
-import { showToast, showConfirm, escapeHtml } from './ui.js';
+import { showToast } from './ui.js';
 import { switchSection } from './navigation.js';
+import {
+    clearValidationMessage,
+    initializeEyeToggle,
+    initializePasswordToggleButton,
+    initializeValidatedSecretField,
+    setValidationMessage
+} from './field-helpers.js';
+import { initializeSuccessActions, showSuccessSection } from './form-success.js';
+import { initializeYearSliderControl } from './year-slider.js';
 import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 
+const YEAR_RANGE_DEFAULTS = window.YEAR_RANGE_DEFAULTS || { min: 1970, max: new Date().getFullYear() };
+const LOADING_ICON = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
 // DOM Elements - will be initialized
-let configForm = null;
 let submitBtn = null;
 let emailInput = null;
 let passwordInput = null;
 let languageSelect = null;
 let movieGenreList = null;
 let seriesGenreList = null;
-let getCatalogs = null;
+let appState = null;
 let resetApp = null;
+let validatePosterRatingApiKey = null;
+let updateYearSlider = () => {};
 
-export function initializeForm(domElements, catalogState) {
-    configForm = domElements.configForm;
+export function initializeForm(domElements, state, actions) {
     submitBtn = domElements.submitBtn;
     emailInput = domElements.emailInput;
     passwordInput = domElements.passwordInput;
     languageSelect = domElements.languageSelect;
     movieGenreList = domElements.movieGenreList;
     seriesGenreList = domElements.seriesGenreList;
-    getCatalogs = catalogState.getCatalogs;
-    resetApp = catalogState.resetApp;
+    appState = state;
+    resetApp = actions.resetApp;
 
     initializeFormSubmission();
     initializeGenreLists();
     initializeLanguageSelect();
     initializePasswordToggles();
-    initializeSuccessActions();
-    initializePosterRatingProvider();
+    initializeSuccessHandlers();
+    validatePosterRatingApiKey = initializePosterRatingProvider();
     initializeTmdb();
     initializeSimkl();
     initializeGemini();
-    initializeYearSlider();
+    updateYearSlider = initializeYearSliderControl();
+    initializeWatchHistorySource();
+}
+
+async function postJson(url, payload) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    return response.json();
+}
+
+function getRequestPayload() {
+    const catalogs = appState ? appState.catalogs : [];
+
+    return {
+        authKey: (document.getElementById('authKey')?.value || '').trim() || undefined,
+        email: emailInput?.value.trim() || undefined,
+        password: passwordInput?.value || undefined,
+        catalogs: catalogs.map(catalog => ({
+            id: catalog.id,
+            name: catalog.name,
+            enabled: catalog.enabled !== false,
+            enabled_movie: catalog.enabledMovie !== false,
+            enabled_series: catalog.enabledSeries !== false,
+            display_at_home: catalog.display_at_home !== false,
+            shuffle: catalog.shuffle === true
+        })),
+        language: languageSelect?.value || 'english',
+        year_min: parseInt(document.getElementById('yearMin')?.value || String(YEAR_RANGE_DEFAULTS.min), 10),
+        year_max: parseInt(document.getElementById('yearMax')?.value || String(YEAR_RANGE_DEFAULTS.max), 10),
+        popularity: document.getElementById('popularitySelect')?.value || 'balanced',
+        sorting_order: document.getElementById('sortingOrderSelect')?.value || 'default',
+        poster_rating_provider: document.getElementById('posterRatingProvider')?.value || '',
+        poster_rating_api_key: document.getElementById('posterRatingApiKey')?.value.trim() || '',
+        tmdb_api_key: document.getElementById('tmdbApiKey')?.value.trim() || '',
+        simkl_api_key: document.getElementById('simklApiKey')?.value.trim() || '',
+        gemini_api_key: document.getElementById('geminiApiKey')?.value.trim() || '',
+        excluded_movie_genres: Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value),
+        excluded_series_genres: Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value),
+        watch_history_source: document.getElementById('watchHistorySource')?.value || 'stremio',
+    };
+}
+
+function buildTokenPayload(formData) {
+    let posterRating;
+    if (formData.poster_rating_provider && formData.poster_rating_api_key) {
+        posterRating = {
+            provider: formData.poster_rating_provider,
+            api_key: formData.poster_rating_api_key
+        };
+    }
+
+    return {
+        authKey: formData.authKey,
+        email: formData.email,
+        password: formData.password,
+        catalogs: formData.catalogs,
+        language: formData.language,
+        year_min: formData.year_min,
+        year_max: formData.year_max,
+        popularity: formData.popularity,
+        sorting_order: formData.sorting_order,
+        poster_rating: posterRating || null,
+        tmdb_api_key: formData.tmdb_api_key || undefined,
+        simkl_api_key: formData.simkl_api_key,
+        gemini_api_key: formData.gemini_api_key,
+        excluded_movie_genres: formData.excluded_movie_genres,
+        excluded_series_genres: formData.excluded_series_genres,
+        watch_history_source: formData.watch_history_source,
+        trakt_access_token: window._watchlyOAuth?.trakt?.access_token || undefined,
+        trakt_refresh_token: window._watchlyOAuth?.trakt?.refresh_token || undefined,
+        simkl_access_token: window._watchlyOAuth?.simkl?.access_token || undefined,
+    };
+}
+
+function validateFormData(formData) {
+    if (!formData.authKey && !(formData.email && formData.password)) {
+        showError('generalError', 'Please login with Stremio or enter email & password.');
+        switchSection('login');
+        return false;
+    }
+
+    if (!formData.tmdb_api_key) {
+        showError('generalError', 'TMDB API key is required.');
+        const tmdbInput = document.getElementById('tmdbApiKey');
+        if (tmdbInput) {
+            tmdbInput.focus();
+            tmdbInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return false;
+    }
+
+    return true;
 }
 
 // Form Submission
-async function initializeFormSubmission() {
+function initializeFormSubmission() {
     if (!submitBtn) return;
 
-    submitBtn.addEventListener("click", async (e) => {
+    submitBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         clearErrors();
 
-        const sAuthKey = (document.getElementById("authKey").value || '').trim();
-        const email = emailInput?.value.trim();
-        const password = passwordInput?.value;
-        const language = languageSelect.value;
-        const popularity = document.getElementById("popularitySelect")?.value || "balanced";
-        const yearMin = parseInt(document.getElementById("yearMin")?.value || "1980");
-        const yearMax = parseInt(document.getElementById("yearMax")?.value || "2026");
-        const sortingOrder = document.getElementById("sortingOrderSelect")?.value || "default";
-        const posterRatingProvider = document.getElementById("posterRatingProvider")?.value || "";
-        const posterRatingApiKey = document.getElementById("posterRatingApiKey")?.value.trim() || "";
-        const excludedMovieGenres = Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value);
-        const excludedSeriesGenres = Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value);
-        const tmdbApiKey = document.getElementById("tmdbApiKey")?.value.trim() || "";
-        const simklApiKey = document.getElementById("simklApiKey")?.value.trim() || "";
-        const geminiApiKey = document.getElementById("geminiApiKey")?.value.trim() || "";
-
-        const catalogsToSend = [];
-        const catalogs = getCatalogs ? getCatalogs() : [];
-        // Get enabled state from catalog objects (updated by visibility button)
-        catalogs.forEach(originalCatalog => {
-            const catalogId = originalCatalog.id;
-            const enabled = originalCatalog.enabled !== false;
-
-            // Get enabled_movie and enabled_series from toggle buttons
-            const activeBtn = document.querySelector(`.catalog-type-btn[data-catalog-id="${catalogId}"].bg-white`);
-            let enabledMovie = true;
-            let enabledSeries = true;
-
-            if (activeBtn) {
-                const mode = activeBtn.dataset.mode;
-                if (mode === 'movie') {
-                    enabledMovie = true;
-                    enabledSeries = false;
-                } else if (mode === 'series') {
-                    enabledMovie = false;
-                    enabledSeries = true;
-                } else {
-                    // 'both' or default
-                    enabledMovie = true;
-                    enabledSeries = true;
-                }
-            } else {
-                // Fallback to catalog state
-                enabledMovie = originalCatalog.enabledMovie !== false;
-                enabledSeries = originalCatalog.enabledSeries !== false;
-            }
-
-            catalogsToSend.push({
-                id: catalogId,
-                name: originalCatalog.name,
-                enabled: enabled,
-                enabled_movie: enabledMovie,
-                enabled_series: enabledSeries,
-                display_at_home: originalCatalog.display_at_home !== false, // Default to true if not set
-                shuffle: originalCatalog.shuffle === true, // Default to false if not set
-            });
-        });
-
-        // Validation
-        if (!sAuthKey && !(email && password)) {
-            showError("generalError", "Please login with Stremio or enter email & password.");
-            switchSection('login');
+        const formData = getRequestPayload();
+        if (!validateFormData(formData)) {
             return;
         }
 
-        if (!tmdbApiKey) {
-            showError("generalError", "TMDB API key is required.");
-            const tmdbInput = document.getElementById("tmdbApiKey");
-            if (tmdbInput) {
-                tmdbInput.focus();
-                tmdbInput.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-            return;
-        }
-
-        // Validate poster rating API key if provided
-        if (posterRatingProvider && posterRatingApiKey) {
-            if (window.validatePosterRatingApiKey) {
-                const isValid = await window.validatePosterRatingApiKey();
-                if (!isValid) {
-                    return;
-                }
+        if (formData.poster_rating_provider && formData.poster_rating_api_key && validatePosterRatingApiKey) {
+            const isValid = await validatePosterRatingApiKey();
+            if (!isValid) {
+                return;
             }
         }
 
         setLoading(true);
 
         try {
-            // Build poster_rating payload
-            let posterRating = null;
-            if (posterRatingProvider && posterRatingApiKey) {
-                posterRating = {
-                    provider: posterRatingProvider,
-                    api_key: posterRatingApiKey
-                };
-            }
-
-            const payload = {
-                authKey: sAuthKey || undefined,
-                email: email || undefined,
-                password: password || undefined,
-                catalogs: catalogsToSend,
-                language: language,
-                year_min: yearMin,
-                year_max: yearMax,
-                popularity: popularity,
-                sorting_order: sortingOrder,
-                poster_rating: posterRating,
-                tmdb_api_key: tmdbApiKey || undefined,
-                simkl_api_key: simklApiKey,
-                gemini_api_key: geminiApiKey,
-                excluded_movie_genres: excludedMovieGenres,
-                excluded_series_genres: excludedSeriesGenres
-            };
-
-            const response = await fetch("/tokens/", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
+            const payload = buildTokenPayload(formData);
+            const response = await fetch('/tokens/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.detail || "Failed to generate manifest URL");
+                throw new Error(errorData.detail || 'Failed to generate manifest URL');
             }
+
             const data = await response.json();
             showSuccess(data.manifestUrl);
         } catch (error) {
-            console.error("Error:", error);
-            showError("generalError", error.message);
+            console.error('Error:', error);
+            showError('generalError', error.message);
         } finally {
             setLoading(false);
         }
@@ -190,6 +199,7 @@ function initializeGenreLists() {
 
 function renderGenreList(container, genres, namePrefix) {
     if (!container) return;
+
     container.innerHTML = genres.map(genre => `
         <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition group">
             <div class="relative flex items-center">
@@ -211,473 +221,200 @@ function initializeLanguageSelect() {
 
 // Poster Rating Provider
 function initializePosterRatingProvider() {
-    const providerSelect = document.getElementById("posterRatingProvider");
-    const apiKeyContainer = document.getElementById("posterRatingApiKeyContainer");
-    const apiKeyInput = document.getElementById("posterRatingApiKey");
-    const helpContainer = document.getElementById("posterRatingHelp");
-    const helpText = document.getElementById("posterRatingHelpText");
-    const validateBtn = document.getElementById("posterRatingApiKeyValidate");
-    const toggleBtn = document.getElementById("posterRatingApiKeyToggle");
-    const eyeIcon = document.getElementById("posterRatingApiKeyEye");
-    const eyeOffIcon = document.getElementById("posterRatingApiKeyEyeOff");
-    const validationMessage = document.getElementById("posterRatingValidationMessage");
+    const providerSelect = document.getElementById('posterRatingProvider');
+    const apiKeyContainer = document.getElementById('posterRatingApiKeyContainer');
+    const apiKeyInput = document.getElementById('posterRatingApiKey');
+    const helpContainer = document.getElementById('posterRatingHelp');
+    const helpText = document.getElementById('posterRatingHelpText');
+    const validateBtn = document.getElementById('posterRatingApiKeyValidate');
+    const toggleBtn = document.getElementById('posterRatingApiKeyToggle');
+    const eyeIcon = document.getElementById('posterRatingApiKeyEye');
+    const eyeOffIcon = document.getElementById('posterRatingApiKeyEyeOff');
+    const validationMessage = document.getElementById('posterRatingValidationMessage');
 
-    if (!providerSelect || !apiKeyContainer || !apiKeyInput || !helpContainer || !helpText) return;
+    if (!providerSelect || !apiKeyContainer || !apiKeyInput || !helpContainer || !helpText) {
+        return null;
+    }
 
     const providerInfo = {
-        "rpdb": {
-            name: "RPDB (RatingPosterDB)",
-            url: "https://ratingposterdb.com",
-            description: "Enable ratings on posters via RatingPosterDB"
+        rpdb: {
+            name: 'RPDB (RatingPosterDB)',
+            url: 'https://ratingposterdb.com',
+            description: 'Enable ratings on posters via RatingPosterDB'
         },
-        "top_posters": {
-            name: "Top Posters",
-            url: "https://api.top-streaming.stream/",
-            description: "Enable ratings on posters via Top Posters"
+        top_posters: {
+            name: 'Top Posters',
+            url: 'https://api.top-streaming.stream/',
+            description: 'Enable ratings on posters via Top Posters'
         }
     };
 
     let isValidated = false;
 
-    // Eye toggle functionality
-    if (toggleBtn && eyeIcon && eyeOffIcon) {
-        toggleBtn.addEventListener("click", () => {
-            const isPassword = apiKeyInput.type === "password";
-            apiKeyInput.type = isPassword ? "text" : "password";
-            eyeIcon.classList.toggle("hidden", !isPassword);
-            eyeOffIcon.classList.toggle("hidden", isPassword);
-        });
+    initializeEyeToggle({ input: apiKeyInput, toggleBtn, eyeIcon, eyeOffIcon });
+
+    function resetValidation() {
+        isValidated = false;
+        clearValidationMessage(validationMessage);
     }
 
-    // Validation function
+    function updateUI() {
+        const selectedProvider = providerSelect.value;
+        const info = providerInfo[selectedProvider];
+
+        if (info) {
+            apiKeyContainer.style.display = 'block';
+            helpContainer.style.display = 'block';
+            helpText.innerHTML = `${info.description}. Get your API key from <a href="${info.url}" target="_blank" class="text-slate-300 hover:text-white underline">${info.name}</a>.`;
+            resetValidation();
+            return;
+        }
+
+        apiKeyContainer.style.display = 'none';
+        helpContainer.style.display = 'none';
+        apiKeyInput.value = '';
+        resetValidation();
+    }
+
     async function validateApiKey() {
         const selectedProvider = providerSelect.value;
         const apiKey = apiKeyInput.value.trim();
 
         if (!selectedProvider || !apiKey) {
-            showValidationMessage("Please select a provider and enter an API key", "error");
+            setValidationMessage(validationMessage, 'Please select a provider and enter an API key', 'error');
             return false;
         }
 
-        if (!validateBtn) return false;
+        if (!validateBtn) {
+            return false;
+        }
 
-        // Show loading state
         validateBtn.disabled = true;
-        validateBtn.classList.add("opacity-50", "cursor-not-allowed");
+        validateBtn.classList.add('opacity-50', 'cursor-not-allowed');
         const originalHTML = validateBtn.innerHTML;
-        validateBtn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+        validateBtn.innerHTML = LOADING_ICON;
 
         try {
-            const response = await fetch("/poster-rating/validate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ provider: selectedProvider, api_key: apiKey })
+            const data = await postJson('/poster-rating/validate', {
+                provider: selectedProvider,
+                api_key: apiKey
             });
 
-            const data = await response.json();
-
             if (data.valid) {
-                showValidationMessage("API key is valid ✓", "success");
+                setValidationMessage(validationMessage, 'API key is valid ✓', 'success');
                 isValidated = true;
                 return true;
-            } else {
-                showValidationMessage(data.message || "Invalid API key", "error");
-                apiKeyInput.value = ""; // Clear invalid key
-                isValidated = false;
-                return false;
             }
+
+            setValidationMessage(validationMessage, data.message || 'Invalid API key', 'error');
+            apiKeyInput.value = '';
+            isValidated = false;
+            return false;
         } catch (error) {
-            showValidationMessage("Validation failed. Please try again.", "error");
+            setValidationMessage(validationMessage, 'Validation failed. Please try again.', 'error');
             isValidated = false;
             return false;
         } finally {
             validateBtn.disabled = false;
-            validateBtn.classList.remove("opacity-50", "cursor-not-allowed");
+            validateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             validateBtn.innerHTML = originalHTML;
         }
     }
 
-    // Show validation message
-    function showValidationMessage(message, type) {
-        if (!validationMessage) return;
-        validationMessage.textContent = message;
-        validationMessage.className = `mt-2 text-xs ${type === "success" ? "text-green-400" : "text-red-400"}`;
-        validationMessage.classList.remove("hidden");
-    }
-
-    // Clear validation message
-    function clearValidationMessage() {
-        if (validationMessage) {
-            validationMessage.classList.add("hidden");
-        }
-    }
-
-    // Validate button click
     if (validateBtn) {
-        validateBtn.addEventListener("click", validateApiKey);
+        validateBtn.addEventListener('click', validateApiKey);
     }
 
-    // Clear validation when API key changes
-    apiKeyInput.addEventListener("input", () => {
-        isValidated = false;
-        clearValidationMessage();
-    });
+    apiKeyInput.addEventListener('input', resetValidation);
+    providerSelect.addEventListener('change', updateUI);
+    updateUI();
 
-    function updateUI() {
-        const selectedProvider = providerSelect.value;
-
-        if (selectedProvider && providerInfo[selectedProvider]) {
-            const info = providerInfo[selectedProvider];
-            apiKeyContainer.style.display = "block";
-            helpContainer.style.display = "block";
-            helpText.innerHTML = `${info.description}. Get your API key from <a href="${info.url}" target="_blank" class="text-slate-300 hover:text-white underline">${info.name}</a>.`;
-            // Don't clear the API key when switching providers - just reset validation
-            isValidated = false;
-            clearValidationMessage();
-        } else {
-            // Only clear when provider is set to "None"
-            apiKeyContainer.style.display = "none";
-            helpContainer.style.display = "none";
-            apiKeyInput.value = "";
-            isValidated = false;
-            clearValidationMessage();
+    return async () => {
+        if (isValidated) {
+            return true;
         }
-    }
 
-    // Handle provider change - preserve API key value, just reset validation
-    providerSelect.addEventListener("change", () => {
-        isValidated = false;
-        clearValidationMessage();
-        updateUI();
-    });
-
-    updateUI(); // Initialize on load
-
-    // Export validate function for form submission
-    window.validatePosterRatingApiKey = validateApiKey;
+        return validateApiKey();
+    };
 }
 
 // TMDB API Key (Required)
 function initializeTmdb() {
-    const apiKeyInput = document.getElementById("tmdbApiKey");
-    const validateBtn = document.getElementById("tmdbApiKeyValidate");
-    const toggleBtn = document.getElementById("tmdbApiKeyToggle");
-    const eyeIcon = document.getElementById("tmdbApiKeyEye");
-    const eyeOffIcon = document.getElementById("tmdbApiKeyEyeOff");
-    const validationMessage = document.getElementById("tmdbValidationMessage");
-
-    if (!apiKeyInput || !validationMessage) return;
-
-    if (toggleBtn && eyeIcon && eyeOffIcon) {
-        toggleBtn.addEventListener("click", () => {
-            const isPassword = apiKeyInput.type === "password";
-            apiKeyInput.type = isPassword ? "text" : "password";
-            eyeIcon.classList.toggle("hidden", !isPassword);
-            eyeOffIcon.classList.toggle("hidden", isPassword);
-        });
-    }
-
-    function showTmdbValidationMessage(message, type) {
-        validationMessage.textContent = message;
-        validationMessage.className = `mt-2 text-xs ${type === "success" ? "text-green-400" : "text-red-400"}`;
-        validationMessage.classList.remove("hidden");
-    }
-
-    if (validateBtn) {
-        validateBtn.addEventListener("click", async () => {
-            const apiKey = apiKeyInput.value.trim();
-            if (!apiKey) {
-                showTmdbValidationMessage("Please enter a TMDB API key", "error");
-                return;
-            }
-            validateBtn.disabled = true;
-            validateBtn.classList.add("opacity-50", "cursor-not-allowed");
-            const originalHTML = validateBtn.innerHTML;
-            validateBtn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-            try {
-                const response = await fetch("/tmdb/validation", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ api_key: apiKey })
-                });
-                const data = await response.json();
-                if (data.valid) {
-                    showTmdbValidationMessage("TMDB API key is valid ✓", "success");
-                } else {
-                    showTmdbValidationMessage(data.message || "Invalid TMDB API key", "error");
-                }
-            } catch (error) {
-                showTmdbValidationMessage("Validation failed. Please try again.", "error");
-            } finally {
-                validateBtn.disabled = false;
-                validateBtn.classList.remove("opacity-50", "cursor-not-allowed");
-                validateBtn.innerHTML = originalHTML;
-            }
-        });
-    }
-
-    apiKeyInput.addEventListener("input", () => validationMessage.classList.add("hidden"));
+    initializeValidatedSecretField({
+        input: document.getElementById('tmdbApiKey'),
+        validateBtn: document.getElementById('tmdbApiKeyValidate'),
+        validationMessage: document.getElementById('tmdbValidationMessage'),
+        toggleBtn: document.getElementById('tmdbApiKeyToggle'),
+        eyeIcon: document.getElementById('tmdbApiKeyEye'),
+        eyeOffIcon: document.getElementById('tmdbApiKeyEyeOff'),
+        emptyMessage: 'Please enter a TMDB API key',
+        successMessage: 'TMDB API key is valid ✓',
+        request: (apiKey) => postJson('/tmdb/validation', { api_key: apiKey }),
+        getErrorMessage: (data) => data.message || 'Invalid TMDB API key'
+    });
 }
 
 // Simkl Integration
 function initializeSimkl() {
-    const apiKeyInput = document.getElementById("simklApiKey");
-    const validateBtn = document.getElementById("simklApiKeyValidate");
-    const toggleBtn = document.getElementById("simklApiKeyToggle");
-    const eyeIcon = document.getElementById("simklApiKeyEye");
-    const eyeOffIcon = document.getElementById("simklApiKeyEyeOff");
-    const validationMessage = document.getElementById("simklValidationMessage");
-
-    if (!apiKeyInput || !validateBtn || !validationMessage) return;
-
-    // Eye toggle functionality
-    if (toggleBtn && eyeIcon && eyeOffIcon) {
-        toggleBtn.addEventListener("click", () => {
-            const isPassword = apiKeyInput.type === "password";
-            apiKeyInput.type = isPassword ? "text" : "password";
-            eyeIcon.classList.toggle("hidden", !isPassword);
-            eyeOffIcon.classList.toggle("hidden", isPassword);
-        });
-    }
-
-    // Validation function
-    async function validateSimklKey() {
-        const apiKey = apiKeyInput.value.trim();
-
-        if (!apiKey) {
-            showSimklValidationMessage("Please enter a Simkl API key", "error");
-            return false;
-        }
-
-        // Show loading state
-        validateBtn.disabled = true;
-        validateBtn.classList.add("opacity-50", "cursor-not-allowed");
-        const originalHTML = validateBtn.innerHTML;
-        validateBtn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-
-        try {
-            const response = await fetch("/simkl/validation", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ api_key: apiKey })
-            });
-
-            const data = await response.json();
-
-            if (data.valid) {
-                showSimklValidationMessage("Simkl API key is valid ✓", "success");
-                return true;
-            } else {
-                showSimklValidationMessage(data.message || "Invalid Simkl API key", "error");
-                return false;
-            }
-        } catch (error) {
-            showSimklValidationMessage("Validation failed. Please try again.", "error");
-            return false;
-        } finally {
-            validateBtn.disabled = false;
-            validateBtn.classList.remove("opacity-50", "cursor-not-allowed");
-            validateBtn.innerHTML = originalHTML;
-        }
-    }
-
-    function showSimklValidationMessage(message, type) {
-        validationMessage.textContent = message;
-        validationMessage.className = `mt-2 text-xs ${type === "success" ? "text-green-400" : "text-red-400"}`;
-        validationMessage.classList.remove("hidden");
-    }
-
-    validateBtn.addEventListener("click", validateSimklKey);
-
-    apiKeyInput.addEventListener("input", () => {
-        validationMessage.classList.add("hidden");
+    initializeValidatedSecretField({
+        input: document.getElementById('simklApiKey'),
+        validateBtn: document.getElementById('simklApiKeyValidate'),
+        validationMessage: document.getElementById('simklValidationMessage'),
+        toggleBtn: document.getElementById('simklApiKeyToggle'),
+        eyeIcon: document.getElementById('simklApiKeyEye'),
+        eyeOffIcon: document.getElementById('simklApiKeyEyeOff'),
+        emptyMessage: 'Please enter a Simkl API key',
+        successMessage: 'Simkl API key is valid ✓',
+        request: (apiKey) => postJson('/simkl/validation', { api_key: apiKey }),
+        getErrorMessage: (data) => data.message || 'Invalid Simkl API key'
     });
 }
 
 // Gemini AI Integration
 function initializeGemini() {
-    const apiKeyInput = document.getElementById("geminiApiKey");
-    const validateBtn = document.getElementById("geminiApiKeyValidate");
-    const toggleBtn = document.getElementById("geminiApiKeyToggle");
-    const eyeIcon = document.getElementById("geminiApiKeyEye");
-    const eyeOffIcon = document.getElementById("geminiApiKeyEyeOff");
-    const validationMessage = document.getElementById("geminiValidationMessage");
-
-    if (!apiKeyInput || !validateBtn || !validationMessage) return;
-
-    // Eye toggle functionality
-    if (toggleBtn && eyeIcon && eyeOffIcon) {
-        toggleBtn.addEventListener("click", () => {
-            const isPassword = apiKeyInput.type === "password";
-            apiKeyInput.type = isPassword ? "text" : "password";
-            eyeIcon.classList.toggle("hidden", !isPassword);
-            eyeOffIcon.classList.toggle("hidden", isPassword);
-        });
-    }
-
-    // Validation function
-    async function validateGeminiKey() {
-        const apiKey = apiKeyInput.value.trim();
-
-        if (!apiKey) {
-            showGeminiValidationMessage("Please enter a Gemini API key", "error");
-            return false;
-        }
-
-        // Show loading state
-        validateBtn.disabled = true;
-        validateBtn.classList.add("opacity-50", "cursor-not-allowed");
-        const originalHTML = validateBtn.innerHTML;
-        validateBtn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-
-        try {
-            const response = await fetch("/gemini/validation", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ api_key: apiKey })
-            });
-
-            const data = await response.json();
-
-            if (data.valid) {
-                showGeminiValidationMessage("Gemini API key is valid ✓", "success");
-                return true;
-            } else {
-                showGeminiValidationMessage(data.message || "Invalid Gemini API key", "error");
-                return false;
-            }
-        } catch (error) {
-            showGeminiValidationMessage("Validation failed. Please try again.", "error");
-            return false;
-        } finally {
-            validateBtn.disabled = false;
-            validateBtn.classList.remove("opacity-50", "cursor-not-allowed");
-            validateBtn.innerHTML = originalHTML;
-        }
-    }
-
-    function showGeminiValidationMessage(message, type) {
-        validationMessage.textContent = message;
-        validationMessage.className = `mt-2 text-xs ${type === "success" ? "text-green-400" : "text-red-400"}`;
-        validationMessage.classList.remove("hidden");
-    }
-
-    validateBtn.addEventListener("click", validateGeminiKey);
-
-    apiKeyInput.addEventListener("input", () => {
-        validationMessage.classList.add("hidden");
+    initializeValidatedSecretField({
+        input: document.getElementById('geminiApiKey'),
+        validateBtn: document.getElementById('geminiApiKeyValidate'),
+        validationMessage: document.getElementById('geminiValidationMessage'),
+        toggleBtn: document.getElementById('geminiApiKeyToggle'),
+        eyeIcon: document.getElementById('geminiApiKeyEye'),
+        eyeOffIcon: document.getElementById('geminiApiKeyEyeOff'),
+        emptyMessage: 'Please enter a Gemini API key',
+        successMessage: 'Gemini API key is valid ✓',
+        request: (apiKey) => postJson('/gemini/validation', { api_key: apiKey }),
+        getErrorMessage: (data) => data.message || 'Invalid Gemini API key'
     });
 }
 
-// Password Toggles
 function initializePasswordToggles() {
-    document.querySelectorAll('.toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const targetId = btn.getAttribute('data-target');
-            const input = document.getElementById(targetId);
-            if (!input) return;
-            const isHidden = input.type === 'password';
-            input.type = isHidden ? 'text' : 'password';
-            // Swap icon and labels
-            if (isHidden) {
-                // Now visible: show eye-off icon
-                btn.setAttribute('title', 'Hide');
-                btn.setAttribute('aria-label', 'Hide password');
-                btn.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31"/><path d="M1 1l22 22"/><path d="M14.12 14.12A3 3 0 0 1 9.88 9.88"/></svg>';
-            } else {
-                // Now hidden: show eye icon
-                btn.setAttribute('title', 'Show');
-                btn.setAttribute('aria-label', 'Show password');
-                btn.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
-            }
-        });
-    });
+    initializePasswordToggleButton();
 }
 
-// Delete & Success Helpers
-function initializeSuccessActions() {
-    const copyBtn = document.getElementById('copyBtn');
-    if (copyBtn) {
-        copyBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const urlText = document.getElementById('addonUrl').textContent;
-            try {
-                await navigator.clipboard.writeText(urlText);
-                const originalText = copyBtn.innerHTML;
-                copyBtn.innerHTML = 'Copied!';
-                setTimeout(() => { copyBtn.innerHTML = originalText; }, 2000);
-            } catch (err) { }
-        });
-    }
-
-    const installDesktopBtn = document.getElementById('installDesktopBtn');
-    if (installDesktopBtn) {
-        installDesktopBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const url = document.getElementById('addonUrl').textContent;
-            window.location.href = `stremio://${url.replace(/^https?:\/\//, '')}`;
-        });
-    }
-    const installWebBtn = document.getElementById('installWebBtn');
-    if (installWebBtn) {
-        installWebBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const url = document.getElementById('addonUrl').textContent;
-            window.open(`https://web.stremio.com/#/addons?addon=${encodeURIComponent(url)}`, '_blank');
-        });
-    }
-
-    const deleteAccountBtn = document.getElementById('deleteAccountBtn');
-    if (deleteAccountBtn) {
-        deleteAccountBtn.addEventListener('click', async () => {
-            const confirmed = await showConfirm(
-                'Delete Account?',
-                'Are you sure you want to delete your settings? This action is irreversible and all your data will be permanently removed.'
-            );
-
-            if (!confirmed) return;
-
-            const sAuthKey = (document.getElementById("authKey").value || '').trim();
-            const email = emailInput?.value.trim();
-            const password = passwordInput?.value;
-
-            if (!sAuthKey && !(email && password)) {
-                showError('generalError', "Provide Stremio auth key or email & password to delete your account.");
-                switchSection('login');
-                return;
-            }
-
-            setLoading(true);
-            try {
-                const payload = { authKey: sAuthKey || undefined, email: email || undefined, password: password || undefined };
-                const res = await fetch('/tokens/', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                if (!res.ok) throw new Error((await res.json()).detail || 'Failed to delete');
-                showToast('Account deleted successfully.', 'success');
-                if (resetApp) resetApp();
-            } catch (e) {
-                showError('generalError', e.message);
-            } finally {
-                setLoading(false);
-            }
-        });
-    }
+function initializeSuccessHandlers() {
+    initializeSuccessActions({
+        emailInput,
+        passwordInput,
+        resetApp,
+        setLoading,
+        showError
+    });
 }
 
 function setLoading(loading) {
     if (!submitBtn) return;
+
     const btnText = submitBtn.querySelector('.btn-text');
     const loader = submitBtn.querySelector('.loader');
     submitBtn.disabled = loading;
+
     if (loading) {
         if (btnText) btnText.classList.add('hidden');
         if (loader) loader.classList.remove('hidden');
-    } else {
-        if (btnText) btnText.classList.remove('hidden');
-        if (loader) loader.classList.add('hidden');
+        return;
     }
+
+    if (btnText) btnText.classList.remove('hidden');
+    if (loader) loader.classList.add('hidden');
 }
 
 function showError(target, message) {
@@ -686,94 +423,123 @@ function showError(target, message) {
         if (errEl) {
             errEl.querySelector('.message-content').textContent = message;
             errEl.classList.remove('hidden');
-        } else { showToast(message, 'error'); }
-    } else if (target === 'stremioAuthSection') {
-        showToast(message, 'error');
-    } else {
-        const el = document.getElementById(target);
-        if (el) {
-            el.classList.add('border-red-500');
-            el.focus();
+        } else {
+            showToast(message, 'error');
         }
+        return;
     }
+
+    if (target === 'stremioAuthSection') {
+        showToast(message, 'error');
+        return;
+    }
+
+    const element = document.getElementById(target);
+    if (!element) return;
+
+    element.classList.add('border-red-500');
+    element.focus();
 }
 
 export function clearErrors() {
     const errEl = document.getElementById('errorMessage');
-    if (errEl) errEl.classList.add('hidden');
-    document.querySelectorAll('.border-red-500').forEach(e => e.classList.remove('border-red-500'));
+    if (errEl) {
+        errEl.classList.add('hidden');
+    }
+
+    document.querySelectorAll('.border-red-500').forEach(element => {
+        element.classList.remove('border-red-500');
+    });
+}
+
+export function refreshYearSlider() {
+    updateYearSlider();
 }
 
 function showSuccess(url) {
-    // Hide form entirely by hiding the active section
-    const sections = {
-        welcome: document.getElementById('sect-welcome'),
-        login: document.getElementById('sect-login'),
-        config: document.getElementById('sect-config'),
-        catalogs: document.getElementById('sect-catalogs'),
-        install: document.getElementById('sect-install'),
-        success: document.getElementById('sect-success')
-    };
-    Object.values(sections).forEach(s => { if (s) s.classList.add('hidden') });
-
-    // Show Success Section
-    if (sections.success) {
-        sections.success.classList.remove('hidden');
-        document.getElementById('addonUrl').textContent = url;
-    }
+    showSuccessSection(url);
 }
 
-// Year Slider Logic
-function initializeYearSlider() {
-    const yearMin = document.getElementById('yearMin');
-    const yearMax = document.getElementById('yearMax');
-    const yearMinLabel = document.getElementById('yearMinLabel');
-    const yearMaxLabel = document.getElementById('yearMaxLabel');
-    const track = document.getElementById('yearSliderTrack');
+// Watch History Source + OAuth
+function initializeWatchHistorySource() {
+    const sourceSelect = document.getElementById('watchHistorySource');
+    const traktLoginBtn = document.getElementById('traktLoginBtn');
+    const traktStatus = document.getElementById('traktStatus');
+    const traktLogoutBtn = document.getElementById('traktLogoutBtn');
+    const simklLoginBtn = document.getElementById('simklLoginBtn');
+    const simklSyncStatus = document.getElementById('simklSyncStatus');
+    const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');
 
-    if (!yearMin || !yearMax || !yearMinLabel || !yearMaxLabel || !track) return;
+    if (!sourceSelect) return;
 
-    function updateSlider() {
-        const minVal = parseInt(yearMin.value);
-        const maxVal = parseInt(yearMax.value);
+    window._watchlyOAuth = window._watchlyOAuth || {};
 
-        if (minVal > maxVal) {
-            // Prevent crossing: if min > max, snap them
-            // This is handled by input listeners to avoid jerky movement
+    window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data || !data.provider || !data.tokens) return;
+
+        if (data.provider === 'trakt') {
+            window._watchlyOAuth.trakt = data.tokens;
+            if (traktStatus) {
+                traktStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
+                traktStatus.classList.remove('text-slate-500');
+                traktStatus.classList.add('text-green-400');
+            }
+            if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
+            const traktOption = sourceSelect.querySelector('option[value="trakt"]');
+            if (traktOption) traktOption.disabled = false;
+        } else if (data.provider === 'simkl') {
+            window._watchlyOAuth.simkl = data.tokens;
+            if (simklSyncStatus) {
+                simklSyncStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
+                simklSyncStatus.classList.remove('text-slate-500');
+                simklSyncStatus.classList.add('text-green-400');
+            }
+            if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
+            const simklOption = sourceSelect.querySelector('option[value="simkl"]');
+            if (simklOption) simklOption.disabled = false;
         }
+    });
 
-        yearMinLabel.textContent = minVal;
-        yearMaxLabel.textContent = maxVal;
-
-        const range = yearMin.max - yearMin.min;
-        const left = ((minVal - yearMin.min) / range) * 100;
-        const right = ((yearMin.max - maxVal) / range) * 100;
-
-        track.style.left = left + '%';
-        track.style.right = right + '%';
+    if (traktLoginBtn) {
+        traktLoginBtn.addEventListener('click', () => {
+            window.open('/auth/trakt', '_blank', 'width=600,height=700');
+        });
     }
 
-    yearMin.addEventListener('input', () => {
-        if (parseInt(yearMin.value) > parseInt(yearMax.value)) {
-            yearMin.value = yearMax.value;
-        }
-        yearMin.classList.add('year-slider-active');
-        yearMax.classList.remove('year-slider-active');
-        updateSlider();
-    });
+    if (simklLoginBtn) {
+        simklLoginBtn.addEventListener('click', () => {
+            window.open('/auth/simkl', '_blank', 'width=600,height=700');
+        });
+    }
 
-    yearMax.addEventListener('input', () => {
-        if (parseInt(yearMax.value) < parseInt(yearMin.value)) {
-            yearMax.value = yearMin.value;
-        }
-        yearMax.classList.add('year-slider-active');
-        yearMin.classList.remove('year-slider-active');
-        updateSlider();
-    });
+    if (traktLogoutBtn) {
+        traktLogoutBtn.addEventListener('click', () => {
+            delete window._watchlyOAuth.trakt;
+            if (traktStatus) {
+                traktStatus.textContent = 'Not connected';
+                traktStatus.classList.remove('text-green-400');
+                traktStatus.classList.add('text-slate-500');
+            }
+            traktLogoutBtn.classList.add('hidden');
+            const traktOption = sourceSelect.querySelector('option[value="trakt"]');
+            if (traktOption) traktOption.disabled = true;
+            if (sourceSelect.value === 'trakt') sourceSelect.value = 'stremio';
+        });
+    }
 
-    // Initial update
-    updateSlider();
-
-    // Export update function for external population
-    window.updateYearSlider = updateSlider;
+    if (simklSyncLogoutBtn) {
+        simklSyncLogoutBtn.addEventListener('click', () => {
+            delete window._watchlyOAuth.simkl;
+            if (simklSyncStatus) {
+                simklSyncStatus.textContent = 'Not connected';
+                simklSyncStatus.classList.remove('text-green-400');
+                simklSyncStatus.classList.add('text-slate-500');
+            }
+            simklSyncLogoutBtn.classList.add('hidden');
+            const simklOption = sourceSelect.querySelector('option[value="simkl"]');
+            if (simklOption) simklOption.disabled = true;
+            if (sourceSelect.value === 'simkl') sourceSelect.value = 'stremio';
+        });
+    }
 }

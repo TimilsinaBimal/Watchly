@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     CATALOG_CACHE_TTL: int = 43200  # 12 hours
     CATALOG_STALE_TTL: int = 604800  # 7 days (soft expiration fallback)
 
+    # External history providers (OAuth app credentials)
+    TRAKT_CLIENT_ID: str | None = None
+    TRAKT_CLIENT_SECRET: str | None = None
+    SIMKL_CLIENT_ID: str | None = None
+    SIMKL_CLIENT_SECRET: str | None = None
+
     # AI
     DEFAULT_GEMINI_MODEL: str = "gemma-3-27b-it"
     GEMINI_API_KEY: str | None = None

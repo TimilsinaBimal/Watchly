@@ -5,10 +5,10 @@ from fastapi import HTTPException
 from loguru import logger
 
 from app.core.settings import UserSettings
-from app.models.taste_profile import TasteProfile
-from app.services.recommendation.filtering import RecommendationFiltering
+from app.models.profile import TasteProfile
+from app.services.recommendation.filtering import RecommendationFiltering, filter_watched_by_imdb
 from app.services.recommendation.metadata import RecommendationMetadata
-from app.services.recommendation.utils import content_type_to_mtype, filter_watched_by_imdb
+from app.services.recommendation.utils import content_type_to_mtype
 from app.services.tmdb.service import TMDBService
 
 

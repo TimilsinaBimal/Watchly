@@ -1,14 +1,13 @@
 // Main entry point - initializes all modules
 
-import { defaultCatalogs } from './constants.js';
-import { showToast, initializeFooter, initializeKofi } from './modules/ui.js';
+import { createAppState, resetAppState } from './state.js';
+import { initializeFooter, initializeKofi } from './modules/ui.js';
 import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initializeMobileNav, updateMobileLayout, unlockNavigation } from './modules/navigation.js';
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
-import { initializeCatalogList, renderCatalogList, getCatalogs, setCatalogs } from './modules/catalog.js';
-import { initializeForm, clearErrors } from './modules/form.js';
+import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
+import { initializeForm, clearErrors, refreshYearSlider } from './modules/form.js';
 
-// Initialize catalogs state
-let catalogsState = JSON.parse(JSON.stringify(defaultCatalogs));
+const appState = createAppState();
 
 // DOM Elements
 const configForm = document.getElementById('configForm');
@@ -50,25 +49,18 @@ const mainEl = document.querySelector('main');
 // Reset App Function
 function resetApp() {
     if (configForm) configForm.reset();
+    resetAppState(appState);
     clearErrors();
-
-    // Reset Navigation is now Back to Welcome
-    switchSection('welcome');
-
-    // Lock Navs
-    Object.keys(navItems).forEach(key => {
-        if (key !== 'login' && key !== 'welcome') {
-            if (navItems[key]) navItems[key].classList.add('disabled');
-        }
-    });
 
     // Reset Stremio State
     setStremioLoggedOutState();
 
     // Reset catalogs
-    catalogsState = JSON.parse(JSON.stringify(defaultCatalogs));
-    setCatalogs(catalogsState);
     renderCatalogList();
+
+    // Reset Navigation is now Back to Welcome
+    switchSection(appState.ui.currentSection);
+    lockNavigationForLoggedOut();
 
     // Show Form
     if (configForm) configForm.classList.remove('hidden');
@@ -95,7 +87,7 @@ function initializeWelcomeFlow() {
 // Initialize everything
 document.addEventListener('DOMContentLoaded', () => {
     // Start at Welcome
-    switchSection('welcome');
+    switchSection(appState.ui.currentSection);
     initializeWelcomeFlow();
 
     // Initialize all modules
@@ -103,37 +95,12 @@ document.addEventListener('DOMContentLoaded', () => {
         navItems,
         sections,
         mainEl
-    });
+    }, appState);
 
     // By default, ensure logged-out users see only Welcome/Login
     lockNavigationForLoggedOut();
 
-    // Initialize catalog management - set catalogs first
-    setCatalogs(catalogsState);
-    initializeCatalogList(
-        { catalogList },
-        {
-            catalogs: catalogsState,
-            renderCatalogList
-        }
-    );
-
-    // Initialize authentication
-    initializeAuth(
-        {
-            stremioLoginBtn,
-            stremioLoginText,
-            emailInput,
-            passwordInput,
-            emailPwdContinueBtn,
-            languageSelect
-        },
-        {
-            getCatalogs,
-            renderCatalogList,
-            resetApp
-        }
-    );
+    initializeCatalogList({ catalogList }, appState);
 
     // Initialize form handling
     initializeForm(
@@ -146,9 +113,28 @@ document.addEventListener('DOMContentLoaded', () => {
             movieGenreList,
             seriesGenreList
         },
+        appState,
+        { resetApp }
+    );
+
+    // Initialize authentication
+    initializeAuth(
         {
-            getCatalogs,
-            resetApp
+            stremioLoginBtn,
+            stremioLoginText,
+            emailInput,
+            passwordInput,
+            emailPwdContinueBtn,
+            languageSelect
+        },
+        appState,
+        {
+            renderCatalogList,
+            resetApp,
+            switchSection,
+            unlockNavigation,
+            lockNavigationForLoggedOut,
+            updateYearSlider: refreshYearSlider
         }
     );
 
@@ -173,8 +159,3 @@ document.addEventListener('DOMContentLoaded', () => {
     if (resetBtn) resetBtn.addEventListener('click', resetApp);
     if (successResetBtn) successResetBtn.addEventListener('click', resetApp);
 });
-
-// Make resetApp available globally for auth module
-window.resetApp = resetApp;
-window.switchSection = switchSection;
-window.unlockNavigation = unlockNavigation;

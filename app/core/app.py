@@ -2,7 +2,6 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from cachetools import TTLCache
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -10,9 +9,9 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
-from app.api.endpoints.meta import fetch_languages_list
+from app.api.endpoints.languages import fetch_languages_list
 from app.api.router import api_router
-from app.core.settings import get_default_catalogs_for_frontend
+from app.core.settings import get_current_year, get_default_catalogs_for_frontend, get_default_year_range
 from app.services.redis_service import redis_service
 from app.services.tmdb.genre import movie_genres, series_genres
 from app.services.token_store import token_store
@@ -62,9 +61,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_ip_failure_cache: TTLCache = TTLCache(maxsize=10000, ttl=600)
-IP_FAILURE_THRESHOLD = 8
-
 
 @app.middleware("http")
 async def block_missing_token_middleware(request: Request, call_next):
@@ -74,15 +70,8 @@ async def block_missing_token_middleware(request: Request, call_next):
     path = request.url.path.lstrip("/")
     seg = path.split("/", 1)[0] if path else ""
     try:
-        # If token is known-missing, short-circuit and track IP failures
+        # If token is known-missing, short-circuit to avoid repeated Redis lookups
         if seg and seg in token_store._missing_tokens:
-            ip = request.client.host if request.client else "unknown"
-            try:
-                _ip_failure_cache[ip] = _ip_failure_cache.get(ip, 0) + 1
-            except Exception:
-                pass
-            if _ip_failure_cache.get(ip, 0) > IP_FAILURE_THRESHOLD:
-                return HTMLResponse(content="Too many requests", status_code=429)
             return HTMLResponse(content="Invalid token", status_code=401)
     except Exception:
         pass
@@ -117,6 +106,7 @@ async def configure_page(request: Request, _token: str | None = None):
 
     # Format default catalogs for frontend
     default_catalogs = get_default_catalogs_for_frontend()
+    year_range_defaults = get_default_year_range()
 
     # Format genres for frontend
     movie_genres_list = [{"id": str(id), "name": name} for id, name in movie_genres.items()]
@@ -131,6 +121,8 @@ async def configure_page(request: Request, _token: str | None = None):
         announcement_html=settings.ANNOUNCEMENT_HTML or "",
         languages=languages,
         default_catalogs=default_catalogs,
+        current_year=get_current_year(),
+        year_range_defaults=year_range_defaults,
         movie_genres=movie_genres_list,
         series_genres=series_genres_list,
     )

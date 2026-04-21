@@ -4,18 +4,18 @@ from typing import Any
 from loguru import logger
 
 from app.core.settings import UserSettings
-from app.models.taste_profile import TasteProfile
+from app.models.library import LibraryCollection
+from app.models.profile import TasteProfile
 from app.services.profile.scorer import ProfileScorer
-from app.services.recommendation.filtering import RecommendationFiltering
-from app.services.recommendation.metadata import RecommendationMetadata
-from app.services.recommendation.scoring import RecommendationScoring
-from app.services.recommendation.utils import (
-    content_type_to_mtype,
+from app.services.recommendation.filtering import (
+    RecommendationFiltering,
     filter_by_genres,
     filter_items_by_settings,
     filter_watched_by_imdb,
-    resolve_tmdb_id,
 )
+from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.scoring import RecommendationScoring
+from app.services.recommendation.utils import content_type_to_mtype, resolve_tmdb_id
 from app.services.simkl import simkl_service
 from app.services.tmdb.service import TMDBService
 
@@ -34,13 +34,12 @@ class AllBasedService:
 
     async def get_recommendations_from_all_items(
         self,
-        library_items: dict[str, list[dict[str, Any]]],
+        library_items: LibraryCollection,
         content_type: str,
         watched_tmdb: set[int],
         watched_imdb: set[str],
-        whitelist: set[int] | None = None,
         limit: int = 20,
-        item_type: str = "loved",  # "loved" or "liked"
+        item_type: str = "loved",
         profile: TasteProfile | None = None,
     ) -> list[dict[str, Any]]:
         """
@@ -58,7 +57,6 @@ class AllBasedService:
             content_type: Content type (movie/series)
             watched_tmdb: Set of watched TMDB IDs
             watched_imdb: Set of watched IMDB IDs
-            whitelist: Genre whitelist
             limit: Number of items to return
             item_type: "loved" or "liked"
             profile: Optional profile for scoring (if None, uses popularity only)
@@ -66,10 +64,9 @@ class AllBasedService:
         Returns:
             List of recommended items
         """
-        # Get all loved or liked items for the content type
-        items = library_items.get(item_type, [])
+        items = getattr(library_items, item_type, [])
 
-        typed_items = [it for it in items if it.get("type") == content_type]
+        typed_items = [it for it in items if it.type == content_type]
 
         logger.info(f"Typed items: {len(typed_items)}")
 
@@ -111,7 +108,7 @@ class AllBasedService:
             logger.info(f"Fetching TMDB recommendations for {len(top_items)} top items")
 
             for item in top_items:
-                item_id = item.get("_id", "")
+                item_id = item.id
                 if not item_id:
                     continue
                 tasks.append(self._fetch_recommendations_for_item(item_id, mtype))
@@ -139,15 +136,13 @@ class AllBasedService:
 
         # Filter by genres and watched items
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
-        whitelist = whitelist or set()
-        filtered = filter_by_genres(candidates, watched_tmdb, whitelist, excluded_ids)
+        filtered = filter_by_genres(candidates, watched_tmdb, excluded_ids)
 
         logger.info(f"Filtered {len(filtered)} candidates")
 
         # Score with profile if available
         scored = []
         if profile:
-            rotation_seed = RecommendationScoring.generate_rotation_seed()  # Daily rotation for fresh recommendations
             for item in filtered:
                 try:
                     final_score = RecommendationScoring.calculate_final_score(
@@ -155,12 +150,7 @@ class AllBasedService:
                         profile=profile,
                         scorer=self.scorer,
                         mtype=mtype,
-                        rotation_seed=rotation_seed,
                     )
-
-                    # Apply genre multiplier (if whitelist available)
-                    genre_mult = RecommendationFiltering.get_genre_multiplier(item.get("genre_ids"), whitelist)
-                    final_score *= genre_mult
 
                     scored.append((final_score, item))
                 except Exception as e:
@@ -208,7 +198,7 @@ class AllBasedService:
         # Extract IMDB IDs
         imdb_ids = []
         for item in top_items:
-            item_id = item.get("_id", "")
+            item_id = item.id
             if item_id and item_id.startswith("tt"):
                 imdb_ids.append(item_id)
 

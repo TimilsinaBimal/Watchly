@@ -24,8 +24,8 @@ async def get_catalog(response: Response, type: str, id: str, token: str, extra:
         for key, value in headers.items():
             response.headers[key] = value
 
-        # if recommendations are none or empty, then set cache header to no-cache
-        if recommendations and not recommendations.get("meta"):
+        # If recommendations are empty, avoid caching the empty payload aggressively.
+        if recommendations is not None and not recommendations.get("metas"):
             response.headers["Cache-Control"] = "no-cache"
 
         return recommendations

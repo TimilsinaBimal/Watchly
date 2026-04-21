@@ -2,33 +2,19 @@
 
 import { escapeHtml } from './ui.js';
 
-let catalogs = [];
 let catalogList = null;
+let appState = null;
 
-export function initializeCatalogList(domElements, catalogState) {
+export function initializeCatalogList(domElements, state) {
     catalogList = domElements.catalogList;
-    // Use the catalogs array from catalogState (shared reference)
-    if (catalogState && catalogState.catalogs) {
-        // Replace the array contents to maintain reference
-        catalogs.length = 0;
-        catalogs.push(...catalogState.catalogs);
-    }
+    appState = state;
     renderCatalogList();
 }
 
-export function setCatalogs(newCatalogs) {
-    catalogs.length = 0;
-    catalogs.push(...newCatalogs);
-}
-
-export function getCatalogs() {
-    return catalogs;
-}
-
 export function renderCatalogList() {
-    if (!catalogList) return;
+    if (!catalogList || !appState) return;
     catalogList.innerHTML = '';
-    catalogs.forEach((cat, index) => {
+    appState.catalogs.forEach((cat, index) => {
         const item = createCatalogItem(cat, index);
         catalogList.appendChild(item);
     });
@@ -36,13 +22,13 @@ export function renderCatalogList() {
 
 function moveCatalogUp(index) {
     if (index === 0) return;
-    [catalogs[index], catalogs[index - 1]] = [catalogs[index - 1], catalogs[index]];
+    [appState.catalogs[index], appState.catalogs[index - 1]] = [appState.catalogs[index - 1], appState.catalogs[index]];
     renderCatalogList();
 }
 
 function moveCatalogDown(index) {
-    if (index === catalogs.length - 1) return;
-    [catalogs[index], catalogs[index + 1]] = [catalogs[index + 1], catalogs[index]];
+    if (index === appState.catalogs.length - 1) return;
+    [appState.catalogs[index], appState.catalogs[index + 1]] = [appState.catalogs[index + 1], appState.catalogs[index]];
     renderCatalogList();
 }
 
@@ -73,7 +59,7 @@ function createCatalogItem(cat, index) {
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
                 </button>
                 <div class="h-9 flex items-center">
-                    <button type="button" class="action-btn move-down p-2 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 hover:border-blue-400/60 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-blue-500/20 disabled:cursor-not-allowed shadow-sm hover:shadow-md hover:shadow-blue-500/20" title="Move down" ${index === catalogs.length - 1 ? 'disabled' : ''}>
+                    <button type="button" class="action-btn move-down p-2 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 hover:border-blue-400/60 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-blue-500/20 disabled:cursor-not-allowed shadow-sm hover:shadow-md hover:shadow-blue-500/20" title="Move down" ${index === appState.catalogs.length - 1 ? 'disabled' : ''}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                 </div>
