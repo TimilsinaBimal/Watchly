@@ -104,7 +104,7 @@ pydantic-core==2.41.5
     #   pydantic
 pydantic-settings==2.12.0
     # via watchly (pyproject.toml)
-python-dotenv==1.2.1
+python-dotenv==1.2.2
     # via
     #   pydantic-settings
     #   uvicorn
