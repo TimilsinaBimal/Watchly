@@ -38,13 +38,13 @@ def year_to_era(year: int) -> str:
     elif year < 1980:
         return "1970s"
     elif year < 1990:
-        return "1990s"
+        return "1980s"
     elif year < 2000:
-        return "2000s"
+        return "1990s"
     elif year < 2010:
-        return "2010s"
+        return "2000s"
     elif year < 2020:
-        return "2020s"
+        return "2010s"
     else:
         return "2020s"
 
