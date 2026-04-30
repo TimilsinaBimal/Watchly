@@ -61,23 +61,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.middleware("http")
-async def block_missing_token_middleware(request: Request, call_next):
-    if not settings.ENABLE_TOKEN_RATE_LIMIT:
-        return await call_next(request)
-    # Extract first path segment which is commonly the token in addon routes
-    path = request.url.path.lstrip("/")
-    seg = path.split("/", 1)[0] if path else ""
-    try:
-        # If token is known-missing, short-circuit to avoid repeated Redis lookups
-        if seg and seg in token_store._missing_tokens:
-            return HTMLResponse(content="Invalid token", status_code=401)
-    except Exception:
-        pass
-    return await call_next(request)
-
-
 if static_dir.exists():
     app.mount("/app/static", StaticFiles(directory=str(static_dir)), name="static")
 

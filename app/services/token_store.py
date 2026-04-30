@@ -4,7 +4,6 @@ from typing import Any
 
 import redis.asyncio as redis
 from async_lru import alru_cache
-from cachetools import TTLCache
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -22,10 +21,6 @@ class TokenStore:
     KEY_PREFIX = settings.REDIS_TOKEN_KEY
 
     def __init__(self) -> None:
-        # Negative cache for missing tokens to avoid repeated Redis GETs
-        # when external probes request non-existent tokens.
-        self._missing_tokens: TTLCache = TTLCache(maxsize=10000, ttl=86400)
-
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
             logger.warning(
                 "TOKEN_SALT is missing or using the default placeholder. Set a strong value to secure tokens."
@@ -164,24 +159,15 @@ class TokenStore:
 
         # Invalidate async LRU cache for fresh reads on subsequent requests
         try:
-            # bound method supports targeted invalidation by argument(s)
-            self.get_user_data.cache_invalidate(token)
+            self._get_user_data_cached.cache_invalidate(token)
         except KeyError:
-            # The token was not in the cache, no action needed.
             pass
         except Exception as e:
             logger.warning(f"Targeted cache invalidation failed: {e}. Falling back to clearing cache.")
             try:
-                self.get_user_data.cache_clear()
+                self._get_user_data_cached.cache_clear()
             except Exception as e_clear:
                 logger.error(f"Error while clearing cache: {e_clear}")
-
-        # Ensure we remove from negative cache so new value is read next time
-        try:
-            if token in self._missing_tokens:
-                del self._missing_tokens[token]
-        except Exception as e:
-            logger.debug(f"Failed to clear negative cache for {token}: {e}")
 
         return token
 
@@ -250,28 +236,24 @@ class TokenStore:
 
         return None
 
-    @alru_cache(maxsize=2000, ttl=43200)
     async def get_user_data(self, token: str) -> dict[str, Any] | None:
-        # Short-circuit for tokens known to be missing
-        if settings.ENABLE_TOKEN_NEGATIVE_CACHE:
+        data = await self._get_user_data_cached(token)
+        if data is None:
+            # Don't let a missing-token result get pinned in the per-process cache;
+            # otherwise a token created on another worker would 401 here for hours.
             try:
-                if token in self._missing_tokens:
-                    logger.debug(f"[REDIS] Negative cache hit for missing token {token}")
-                    return None
-            except Exception as e:
-                logger.debug(f"Failed to check negative cache for {token}: {e}")
+                self._get_user_data_cached.cache_invalidate(token)
+            except Exception:
+                pass
+        return data
 
+    @alru_cache(maxsize=2000, ttl=43200)
+    async def _get_user_data_cached(self, token: str) -> dict[str, Any] | None:
         logger.debug(f"[REDIS] Cache miss. Fetching data from redis for {token}")
         key = self._format_key(token)
         data_raw = await redis_service.get(key)
 
         if not data_raw:
-            # remember negative result briefly
-            if settings.ENABLE_TOKEN_NEGATIVE_CACHE:
-                try:
-                    self._missing_tokens[token] = True
-                except Exception as e:
-                    logger.debug(f"Failed to set negative cache for missing token {token}: {e}")
             return None
 
         try:
@@ -373,22 +355,14 @@ class TokenStore:
         # Invalidate async LRU cache so future reads reflect deletion
         try:
             if token:
-                self.get_user_data.cache_invalidate(token)
+                self._get_user_data_cached.cache_invalidate(token)
             else:
                 # If only key is provided, clear cache entirely to be safe
-                self.get_user_data.cache_clear()
+                self._get_user_data_cached.cache_clear()
         except KeyError:
-            # The token was not in the cache, no action needed.
             pass
         except Exception as e:
             logger.warning(f"Failed to invalidate user data cache during token deletion: {e}")
-
-        # Remove from negative cache as token is deleted
-        try:
-            if token and token in self._missing_tokens:
-                del self._missing_tokens[token]
-        except Exception as e:
-            logger.debug(f"Failed to clear negative cache during deletion: {e}")
 
     async def count_users(self) -> int:
         """Count total users by scanning Redis keys with the configured prefix.
