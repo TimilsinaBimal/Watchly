@@ -155,7 +155,8 @@ class RecommendationMetadata:
                     return None
 
         tasks = [_fetch_one(it.get("id")) for it in valid_items]
-        details_list = await asyncio.gather(*tasks)
+        details_list = await asyncio.gather(*tasks, return_exceptions=True)
+        details_list = [d for d in details_list if d and not isinstance(d, Exception)]
 
         language = getattr(user_settings, "language", None) or "en-US"
         mt = "movie" if media_type == "movie" else "tv"

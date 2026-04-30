@@ -64,7 +64,17 @@ class ItemBasedService:
 
         # Fetch candidates (similar + recommendations, 2 pages each)
         tasks = [self._fetch_candidates_from_simkl(item_id, mtype), self._fetch_candidates(tmdb_id, mtype)]
-        simkl_candidates, candidates = await asyncio.gather(*tasks)
+        simkl_result, tmdb_result = await asyncio.gather(*tasks, return_exceptions=True)
+        if isinstance(simkl_result, Exception):
+            logger.warning(f"item-based simkl candidate fetch failed for {item_id}: {simkl_result}")
+            simkl_candidates: list = []
+        else:
+            simkl_candidates = simkl_result
+        if isinstance(tmdb_result, Exception):
+            logger.warning(f"item-based tmdb candidate fetch failed for {item_id}: {tmdb_result}")
+            candidates: list = []
+        else:
+            candidates = tmdb_result
 
         # Apply global settings filter (years, popularity)
         candidates = filter_items_by_settings(candidates, self.user_settings)

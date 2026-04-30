@@ -1,5 +1,7 @@
 import asyncio
 
+from loguru import logger
+
 from app.services.tmdb.service import TMDBService, get_tmdb_service
 
 
@@ -10,7 +12,13 @@ async def fetch_languages_list() -> list[dict[str, str]]:
         tmdb_service.get_languages(),
         tmdb_service.get_countries(),
     ]
-    primary_translations, languages, countries = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for label, r in zip(("primary_translations", "languages", "countries"), results):
+        if isinstance(r, Exception):
+            logger.warning(f"TMDB {label} fetch failed: {r}")
+    primary_translations = results[0] if not isinstance(results[0], Exception) else []
+    languages = results[1] if not isinstance(results[1], Exception) else []
+    countries = results[2] if not isinstance(results[2], Exception) else []
 
     language_map = {lang["iso_639_1"]: lang["english_name"] for lang in languages}
     country_map = {country["iso_3166_1"]: country["english_name"] for country in countries}
