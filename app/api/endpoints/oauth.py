@@ -178,18 +178,21 @@ async def simkl_callback(request: Request, code: str, state: str | None = None):
 
 def _oauth_success_page(provider: str, username: str, tokens: dict[str, str]) -> str:
     """Generate a callback page that sends tokens back to the opener window."""
+    import html
     import json
     from urllib.parse import urlparse
 
+    safe_username = html.escape(username or "")
+    safe_provider = html.escape(provider.title())
     payload = json.dumps({"provider": provider, "username": username, "tokens": tokens})
     # Pin postMessage target to the configured app origin so we never broadcast
     # tokens to whatever origin the popup happens to be on.
     parsed = urlparse(settings.HOST_NAME or "")
     target_origin = json.dumps(f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else "/")
     return f"""<!DOCTYPE html>
-        <html><head><title>{provider.title()} Connected</title></head>
+        <html><head><title>{safe_provider} Connected</title></head>
         <body>
-        <h2>Connected as {username}</h2>
+        <h2>Connected as {safe_username}</h2>
         <p>You can close this window.</p>
         <script>
         if (window.opener) {{
@@ -201,10 +204,14 @@ def _oauth_success_page(provider: str, username: str, tokens: dict[str, str]) ->
 
 
 def _oauth_error_page(provider: str, error: str) -> str:
+    import html
+
+    safe_provider = html.escape(provider.title())
+    safe_error = html.escape(error or "")
     return f"""<!DOCTYPE html>
-<html><head><title>{provider.title()} Error</title></head>
+<html><head><title>{safe_provider} Error</title></head>
 <body>
-<h2>{provider.title()} login failed</h2>
-<p>{error}</p>
+<h2>{safe_provider} login failed</h2>
+<p>{safe_error}</p>
 <p>Please close this window and try again.</p>
 </body></html>"""
