@@ -1,3 +1,4 @@
+import secrets
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Request
@@ -8,6 +9,29 @@ from app.core.config import settings
 from app.services.trakt import trakt_service
 
 router = APIRouter(tags=["OAuth"])
+
+# Short-lived cookie name + lifetime for OAuth CSRF state.
+_OAUTH_STATE_COOKIE_PREFIX = "watchly_oauth_state_"
+_OAUTH_STATE_TTL_SECONDS = 600  # 10 minutes
+
+
+def _set_state_cookie(response, provider: str, state: str) -> None:
+    response.set_cookie(
+        key=f"{_OAUTH_STATE_COOKIE_PREFIX}{provider}",
+        value=state,
+        max_age=_OAUTH_STATE_TTL_SECONDS,
+        httponly=True,
+        secure=settings.APP_ENV == "production",
+        samesite="lax",
+        path="/",
+    )
+
+
+def _verify_state(request: Request, provider: str, state: str | None) -> None:
+    expected = request.cookies.get(f"{_OAUTH_STATE_COOKIE_PREFIX}{provider}")
+    if not state or not expected or not secrets.compare_digest(state, expected):
+        raise HTTPException(status_code=400, detail="Invalid or missing OAuth state. Please try connecting again.")
+
 
 # ── Trakt OAuth ──────────────────────────────────────────────────────────────
 
@@ -21,21 +45,27 @@ async def trakt_auth_redirect(request: Request):
         raise HTTPException(status_code=501, detail="Trakt integration is not configured on this server.")
 
     redirect_uri = f"{settings.HOST_NAME}/auth/trakt/callback"
+    state = secrets.token_urlsafe(32)
     params = urlencode(
         {
             "response_type": "code",
             "client_id": settings.TRAKT_CLIENT_ID,
             "redirect_uri": redirect_uri,
+            "state": state,
         }
     )
-    return RedirectResponse(f"{TRAKT_AUTH_URL}?{params}")
+    response = RedirectResponse(f"{TRAKT_AUTH_URL}?{params}")
+    _set_state_cookie(response, "trakt", state)
+    return response
 
 
 @router.get("/auth/trakt/callback", response_class=HTMLResponse)
-async def trakt_callback(code: str):
+async def trakt_callback(request: Request, code: str, state: str | None = None):
     """Handle Trakt OAuth callback, exchange code for tokens."""
     if not settings.TRAKT_CLIENT_ID or not settings.TRAKT_CLIENT_SECRET:
         raise HTTPException(status_code=501, detail="Trakt integration is not configured on this server.")
+
+    _verify_state(request, "trakt", state)
 
     redirect_uri = f"{settings.HOST_NAME}/auth/trakt/callback"
 
@@ -73,21 +103,27 @@ async def simkl_auth_redirect(request: Request):
         raise HTTPException(status_code=501, detail="Simkl integration is not configured on this server.")
 
     redirect_uri = f"{settings.HOST_NAME}/auth/simkl/callback"
+    state = secrets.token_urlsafe(32)
     params = urlencode(
         {
             "response_type": "code",
             "client_id": settings.SIMKL_CLIENT_ID,
             "redirect_uri": redirect_uri,
+            "state": state,
         }
     )
-    return RedirectResponse(f"{SIMKL_AUTH_URL}?{params}")
+    response = RedirectResponse(f"{SIMKL_AUTH_URL}?{params}")
+    _set_state_cookie(response, "simkl", state)
+    return response
 
 
 @router.get("/auth/simkl/callback", response_class=HTMLResponse)
-async def simkl_callback(code: str):
+async def simkl_callback(request: Request, code: str, state: str | None = None):
     """Handle Simkl OAuth callback, exchange code for tokens."""
     if not settings.SIMKL_CLIENT_ID or not settings.SIMKL_CLIENT_SECRET:
         raise HTTPException(status_code=501, detail="Simkl integration is not configured on this server.")
+
+    _verify_state(request, "simkl", state)
 
     redirect_uri = f"{settings.HOST_NAME}/auth/simkl/callback"
 
