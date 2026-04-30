@@ -170,13 +170,25 @@ class SimklService:
                     except (ValueError, TypeError):
                         pass
 
+                # Prefer the play/episode count Simkl reports; fall back to 1
+                # so 'watched but unmarked-count' items still register as seen.
+                raw_plays = (
+                    entry.get("total_plays_count")
+                    if mtype == "movie"
+                    else entry.get("watched_episodes_count") or entry.get("total_plays_count")
+                )
+                try:
+                    watch_count = max(int(raw_plays or 0), 1)
+                except (TypeError, ValueError):
+                    watch_count = 1
+
                 items.append(
                     WatchHistoryItem(
                         imdb_id=imdb_id,
                         type=mtype,
                         name=media.get("title", ""),
                         rating=rating,
-                        watch_count=1,
+                        watch_count=watch_count,
                         completion=1.0,
                         last_watched=last_watched,
                         source="simkl",
