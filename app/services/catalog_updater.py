@@ -21,6 +21,18 @@ class CatalogUpdater:
 
     def __init__(self):
         self._updating_tokens: set[str] = set()
+        # Retain background task handles so they don't get GC'd mid-flight,
+        # and so unhandled exceptions surface in logs.
+        self._pending_tasks: set[asyncio.Task] = set()
+
+    def _on_task_done(self, task: asyncio.Task) -> None:
+        self._pending_tasks.discard(task)
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            return
+        if exc is not None:
+            logger.error(f"Background catalog update task crashed: {exc!r}")
 
     def _needs_update(self, credentials: dict[str, Any]) -> bool:
         """Check if catalog update is needed based on last_updated timestamp."""
@@ -122,7 +134,9 @@ class CatalogUpdater:
 
         self._updating_tokens.add(token)
         logger.info(f"[{redact_token(token)}] Triggering catalog update")
-        asyncio.create_task(self._update_task(token, credentials))
+        task = asyncio.create_task(self._update_task(token, credentials))
+        self._pending_tasks.add(task)
+        task.add_done_callback(self._on_task_done)
 
     async def _update_task(self, token: str, credentials: dict[str, Any]) -> None:
         """Background task that performs the actual catalog update."""
