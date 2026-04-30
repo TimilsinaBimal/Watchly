@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, HTTPException, Response
 from loguru import logger
 
@@ -6,6 +8,10 @@ from app.services.recommendation.catalog_service import catalog_service
 
 router = APIRouter()
 
+# Stremio auth tokens are short (~24 char) hex/alphanumeric strings. Accept up
+# to 32 chars of [A-Za-z0-9] as a sanity check; anything else is malformed.
+_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9]{1,32}$")
+
 
 @router.get("/{token}/catalog/{type}/{id}.json")
 @router.get("/{token}/catalog/{type}/{id}/{extra}.json")
@@ -13,7 +19,7 @@ async def get_catalog(response: Response, type: str, id: str, token: str, extra:
     if type not in ("movie", "series"):
         raise HTTPException(status_code=400, detail="Invalid content type. Must be 'movie' or 'series'.")
 
-    if len(token) > 30:  # normal stremio tokens are 24 length. But we are using this just to be safe.
+    if not _TOKEN_PATTERN.match(token):
         raise HTTPException(status_code=400, detail="Invalid token.")
 
     try:
