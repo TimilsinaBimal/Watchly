@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
+import httpx
 from cachetools import TTLCache
 from httpx import AsyncClient
 from loguru import logger
@@ -76,11 +77,12 @@ class SimklService:
         try:
             response = await self.client.get(url, params=params, follow_redirects=True)
             response.raise_for_status()
-            json_response = response.json()
-            return json_response
-
-        except Exception as e:
-            logger.error(f"Error fetching details from Simkl: {e}")
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"Simkl trending returned {e.response.status_code}: {e}")
+            return []
+        except (httpx.RequestError, ValueError) as e:
+            logger.warning(f"Simkl trending request failed: {e}")
             return []
 
     async def get_item_details(self, simkl_id, mtype: str, api_key: str) -> dict[str, Any]:
@@ -105,9 +107,11 @@ class SimklService:
             # Store in cache
             self._details_cache[cache_key] = result
             return result
-
-        except Exception as e:
-            logger.error(f"Error fetching details from Simkl: {e}")
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"Simkl item details {simkl_id} returned {e.response.status_code}: {e}")
+            return {}
+        except (httpx.RequestError, ValueError) as e:
+            logger.warning(f"Simkl item details {simkl_id} request failed: {e}")
             return {}
 
     async def get_history(self, access_token: str, client_id: str) -> WatchHistory:
