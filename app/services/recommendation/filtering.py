@@ -273,6 +273,16 @@ def filter_items_by_settings(
     year_max = getattr(user_settings, "year_max", get_current_year())
     pop_pref = getattr(user_settings, "popularity", "balanced")
 
+    # Hoist out of the per-item loop: this lookup doesn't depend on the item.
+    # If pop_pref has no mapping, fall back to no popularity filtering rather
+    # than dropping every item.
+    params = DISCOVERY_SETTINGS.get(pop_pref) or {}
+
+    ops = {
+        "gte": lambda x, y: x >= y,
+        "lte": lambda x, y: x <= y,
+    }
+
     filtered = []
     for item in items:
         release_date = item.get("release_date") or item.get("first_air_date") or item.get("released")
@@ -283,15 +293,6 @@ def filter_items_by_settings(
                     continue
             except (ValueError, IndexError):
                 pass
-
-        params = DISCOVERY_SETTINGS.get(pop_pref, {})
-        if not params:
-            continue
-
-        ops = {
-            "gte": lambda x, y: x >= y,
-            "lte": lambda x, y: x <= y,
-        }
 
         passes_all = True
         for param in params:
