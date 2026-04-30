@@ -1,6 +1,7 @@
 import functools
 from typing import Any
 
+import httpx
 from async_lru import alru_cache
 from loguru import logger
 
@@ -47,8 +48,13 @@ class TMDBService:
                     return tmdb_id, "tv"
 
             return None, None
+        except httpx.HTTPStatusError as e:
+            # Log 404 as warning (item just not in TMDB), 5xx as error.
+            level = "warning" if e.response.status_code == 404 else "error"
+            getattr(logger, level)(f"TMDB find_by_imdb_id({imdb_id}) HTTP {e.response.status_code}: {e}")
+            return None, None
         except Exception as e:
-            logger.exception(f"Error finding TMDB ID for IMDB {imdb_id}: {e}")
+            logger.exception(f"Unexpected error finding TMDB ID for IMDB {imdb_id}: {e}")
             return None, None
 
     @alru_cache(maxsize=500, ttl=86400)
