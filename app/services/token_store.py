@@ -247,7 +247,10 @@ class TokenStore:
                 pass
         return data
 
-    @alru_cache(maxsize=2000, ttl=43200)
+    # 5-minute TTL: keeps reads cheap under bursty traffic but bounds the window
+    # in which a deleted token can keep authenticating on a worker that didn't
+    # observe the local cache invalidation (e.g. multi-worker deployments).
+    @alru_cache(maxsize=2000, ttl=300)
     async def _get_user_data_cached(self, token: str) -> dict[str, Any] | None:
         logger.debug(f"[REDIS] Cache miss. Fetching data from redis for {token}")
         key = self._format_key(token)
