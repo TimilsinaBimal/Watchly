@@ -66,11 +66,9 @@ class CreatorsService:
         # Create tasks for directors (fetch 2 pages each)
         for dir_id, _ in selected_directors:
             for page in [1, 2]:
-                # TV uses with_people, movies use with_crew
-                if mtype == "tv":
-                    discover_params = {"with_people": str(dir_id), "page": page}
-                else:
-                    discover_params = {"with_crew": str(dir_id), "page": page}
+                # TMDB /discover supports with_crew for both movies and TV;
+                # with_people is a search-people endpoint param, not valid here.
+                discover_params = {"with_crew": str(dir_id), "page": page}
 
                 # Apply dynamic filters
                 min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
