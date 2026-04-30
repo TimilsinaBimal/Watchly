@@ -179,8 +179,13 @@ async def simkl_callback(request: Request, code: str, state: str | None = None):
 def _oauth_success_page(provider: str, username: str, tokens: dict[str, str]) -> str:
     """Generate a callback page that sends tokens back to the opener window."""
     import json
+    from urllib.parse import urlparse
 
     payload = json.dumps({"provider": provider, "username": username, "tokens": tokens})
+    # Pin postMessage target to the configured app origin so we never broadcast
+    # tokens to whatever origin the popup happens to be on.
+    parsed = urlparse(settings.HOST_NAME or "")
+    target_origin = json.dumps(f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else "/")
     return f"""<!DOCTYPE html>
         <html><head><title>{provider.title()} Connected</title></head>
         <body>
@@ -188,7 +193,7 @@ def _oauth_success_page(provider: str, username: str, tokens: dict[str, str]) ->
         <p>You can close this window.</p>
         <script>
         if (window.opener) {{
-            window.opener.postMessage({payload}, window.location.origin);;
+            window.opener.postMessage({payload}, {target_origin});
         }}
         setTimeout(function() {{ window.close(); }}, 2000);
         </script>
