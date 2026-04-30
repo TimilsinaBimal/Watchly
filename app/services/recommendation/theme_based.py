@@ -250,9 +250,9 @@ class ThemeBasedService:
                     start_year = int(val)
                     end_year = start_year + 9
 
-                    prefix = "first_air_date" if content_type in ("tv", "series") else "primary_release_date"
-                    params[f"{prefix}.gte"] = f"{start_year}-01-01"
-                    params[f"{prefix}.lte"] = f"{end_year}-12-31"
+                prefix = "first_air_date" if content_type in ("tv", "series") else "primary_release_date"
+                params[f"{prefix}.gte"] = f"{start_year}-01-01"
+                params[f"{prefix}.lte"] = f"{end_year}-12-31"
             except Exception:
                 logger.error("Failed to parse era axis: {}", axes["era"])
                 pass
