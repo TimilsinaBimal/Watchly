@@ -56,7 +56,10 @@ async def check_stremio_identity(payload: TokenRequest):
 async def delete_redis_token(payload: TokenRequest):
     try:
         await auth_service.delete_user_account(payload)
-        return JSONResponse(status_code=200, content="Settings deleted successfully")
+        return JSONResponse(
+            status_code=200,
+            content={"status": "ok", "message": "Settings deleted successfully"},
+        )
     except HTTPException:
         raise
     except Exception as exc:
