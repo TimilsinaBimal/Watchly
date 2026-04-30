@@ -242,7 +242,8 @@ class UserCacheService:
         if stored_hash is None:
             return True
 
-        return current_hash != stored_hash.decode() if isinstance(stored_hash, bytes) else current_hash != stored_hash
+        # redis_service is configured with decode_responses=True so stored_hash is always str.
+        return current_hash != stored_hash
 
     async def update_library_hash(self, token: str, content_type: str, library_items: list) -> None:
         """

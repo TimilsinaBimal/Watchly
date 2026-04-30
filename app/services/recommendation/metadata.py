@@ -72,9 +72,6 @@ class RecommendationMetadata:
         if logo_url:
             meta_data["logo"] = logo_url
 
-        if logo_url:
-            meta_data["logo"] = logo_url
-
         # Extensions
         runtime_str = cls._extract_runtime_string(details)
         if runtime_str:
