@@ -289,7 +289,10 @@ class ItemVectorizer:
 
         runtime_str = cinemeta_metadata.get("runtime", "0 min")
         if runtime_str:
-            runtime = int(runtime_str.split(" ")[0])
+            try:
+                runtime = int(str(runtime_str).split(" ")[0])
+            except (ValueError, TypeError):
+                runtime = 0
 
         if not runtime or not isinstance(runtime, (int, float)):
             return None
