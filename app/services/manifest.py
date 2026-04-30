@@ -1,3 +1,4 @@
+import copy
 from typing import Any
 
 from loguru import logger
@@ -98,7 +99,12 @@ class ManifestService:
         finally:
             await ctx.close()
 
-        all_catalogs = [c.copy() for c in base_manifest["catalogs"]] + [c.copy() for c in fetched_catalogs]
+        # deepcopy: catalogs contain nested dicts/lists (extra params, options) that
+        # downstream code mutates (translation, sort). Shallow copies would mutate
+        # shared inner objects across users.
+        all_catalogs = [copy.deepcopy(c) for c in base_manifest["catalogs"]] + [
+            copy.deepcopy(c) for c in fetched_catalogs
+        ]
 
         language = ctx.user_settings.language
         translated = await self._translate_catalogs(all_catalogs, language)
