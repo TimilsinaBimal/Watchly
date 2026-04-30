@@ -30,10 +30,10 @@ async def lifespan(app: FastAPI):
     Manage application lifespan events (startup/shutdown).
     """
     # Startup checks
-    if settings.TOKEN_SALT == "change-me" and settings.APP_ENV == "production":
-        logger.warning(
-            "Security Warning: TOKEN_SALT is set to default 'change-me' in production environment! "
-            "Please set the TOKEN_SALT environment variable."
+    if settings.APP_ENV == "production" and (not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me"):
+        raise RuntimeError(
+            "TOKEN_SALT is unset or using the insecure default 'change-me' in production. "
+            "Set the TOKEN_SALT environment variable to a strong, unique value before starting the app."
         )
 
     yield
