@@ -4,9 +4,9 @@ from typing import Any
 
 import httpx
 from cachetools import TTLCache
-from httpx import AsyncClient
 from loguru import logger
 
+from app.core.base_client import BaseClient
 from app.models.history import WatchHistory, WatchHistoryItem
 
 
@@ -62,9 +62,12 @@ def normalize_simkl_to_tmdb(item: dict[str, Any], mtype: str) -> dict[str, Any]:
 class SimklService:
     def __init__(self):
         self.base_url = "https://api.simkl.com"
-        self.client = AsyncClient(timeout=10)
+        self.client = BaseClient(base_url=self.base_url, timeout=10.0, max_retries=3)
         self._semaphore = asyncio.Semaphore(10)  # Max 10 concurrent requests
-        self._details_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # Cache up to 1000 items  # 1 hour TTL
+        self._details_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour TTL
+
+    async def close(self) -> None:
+        await self.client.close()
 
     async def _fetch_with_semaphore(self, coro):
         """Execute a coroutine with semaphore for rate limiting."""
@@ -72,45 +75,35 @@ class SimklService:
             return await coro
 
     async def get_trending(self, api_key: str):
-        url = f"{self.base_url}/movies/trending"
-        params = {"client_id": api_key}
         try:
-            response = await self.client.get(url, params=params, follow_redirects=True)
-            response.raise_for_status()
-            return response.json()
+            return await self.client.get("/movies/trending", params={"client_id": api_key})
         except httpx.HTTPStatusError as e:
             logger.warning(f"Simkl trending returned {e.response.status_code}: {e}")
             return []
-        except (httpx.RequestError, ValueError) as e:
+        except httpx.RequestError as e:
             logger.warning(f"Simkl trending request failed: {e}")
             return []
 
     async def get_item_details(self, simkl_id, mtype: str, api_key: str) -> dict[str, Any]:
         """Fetch full item details from Simkl with caching."""
-        # Create cache key
         cache_key = f"{simkl_id}:{mtype}"
 
-        # Check cache first
         if cache_key in self._details_cache:
             logger.debug(f"Cache hit for Simkl item {simkl_id}")
             return self._details_cache[cache_key]
 
-        # Fetch from API
         mtype_path = "movies" if mtype == "movie" else "tv"
-        url = f"{self.base_url}/{mtype_path}/{simkl_id}"
-        params = {"client_id": api_key, "extended": "full"}
         try:
-            response = await self.client.get(url, params=params, follow_redirects=True)
-            response.raise_for_status()
-            result = response.json()
-
-            # Store in cache
+            result = await self.client.get(
+                f"/{mtype_path}/{simkl_id}",
+                params={"client_id": api_key, "extended": "full"},
+            )
             self._details_cache[cache_key] = result
             return result
         except httpx.HTTPStatusError as e:
             logger.warning(f"Simkl item details {simkl_id} returned {e.response.status_code}: {e}")
             return {}
-        except (httpx.RequestError, ValueError) as e:
+        except httpx.RequestError as e:
             logger.warning(f"Simkl item details {simkl_id} request failed: {e}")
             return {}
 
@@ -122,18 +115,11 @@ class SimklService:
             "simkl-api-key": client_id,
         }
 
-        movies_coro = self.client.get(
-            f"{self.base_url}/sync/all-items/movies",
-            headers=headers,
-            follow_redirects=True,
+        results = await asyncio.gather(
+            self.client.get("/sync/all-items/movies", headers=headers),
+            self.client.get("/sync/all-items/shows", headers=headers),
+            return_exceptions=True,
         )
-        shows_coro = self.client.get(
-            f"{self.base_url}/sync/all-items/shows",
-            headers=headers,
-            follow_redirects=True,
-        )
-
-        results = await asyncio.gather(movies_coro, shows_coro, return_exceptions=True)
 
         items: list[WatchHistoryItem] = []
         seen: set[str] = set()
@@ -142,13 +128,7 @@ class SimklService:
             if isinstance(result, Exception):
                 logger.warning(f"Simkl sync request failed: {result}")
                 continue
-            try:
-                result.raise_for_status()
-                data = result.json()
-            except Exception as e:
-                logger.warning(f"Failed to parse Simkl sync response: {e}")
-                continue
-
+            data = result if isinstance(result, dict) else {}
             mtype = "movie" if idx == 0 else "series"
             entries = data.get("movies", []) if idx == 0 else data.get("shows", [])
 

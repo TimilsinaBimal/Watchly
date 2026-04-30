@@ -1,9 +1,9 @@
 import asyncio
 from typing import Any
 
-from httpx import AsyncClient
 from loguru import logger
 
+from app.core.base_client import BaseClient
 from app.core.config import settings
 from app.models.history import WatchHistory, WatchHistoryItem
 
@@ -14,7 +14,10 @@ class TraktService:
     BASE_URL = "https://api.trakt.tv"
 
     def __init__(self):
-        self.client = AsyncClient(timeout=15)
+        self.client = BaseClient(base_url=self.BASE_URL, timeout=15.0, max_retries=3)
+
+    async def close(self) -> None:
+        await self.client.close()
 
     def _headers(self, access_token: str) -> dict[str, str]:
         return {
@@ -26,18 +29,12 @@ class TraktService:
 
     async def get_user_info(self, access_token: str) -> dict[str, Any]:
         """GET /users/me - validate token and get username."""
-        response = await self.client.get(
-            f"{self.BASE_URL}/users/me",
-            headers=self._headers(access_token),
-            follow_redirects=True,
-        )
-        response.raise_for_status()
-        return response.json()
+        return await self.client.get("/users/me", headers=self._headers(access_token))
 
     async def exchange_code(self, code: str, redirect_uri: str) -> dict[str, Any]:
         """Exchange authorization code for tokens."""
-        response = await self.client.post(
-            f"{self.BASE_URL}/oauth/token",
+        return await self.client.post(
+            "/oauth/token",
             json={
                 "code": code,
                 "client_id": settings.TRAKT_CLIENT_ID,
@@ -45,15 +42,12 @@ class TraktService:
                 "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
             },
-            follow_redirects=True,
         )
-        response.raise_for_status()
-        return response.json()
 
     async def refresh_token(self, refresh_token: str, redirect_uri: str) -> dict[str, Any]:
         """Refresh expired Trakt access token."""
-        response = await self.client.post(
-            f"{self.BASE_URL}/oauth/token",
+        return await self.client.post(
+            "/oauth/token",
             json={
                 "refresh_token": refresh_token,
                 "client_id": settings.TRAKT_CLIENT_ID,
@@ -61,49 +55,26 @@ class TraktService:
                 "redirect_uri": redirect_uri,
                 "grant_type": "refresh_token",
             },
-            follow_redirects=True,
         )
-        response.raise_for_status()
-        return response.json()
 
     async def get_history(self, access_token: str) -> WatchHistory:
         """Fetch watched + rated items, return as WatchHistory."""
         headers = self._headers(access_token)
 
-        # Fetch all 4 endpoints in parallel
-        watched_movies_coro = self.client.get(
-            f"{self.BASE_URL}/users/me/watched/movies",
-            headers=headers,
-            follow_redirects=True,
-        )
-        watched_shows_coro = self.client.get(
-            f"{self.BASE_URL}/users/me/watched/shows",
-            headers=headers,
-            follow_redirects=True,
-        )
-        rated_movies_coro = self.client.get(
-            f"{self.BASE_URL}/users/me/ratings/movies",
-            headers=headers,
-            follow_redirects=True,
-        )
-        rated_shows_coro = self.client.get(
-            f"{self.BASE_URL}/users/me/ratings/shows",
-            headers=headers,
-            follow_redirects=True,
-        )
-
+        # Fetch all 4 endpoints in parallel; BaseClient returns parsed JSON
+        # and handles retry on 429/5xx internally.
         results = await asyncio.gather(
-            watched_movies_coro,
-            watched_shows_coro,
-            rated_movies_coro,
-            rated_shows_coro,
+            self.client.get("/users/me/watched/movies", headers=headers),
+            self.client.get("/users/me/watched/shows", headers=headers),
+            self.client.get("/users/me/ratings/movies", headers=headers),
+            self.client.get("/users/me/ratings/shows", headers=headers),
             return_exceptions=True,
         )
 
-        watched_movies = self._safe_json(results[0])
-        watched_shows = self._safe_json(results[1])
-        rated_movies = self._safe_json(results[2])
-        rated_shows = self._safe_json(results[3])
+        watched_movies = self._safe_list(results[0], "watched/movies")
+        watched_shows = self._safe_list(results[1], "watched/shows")
+        rated_movies = self._safe_list(results[2], "ratings/movies")
+        rated_shows = self._safe_list(results[3], "ratings/shows")
 
         # Build rating lookup: imdb_id -> rating (1-10)
         ratings: dict[str, float] = {}
@@ -180,16 +151,18 @@ class TraktService:
         return WatchHistory(items=items, source="trakt")
 
     @staticmethod
-    def _safe_json(result) -> list:
+    def _safe_list(result, label: str) -> list:
         if isinstance(result, Exception):
-            logger.warning(f"Trakt API request failed: {result}")
+            logger.warning(f"Trakt {label} request failed: {result}")
             return []
-        try:
-            result.raise_for_status()
-            return result.json()
-        except Exception as e:
-            logger.warning(f"Failed to parse Trakt response: {e}")
+        # BaseClient returns dict for JSON objects; Trakt list endpoints return
+        # arrays which BaseClient parses to list — but its type is annotated as
+        # dict. Accept either shape defensively.
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and not result:
             return []
+        return result if isinstance(result, list) else []
 
     @staticmethod
     def _parse_date(date_str: str | None):
