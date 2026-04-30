@@ -56,9 +56,11 @@ async def validate_poster_rating_api_key(payload: PosterRatingValidationInput) -
         if is_valid:
             return BaseValidationResponse(valid=True, message="API key is valid")
         return BaseValidationResponse(valid=False, message="Invalid API key")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Validation failed: {str(e)}")
-        raise HTTPException(status_code=500, detail="Validation failed due to an internal error.")
+        logger.error(f"Poster rating validation failed: {str(e)}")
+        return BaseValidationResponse(valid=False, message="Could not validate API key. Please try again.")
 
 
 @router.post("/simkl/validation")
@@ -69,8 +71,8 @@ async def validate_simkl_api_key(data: BaseValidationInput) -> BaseValidationRes
             return BaseValidationResponse(valid=True, message="Valid API Key")
         return BaseValidationResponse(valid=False, message="Invalid API Key")
     except Exception as e:
-        logger.error(f"Validation failed: {str(e)}")
-        raise HTTPException(status_code=500, detail="Validation failed due to an internal error.")
+        logger.error(f"Simkl validation failed: {str(e)}")
+        return BaseValidationResponse(valid=False, message="Could not validate API key. Please try again.")
 
 
 class OAuthTokenValidationInput(BaseModel):
