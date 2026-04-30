@@ -87,13 +87,11 @@ class TopPicksService:
         scored_candidates.sort(key=lambda x: x[0], reverse=True)
         logger.info(f"Scored {len(scored_candidates)} candidates.")
 
-        # 4. Apply diversity caps
-        result = apply_diversity_caps(scored_candidates, len(scored_candidates), mtype, self.user_settings)
+        # 4. Apply diversity caps (cap to 3x the target so the genre cap is meaningful
+        #    and we still have headroom for the post-enrichment filters)
+        diversity_target = limit * 3
+        result = apply_diversity_caps(scored_candidates, diversity_target, mtype, self.user_settings)
         logger.info(f"After diversity caps: {len(result)} items")
-
-        # Limit before enrichment to avoid timeout (only enrich 3x what we need)
-        result = result[: limit * 3]
-        logger.info(f"After diversity caps and pre-enrichment limit: {len(result)} items")
 
         # 5. Enrich metadata
         enriched = await RecommendationMetadata.fetch_batch(
