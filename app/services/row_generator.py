@@ -94,8 +94,6 @@ def _pick(items: list, start: int, end: int, exclude: set | None = None) -> Any 
     pool = items[start:end]
     if exclude:
         pool = [x for x in pool if x[0] not in exclude]
-    if not pool:
-        pool = items[start:end]
     return random.choice(pool) if pool else None
 
 
