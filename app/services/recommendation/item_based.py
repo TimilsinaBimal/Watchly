@@ -137,11 +137,10 @@ class ItemBasedService:
         if not combined or len(combined) < 30:
             await fetch_and_combine(self.tmdb_service.get_similar, "similar")
 
-        # apply filter and check
-        filtered = filter_items_by_settings(combined.values(), self.user_settings)
-
-        if not filtered or len(filtered) < 30:
-            # fetch more similar items if there are less than 30 items after user_settings filter
+        # If the post-settings filter produces fewer than 30 candidates, pull
+        # more pages of similar before returning so the caller has headroom.
+        if len(filter_items_by_settings(combined.values(), self.user_settings)) < 30:
             await fetch_and_combine(self.tmdb_service.get_similar, "similar", pages=[4, 5, 6])
 
+        # Caller re-applies filter_items_by_settings, so return the merged set.
         return list(combined.values())
