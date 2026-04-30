@@ -34,4 +34,4 @@ async def get_catalog(response: Response, type: str, id: str, token: str, extra:
         raise
     except Exception as e:
         logger.exception(f"[{redact_token(token)}] Error fetching catalog for {type}/{id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Something went wrong. Please try again. Error: {e}")
+        raise HTTPException(status_code=500, detail="Something went wrong. Please try again.")
