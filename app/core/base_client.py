@@ -69,12 +69,23 @@ class BaseClient:
 
         raise httpx.RequestError(f"Request failed for {method} {url} with 0 attempts configured")
 
+    @staticmethod
+    def _safe_json(response: httpx.Response, method: str, url: str) -> dict[str, Any]:
+        """Parse JSON body, returning {} on empty/non-JSON 2xx responses."""
+        if not response.content:
+            return {}
+        try:
+            return response.json()
+        except ValueError as e:
+            logger.warning(f"Non-JSON body from {method} {url} (status={response.status_code}): {e}")
+            return {}
+
     async def get(self, url: str, params: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
         """Perform a GET request and return the JSON response."""
         response = await self._request("GET", url, params=params, **kwargs)
-        return response.json()
+        return self._safe_json(response, "GET", url)
 
     async def post(self, url: str, json: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
         """Perform a POST request and return the JSON response."""
         response = await self._request("POST", url, json=json, **kwargs)
-        return response.json()
+        return self._safe_json(response, "POST", url)
