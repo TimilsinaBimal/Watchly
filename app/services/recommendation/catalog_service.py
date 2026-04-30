@@ -37,7 +37,7 @@ class CatalogService:
             "Access-Control-Allow-Headers": "*",
             "Content-Type": "application/json",
             "Cache-Control": (
-                f"public, max-age={settings.CATALOG_CACHE_TTL},stale-while-revalidate=3600, stale-if-error=1800"
+                f"private, max-age={settings.CATALOG_CACHE_TTL},stale-while-revalidate=3600, stale-if-error=1800"
             ),
         }
 
