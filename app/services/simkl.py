@@ -69,6 +69,27 @@ class SimklService:
     async def close(self) -> None:
         await self.client.close()
 
+    async def exchange_code(self, code: str, redirect_uri: str, client_id: str, client_secret: str) -> dict[str, Any]:
+        """Exchange authorization code for an access token."""
+        return await self.client.post(
+            "/oauth/token",
+            json={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+
+    async def get_user_settings(self, access_token: str, client_id: str) -> dict[str, Any]:
+        """Fetch the authenticated user's profile (used to display 'Connected as ...')."""
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "simkl-api-key": client_id,
+        }
+        return await self.client.get("/users/settings", headers=headers)
+
     async def _fetch_with_semaphore(self, coro):
         """Execute a coroutine with semaphore for rate limiting."""
         async with self._semaphore:

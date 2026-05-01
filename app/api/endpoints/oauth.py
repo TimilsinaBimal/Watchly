@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from loguru import logger
 
 from app.core.config import settings
+from app.services.simkl import simkl_service
 from app.services.trakt import trakt_service
 
 router = APIRouter(tags=["OAuth"])
@@ -93,7 +94,6 @@ async def trakt_callback(request: Request, code: str, state: str | None = None):
 # ── Simkl OAuth ──────────────────────────────────────────────────────────────
 
 SIMKL_AUTH_URL = "https://simkl.com/oauth/authorize"
-SIMKL_TOKEN_URL = "https://api.simkl.com/oauth/token"
 
 
 @router.get("/auth/simkl")
@@ -128,38 +128,16 @@ async def simkl_callback(request: Request, code: str, state: str | None = None):
     redirect_uri = f"{settings.HOST_NAME}/auth/simkl/callback"
 
     try:
-        from httpx import AsyncClient
-
-        async with AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                SIMKL_TOKEN_URL,
-                json={
-                    "code": code,
-                    "client_id": settings.SIMKL_CLIENT_ID,
-                    "client_secret": settings.SIMKL_CLIENT_SECRET,
-                    "redirect_uri": redirect_uri,
-                    "grant_type": "authorization_code",
-                },
-                follow_redirects=True,
-            )
-            resp.raise_for_status()
-            token_data = resp.json()
-
+        token_data = await simkl_service.exchange_code(
+            code,
+            redirect_uri,
+            settings.SIMKL_CLIENT_ID,
+            settings.SIMKL_CLIENT_SECRET,
+        )
         access_token = token_data.get("access_token", "")
 
-        # Fetch username for display
-        async with AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                "https://api.simkl.com/users/settings",
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "simkl-api-key": settings.SIMKL_CLIENT_ID,
-                },
-                follow_redirects=True,
-            )
-            resp.raise_for_status()
-            user_info = resp.json()
-            username = user_info.get("user", {}).get("name") or user_info.get("account", {}).get("id", "Unknown")
+        user_info = await simkl_service.get_user_settings(access_token, settings.SIMKL_CLIENT_ID)
+        username = user_info.get("user", {}).get("name") or user_info.get("account", {}).get("id", "Unknown")
     except Exception as e:
         logger.error(f"Simkl OAuth callback failed: {e}")
         return HTMLResponse(_oauth_error_page("Simkl", str(e)))
