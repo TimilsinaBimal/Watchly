@@ -1,4 +1,5 @@
 import asyncio
+import random
 from typing import Any
 
 import httpx
@@ -53,7 +54,9 @@ class BaseClient:
                     is_retryable = e.response.status_code in (429, 500, 502, 503, 504)
 
                 if is_retryable and attempt < tries:
-                    wait_time = 0.5 * (2 ** (attempt - 1))  # Exponential backoff
+                    # Exponential backoff + small random jitter to avoid retry
+                    # stampedes when many concurrent users hit the same 429.
+                    wait_time = 0.5 * (2 ** (attempt - 1)) + random.uniform(0, 0.25)
                     logger.warning(
                         f"Request failed ({method} {url}): {str(e)}. "
                         f"Retrying in {wait_time}s... (Attempt {attempt}/{tries})"
