@@ -5,7 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.constants import CATALOG_KEY, LIBRARY_ITEMS_KEY, PROFILE_KEY, WATCHED_SETS_KEY
+from app.core.constants import CATALOG_KEY, LIBRARY_ITEMS_KEY, PROFILE_KEY, USER_CACHE_TTL_SECONDS, WATCHED_SETS_KEY
 from app.core.security import redact_token
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
@@ -48,6 +48,8 @@ class UserCacheService:
         if cached:
             try:
                 data = json.loads(cached)
+                # Refresh TTL on read so active users' caches stay warm.
+                await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
                 return LibraryCollection.model_validate(data)
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"Failed to decode cached library items for {redact_token(token)}...: {e}")
@@ -58,7 +60,7 @@ class UserCacheService:
     async def set_library_items(self, token: str, library_items: LibraryCollection) -> None:
         """Cache library items for a user."""
         key = self._library_items_key(token)
-        await redis_service.set(key, library_items.model_dump_json(by_alias=True))
+        await redis_service.set(key, library_items.model_dump_json(by_alias=True), USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Cached library items")
 
         await self.invalidate_all_catalogs(token)
@@ -92,7 +94,9 @@ class UserCacheService:
 
         if cached:
             try:
-                return TasteProfile.model_validate_json(cached)
+                profile = TasteProfile.model_validate_json(cached)
+                await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
+                return profile
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Failed to decode cached profile for {redact_token(token)}.../{content_type}: {e}")
                 return None
@@ -109,7 +113,7 @@ class UserCacheService:
             profile: TasteProfile instance to cache
         """
         key = self._profile_key(token, content_type)
-        await redis_service.set(key, profile.model_dump_json())
+        await redis_service.set(key, profile.model_dump_json(), USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Cached profile for {content_type}")
 
     async def invalidate_profile(self, token: str, content_type: str) -> None:
@@ -145,6 +149,7 @@ class UserCacheService:
                 data = json.loads(cached)
                 watched_tmdb = set(data.get("watched_tmdb", []))
                 watched_imdb = set(data.get("watched_imdb", []))
+                await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
                 return (watched_tmdb, watched_imdb)
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 logger.warning(f"Failed to decode cached watched sets for {redact_token(token)}.../{content_type}: {e}")
@@ -173,7 +178,7 @@ class UserCacheService:
             "watched_tmdb": list(watched_tmdb),
             "watched_imdb": list(watched_imdb),
         }
-        await redis_service.set(key, json.dumps(data))
+        await redis_service.set(key, json.dumps(data), USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Cached watched sets for {content_type}")
 
     async def invalidate_watched_sets(self, token: str, content_type: str) -> None:
@@ -261,8 +266,8 @@ class UserCacheService:
         build_time_key = self._last_profile_build_key(token, content_type)
 
         # Store hash and build timestamp
-        await redis_service.set(hash_key, current_hash)
-        await redis_service.set(build_time_key, str(time.time()))
+        await redis_service.set(hash_key, current_hash, USER_CACHE_TTL_SECONDS)
+        await redis_service.set(build_time_key, str(time.time()), USER_CACHE_TTL_SECONDS)
 
         logger.debug(f"[{redact_token(token)}...] Updated library hash for {content_type}")
 
@@ -282,7 +287,7 @@ class UserCacheService:
             return None
 
         try:
-            return int(float(build_time.decode() if isinstance(build_time, bytes) else build_time))
+            return int(float(build_time))
         except (ValueError, TypeError):
             return None
 
