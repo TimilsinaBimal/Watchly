@@ -219,7 +219,7 @@ class ProfileService:
 
         if source in ("trakt", "simkl"):
             profile, watched_tmdb, watched_imdb = await self._build_from_external_source(
-                source, user_settings, content_type, library_items
+                source, user_settings, content_type, library_items, token=token
             )
         else:
             profile, watched_tmdb, watched_imdb = await self.build_profile_incremental(
@@ -239,11 +239,15 @@ class ProfileService:
         user_settings: UserSettings | None,
         content_type: str,
         library: LibraryCollection,
+        token: str | None = None,
     ) -> tuple[TasteProfile | None, set[int], set[str]]:
         """Build a profile from an external history source, falling back to the
         Stremio library when the external fetch fails or no token is set."""
+        import httpx
+
         watch_history: WatchHistory | None = None
         token_missing = False
+        token_revoked = False
 
         if source == "trakt":
             if user_settings and user_settings.trakt_access_token:
@@ -251,9 +255,22 @@ class ProfileService:
 
                 try:
                     watch_history = await trakt_service.get_history(user_settings.trakt_access_token)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code in (401, 403):
+                        token_revoked = True
+                        logger.error(
+                            f"Trakt token rejected (HTTP {e.response.status_code}). "
+                            "Clearing stored token; user must reconnect Trakt."
+                        )
+                    else:
+                        logger.error(
+                            f"Trakt history fetch failed (HTTP {e.response.status_code}: {e}). "
+                            "Falling back to Stremio library."
+                        )
+                    watch_history = None
                 except Exception as e:
                     logger.error(
-                        f"Trakt history fetch failed ({type(e).__name__}: {e}). " "Falling back to Stremio library."
+                        f"Trakt history fetch failed ({type(e).__name__}: {e}). Falling back to Stremio library."
                     )
                     watch_history = None
             else:
@@ -268,9 +285,22 @@ class ProfileService:
                         user_settings.simkl_access_token,
                         app_settings.SIMKL_CLIENT_ID or "",
                     )
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code in (401, 403):
+                        token_revoked = True
+                        logger.error(
+                            f"Simkl token rejected (HTTP {e.response.status_code}). "
+                            "Clearing stored token; user must reconnect Simkl."
+                        )
+                    else:
+                        logger.error(
+                            f"Simkl history fetch failed (HTTP {e.response.status_code}: {e}). "
+                            "Falling back to Stremio library."
+                        )
+                    watch_history = None
                 except Exception as e:
                     logger.error(
-                        f"Simkl history fetch failed ({type(e).__name__}: {e}). " "Falling back to Stremio library."
+                        f"Simkl history fetch failed ({type(e).__name__}: {e}). Falling back to Stremio library."
                     )
                     watch_history = None
             else:
@@ -281,6 +311,9 @@ class ProfileService:
                 f"watch_history_source='{source}' but no {source}_access_token in user settings. "
                 "Falling back to Stremio library — the user likely needs to redo OAuth."
             )
+
+        if token_revoked and token:
+            await self._clear_revoked_token(token, source)
 
         # An empty WatchHistory still counts as "the source spoke" — only fall back
         # on actual failure (None), not on a user with zero history.
@@ -294,3 +327,34 @@ class ProfileService:
             watch_history, content_type, extra_exclusion_imdb=stremio_imdb, source=effective_source
         )
         return profile, set(), watched_imdb
+
+    async def _clear_revoked_token(self, token: str, source: str) -> None:
+        """Wipe a revoked external-source token from stored credentials.
+
+        Called when Trakt/Simkl returns 401/403 — keeps the user from looping
+        on a dead token forever. Their /configure page will show the source
+        as disconnected on next visit so they can reconnect.
+        """
+        from app.services.token_store import token_store
+
+        try:
+            credentials = await token_store.get_user_data(token)
+            if not credentials:
+                return
+            settings_dict = credentials.get("settings") or {}
+            mutated = False
+            if source == "trakt":
+                for field in ("trakt_access_token", "trakt_refresh_token"):
+                    if settings_dict.get(field):
+                        settings_dict[field] = None
+                        mutated = True
+            elif source == "simkl":
+                if settings_dict.get("simkl_access_token"):
+                    settings_dict["simkl_access_token"] = None
+                    mutated = True
+            if mutated:
+                credentials["settings"] = settings_dict
+                await token_store.update_user_data(token, credentials)
+                logger.info(f"[{token[:8]}...] Cleared revoked {source} credentials.")
+        except Exception as e:
+            logger.warning(f"[{token[:8]}...] Failed to clear revoked {source} token: {e}")

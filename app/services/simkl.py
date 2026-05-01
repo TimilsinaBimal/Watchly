@@ -99,6 +99,10 @@ class SimklService:
         try:
             return await self.client.get("/movies/trending", params={"client_id": api_key})
         except httpx.HTTPStatusError as e:
+            # 401/403 indicate the user's Simkl token was revoked — let those
+            # propagate so callers can clear the token and prompt re-auth.
+            if e.response.status_code in (401, 403):
+                raise
             logger.warning(f"Simkl trending returned {e.response.status_code}: {e}")
             return []
         except httpx.RequestError as e:
@@ -122,6 +126,8 @@ class SimklService:
             self._details_cache[cache_key] = result
             return result
         except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                raise
             logger.warning(f"Simkl item details {simkl_id} returned {e.response.status_code}: {e}")
             return {}
         except httpx.RequestError as e:
