@@ -188,6 +188,7 @@ class AuthService:
             tmdb_api_key=payload.tmdb_api_key,
             trakt_access_token=payload.trakt_access_token,
             trakt_refresh_token=payload.trakt_refresh_token,
+            trakt_token_expires_at=payload.trakt_token_expires_at,
             simkl_access_token=payload.simkl_access_token,
             watch_history_source=payload.watch_history_source,
         )

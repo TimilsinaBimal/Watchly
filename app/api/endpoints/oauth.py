@@ -1,4 +1,5 @@
 import secrets
+import time
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Request
@@ -74,6 +75,12 @@ async def trakt_callback(request: Request, code: str, state: str | None = None):
         token_data = await trakt_service.exchange_code(code, redirect_uri)
         access_token = token_data.get("access_token", "")
         refresh_token = token_data.get("refresh_token", "")
+        # Trakt returns expires_in (seconds, ~3 months) and created_at (epoch).
+        # Compute the absolute expiry up front so we can refresh proactively
+        # without re-deriving it later.
+        expires_in = int(token_data.get("expires_in") or 0)
+        created_at = int(token_data.get("created_at") or time.time())
+        expires_at = created_at + expires_in if expires_in else 0
 
         # Fetch username for display
         user_info = await trakt_service.get_user_info(access_token)
@@ -86,7 +93,11 @@ async def trakt_callback(request: Request, code: str, state: str | None = None):
         _oauth_success_page(
             provider="trakt",
             username=username,
-            tokens={"access_token": access_token, "refresh_token": refresh_token},
+            tokens={
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "expires_at": expires_at,
+            },
         )
     )
 

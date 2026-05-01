@@ -452,6 +452,7 @@ function restoreWatchHistoryState(settings) {
         window._watchlyOAuth.trakt = {
             access_token: settings.trakt_access_token,
             refresh_token: settings.trakt_refresh_token || '',
+            expires_at: settings.trakt_token_expires_at || 0,
         };
 
         const traktOption = sourceSelect.querySelector('option[value="trakt"]');

@@ -121,6 +121,7 @@ function buildTokenPayload(formData) {
         watch_history_source: formData.watch_history_source,
         trakt_access_token: window._watchlyOAuth?.trakt?.access_token || undefined,
         trakt_refresh_token: window._watchlyOAuth?.trakt?.refresh_token || undefined,
+        trakt_token_expires_at: window._watchlyOAuth?.trakt?.expires_at || undefined,
         simkl_access_token: window._watchlyOAuth?.simkl?.access_token || undefined,
     };
 }

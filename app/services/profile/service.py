@@ -251,12 +251,40 @@ class ProfileService:
 
         if source == "trakt":
             if user_settings and user_settings.trakt_access_token:
+                # Refresh proactively when within 7 days of expiry, then fetch.
+                # On a 401 from get_history, attempt one reactive refresh + retry
+                # before giving up — covers cases where expires_at was missing
+                # or the server clock skewed past it.
+                access_token, _ = await self._ensure_trakt_token_fresh(token, user_settings)
+
                 from app.services.trakt import trakt_service
 
                 try:
-                    watch_history = await trakt_service.get_history(user_settings.trakt_access_token)
+                    watch_history = await trakt_service.get_history(access_token)
                 except httpx.HTTPStatusError as e:
-                    if e.response.status_code in (401, 403):
+                    if e.response.status_code == 401 and user_settings.trakt_refresh_token and token:
+                        logger.info(f"[{token[:8]}...] Trakt 401 on get_history; attempting reactive refresh.")
+                        refreshed = await self._refresh_trakt_token(token, user_settings.trakt_refresh_token)
+                        if refreshed:
+                            try:
+                                watch_history = await trakt_service.get_history(refreshed)
+                            except httpx.HTTPStatusError as retry_e:
+                                if retry_e.response.status_code in (401, 403):
+                                    token_revoked = True
+                                    logger.error(
+                                        f"Trakt token still rejected after refresh (HTTP "
+                                        f"{retry_e.response.status_code}). Clearing stored token."
+                                    )
+                                else:
+                                    logger.error(
+                                        f"Trakt history fetch failed after refresh (HTTP "
+                                        f"{retry_e.response.status_code}: {retry_e})."
+                                    )
+                                watch_history = None
+                        else:
+                            token_revoked = True
+                            logger.error("Trakt refresh failed; clearing stored token. User must reconnect Trakt.")
+                    elif e.response.status_code in (401, 403):
                         token_revoked = True
                         logger.error(
                             f"Trakt token rejected (HTTP {e.response.status_code}). "
@@ -267,7 +295,7 @@ class ProfileService:
                             f"Trakt history fetch failed (HTTP {e.response.status_code}: {e}). "
                             "Falling back to Stremio library."
                         )
-                    watch_history = None
+                        watch_history = None
                 except Exception as e:
                     logger.error(
                         f"Trakt history fetch failed ({type(e).__name__}: {e}). Falling back to Stremio library."
@@ -327,6 +355,72 @@ class ProfileService:
             watch_history, content_type, extra_exclusion_imdb=stremio_imdb, source=effective_source
         )
         return profile, set(), watched_imdb
+
+    async def _ensure_trakt_token_fresh(self, token: str | None, user_settings: UserSettings) -> tuple[str, bool]:
+        """If the Trakt access token is within 7 days of expiry, refresh it.
+
+        Returns (access_token_to_use, was_refreshed). Always returns the best
+        token we have — even if refresh fails the original is returned so the
+        caller can still attempt the request and surface the real failure.
+        """
+        import time as _time
+
+        access_token = user_settings.trakt_access_token or ""
+        expires_at = user_settings.trakt_token_expires_at or 0
+        if not (token and user_settings.trakt_refresh_token and expires_at):
+            return access_token, False
+
+        seven_days = 7 * 24 * 60 * 60
+        if _time.time() < expires_at - seven_days:
+            return access_token, False
+
+        logger.info(f"[{token[:8]}...] Trakt token within refresh window; refreshing proactively.")
+        refreshed = await self._refresh_trakt_token(token, user_settings.trakt_refresh_token)
+        if refreshed:
+            return refreshed, True
+        return access_token, False
+
+    async def _refresh_trakt_token(self, token: str, refresh_token: str) -> str | None:
+        """Refresh a Trakt access token and persist the new tokens.
+
+        Returns the new access token on success, None on failure.
+        """
+        import time as _time
+
+        from app.core.config import settings as app_settings
+        from app.services.token_store import token_store
+        from app.services.trakt import trakt_service
+
+        redirect_uri = f"{app_settings.HOST_NAME}/auth/trakt/callback"
+        try:
+            data = await trakt_service.refresh_token(refresh_token, redirect_uri)
+        except Exception as e:
+            logger.warning(f"[{token[:8]}...] Trakt refresh_token call failed: {e}")
+            return None
+
+        new_access = data.get("access_token") or ""
+        new_refresh = data.get("refresh_token") or refresh_token
+        expires_in = int(data.get("expires_in") or 0)
+        created_at = int(data.get("created_at") or _time.time())
+        new_expires_at = created_at + expires_in if expires_in else 0
+        if not new_access:
+            logger.warning(f"[{token[:8]}...] Trakt refresh returned no access_token.")
+            return None
+
+        try:
+            credentials = await token_store.get_user_data(token)
+            if credentials:
+                settings_dict = credentials.get("settings") or {}
+                settings_dict["trakt_access_token"] = new_access
+                settings_dict["trakt_refresh_token"] = new_refresh
+                settings_dict["trakt_token_expires_at"] = new_expires_at
+                credentials["settings"] = settings_dict
+                await token_store.update_user_data(token, credentials)
+                logger.info(f"[{token[:8]}...] Trakt token refreshed; new expiry={new_expires_at}.")
+        except Exception as e:
+            logger.warning(f"[{token[:8]}...] Failed to persist refreshed Trakt token: {e}")
+
+        return new_access
 
     async def _clear_revoked_token(self, token: str, source: str) -> None:
         """Wipe a revoked external-source token from stored credentials.
