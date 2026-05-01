@@ -53,6 +53,10 @@ class TasteProfile(BaseModel):
         default_factory=set,
         description="Set of processed item IDs to prevent double counting",
     )
+    # Which watch-history source produced this profile. Used to invalidate
+    # cached profiles when the user changes watch_history_source in settings,
+    # so a Stremio-built profile isn't served after switching to Trakt/Simkl.
+    source: str = Field(default="stremio", description="stremio | trakt | simkl")
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}

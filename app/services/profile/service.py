@@ -85,6 +85,8 @@ class ProfileService:
 
         sampled = sample_items(typed, content_type, self.scoring_service)
         profile = await self.builder.build_profile(sampled, content_type=content_type)
+        if profile is not None:
+            profile.source = "stremio"
         return profile, watched_tmdb, watched_imdb
 
     async def build_profile_incremental(
@@ -168,6 +170,7 @@ class ProfileService:
         watch_history: WatchHistory,
         content_type: str,
         extra_exclusion_imdb: set[str] | None = None,
+        source: str | None = None,
     ) -> tuple[TasteProfile | None, set[str]]:
         """Build taste profile from external watch history (Trakt/Simkl)."""
         typed_items = [it for it in watch_history.items if it.type == content_type]
@@ -176,6 +179,9 @@ class ProfileService:
 
         scored_items = [_watch_history_item_to_scored(it) for it in typed_items]
         profile = await self.builder.build_profile(scored_items, content_type=content_type)
+
+        if profile is not None:
+            profile.source = source or watch_history.source or "stremio"
 
         watched_imdb = watch_history.imdb_ids()
         if extra_exclusion_imdb:
@@ -198,6 +204,18 @@ class ProfileService:
         when the user connected those, otherwise the Stremio library.
         """
         source = user_settings.watch_history_source if user_settings else "stremio"
+
+        # Drop a cached profile that was built from a different source than the
+        # one the user has currently selected — otherwise switching sources in
+        # the configure page silently keeps serving the old (wrong) profile.
+        cached = await user_cache.get_profile(token, content_type)
+        if cached and getattr(cached, "source", "stremio") != source:
+            logger.info(
+                f"[{token[:8]}...] Cached profile source '{cached.source}' "
+                f"!= requested '{source}'; invalidating before rebuild."
+            )
+            await user_cache.invalidate_profile(token, content_type)
+            await user_cache.invalidate_watched_sets(token, content_type)
 
         if source in ("trakt", "simkl"):
             profile, watched_tmdb, watched_imdb = await self._build_from_external_source(
@@ -225,28 +243,54 @@ class ProfileService:
         """Build a profile from an external history source, falling back to the
         Stremio library when the external fetch fails or no token is set."""
         watch_history: WatchHistory | None = None
-        try:
-            if source == "trakt" and user_settings and user_settings.trakt_access_token:
+        token_missing = False
+
+        if source == "trakt":
+            if user_settings and user_settings.trakt_access_token:
                 from app.services.trakt import trakt_service
 
-                watch_history = await trakt_service.get_history(user_settings.trakt_access_token)
-            elif source == "simkl" and user_settings and user_settings.simkl_access_token:
+                try:
+                    watch_history = await trakt_service.get_history(user_settings.trakt_access_token)
+                except Exception as e:
+                    logger.error(
+                        f"Trakt history fetch failed ({type(e).__name__}: {e}). " "Falling back to Stremio library."
+                    )
+                    watch_history = None
+            else:
+                token_missing = True
+        elif source == "simkl":
+            if user_settings and user_settings.simkl_access_token:
                 from app.core.config import settings as app_settings
                 from app.services.simkl import simkl_service
 
-                watch_history = await simkl_service.get_history(
-                    user_settings.simkl_access_token,
-                    app_settings.SIMKL_CLIENT_ID or "",
-                )
-        except Exception as e:
-            logger.warning(f"External history ({source}) failed, falling back to Stremio library: {e}")
-            watch_history = None
+                try:
+                    watch_history = await simkl_service.get_history(
+                        user_settings.simkl_access_token,
+                        app_settings.SIMKL_CLIENT_ID or "",
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Simkl history fetch failed ({type(e).__name__}: {e}). " "Falling back to Stremio library."
+                    )
+                    watch_history = None
+            else:
+                token_missing = True
 
+        if token_missing:
+            logger.error(
+                f"watch_history_source='{source}' but no {source}_access_token in user settings. "
+                "Falling back to Stremio library — the user likely needs to redo OAuth."
+            )
+
+        # An empty WatchHistory still counts as "the source spoke" — only fall back
+        # on actual failure (None), not on a user with zero history.
+        effective_source = source
         if watch_history is None:
             watch_history = stremio_library_to_watch_history(library)
+            effective_source = "stremio"
 
         stremio_imdb = library.all_imdb_ids()
         profile, watched_imdb = await self.build_profile_from_watch_history(
-            watch_history, content_type, extra_exclusion_imdb=stremio_imdb
+            watch_history, content_type, extra_exclusion_imdb=stremio_imdb, source=effective_source
         )
         return profile, set(), watched_imdb

@@ -138,6 +138,27 @@ class AuthService:
         # 4. Store user data
         token = await self.store_credentials(user_id, payload_to_store)
 
+        # If watch_history_source changed (or any other setting that affects
+        # the profile), drop cached profiles so the next catalog request
+        # rebuilds from the new source instead of serving the stale cache.
+        if existing_data:
+            try:
+                from app.services.user_cache import user_cache as _user_cache
+
+                old_settings = existing_data.get("settings") or {}
+                old_source = old_settings.get("watch_history_source", "stremio")
+                if old_source != user_settings.watch_history_source:
+                    for ct in ("movie", "series"):
+                        await _user_cache.invalidate_profile(token, ct)
+                        await _user_cache.invalidate_watched_sets(token, ct)
+                    await _user_cache.invalidate_all_catalogs(token)
+                    logger.info(
+                        f"[{redact_token(token)}] watch_history_source changed "
+                        f"'{old_source}' -> '{user_settings.watch_history_source}'; cleared profile/catalog caches."
+                    )
+            except Exception as e:
+                logger.warning(f"[{redact_token(token)}] Failed to invalidate caches on source change: {e}")
+
         # 5. Build response
         base_url = settings.HOST_NAME
         manifest_url = f"{base_url}/{token}/manifest.json"
