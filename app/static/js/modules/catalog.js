@@ -40,7 +40,10 @@ function createCatalogItem(cat, index) {
     item.setAttribute('data-id', cat.id);
     item.setAttribute('data-index', index);
 
-    const isRenamable = cat.id !== 'watchly.theme';
+    // watchly.theme builds names from genres/keywords at runtime; watchly.item
+    // builds them from the seed bucket ("Because you loved/watched"). Both
+    // would discard a user-supplied name, so the rename button is hidden.
+    const isRenamable = cat.id !== 'watchly.theme' && cat.id !== 'watchly.item';
 
     // Determine active mode for toggle buttons
     const enabledMovie = cat.enabledMovie !== false;

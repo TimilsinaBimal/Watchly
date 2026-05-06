@@ -289,7 +289,7 @@ class DynamicCatalogService:
                 enabled = bool((legacy_loved and legacy_loved.enabled) or (legacy_watched and legacy_watched.enabled))
                 item = CatalogConfig(
                     id="watchly.item",
-                    name=None,
+                    name="Because you Watched/Loved",
                     enabled=enabled,
                     enabled_movie=getattr(donor, "enabled_movie", True),
                     enabled_series=getattr(donor, "enabled_series", True),
@@ -341,11 +341,10 @@ class DynamicCatalogService:
 
         Seed selection: take the 3 most-recent loved items and the 3 most-recent
         watched items, combine, and pick uniformly at random. The label
-        ("Because you loved X" vs "Because you watched X") is set from which
-        bucket the chosen seed came from, so a user with both loved and
-        watched items sees variety across calls instead of "loved" winning
-        every time. A user-set `name` on the config overrides the dynamic
-        label entirely.
+        ("Because you loved X" vs "Because you watched X") follows the bucket
+        the chosen seed came from. The configured `name` is for the FE display
+        only — the served catalog title is always one of the two dynamic
+        labels — so the configure page disables renaming this catalog.
         """
         if not item_config or not item_config.enabled:
             return
@@ -371,11 +370,7 @@ class DynamicCatalogService:
             return
 
         seed, seed_is_loved = random.choice(candidates)
-
-        if item_config.name:
-            label = item_config.name
-        else:
-            label = "Because you loved" if seed_is_loved else "Because you watched"
+        label = "Because you loved" if seed_is_loved else "Because you watched"
 
         display_at_home = getattr(item_config, "display_at_home", True)
         catalogs.append(self.build_catalog_entry(seed, label, "watchly.item", display_at_home))
