@@ -7,6 +7,7 @@ from .endpoints.manifest import router as manifest_router
 from .endpoints.meta import router as meta_router
 from .endpoints.stats import router as stats_router
 from .endpoints.tokens import router as tokens_router
+from .endpoints.trakt import router as trakt_router
 from .endpoints.validation import router as validation_router
 
 api_router = APIRouter()
@@ -20,6 +21,7 @@ async def root():
 api_router.include_router(manifest_router)
 api_router.include_router(catalogs_router)
 api_router.include_router(tokens_router)
+api_router.include_router(trakt_router)
 api_router.include_router(health_router)
 api_router.include_router(meta_router)
 api_router.include_router(announcement_router)

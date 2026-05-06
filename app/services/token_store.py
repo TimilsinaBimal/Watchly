@@ -56,6 +56,16 @@ class TokenStore:
         return f"{self.KEY_PREFIX}{token}"
 
     def get_token_from_user_id(self, user_id: str) -> str:
+        """
+        For Trakt users, generate a stable opaque token from the user_id
+        so the username is not exposed in the manifest URL.
+        Stremio users keep their existing behaviour (user_id == token).
+        """
+        if user_id.startswith("trakt:"):
+            import hashlib
+            salt = settings.TOKEN_SALT or "watchly"
+            digest = hashlib.sha256(f"{salt}:{user_id}".encode()).hexdigest()
+            return digest[:40]
         return user_id.strip()
 
     def get_user_id_from_token(self, token: str) -> str:
@@ -74,6 +84,14 @@ class TokenStore:
 
         if storage_data.get("authKey"):
             storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
+
+        # Encrypt Trakt refresh token if present
+        if storage_data.get("trakt_refresh_token"):
+            try:
+                if not storage_data["trakt_refresh_token"].startswith("gAAAAAB"):
+                    storage_data["trakt_refresh_token"] = self.encrypt_token(storage_data["trakt_refresh_token"])
+            except Exception as exc:
+                logger.warning(f"Failed to encrypt trakt_refresh_token: {exc}")
 
         # Securely store password if provided (primary login mode)
         if storage_data.get("password"):
@@ -250,6 +268,13 @@ class TokenStore:
                 logger.warning(f"Decryption failed for authKey associated with {redact_token(token)}: {e}")
                 # Leave as-is (legacy plaintext or previous failure)
                 pass
+
+        if data.get("trakt_refresh_token"):
+            try:
+                if data["trakt_refresh_token"].startswith("gAAAAA"):
+                    data["trakt_refresh_token"] = self.decrypt_token(data["trakt_refresh_token"])
+            except Exception as e:
+                logger.debug(f"Decryption failed for trakt_refresh_token associated with {redact_token(token)}: {e}")
         if data.get("password"):
             try:
                 data["password"] = self.decrypt_token(data["password"])

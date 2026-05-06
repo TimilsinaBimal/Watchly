@@ -13,7 +13,7 @@ async def get_catalog(response: Response, type: str, id: str, token: str, extra:
     if type not in ("movie", "series"):
         raise HTTPException(status_code=400, detail="Invalid content type. Must be 'movie' or 'series'.")
 
-    if len(token) > 30:  # normal stremio tokens are 24 length. But we are using this just to be safe.
+    if len(token) > 80:  # Stremio tokens are ~24 chars; Trakt hashed tokens are 40 chars. 80 is a safe upper bound.
         raise HTTPException(status_code=400, detail="Invalid token.")
 
     try:

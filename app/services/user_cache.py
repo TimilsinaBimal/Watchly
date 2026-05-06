@@ -404,6 +404,31 @@ class UserCacheService:
         await redis_service.delete(key)
         logger.debug(f"[{redact_token(token)}...] Invalidated catalog cache for {type}/{id}")
 
+    async def get_catalog_slot_map(self, token: str) -> dict[str, str] | None:
+        """
+        Return the slot-to-real-id mapping for dynamic catalogs.
+        e.g. {"watchly.watched.slot0": "watchly.watched.tt0209144", ...}
+        """
+        key = f"{token}:catalog_slot_map"
+        try:
+            data = await redis_service.get(key)
+            if data:
+                import json
+                return json.loads(data)
+        except Exception as e:
+            logger.warning(f"[{redact_token(token)}...] Failed to get catalog slot map: {e}")
+        return None
+
+    async def set_catalog_slot_map(self, token: str, slot_map: dict[str, str]) -> None:
+        """Store the slot-to-real-id mapping for dynamic catalogs."""
+        key = f"{token}:catalog_slot_map"
+        try:
+            import json
+            await redis_service.set(key, json.dumps(slot_map), 86400 * 7)
+            logger.debug(f"[{redact_token(token)}...] Stored catalog slot map ({len(slot_map)} entries)")
+        except Exception as e:
+            logger.warning(f"[{redact_token(token)}...] Failed to set catalog slot map: {e}")
+
     async def invalidate_all_catalogs(self, token: str) -> None:
         """
         Invalidate all cached catalogs for a user.

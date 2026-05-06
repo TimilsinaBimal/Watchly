@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     DEFAULT_GEMINI_MODEL: str = "gemma-3-27b-it"
     GEMINI_API_KEY: str | None = None
 
+    # Trakt OAuth
+    TRAKT_CLIENT_ID: str | None = None
+    TRAKT_CLIENT_SECRET: str | None = None
+
 
 settings = Settings()
 

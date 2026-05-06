@@ -133,6 +133,18 @@ class CatalogService:
                 # continue with the request even if the auto update fails
                 pass
 
+        # Resolve stable slot ID to real dynamic catalog ID if needed
+        slot_prefixes = ("watchly.watched.slot", "watchly.loved.slot", "watchly.theme.slot")
+        if any(catalog_id.startswith(p) for p in slot_prefixes):
+            slot_map = await user_cache.get_catalog_slot_map(token)
+            if slot_map and catalog_id in slot_map:
+                real_id = slot_map[catalog_id]
+                logger.debug(f"[{redact_token(token)}...] Resolved slot {catalog_id} → {real_id}")
+                catalog_id = real_id
+            else:
+                logger.warning(f"[{redact_token(token)}...] Slot {catalog_id} not found in slot map, cannot resolve")
+                raise HTTPException(status_code=404, detail="Catalog slot not found. Please re-configure the addon.")
+
         bundle = StremioBundle()
         user_settings = None
         stale_data = None
@@ -296,7 +308,9 @@ class CatalogService:
             "watchly.liked.all",
         ]
         supported_prefixes = ("watchly.theme.", "watchly.loved.", "watchly.watched.")
-        if catalog_id not in supported_base and not any(catalog_id.startswith(p) for p in supported_prefixes):
+        # Also accept stable slot IDs (e.g. watchly.watched.slot0, watchly.theme.slot1)
+        is_slot = any(catalog_id.startswith(p.rstrip(".") + ".slot") for p in supported_prefixes)
+        if catalog_id not in supported_base and not any(catalog_id.startswith(p) for p in supported_prefixes) and not is_slot:
             logger.warning(f"Invalid id: {catalog_id}")
             raise HTTPException(
                 status_code=400,
@@ -308,6 +322,14 @@ class CatalogService:
 
     async def _resolve_auth(self, bundle: StremioBundle, credentials: dict, token: str) -> str:
         auth_key = credentials.get("authKey")
+
+        # Trakt accounts use a Trakt access token stored as authKey.
+        # Skip Stremio session validation entirely for these accounts.
+        if credentials.get("auth_provider") == "trakt":
+            if not auth_key:
+                raise HTTPException(status_code=401, detail="Trakt session expired. Please reconfigure.")
+            return auth_key
+
         email = credentials.get("email")
         password = credentials.get("password")
 

@@ -15,7 +15,8 @@
 
 ## Features
 
-- **Personalized Recommendations**: Analyzes your Stremio library to understand your viewing preferences.
+- **Personalized Recommendations**: Analyzes your Stremio or Trakt library to understand your viewing preferences.
+- **Trakt Integration**: Log in with Trakt instead of Stremio — no Stremio account required.
 - **Smart Filtering**: Automatically excludes content you've already watched.
 - **Advanced Scoring**: Recommendations are intelligently weighted by recency and relevance.
 - **Genre-Based Discovery**: Offers genre-specific catalogs based on your viewing history.
@@ -67,7 +68,7 @@ You can pull the latest image from the GitHub Container Registry.
     ```env
     # Required
     TMDB_API_KEY=your_tmdb_api_key_here
-    TOKEN_SALT=generate_a_random_secure_string_here
+    TOKEN_SALT=generate_a_random_secure_string_here  # python3 -c "import secrets; print(secrets.token_hex(32))"
     HOST_NAME=your_addon_url
 
     # Optional
@@ -77,6 +78,12 @@ You can pull the latest image from the GitHub Container Registry.
     ADDON_NAME=Watchly
     TOKEN_TTL_SECONDS=0
     AUTO_UPDATE_CATALOGS=true
+
+    # Trakt Integration (optional — enables Trakt login on the configure page)
+    # Register your app at https://trakt.tv/oauth/applications/new
+    # Set the redirect URI to: https://your_addon_url/tokens/trakt/callback
+    TRAKT_CLIENT_ID=your_trakt_client_id
+    TRAKT_CLIENT_SECRET=your_trakt_client_secret
     ```
 
 3.  **Start the application:**
@@ -86,7 +93,7 @@ You can pull the latest image from the GitHub Container Registry.
     ```
 
 4.  **Configure the addon:**
-    Open `http://localhost:8000/configure` in your browser to set up your Stremio credentials and install the addon.
+    Open `http://localhost:8000/configure` in your browser. Log in with either your **Stremio** credentials or your **Trakt** account, then configure your preferences and install the addon.
 
 ## Development
 

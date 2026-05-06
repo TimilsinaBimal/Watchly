@@ -4,6 +4,7 @@ import { defaultCatalogs } from './constants.js';
 import { showToast, initializeFooter, initializeKofi } from './modules/ui.js';
 import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initializeMobileNav, updateMobileLayout, unlockNavigation } from './modules/navigation.js';
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
+import { initializeTrakt, setTraktLoggedOutState } from './modules/trakt.js';
 import { initializeCatalogList, renderCatalogList, getCatalogs, setCatalogs } from './modules/catalog.js';
 import { initializeForm, clearErrors } from './modules/form.js';
 
@@ -65,6 +66,9 @@ function resetApp() {
     // Reset Stremio State
     setStremioLoggedOutState();
 
+    // Reset Trakt State
+    setTraktLoggedOutState();
+
     // Reset catalogs
     catalogsState = JSON.parse(JSON.stringify(defaultCatalogs));
     setCatalogs(catalogsState);
@@ -118,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     );
 
-    // Initialize authentication
+    // Initialize authentication (Stremio)
     initializeAuth(
         {
             stremioLoginBtn,
@@ -128,6 +132,16 @@ document.addEventListener('DOMContentLoaded', () => {
             emailPwdContinueBtn,
             languageSelect
         },
+        {
+            getCatalogs,
+            renderCatalogList,
+            resetApp
+        }
+    );
+
+    // Initialize Trakt authentication
+    initializeTrakt(
+        { languageSelect },
         {
             getCatalogs,
             renderCatalogList,

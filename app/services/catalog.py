@@ -57,6 +57,53 @@ class DynamicCatalogService:
             "extra": extra,
         }
 
+    async def _stabilize_catalog_ids(self, catalogs: list[dict], token: str) -> list[dict]:
+        """
+        Replace dynamic content-encoded catalog IDs with stable positional slot IDs
+        and persist a slot→real_id map in Redis so catalog_service can resolve them.
+
+        watchly.watched.tt0209144  → watchly.watched.slot0
+        watchly.loved.tt0816692   → watchly.loved.slot0
+        watchly.theme.a:g27...    → watchly.theme.slot0  (per type)
+
+        The slot numbers are per-prefix per-type so movie slot0 and series slot0
+        are independent, matching the pattern users see in the UI.
+        """
+        from app.services.user_cache import user_cache
+
+        slot_map: dict[str, str] = {}   # stable_id → real_id
+        counters: dict[str, int] = {}   # prefix:type → counter
+        stabilized = []
+
+        for cat in catalogs:
+            real_id: str = cat["id"]
+            cat_type: str = cat.get("type", "")
+
+            # Determine if this is a dynamic ID that needs stabilizing
+            dynamic_prefixes = ("watchly.watched.", "watchly.loved.", "watchly.theme.")
+            matched_prefix = next((p for p in dynamic_prefixes if real_id.startswith(p)), None)
+
+            if matched_prefix:
+                # Strip the prefix to get the content part
+                content_part = real_id[len(matched_prefix):]
+                # Only stabilize if the content part looks like an ID (tt...) or theme params
+                # Fixed IDs like "watchly.rec", "watchly.creators" are left alone
+                if content_part and not content_part.startswith("slot"):
+                    counter_key = f"{matched_prefix.rstrip('.')}:{cat_type}"
+                    slot_num = counters.get(counter_key, 0)
+                    counters[counter_key] = slot_num + 1
+                    stable_id = f"{matched_prefix.rstrip('.')}.slot{slot_num}"
+                    slot_map[stable_id] = real_id
+                    stabilized.append({**cat, "id": stable_id})
+                    continue
+
+            stabilized.append(cat)
+
+        if slot_map:
+            await user_cache.set_catalog_slot_map(token, slot_map)
+
+        return stabilized
+
     def _get_smart_scored_items(self, library_items: dict, content_type: str, max_items: int = 50) -> list:
         """
         Get smart sampled items for profile building.
@@ -235,6 +282,14 @@ class DynamicCatalogService:
 
         # 4. Add watchly.rec catalog
         catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rec", "Top Picks for You", True, True))
+
+        # 5. Stabilize dynamic catalog IDs so external apps (Nuvio, aiostreams) can
+        #    order them consistently. Replace content-encoded IDs like
+        #    "watchly.watched.tt0209144" and "watchly.theme.a:g27..." with stable
+        #    positional slot IDs like "watchly.watched.slot0", "watchly.theme.slot0".
+        #    A Redis mapping records which real ID each slot resolves to at fetch time.
+        if token:
+            catalogs = await self._stabilize_catalog_ids(catalogs, token)
 
         # 5. Add watchly.creators catalog
         catalogs.extend(

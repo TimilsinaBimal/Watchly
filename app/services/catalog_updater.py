@@ -73,6 +73,10 @@ class CatalogUpdater:
             logger.warning(f"[{redact_token(token)}] Attempted to refresh catalogs with no credentials.")
             raise HTTPException(status_code=401, detail="Invalid or expired token. Please reconfigure the addon.")
 
+        # Trakt-backed accounts use a different refresh path
+        if credentials.get("auth_provider") == "trakt":
+            return await self._refresh_trakt_catalogs(token, credentials, update_timestamp)
+
         auth_key = credentials.get("authKey")
         # check if auth key is valid
         bundle = StremioBundle()
@@ -164,6 +168,50 @@ class CatalogUpdater:
             return False
         finally:
             await bundle.close()
+
+    async def _refresh_trakt_catalogs(
+        self, token: str, credentials: dict[str, Any], update_timestamp: bool = True
+    ) -> bool:
+        """Refresh catalogs for a Trakt-backed account."""
+        from app.core.settings import resolve_tmdb_api_key
+        from app.services.trakt.service import TraktBundle
+
+        user_settings = None
+        if credentials.get("settings"):
+            try:
+                user_settings = UserSettings(**credentials["settings"])
+            except Exception as e:
+                logger.warning(f"[{redact_token(token)}] Failed to parse Trakt user settings: {e}")
+                return True
+
+        access_token = credentials.get("authKey")  # stored as authKey after decrypt
+        if not access_token or not settings.TRAKT_CLIENT_ID or not settings.TRAKT_CLIENT_SECRET:
+            logger.warning(f"[{redact_token(token)}] Trakt credentials missing, skipping refresh")
+            return True
+
+        redirect_uri = f"{settings.HOST_NAME}/tokens/trakt/callback"
+        trakt_bundle = TraktBundle(
+            client_id=settings.TRAKT_CLIENT_ID,
+            client_secret=settings.TRAKT_CLIENT_SECRET,
+            redirect_uri=redirect_uri,
+            access_token=access_token,
+        )
+        try:
+            library_items = await trakt_bundle.library.get_library_items()
+            await manifest_service.cache_library_and_profiles_from_items(library_items, user_settings, token)
+
+            if update_timestamp:
+                now = datetime.now(timezone.utc)
+                credentials["last_updated"] = now.replace(microsecond=0).isoformat()
+                await token_store.update_user_data(token, credentials)
+
+            logger.info(f"[{redact_token(token)}] Trakt catalog refresh complete")
+            return True
+        except Exception as e:
+            logger.exception(f"[{redact_token(token)}] Trakt catalog refresh failed: {e}")
+            return False
+        finally:
+            await trakt_bundle.close()
 
     async def trigger_update(self, token: str, credentials: dict[str, Any]) -> None:
         """

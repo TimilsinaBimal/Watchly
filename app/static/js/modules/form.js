@@ -1,6 +1,7 @@
 // Form Submission and UI Helpers
 
 import { showToast, showConfirm, escapeHtml } from './ui.js';
+import { getTraktTokensFromStorage } from './trakt.js';
 import { switchSection } from './navigation.js';
 import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 
@@ -104,9 +105,13 @@ async function initializeFormSubmission() {
             });
         });
 
+        // Determine active provider
+        const traktTokens = getTraktTokensFromStorage();
+        const isTraktLogin = !!(traktTokens && traktTokens.access_token && !sAuthKey && !email);
+
         // Validation
-        if (!sAuthKey && !(email && password)) {
-            showError("generalError", "Please login with Stremio or enter email & password.");
+        if (!sAuthKey && !(email && password) && !isTraktLogin) {
+            showError("generalError", "Please login with Stremio or Trakt to continue.");
             switchSection('login');
             return;
         }
@@ -143,25 +148,51 @@ async function initializeFormSubmission() {
                 };
             }
 
-            const payload = {
-                authKey: sAuthKey || undefined,
-                email: email || undefined,
-                password: password || undefined,
-                catalogs: catalogsToSend,
-                language: language,
-                year_min: yearMin,
-                year_max: yearMax,
-                popularity: popularity,
-                sorting_order: sortingOrder,
-                poster_rating: posterRating,
-                tmdb_api_key: tmdbApiKey || undefined,
-                simkl_api_key: simklApiKey,
-                gemini_api_key: geminiApiKey,
-                excluded_movie_genres: excludedMovieGenres,
-                excluded_series_genres: excludedSeriesGenres
-            };
+            let endpoint, payload;
 
-            const response = await fetch("/tokens/", {
+            if (isTraktLogin) {
+                // ---- Trakt submission ----
+                endpoint = "/tokens/trakt/";
+                payload = {
+                    trakt_access_token: traktTokens.access_token,
+                    trakt_refresh_token: traktTokens.refresh_token || undefined,
+                    trakt_expires_at: traktTokens.expires_at || undefined,
+                    catalogs: catalogsToSend,
+                    language: language,
+                    year_min: yearMin,
+                    year_max: yearMax,
+                    popularity: popularity,
+                    sorting_order: sortingOrder,
+                    poster_rating: posterRating,
+                    tmdb_api_key: tmdbApiKey || undefined,
+                    simkl_api_key: simklApiKey,
+                    gemini_api_key: geminiApiKey,
+                    excluded_movie_genres: excludedMovieGenres,
+                    excluded_series_genres: excludedSeriesGenres
+                };
+            } else {
+                // ---- Stremio submission ----
+                endpoint = "/tokens/";
+                payload = {
+                    authKey: sAuthKey || undefined,
+                    email: email || undefined,
+                    password: password || undefined,
+                    catalogs: catalogsToSend,
+                    language: language,
+                    year_min: yearMin,
+                    year_max: yearMax,
+                    popularity: popularity,
+                    sorting_order: sortingOrder,
+                    poster_rating: posterRating,
+                    tmdb_api_key: tmdbApiKey || undefined,
+                    simkl_api_key: simklApiKey,
+                    gemini_api_key: geminiApiKey,
+                    excluded_movie_genres: excludedMovieGenres,
+                    excluded_series_genres: excludedSeriesGenres
+                };
+            }
+
+            const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)

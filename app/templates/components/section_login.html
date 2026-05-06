@@ -1,23 +1,20 @@
 <!-- SECTION 1: LOGIN -->
 <section id="sect-login" class="space-y-6 hidden animate-fade-in">
     <div class="mb-8">
-        <h2 class="text-3xl font-bold text-white mb-2">Connect to Stremio</h2>
-        <p class="text-slate-400">Log in to your Stremio account to enable Watchly to read your library.</p>
+        <h2 class="text-3xl font-bold text-white mb-2">Connect Your Library</h2>
+        <p class="text-slate-400">Log in with Stremio or Trakt so Watchly can read your watch history.</p>
     </div>
 
-    <!-- Logged In Status (Hidden by default, shown after login) -->
+    <!-- Logged In Status (shown after login - shared across both providers) -->
     <div id="loginStatusSection" class="hidden bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
         <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 flex-grow min-w-0">
                 <div class="w-10 h-10 rounded-full bg-white text-black ring-1 ring-white/10 flex items-center justify-center font-bold text-sm flex-shrink-0"
                     id="loginStatusAvatar">
-                    <!-- Avatar initials will be generated from email -->
                 </div>
                 <div class="flex-grow min-w-0">
                     <div class="text-xs text-slate-500 mb-0.5">Logged in as</div>
-                    <div class="text-sm text-white font-medium truncate" id="loginStatusEmail">
-                        <!-- Email will be inserted here -->
-                    </div>
+                    <div class="text-sm text-white font-medium truncate" id="loginStatusEmail"></div>
                 </div>
             </div>
             <button type="button" id="loginStatusLogoutBtn"
@@ -33,65 +30,198 @@
     </div>
 
     <div id="loginFormCard" class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
-        <button type="button" id="stremioLoginBtn"
-            class="w-full bg-stremio text-white font-medium py-4 rounded-xl transition flex items-center justify-center gap-3 border border-stremio-border shadow-lg shadow-stremio/20 group hover:bg-white hover:text-black hover:border-white/10">
-            <img src="https://stremio.com/website/stremio-logo-small.png"
-                class="w-6 h-6 group-hover:scale-110 transition-transform" alt="Stremio">
-            <span id="stremioLoginText" class="text-lg">Login with Stremio</span>
-        </button>
 
-        <input type="hidden" id="authKey">
-
-        <!-- Divider -->
-        <div id="emailPwdDivider" class="flex items-center gap-3 my-6">
-            <div class="h-px bg-white/10 w-full"></div>
-            <div class="text-xs text-slate-500">or</div>
-            <div class="h-px bg-white/10 w-full"></div>
-        </div>
-
-        <!-- Email/Password Login -->
-        <div id="emailPwdSection" class="grid gap-3">
-            <label class="text-xs text-slate-400">Email</label>
-            <input id="emailInput" type="email" autocomplete="email" inputmode="email"
-                spellcheck="false" required placeholder="you@example.com"
-                class="w-full bg-neutral-900 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
-            <label class="text-xs text-slate-400">Password</label>
-            <div class="relative">
-                <input id="passwordInput" type="password" autocomplete="current-password"
-                    placeholder="Your Stremio password"
-                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-4 pr-12 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
-                <button type="button"
-                    class="toggle-btn absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg"
-                    aria-label="Show password" title="Show" data-target="passwordInput">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                        <circle cx="12" cy="12" r="3" />
+        <!-- Provider Tabs -->
+        <div class="flex gap-1 mb-6 bg-neutral-800/60 p-1 rounded-xl">
+            <button type="button" id="tabStremio"
+                class="login-tab flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all bg-white text-black shadow"
+                data-tab="stremio">
+                <span class="flex items-center justify-center gap-2">
+                    <img src="https://stremio.com/website/stremio-logo-small.png" class="w-4 h-4" alt="">
+                    Stremio
+                </span>
+            </button>
+            <button type="button" id="tabTrakt"
+                class="login-tab flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white"
+                data-tab="trakt">
+                <span class="flex items-center justify-center gap-2">
+                    <!-- Trakt icon (simple "t" badge) -->
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-.5 5h1.5v6h3v1.5h-4.5V7z"/>
                     </svg>
-                </button>
-            </div>
-            <button type="button" id="emailPwdContinueBtn"
-                class="mt-2 w-full bg-white text-black hover:bg-white/90 font-medium py-3 rounded-xl transition border border-white/10 flex items-center justify-center gap-2">
-                <span class="btn-text">Continue with Email</span>
-                <div class="loader hidden w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin">
-                </div>
+                    Trakt
+                </span>
             </button>
         </div>
 
-        <!-- Inline error for email/password login -->
-        <div id="emailPwdError" class="hidden mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm">
-        </div>
+        <!-- ===== STREMIO PANEL ===== -->
+        <div id="panelStremio">
+            <button type="button" id="stremioLoginBtn"
+                class="w-full bg-stremio text-white font-medium py-4 rounded-xl transition flex items-center justify-center gap-3 border border-stremio-border shadow-lg shadow-stremio/20 group hover:bg-white hover:text-black hover:border-white/10">
+                <img src="https://stremio.com/website/stremio-logo-small.png"
+                    class="w-6 h-6 group-hover:scale-110 transition-transform" alt="Stremio">
+                <span id="stremioLoginText" class="text-lg">Login with Stremio</span>
+            </button>
 
-        <!-- Disclaimer -->
-        <div id="emailPwdDisclaimer"
-            class="mt-4 text-xs leading-relaxed bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 rounded-xl p-3">
-            <strong class="text-yellow-300">Why email & password?</strong>
-            <span class="block mt-1">We store your credentials securely to generate a fresh Stremio auth
-                key automatically when needed. This avoids expired keys and keeps your addon working
-                without manual re-login.</span>
-            <span class="block mt-2">Prefer not to share your password? Use the Stremio login above to
-                supply an auth key. Note: auth keys can expire and may require periodic
-                re-authentication.</span>
+            <input type="hidden" id="authKey">
+
+            <!-- Divider -->
+            <div id="emailPwdDivider" class="flex items-center gap-3 my-6">
+                <div class="h-px bg-white/10 w-full"></div>
+                <div class="text-xs text-slate-500">or</div>
+                <div class="h-px bg-white/10 w-full"></div>
+            </div>
+
+            <!-- Email/Password Login -->
+            <div id="emailPwdSection" class="grid gap-3">
+                <label class="text-xs text-slate-400">Email</label>
+                <input id="emailInput" type="email" autocomplete="email" inputmode="email"
+                    spellcheck="false" required placeholder="you@example.com"
+                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
+                <label class="text-xs text-slate-400">Password</label>
+                <div class="relative">
+                    <input id="passwordInput" type="password" autocomplete="current-password"
+                        placeholder="Your Stremio password"
+                        class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-4 pr-12 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
+                    <button type="button"
+                        class="toggle-btn absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg"
+                        aria-label="Show password" title="Show" data-target="passwordInput">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                    </button>
+                </div>
+                <button type="button" id="emailPwdContinueBtn"
+                    class="mt-2 w-full bg-white text-black hover:bg-white/90 font-medium py-3 rounded-xl transition border border-white/10 flex items-center justify-center gap-2">
+                    <span class="btn-text">Continue with Email</span>
+                    <div class="loader hidden w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin">
+                    </div>
+                </button>
+            </div>
+
+            <!-- Inline error for email/password login -->
+            <div id="emailPwdError" class="hidden mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm">
+            </div>
+
+            <!-- Disclaimer -->
+            <div id="emailPwdDisclaimer"
+                class="mt-4 text-xs leading-relaxed bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 rounded-xl p-3">
+                <strong class="text-yellow-300">Why email &amp; password?</strong>
+                <span class="block mt-1">We store your credentials securely to generate a fresh Stremio auth
+                    key automatically when needed. This avoids expired keys and keeps your addon working
+                    without manual re-login.</span>
+                <span class="block mt-2">Prefer not to share your password? Use the Stremio login above to
+                    supply an auth key. Note: auth keys can expire and may require periodic
+                    re-authentication.</span>
+            </div>
         </div>
+        <!-- end #panelStremio -->
+
+        <!-- ===== TRAKT PANEL ===== -->
+        <div id="panelTrakt" class="hidden">
+
+            <!-- Logged-in state -->
+            <div id="traktStatusSection" class="hidden mb-4">
+                <div class="flex items-center justify-between gap-4 p-4 bg-neutral-800/60 rounded-xl border border-white/10">
+                    <div class="flex items-center gap-3 flex-grow min-w-0">
+                        <div class="w-10 h-10 rounded-full bg-[#ed1c24] text-white ring-1 ring-white/10 flex items-center justify-center font-bold text-sm flex-shrink-0"
+                            id="traktStatusAvatar">T</div>
+                        <div class="flex-grow min-w-0">
+                            <div class="text-xs text-slate-500 mb-0.5">Connected as</div>
+                            <div class="text-sm text-white font-medium truncate" id="traktStatusDisplay"></div>
+                        </div>
+                    </div>
+                    <button type="button" id="traktLogoutBtn"
+                        class="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-3 rounded-xl transition border border-red-700 text-sm">
+                        Disconnect
+                    </button>
+                </div>
+            </div>
+
+            <!-- Connect button -->
+            <button type="button" id="traktConnectBtn"
+                class="w-full bg-[#ed1c24] hover:bg-[#c41019] text-white font-medium py-4 rounded-xl transition flex items-center justify-center gap-3 border border-[#b00e15] shadow-lg shadow-red-900/20">
+                <!-- Trakt "T" logo as simple SVG -->
+                <svg class="w-6 h-6 flex-shrink-0" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="16" cy="16" r="16" fill="white"/>
+                    <text x="16" y="22" text-anchor="middle" font-size="18" font-weight="bold" fill="#ed1c24" font-family="sans-serif">t</text>
+                </svg>
+                <span class="btn-text text-lg">Connect with Trakt</span>
+                <div class="loader hidden w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            </button>
+
+            <!-- Hidden field to carry Trakt display name through to form submission -->
+            <input type="hidden" id="traktDisplayName">
+
+            <div class="mt-4 text-xs leading-relaxed bg-blue-500/10 border border-blue-500/30 text-blue-200 rounded-xl p-3">
+                <strong class="text-blue-300">How it works</strong>
+                <span class="block mt-1">Clicking "Connect with Trakt" opens a secure Trakt authorization
+                    window. After you approve access, Watchly uses your Trakt watch history to generate
+                    recommendations — no Stremio account needed.</span>
+                <span class="block mt-2">Your Trakt access token is stored encrypted on the server and
+                    is never shared or exposed in URLs.</span>
+            </div>
+        </div>
+        <!-- end #panelTrakt -->
+
     </div>
+    <!-- end #loginFormCard -->
 </section>
+
+<script>
+// Tab switching logic (inline to avoid module-loading order issues)
+(function () {
+    function switchLoginTab(tab) {
+        const tabs = document.querySelectorAll('.login-tab');
+        const panelStremio = document.getElementById('panelStremio');
+        const panelTrakt = document.getElementById('panelTrakt');
+
+        tabs.forEach(t => {
+            const active = t.dataset.tab === tab;
+            t.classList.toggle('bg-white', active);
+            t.classList.toggle('text-black', active);
+            t.classList.toggle('shadow', active);
+            t.classList.toggle('text-slate-400', !active);
+            t.classList.toggle('hover:text-white', !active);
+        });
+
+        if (panelStremio) panelStremio.classList.toggle('hidden', tab !== 'stremio');
+        if (panelTrakt) panelTrakt.classList.toggle('hidden', tab !== 'trakt');
+
+        // Persist choice
+        try { localStorage.setItem('watchly_login_tab', tab); } catch (e) { }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.login-tab').forEach(btn => {
+            btn.addEventListener('click', () => switchLoginTab(btn.dataset.tab));
+        });
+
+        // Restore last tab
+        try {
+            const saved = localStorage.getItem('watchly_login_tab');
+            if (saved === 'trakt') switchLoginTab('trakt');
+        } catch (e) { }
+    });
+})();
+</script>
+
+<script>
+// Hide the Trakt tab if Trakt is not configured on this server
+(function () {
+    fetch('/tokens/trakt/config')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.configured) {
+                const traktTab = document.getElementById('tabTrakt');
+                if (traktTab) traktTab.style.display = 'none';
+            }
+        })
+        .catch(() => {
+            // If the endpoint fails (unlikely), leave tabs as-is
+        });
+})();
+</script>
+
