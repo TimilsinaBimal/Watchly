@@ -409,7 +409,7 @@ class UserCacheService:
         Return the slot-to-real-id mapping for dynamic catalogs.
         e.g. {"watchly.watched.slot0": "watchly.watched.tt0209144", ...}
         """
-        key = f"{token}:catalog_slot_map"
+        key = f"watchly:catalog_slot_map:{token}"
         try:
             data = await redis_service.get(key)
             if data:
@@ -421,7 +421,7 @@ class UserCacheService:
 
     async def set_catalog_slot_map(self, token: str, slot_map: dict[str, str]) -> None:
         """Store the slot-to-real-id mapping for dynamic catalogs."""
-        key = f"{token}:catalog_slot_map"
+        key = f"watchly:catalog_slot_map:{token}"
         try:
             import json
             await redis_service.set(key, json.dumps(slot_map), 86400 * 7)

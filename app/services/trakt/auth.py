@@ -2,7 +2,6 @@ import secrets
 from typing import Any
 
 import httpx
-from loguru import logger
 
 
 class TraktAuthService:
@@ -12,7 +11,6 @@ class TraktAuthService:
 
     TOKEN_URL = "https://api.trakt.tv/oauth/token"
     AUTHORIZE_URL = "https://trakt.tv/oauth/authorize"
-    DEVICE_CODE_URL = "https://api.trakt.tv/oauth/device/code"
 
     def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
         self.client_id = client_id

@@ -32,10 +32,25 @@ from app.services.trakt.service import TraktBundle
 
 router = APIRouter(prefix="/tokens/trakt", tags=["trakt"])
 
-# In-memory store for short-lived OAuth state values.
-# This is per-process only; for multi-worker deployments Redis would be better,
-# but CSRF protection is still improved versus nothing.
-_oauth_states: dict[str, str] = {}
+# OAuth state values are stored in Redis with a short TTL so they work
+# correctly across multiple workers and don't accumulate indefinitely.
+_OAUTH_STATE_TTL = 600  # 10 minutes
+
+
+async def _store_oauth_state(state: str) -> None:
+    from app.services.redis_service import redis_service
+    await redis_service.set(f"watchly:oauth_state:trakt:{state}", state, _OAUTH_STATE_TTL)
+
+
+async def _consume_oauth_state(state: str) -> bool:
+    """Returns True and deletes the state if valid, False otherwise."""
+    from app.services.redis_service import redis_service
+    key = f"watchly:oauth_state:trakt:{state}"
+    value = await redis_service.get(key)
+    if value:
+        await redis_service.delete(key)
+        return True
+    return False
 
 
 def _get_bundle(access_token: str | None = None) -> TraktBundle:
@@ -104,7 +119,7 @@ async def trakt_authorize():
     """Return the Trakt OAuth2 authorization URL for the frontend popup."""
     bundle = _get_bundle()
     state = secrets.token_urlsafe(16)
-    _oauth_states[state] = state  # minimal anti-CSRF
+    await _store_oauth_state(state)
     url, _ = bundle.auth.get_authorize_url(state=state)
     await bundle.close()
     return {"url": url, "state": state}
@@ -122,9 +137,8 @@ async def trakt_callback(request: Request, code: str | None = None, state: str |
         return HTMLResponse(_popup_close_html(success=False, error=error or "Authorization cancelled"))
 
     # --- verify state to prevent CSRF ---
-    if not state or state not in _oauth_states:
+    if not state or not await _consume_oauth_state(state):
         return HTMLResponse(_popup_close_html(success=False, error="Invalid OAuth state. Please try again."))
-    del _oauth_states[state]
 
     # --- exchange code for tokens ---
     try:
@@ -312,7 +326,5 @@ def _popup_close_html(
 
 
 def _js_str(value: str | None) -> str:
-    if value is None:
-        return "null"
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-    return f'"{escaped}"'
+    import json
+    return json.dumps(value)

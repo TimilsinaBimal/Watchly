@@ -190,6 +190,30 @@ class CatalogUpdater:
             return True
 
         redirect_uri = f"{settings.HOST_NAME}/tokens/trakt/callback"
+
+        # Refresh access token if near expiry (within 7 days)
+        import time
+        expires_at = credentials.get("trakt_expires_at")
+        refresh_token_value = credentials.get("trakt_refresh_token")
+        if expires_at and refresh_token_value and int(time.time()) > (int(expires_at) - 604800):
+            logger.info(f"[{redact_token(token)}] Trakt access token near expiry, refreshing...")
+            try:
+                from app.services.trakt.auth import TraktAuthService
+                auth_service = TraktAuthService(
+                    client_id=settings.TRAKT_CLIENT_ID,
+                    client_secret=settings.TRAKT_CLIENT_SECRET,
+                    redirect_uri=redirect_uri,
+                )
+                token_data = await auth_service.refresh_token(refresh_token_value)
+                access_token = token_data["access_token"]
+                credentials["authKey"] = access_token
+                credentials["trakt_refresh_token"] = token_data.get("refresh_token", refresh_token_value)
+                credentials["trakt_expires_at"] = int(time.time()) + token_data.get("expires_in", 7776000)
+                await token_store.update_user_data(token, credentials)
+                logger.info(f"[{redact_token(token)}] Trakt access token refreshed successfully")
+            except Exception as e:
+                logger.warning(f"[{redact_token(token)}] Failed to refresh Trakt token: {e}")
+
         trakt_bundle = TraktBundle(
             client_id=settings.TRAKT_CLIENT_ID,
             client_secret=settings.TRAKT_CLIENT_SECRET,

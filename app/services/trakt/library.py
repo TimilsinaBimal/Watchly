@@ -12,9 +12,6 @@ class TraktLibraryService:
     needs no changes.
     """
 
-    # How many pages of history to pull (1 000 items / page)
-    MAX_PAGES = 10
-
     def __init__(self, client: TraktClient):
         self.client = client
 
@@ -33,8 +30,11 @@ class TraktLibraryService:
           name      – title
         """
         try:
-            movies = await self._get_history("movies")
-            shows = await self._get_history("shows")
+            import asyncio
+            movies, shows = await asyncio.gather(
+                self._get_history("movies"),
+                self._get_history("shows"),
+            )
 
             watched: list[dict[str, Any]] = []
             seen_ids: set[str] = set()
