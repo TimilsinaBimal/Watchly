@@ -74,15 +74,11 @@ class UserSettings(BaseModel):
 # Catalog descriptions for frontend
 CATALOG_DESCRIPTIONS = {
     "watchly.rec": "Personalized recommendations based on your watch history, library and your reactions.",
-    "watchly.loved": (
-        "Recommends items similar to the content you recently loved. example: If you loved 'The Dark Knight',"
-        " Then it will show similar items to 'The Dark Knight'. This takes your last 3 loved items and shuffles"
-        " them and picks one at random."
-    ),
-    "watchly.watched": (
-        "Recommends items similar to the content you recently watched. example: If you watched 'The Dark"
-        " Knight', Then it will show similar items to 'The Dark Knight'. This takes your last 3 watched items"
-        " and shuffles them and picks one at random."
+    "watchly.item": (
+        "Recommends items similar to one you recently watched or loved. The seed is picked uniformly at random"
+        " from a pool of your 3 most-recent loved items + your 3 most-recent watched items. The catalog title"
+        " becomes 'Because you loved <title>' or 'Because you watched <title>' depending on which bucket the"
+        " seed came from."
     ),
     "watchly.creators": (
         "Recommends items from your top 5 favorite directors and top 5 favorite actors.(Favourite = Most"
@@ -112,17 +108,8 @@ def get_default_settings() -> UserSettings:
                 shuffle=False,
             ),
             CatalogConfig(
-                id="watchly.loved",
-                name="More Like",
-                enabled=True,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
-            CatalogConfig(
-                id="watchly.watched",
-                name="Because you watched",
+                id="watchly.item",
+                name=None,
                 enabled=True,
                 enabled_movie=True,
                 enabled_series=True,

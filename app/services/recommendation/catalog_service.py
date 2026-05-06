@@ -187,14 +187,23 @@ class CatalogService:
             "watchly.all.loved",
             "watchly.liked.all",
         ]
-        supported_prefixes = ("watchly.theme.", "watchly.loved.", "watchly.watched.")
+        # watchly.loved.* / watchly.watched.* kept for legacy stored manifests
+        # — installed Stremio clients may still request these IDs after the
+        # loved/watched merge until the manifest refreshes.
+        supported_prefixes = (
+            "watchly.theme.",
+            "watchly.item.",
+            "watchly.loved.",
+            "watchly.watched.",
+        )
         if catalog_id not in supported_base and not any(catalog_id.startswith(p) for p in supported_prefixes):
             logger.warning(f"Invalid id: {catalog_id}")
             raise HTTPException(
                 status_code=400,
                 detail=(
                     "Invalid id. Supported: 'watchly.rec', 'watchly.creators', "
-                    "'watchly.theme.<params>', 'watchly.all.loved', 'watchly.liked.all'"
+                    "'watchly.theme.<params>', 'watchly.item.<imdb>', "
+                    "'watchly.all.loved', 'watchly.liked.all'"
                 ),
             )
 
@@ -250,8 +259,8 @@ class CatalogService:
         user_settings: UserSettings | None = None,
     ) -> list[dict[str, Any]]:
         """Route to appropriate recommendation service based on catalog ID."""
-        if any(catalog_id.startswith(p) for p in ("watchly.loved.", "watchly.watched.")):
-            item_id = re.sub(r"^watchly\.(loved|watched)\.", "", catalog_id)
+        if any(catalog_id.startswith(p) for p in ("watchly.item.", "watchly.loved.", "watchly.watched.")):
+            item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", catalog_id)
             item_service: ItemBasedService = services["item"]
 
             recommendations = await item_service.get_recommendations_for_item(

@@ -43,10 +43,12 @@ def get_config_id(catalog: dict[str, Any]) -> str | None:
     catalog_id = catalog.get("id", "")
     if catalog_id.startswith("watchly.theme."):
         return "watchly.theme"
-    if catalog_id.startswith("watchly.loved."):
-        return "watchly.loved"
-    if catalog_id.startswith("watchly.watched."):
-        return "watchly.watched"
+    if catalog_id.startswith("watchly.item."):
+        return "watchly.item"
+    # Legacy stored manifests still emit watchly.loved.* / watchly.watched.* —
+    # map them to the unified watchly.item config so user ordering keeps working.
+    if catalog_id.startswith("watchly.loved.") or catalog_id.startswith("watchly.watched."):
+        return "watchly.item"
     return catalog_id
 
 
@@ -119,12 +121,7 @@ class DynamicCatalogService:
             item_type = item.get("type", "")
             item_name = item.get("name", "")
 
-        if config_id in ["watchly.item", "watchly.loved", "watchly.watched"]:
-            catalog_id = f"{config_id}.{item_id}"
-        elif item_id.startswith("tt") and config_id in [
-            "watchly.loved",
-            "watchly.watched",
-        ]:
+        if config_id == "watchly.item":
             catalog_id = f"{config_id}.{item_id}"
         else:
             catalog_id = item_id
@@ -150,7 +147,7 @@ class DynamicCatalogService:
         if not user_settings:
             return catalogs
 
-        theme_cfg, loved_cfg, watched_cfg = self._resolve_catalog_configs(user_settings)
+        theme_cfg, item_cfg = self._resolve_catalog_configs(user_settings)
 
         if theme_cfg and theme_cfg.enabled:
             enabled_movie = getattr(theme_cfg, "enabled_movie", True)
@@ -167,7 +164,7 @@ class DynamicCatalogService:
             catalogs.extend(theme_catalogs)
 
         for mtype in ["movie", "series"]:
-            await self._add_item_based_rows(catalogs, library_items, mtype, loved_cfg, watched_cfg)
+            await self._add_item_based_rows(catalogs, library_items, mtype, item_cfg)
 
         catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rec", "Top Picks for You", True, True))
         catalogs.extend(
@@ -273,19 +270,34 @@ class DynamicCatalogService:
 
     # --- Item-based rows ---
 
-    def _resolve_catalog_configs(self, user_settings: UserSettings) -> tuple[Any, Any, Any]:
+    def _resolve_catalog_configs(self, user_settings: UserSettings) -> tuple[Any, Any]:
         cfg_map = {c.id: c for c in user_settings.catalogs}
         theme = cfg_map.get("watchly.theme")
-        loved = cfg_map.get("watchly.loved")
-        watched = cfg_map.get("watchly.watched")
+        item = cfg_map.get("watchly.item")
 
-        if not loved and not watched:
-            old_item = cfg_map.get("watchly.item")
-            if old_item and old_item.enabled:
-                loved = CatalogConfig(id="watchly.loved", name=None, enabled=True)
-                watched = CatalogConfig(id="watchly.watched", name=None, enabled=True)
+        # Legacy migration: users created before the loved/watched merge still
+        # have separate `watchly.loved` and `watchly.watched` entries in their
+        # saved settings. Synthesize a watchly.item config from whichever is
+        # present so they don't lose the catalog on first load after the
+        # upgrade. Donor preference: loved over watched (loved was opt-in
+        # branded as the more intentional signal).
+        if not item:
+            legacy_loved = cfg_map.get("watchly.loved")
+            legacy_watched = cfg_map.get("watchly.watched")
+            donor = legacy_loved or legacy_watched
+            if donor:
+                enabled = bool((legacy_loved and legacy_loved.enabled) or (legacy_watched and legacy_watched.enabled))
+                item = CatalogConfig(
+                    id="watchly.item",
+                    name=None,
+                    enabled=enabled,
+                    enabled_movie=getattr(donor, "enabled_movie", True),
+                    enabled_series=getattr(donor, "enabled_series", True),
+                    display_at_home=getattr(donor, "display_at_home", True),
+                    shuffle=getattr(donor, "shuffle", False),
+                )
 
-        return theme, loved, watched
+        return theme, item
 
     def _parse_item_last_watched(self, item) -> datetime:
         from app.models.library import StremioLibraryItem
@@ -323,44 +335,47 @@ class DynamicCatalogService:
         catalogs: list[dict[str, Any]],
         library_items: LibraryCollection,
         content_type: str,
-        loved_config: Any,
-        watched_config: Any,
+        item_config: Any,
     ) -> None:
-        def is_type_enabled(config: Any, ct: str) -> bool:
-            if not config:
-                return False
-            if ct == "movie":
-                return getattr(config, "enabled_movie", True)
-            if ct == "series":
-                return getattr(config, "enabled_series", True)
-            return True
+        """Emit one item-based row per content type.
 
-        last_loved = None
-        if loved_config and loved_config.enabled and is_type_enabled(loved_config, content_type):
-            loved = [i for i in library_items.loved if i.type == content_type]
-            loved.sort(key=self._parse_item_last_watched, reverse=True)
-            last_loved = random.choice(loved[:3]) if loved else None
-            if last_loved:
-                label = loved_config.name if loved_config.name else "More like"
-                display_at_home = getattr(loved_config, "display_at_home", True)
-                catalogs.append(self.build_catalog_entry(last_loved, label, "watchly.loved", display_at_home))
+        Seed selection: take the 3 most-recent loved items and the 3 most-recent
+        watched items, combine, and pick uniformly at random. The label
+        ("Because you loved X" vs "Because you watched X") is set from which
+        bucket the chosen seed came from, so a user with both loved and
+        watched items sees variety across calls instead of "loved" winning
+        every time. A user-set `name` on the config overrides the dynamic
+        label entirely.
+        """
+        if not item_config or not item_config.enabled:
+            return
 
-        if watched_config and watched_config.enabled and is_type_enabled(watched_config, content_type):
-            watched = [i for i in library_items.watched if i.type == content_type]
-            watched.sort(key=self._parse_item_last_watched, reverse=True)
+        if content_type == "movie" and not getattr(item_config, "enabled_movie", True):
+            return
+        if content_type == "series" and not getattr(item_config, "enabled_series", True):
+            return
 
-            if last_loved:
-                watched = [i for i in watched if i.id != last_loved.id]
+        loved = [i for i in library_items.loved if i.type == content_type]
+        watched = [i for i in library_items.watched if i.type == content_type]
+        loved.sort(key=self._parse_item_last_watched, reverse=True)
+        watched.sort(key=self._parse_item_last_watched, reverse=True)
 
-            last_watched = random.choice(watched[:3]) if watched else None
-            if last_watched:
-                label = watched_config.name if watched_config.name else "Because you watched"
-                display_at_home = getattr(watched_config, "display_at_home", True)
-                catalogs.append(
-                    self.build_catalog_entry(
-                        last_watched,
-                        label,
-                        "watchly.watched",
-                        display_at_home,
-                    )
-                )
+        loved_pool = loved[:3]
+        watched_pool = watched[:3]
+        # Tag each candidate with its origin bucket so the label can follow
+        # the actual pick rather than re-checking flags after the fact.
+        candidates: list[tuple[Any, bool]] = [(i, True) for i in loved_pool]
+        candidates += [(i, False) for i in watched_pool]
+
+        if not candidates:
+            return
+
+        seed, seed_is_loved = random.choice(candidates)
+
+        if item_config.name:
+            label = item_config.name
+        else:
+            label = "Because you loved" if seed_is_loved else "Because you watched"
+
+        display_at_home = getattr(item_config, "display_at_home", True)
+        catalogs.append(self.build_catalog_entry(seed, label, "watchly.item", display_at_home))
