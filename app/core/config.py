@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     CATALOG_STALE_TTL: int = 604800  # 7 days (soft expiration fallback)
 
     # AI
-    DEFAULT_GEMINI_MODEL: str = "gemma-3-27b-it"
+    DEFAULT_GEMINI_MODEL: str = "gemma-4-26b-a4b-it"
     GEMINI_API_KEY: str | None = None
 
 
