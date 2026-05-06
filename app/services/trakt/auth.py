@@ -4,9 +4,23 @@ from typing import Any
 import httpx
 
 
+# Module-level shared client for connection pooling across token exchanges.
+# auth.py only talks to one endpoint (api.trakt.tv/oauth/token) so a single
+# persistent client is sufficient and avoids the overhead of creating a new
+# TCP connection for every OAuth exchange.
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(timeout=15.0)
+    return _http_client
+
+
 class TraktAuthService:
     """
-    Handles Trakt OAuth2 authentication (Device Code / Authorization Code flows).
+    Handles Trakt OAuth2 authentication (Authorization Code flow).
     """
 
     TOKEN_URL = "https://api.trakt.tv/oauth/token"
@@ -45,14 +59,10 @@ class TraktAuthService:
             "redirect_uri": self.redirect_uri,
             "grant_type": "authorization_code",
         }
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.post(self.TOKEN_URL, json=payload)
-                response.raise_for_status()
-                return response.json()
-        except Exception as e:
-            logger.exception(f"Trakt token exchange failed: {e}")
-            raise
+        client = _get_http_client()
+        response = await client.post(self.TOKEN_URL, json=payload)
+        response.raise_for_status()
+        return response.json()
 
     async def refresh_token(self, refresh_token_value: str) -> dict[str, Any]:
         """Refresh an expired access token."""
@@ -63,11 +73,7 @@ class TraktAuthService:
             "redirect_uri": self.redirect_uri,
             "grant_type": "refresh_token",
         }
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.post(self.TOKEN_URL, json=payload)
-                response.raise_for_status()
-                return response.json()
-        except Exception as e:
-            logger.exception(f"Trakt token refresh failed: {e}")
-            raise
+        client = _get_http_client()
+        response = await client.post(self.TOKEN_URL, json=payload)
+        response.raise_for_status()
+        return response.json()
