@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     SIMKL_CLIENT_SECRET: str | None = None
 
     # AI
-    DEFAULT_GEMINI_MODEL: str = "gemma-3-27b-it"
+    DEFAULT_GEMINI_MODEL: str = "gemma-4-26b-a4b-it"
     GEMINI_API_KEY: str | None = None
 
 
