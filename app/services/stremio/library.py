@@ -6,7 +6,7 @@ from async_lru import alru_cache
 from loguru import logger
 
 from app.models.history import WatchHistory, WatchHistoryItem
-from app.models.library import LibraryCollection, StremioLibraryItem
+from app.models.library import LibraryCollection, StremioLibraryItem, StremioState
 from app.services.stremio.client import StremioClient, StremioLikesClient
 
 
@@ -69,6 +69,82 @@ def stremio_library_to_watch_history(library: LibraryCollection) -> WatchHistory
             )
 
     return WatchHistory(items=items, source="stremio")
+
+
+def _history_item_to_library_item(item: WatchHistoryItem, is_loved: bool, is_liked: bool) -> StremioLibraryItem:
+    state_kwargs: dict[str, Any] = {}
+    if item.last_watched:
+        state_kwargs["lastWatched"] = item.last_watched
+    state_kwargs["timesWatched"] = max(item.watch_count, 0)
+    if item.completion >= 1.0:
+        state_kwargs["flaggedWatched"] = 1
+        state_kwargs["timesWatched"] = max(item.watch_count, 1)
+    elif item.completion > 0:
+        state_kwargs["duration"] = 6000
+        state_kwargs["timeWatched"] = int(6000 * item.completion)
+
+    return StremioLibraryItem(
+        _id=item.imdb_id,
+        type=item.type,
+        name=item.name,
+        state=StremioState(**state_kwargs),
+        temp=False,
+        removed=False,
+        _is_loved=is_loved,
+        _is_liked=is_liked,
+    )
+
+
+def watch_history_to_library_collection(history: WatchHistory) -> LibraryCollection:
+    """Convert an external WatchHistory (Trakt/Simkl) into a LibraryCollection.
+
+    Bucketing rules:
+      loved:   rating >= 9, OR no rating + watch_count >= 2 (rewatch as love proxy)
+      liked:   7 <= rating < 9
+      watched: everything else with any completion/watch signal
+
+    Items without IMDb IDs are skipped — downstream code keys on `tt…` / `tmdb:…`
+    everywhere and dropping them up front avoids fanning empty IDs into TMDB lookups.
+    """
+    loved: list[StremioLibraryItem] = []
+    liked: list[StremioLibraryItem] = []
+    watched: list[StremioLibraryItem] = []
+    seen: set[str] = set()
+
+    for item in history.items:
+        if not item.imdb_id or item.imdb_id in seen:
+            continue
+        seen.add(item.imdb_id)
+
+        rating = item.rating
+        if rating is not None and rating >= 9.0:
+            bucket = "loved"
+        elif rating is not None and rating >= 7.0:
+            bucket = "liked"
+        elif rating is None and item.watch_count >= 2:
+            bucket = "loved"
+        else:
+            bucket = "watched"
+
+        is_loved = bucket == "loved"
+        is_liked = bucket == "liked"
+        lib_item = _history_item_to_library_item(item, is_loved, is_liked)
+
+        if bucket == "loved":
+            loved.append(lib_item)
+        elif bucket == "liked":
+            liked.append(lib_item)
+        else:
+            watched.append(lib_item)
+
+    return LibraryCollection(
+        loved=loved,
+        liked=liked,
+        watched=watched,
+        added=[],
+        removed=[],
+        source=history.source or "stremio",
+    )
 
 
 class StremioLibraryService:
@@ -251,6 +327,7 @@ class StremioLibraryService:
                 liked=liked,
                 added=added,
                 removed=removed,
+                source="stremio",
             )
         except Exception as e:
             logger.exception(f"Error processing library items: {e}")

@@ -233,16 +233,19 @@ class ProfileService:
         await user_cache.set_profile_and_watched_sets(token, content_type, profile, watched_tmdb, watched_imdb)
         return profile, watched_tmdb, watched_imdb
 
-    async def _build_from_external_source(
+    async def fetch_external_watch_history(
         self,
         source: str,
         user_settings: UserSettings | None,
-        content_type: str,
-        library: LibraryCollection,
         token: str | None = None,
-    ) -> tuple[TasteProfile | None, set[int], set[str]]:
-        """Build a profile from an external history source, falling back to the
-        Stremio library when the external fetch fails or no token is set."""
+    ) -> tuple[WatchHistory | None, bool, bool]:
+        """Fetch watch history from Trakt or Simkl with token refresh + revoke handling.
+
+        Returns (history, token_missing, token_revoked). On any non-auth failure
+        history is None and both flags are False — caller decides whether to
+        fall back. token_revoked=True implies the stored credential has been
+        cleared from the user record by `_clear_revoked_token`.
+        """
         import httpx
 
         watch_history: WatchHistory | None = None
@@ -342,6 +345,77 @@ class ProfileService:
 
         if token_revoked and token:
             await self._clear_revoked_token(token, source)
+
+        return watch_history, token_missing, token_revoked
+
+    async def fetch_external_library(
+        self,
+        source: str,
+        user_settings: UserSettings | None,
+        token: str | None = None,
+    ) -> LibraryCollection | None:
+        """Fetch external watch history and return it as a LibraryCollection.
+
+        Returns None when no history could be fetched (missing/revoked token,
+        network failure). The collection's `source` field carries the origin
+        so cache layers can detect a source switch.
+        """
+        from app.services.stremio.library import watch_history_to_library_collection
+
+        history, _, _ = await self.fetch_external_watch_history(source, user_settings, token)
+        if history is None:
+            return None
+        return watch_history_to_library_collection(history)
+
+    async def _build_from_external_source(
+        self,
+        source: str,
+        user_settings: UserSettings | None,
+        content_type: str,
+        library: LibraryCollection,
+        token: str | None = None,
+    ) -> tuple[TasteProfile | None, set[int], set[str]]:
+        """Build a profile from an external history source, falling back to the
+        Stremio library when the external fetch fails or no token is set.
+
+        When the passed-in library was already built from the same external
+        source (load_user_context handles that), we avoid the duplicate fetch
+        and read history straight off the library.
+        """
+        watch_history: WatchHistory | None = None
+
+        if library.source == source:
+            # context layer already pulled from the same source — reuse it.
+            watch_history = WatchHistory(
+                items=[
+                    item
+                    for items in (library.loved, library.liked, library.watched)
+                    for item in (
+                        WatchHistoryItem(
+                            imdb_id=lib.id,
+                            type=lib.type,
+                            name=lib.name,
+                            rating=(9.0 if lib.is_loved else (7.0 if lib.is_liked else None)),
+                            watch_count=lib.state.timesWatched or (1 if lib.state.flaggedWatched else 0),
+                            completion=(
+                                1.0
+                                if lib.state.flaggedWatched or (lib.state.timesWatched or 0) > 0
+                                else (
+                                    min((lib.state.timeWatched or 0) / lib.state.duration, 1.0)
+                                    if lib.state.duration
+                                    else 0.0
+                                )
+                            ),
+                            last_watched=lib.state.lastWatched,
+                            source=source,
+                        )
+                        for lib in items
+                    )
+                ],
+                source=source,
+            )
+        else:
+            watch_history, _, _ = await self.fetch_external_watch_history(source, user_settings, token)
 
         # An empty WatchHistory still counts as "the source spoke" — only fall back
         # on actual failure (None), not on a user with zero history.

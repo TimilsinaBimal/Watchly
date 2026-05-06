@@ -64,6 +64,7 @@ class LibraryCollection(BaseModel):
     watched: list[StremioLibraryItem] = []
     added: list[StremioLibraryItem] = []
     removed: list[StremioLibraryItem] = []
+    source: str = "stremio"
 
     def all_items(self) -> list[StremioLibraryItem]:
         return self.loved + self.liked + self.watched + self.added
@@ -78,6 +79,7 @@ class LibraryCollection(BaseModel):
             watched=[i for i in self.watched if i.type == content_type],
             added=[i for i in self.added if i.type == content_type],
             removed=[i for i in self.removed if i.type == content_type],
+            source=self.source,
         )
 
     def all_imdb_ids(self) -> set[str]:
