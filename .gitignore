@@ -54,3 +54,5 @@ migration.py
 .github
 .pytest_cache
 .ruff_cache
+
+*.local.*
