@@ -38,6 +38,13 @@ class TasteProfile(BaseModel):
     country_scores: dict[str, float] = Field(default_factory=dict, description="Country code → accumulated score")
     director_scores: dict[int, float] = Field(default_factory=dict, description="Director ID → accumulated score")
     cast_scores: dict[int, float] = Field(default_factory=dict, description="Actor ID → accumulated score")
+    # Raw appearance counts kept alongside the score-based dicts above. Scores
+    # answer "how strong is this creator's signal"; frequencies answer "across
+    # how many items did the user actually engage with this creator". The
+    # creators catalog uses the frequency view to filter out single-appearance
+    # noise that scores alone can't separate.
+    director_frequency: dict[int, int] = Field(default_factory=dict, description="Director ID → item appearance count")
+    cast_frequency: dict[int, int] = Field(default_factory=dict, description="Actor ID → item appearance count")
     runtime_bucket_scores: dict[str, float] = Field(
         default_factory=dict,
         description="Runtime bucket (short/medium/long) → accumulated score",

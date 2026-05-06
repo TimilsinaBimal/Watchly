@@ -233,10 +233,10 @@ class ProfileBuilder:
                     job = ""
 
                 if crew_id:
-                    # Only count actual directors (for movies) and creators (for TV series)
                     if job in ["director", "creator"]:
                         weight = evidence_weight * FEATURE_WEIGHT_CREATOR
                         profile.director_scores[crew_id] = profile.director_scores.get(crew_id, 0.0) + weight
+                        profile.director_frequency[crew_id] = profile.director_frequency.get(crew_id, 0) + 1
                         if frequencies is not None:
                             frequencies["directors"][crew_id] += 1
 
@@ -249,9 +249,9 @@ class ProfileBuilder:
                 position_weight = 1.0
 
             if cast_id:
-                # Use evidence weight multiplied by position weight
                 weight = evidence_weight * FEATURE_WEIGHT_CREATOR * position_weight
                 profile.cast_scores[cast_id] = profile.cast_scores.get(cast_id, 0.0) + weight
+                profile.cast_frequency[cast_id] = profile.cast_frequency.get(cast_id, 0) + 1
                 if frequencies is not None:
                     frequencies["cast"][cast_id] += 1
 

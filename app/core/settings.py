@@ -81,8 +81,9 @@ CATALOG_DESCRIPTIONS = {
         " seed came from."
     ),
     "watchly.creators": (
-        "Recommends items from your top 5 favorite directors and top 5 favorite actors.(Favourite = Most"
-        " watched items)"
+        "Recommends items from your recurring directors and lead actors — those who appear across multiple"
+        " items in your library, not just one. Single-appearance creators are filtered out so the catalog"
+        " actually reflects who you keep coming back to."
     ),
     "watchly.all.loved": "Recommendations based on all your loved items",
     "watchly.liked.all": "Recommendations based on all your liked items",
