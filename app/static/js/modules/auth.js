@@ -9,6 +9,11 @@ import {
     showUserProfile,
     updateInstallMode
 } from './auth-ui.js';
+import {
+    setProviderConnected,
+    setStremioConnected,
+    setWatchHistorySource,
+} from './accounts.js';
 
 // DOM Elements - will be initialized
 let stremioLoginBtn = null;
@@ -169,7 +174,7 @@ async function initializeStremioLogin() {
     const authKey = urlParams.get('key') || urlParams.get('authKey');
 
     if (authKey) {
-        // Logged In -> Unlock and move to config
+        // Logged In -> Unlock; stay on Accounts so the user can connect optional providers
         setStremioLoggedInState(authKey);
 
         try {
@@ -177,7 +182,7 @@ async function initializeStremioLogin() {
             // Save auth key to localStorage for persistent login
             saveAuthToStorage({ authKey });
             unlockNavigation();
-            switchSection('config');
+            switchSection('login');
         } catch (error) {
             showToast(error.message, "error");
             clearAuthFromStorage();
@@ -370,9 +375,8 @@ function initializeEmailPasswordLogin() {
             saveAuthToStorage({ email, password: pwd });
             // Mark as logged-in (disables inputs and flips button to Logout)
             setStremioLoggedInState('');
-            // Proceed to config
+            // Stay on Accounts so the user can connect optional providers
             unlockNavigation();
-            switchSection('config');
         } catch (e) {
             showEmailPwdError(e.message || 'Login failed');
             clearAuthFromStorage();
@@ -421,6 +425,7 @@ export function setStremioLoggedInState(authKey) {
     }
 
     renderLoggedInControls({ stremioLoginBtn, stremioLoginText, authKey });
+    setStremioConnected(true);
 }
 
 export function setStremioLoggedOutState() {
@@ -437,27 +442,19 @@ export function setStremioLoggedOutState() {
     hideUserProfile();
 
     renderLoggedOutControls({ stremioLoginBtn, stremioLoginText, emailInput, passwordInput });
+    setStremioConnected(false);
 }
 
 // Restore Watch History Source and OAuth connected state from saved settings
 function restoreWatchHistoryState(settings) {
-    const sourceSelect = document.getElementById('watchHistorySource');
-    if (!sourceSelect) return;
-
-    // Initialize global OAuth state
     window._watchlyOAuth = window._watchlyOAuth || {};
 
-    // Restore Trakt connected state
     if (settings.trakt_access_token) {
         window._watchlyOAuth.trakt = {
             access_token: settings.trakt_access_token,
             refresh_token: settings.trakt_refresh_token || '',
             expires_at: settings.trakt_token_expires_at || 0,
         };
-
-        const traktOption = sourceSelect.querySelector('option[value="trakt"]');
-        if (traktOption) traktOption.disabled = false;
-
         const traktStatus = document.getElementById('traktStatus');
         if (traktStatus) {
             traktStatus.textContent = 'Connected';
@@ -466,20 +463,14 @@ function restoreWatchHistoryState(settings) {
         }
         const traktLogoutBtn = document.getElementById('traktLogoutBtn');
         if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
-
-        // Validate token in background to show username
+        setProviderConnected('trakt', true);
         validateAndShowTraktUser(settings.trakt_access_token);
     }
 
-    // Restore Simkl connected state
     if (settings.simkl_access_token) {
         window._watchlyOAuth.simkl = {
             access_token: settings.simkl_access_token,
         };
-
-        const simklOption = sourceSelect.querySelector('option[value="simkl"]');
-        if (simklOption) simklOption.disabled = false;
-
         const simklSyncStatus = document.getElementById('simklSyncStatus');
         if (simklSyncStatus) {
             simklSyncStatus.textContent = 'Connected';
@@ -488,14 +479,12 @@ function restoreWatchHistoryState(settings) {
         }
         const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');
         if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
-
-        // Validate token in background to show username
+        setProviderConnected('simkl', true);
         validateAndShowSimklUser(settings.simkl_access_token);
     }
 
-    // Restore selected history source (after enabling options)
     if (settings.watch_history_source) {
-        sourceSelect.value = settings.watch_history_source;
+        setWatchHistorySource(settings.watch_history_source);
     }
 }
 

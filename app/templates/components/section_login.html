@@ -1,97 +1,230 @@
-<!-- SECTION 1: LOGIN -->
+<!-- SECTION 1: ACCOUNTS -->
 <section id="sect-login" class="space-y-6 hidden animate-fade-in">
-    <div class="mb-8">
-        <h2 class="text-3xl font-bold text-white mb-2">Connect to Stremio</h2>
-        <p class="text-slate-400">Log in to your Stremio account to enable Watchly to read your library.</p>
+    <div class="mb-6">
+        <h2 class="text-3xl font-bold text-white mb-2">Accounts</h2>
+        <p class="text-slate-400">Stremio is required so Watchly can read your library. Trakt and Simkl are optional — they add explicit ratings and rewatches that sharpen recommendations.</p>
     </div>
 
-    <!-- Logged In Status (Hidden by default, shown after login) -->
-    <div id="loginStatusSection" class="hidden bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
-        <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3 flex-grow min-w-0">
-                <div class="w-10 h-10 rounded-full bg-white text-black ring-1 ring-white/10 flex items-center justify-center font-bold text-sm flex-shrink-0"
-                    id="loginStatusAvatar">
-                    <!-- Avatar initials will be generated from email -->
-                </div>
-                <div class="flex-grow min-w-0">
-                    <div class="text-xs text-slate-500 mb-0.5">Logged in as</div>
-                    <div class="text-sm text-white font-medium truncate" id="loginStatusEmail">
-                        <!-- Email will be inserted here -->
+    <!-- Intro / Privacy note -->
+    <div class="bg-neutral-900/40 border border-white/5 rounded-2xl p-5 text-xs text-slate-400 leading-relaxed">
+        <div class="flex items-start gap-3">
+            <svg class="w-4 h-4 mt-0.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+                Credentials and OAuth tokens are encrypted at rest and only used to read your watch history. You can disconnect any provider at any time. The watch history source is selected on the next page.
+            </div>
+        </div>
+    </div>
+
+    <!-- STREMIO -->
+    <div id="provider-stremio" class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
+        <div class="flex items-start justify-between gap-4 mb-5">
+            <div class="flex items-center gap-3">
+                <img src="https://stremio.com/website/stremio-logo-small.png" class="w-8 h-8" alt="Stremio">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-lg font-semibold text-white">Stremio</h3>
+                        <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/20">Required</span>
                     </div>
+                    <p class="text-xs text-slate-500 mt-0.5">Reads your Stremio library to build recommendations.</p>
                 </div>
             </div>
-            <button type="button" id="loginStatusLogoutBtn"
-                class="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-xl transition border border-red-700 shadow-lg shadow-red-900/20 flex items-center justify-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
-                    </path>
-                </svg>
-                <span>Logout</span>
+            <span class="w-2 h-2 rounded-full bg-slate-500 mt-2 flex-shrink-0" data-account-dot="stremio"></span>
+        </div>
+
+        <!-- Disconnected view -->
+        <div id="loginFormCard" data-provider-view="disconnected" data-provider-for="stremio">
+            <button type="button" id="stremioLoginBtn"
+                class="w-full bg-stremio text-white font-medium py-4 rounded-xl transition flex items-center justify-center gap-3 border border-stremio-border shadow-lg shadow-stremio/20 group hover:bg-white hover:text-black hover:border-white/10">
+                <img src="https://stremio.com/website/stremio-logo-small.png"
+                    class="w-6 h-6 group-hover:scale-110 transition-transform" alt="Stremio">
+                <span id="stremioLoginText" class="text-lg">Login with Stremio</span>
             </button>
-        </div>
-    </div>
 
-    <div id="loginFormCard" class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
-        <button type="button" id="stremioLoginBtn"
-            class="w-full bg-stremio text-white font-medium py-4 rounded-xl transition flex items-center justify-center gap-3 border border-stremio-border shadow-lg shadow-stremio/20 group hover:bg-white hover:text-black hover:border-white/10">
-            <img src="https://stremio.com/website/stremio-logo-small.png"
-                class="w-6 h-6 group-hover:scale-110 transition-transform" alt="Stremio">
-            <span id="stremioLoginText" class="text-lg">Login with Stremio</span>
-        </button>
+            <input type="hidden" id="authKey">
 
-        <input type="hidden" id="authKey">
+            <div id="emailPwdDivider" class="flex items-center gap-3 my-6">
+                <div class="h-px bg-white/10 w-full"></div>
+                <div class="text-xs text-slate-500">or</div>
+                <div class="h-px bg-white/10 w-full"></div>
+            </div>
 
-        <!-- Divider -->
-        <div id="emailPwdDivider" class="flex items-center gap-3 my-6">
-            <div class="h-px bg-white/10 w-full"></div>
-            <div class="text-xs text-slate-500">or</div>
-            <div class="h-px bg-white/10 w-full"></div>
-        </div>
-
-        <!-- Email/Password Login -->
-        <div id="emailPwdSection" class="grid gap-3">
-            <label class="text-xs text-slate-400">Email</label>
-            <input id="emailInput" type="email" autocomplete="email" inputmode="email"
-                spellcheck="false" required placeholder="you@example.com"
-                class="w-full bg-neutral-900 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
-            <label class="text-xs text-slate-400">Password</label>
-            <div class="relative">
-                <input id="passwordInput" type="password" autocomplete="current-password"
-                    placeholder="Your Stremio password"
-                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-4 pr-12 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
-                <button type="button"
-                    class="toggle-btn absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg"
-                    aria-label="Show password" title="Show" data-target="passwordInput">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                        <circle cx="12" cy="12" r="3" />
-                    </svg>
+            <div id="emailPwdSection" class="grid gap-3">
+                <label class="text-xs text-slate-400">Email</label>
+                <input id="emailInput" type="email" autocomplete="email" inputmode="email"
+                    spellcheck="false" required placeholder="you@example.com"
+                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
+                <label class="text-xs text-slate-400">Password</label>
+                <div class="relative">
+                    <input id="passwordInput" type="password" autocomplete="current-password"
+                        placeholder="Your Stremio password"
+                        class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-4 pr-12 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
+                    <button type="button"
+                        class="toggle-btn absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg"
+                        aria-label="Show password" title="Show" data-target="passwordInput">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                    </button>
+                </div>
+                <button type="button" id="emailPwdContinueBtn"
+                    class="mt-2 w-full bg-white text-black hover:bg-white/90 font-medium py-3 rounded-xl transition border border-white/10 flex items-center justify-center gap-2">
+                    <span class="btn-text">Continue with Email</span>
+                    <div class="loader hidden w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
                 </button>
             </div>
-            <button type="button" id="emailPwdContinueBtn"
-                class="mt-2 w-full bg-white text-black hover:bg-white/90 font-medium py-3 rounded-xl transition border border-white/10 flex items-center justify-center gap-2">
-                <span class="btn-text">Continue with Email</span>
-                <div class="loader hidden w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin">
+
+            <div id="emailPwdError" class="hidden mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm"></div>
+
+            <div id="emailPwdDisclaimer"
+                class="mt-4 text-xs leading-relaxed bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 rounded-xl p-3">
+                <strong class="text-yellow-300">Why email & password?</strong>
+                <span class="block mt-1">We store your credentials securely so we can refresh your Stremio auth key automatically. This avoids expired keys and keeps your addon working without manual re-login.</span>
+                <span class="block mt-2">Prefer not to share your password? Use the Stremio button above to supply an auth key instead — note that auth keys can expire and may require periodic re-authentication.</span>
+            </div>
+        </div>
+
+        <!-- Connected view -->
+        <div data-provider-view="connected" data-provider-for="stremio" class="hidden">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3 flex-grow min-w-0">
+                    <div class="w-10 h-10 rounded-full bg-white text-black ring-1 ring-white/10 flex items-center justify-center font-bold text-sm flex-shrink-0"
+                        id="loginStatusAvatar"></div>
+                    <div class="flex-grow min-w-0">
+                        <div class="text-xs text-green-400 mb-0.5 flex items-center gap-1.5">
+                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            Connected
+                        </div>
+                        <div class="text-sm text-white font-medium truncate" id="loginStatusEmail"></div>
+                    </div>
                 </div>
+                <button type="button" id="loginStatusLogoutBtn"
+                    class="flex-shrink-0 bg-red-600/90 hover:bg-red-600 text-white font-medium py-2.5 px-4 rounded-xl transition border border-red-500/40 shadow-lg shadow-red-900/20 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                    </svg>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TRAKT -->
+    <div id="provider-trakt" class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
+        <div class="flex items-start justify-between gap-4 mb-5">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-red-500/15 border border-red-400/20 flex items-center justify-center text-red-400">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm-1.4 17.5L4.7 11.6l1.1-1.1 4.8 4.8 7.6-7.6 1.1 1.1-8.7 8.7zm0-3.4L6.7 10.2l1.1-1.1 2.8 2.8 5.6-5.6 1.1 1.1-6.7 6.7z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-lg font-semibold text-white">Trakt</h3>
+                        <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-300 border border-slate-400/20">Optional</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">Adds explicit ratings, rewatches, and stronger taste signal.</p>
+                </div>
+            </div>
+            <span class="w-2 h-2 rounded-full bg-slate-500 mt-2 flex-shrink-0" data-account-dot="trakt"></span>
+        </div>
+
+        <!-- Disconnected view -->
+        <div data-provider-view="disconnected" data-provider-for="trakt">
+            <button type="button" id="traktLoginBtn"
+                class="w-full bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 hover:text-red-200 font-medium py-4 rounded-xl transition flex items-center justify-center gap-3">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm-1.4 17.5L4.7 11.6l1.1-1.1 4.8 4.8 7.6-7.6 1.1 1.1-8.7 8.7z"/>
+                </svg>
+                <span class="text-base">Login with Trakt</span>
             </button>
+            <p class="mt-4 text-xs text-slate-500 leading-relaxed">
+                Trakt tracks every play and rating you make. Watchly uses your ratings to weight loved vs. liked items differently — much sharper than play counts alone. Pick Trakt as your watch history source on the next page once connected.
+            </p>
         </div>
 
-        <!-- Inline error for email/password login -->
-        <div id="emailPwdError" class="hidden mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm">
+        <!-- Connected view -->
+        <div data-provider-view="connected" data-provider-for="trakt" class="hidden">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-red-500/15 text-red-300 ring-1 ring-red-400/20 flex items-center justify-center">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-xs text-green-400 mb-0.5">Connected</div>
+                        <div class="text-sm text-white font-medium" id="traktStatus">Trakt</div>
+                    </div>
+                </div>
+                <button type="button" id="traktLogoutBtn"
+                    class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 hover:text-red-200 text-sm font-medium py-2 px-4 rounded-lg transition">
+                    Disconnect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SIMKL -->
+    <div id="provider-simkl" class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 backdrop-blur-sm shadow-xl shadow-black/20">
+        <div class="flex items-start justify-between gap-4 mb-5">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-400/20 flex items-center justify-center text-blue-400">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm0 4.5c1.4 0 2.5 1.1 2.5 2.5S13.4 9.5 12 9.5 9.5 8.4 9.5 7s1.1-2.5 2.5-2.5zm5 13H7v-1.5c0-1.7 3.3-2.5 5-2.5s5 .8 5 2.5V17.5z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-lg font-semibold text-white">Simkl</h3>
+                        <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-500/15 text-slate-300 border border-slate-400/20">Optional</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">Detailed show tracking with ratings and watch dates.</p>
+                </div>
+            </div>
+            <span class="w-2 h-2 rounded-full bg-slate-500 mt-2 flex-shrink-0" data-account-dot="simkl"></span>
         </div>
 
-        <!-- Disclaimer -->
-        <div id="emailPwdDisclaimer"
-            class="mt-4 text-xs leading-relaxed bg-yellow-500/10 border border-yellow-500/30 text-yellow-200 rounded-xl p-3">
-            <strong class="text-yellow-300">Why email & password?</strong>
-            <span class="block mt-1">We store your credentials securely to generate a fresh Stremio auth
-                key automatically when needed. This avoids expired keys and keeps your addon working
-                without manual re-login.</span>
-            <span class="block mt-2">Prefer not to share your password? Use the Stremio login above to
-                supply an auth key. Note: auth keys can expire and may require periodic
-                re-authentication.</span>
+        <!-- Disconnected view -->
+        <div data-provider-view="disconnected" data-provider-for="simkl">
+            <button type="button" id="simklLoginBtn"
+                class="w-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 hover:text-blue-200 font-medium py-4 rounded-xl transition flex items-center justify-center gap-3">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm0 4.5c1.4 0 2.5 1.1 2.5 2.5S13.4 9.5 12 9.5 9.5 8.4 9.5 7s1.1-2.5 2.5-2.5z"/>
+                </svg>
+                <span class="text-base">Login with Simkl</span>
+            </button>
+            <p class="mt-4 text-xs text-slate-500 leading-relaxed">
+                Simkl is especially strong for series — it tracks individual episodes and adds rich rating signal. Pick Simkl as your watch history source on the next page once connected.
+            </p>
         </div>
+
+        <!-- Connected view -->
+        <div data-provider-view="connected" data-provider-for="simkl" class="hidden">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-blue-500/15 text-blue-300 ring-1 ring-blue-400/20 flex items-center justify-center">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-xs text-green-400 mb-0.5">Connected</div>
+                        <div class="text-sm text-white font-medium" id="simklSyncStatus">Simkl</div>
+                    </div>
+                </div>
+                <button type="button" id="simklSyncLogoutBtn"
+                    class="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 hover:text-blue-200 text-sm font-medium py-2 px-4 rounded-lg transition">
+                    Disconnect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer / Next -->
+    <div class="pt-4 flex justify-end">
+        <button type="button" id="accountsNextBtn"
+            class="bg-white text-black hover:bg-white/90 border border-white/10 px-8 py-3 rounded-xl font-medium transition hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:ring-0"
+            disabled>Next: Configure Options &rarr;</button>
     </div>
 </section>

@@ -6,6 +6,7 @@ import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initia
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
 import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
 import { initializeForm, clearErrors, refreshYearSlider } from './modules/form.js';
+import { initializeAccountsUI } from './modules/accounts.js';
 
 const appState = createAppState();
 
@@ -21,6 +22,7 @@ const emailInput = document.getElementById('emailInput');
 const passwordInput = document.getElementById('passwordInput');
 const emailPwdContinueBtn = document.getElementById('emailPwdContinueBtn');
 const languageSelect = document.getElementById('languageSelect');
+const accountsNextBtn = document.getElementById('accountsNextBtn');
 const configNextBtn = document.getElementById('configNextBtn');
 const catalogsNextBtn = document.getElementById('catalogsNextBtn');
 const successResetBtn = document.getElementById('successResetBtn');
@@ -100,6 +102,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // By default, ensure logged-out users see only Welcome/Login
     lockNavigationForLoggedOut();
 
+    initializeAccountsUI({ switchSection });
+
     initializeCatalogList({ catalogList }, appState);
 
     // Initialize form handling
@@ -151,6 +155,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('orientationchange', updateMobileLayout);
 
     // Next Buttons
+    if (accountsNextBtn) accountsNextBtn.addEventListener('click', () => {
+        if (!accountsNextBtn.disabled) switchSection('config');
+    });
     if (configNextBtn) configNextBtn.addEventListener('click', () => switchSection('catalogs'));
     if (catalogsNextBtn) catalogsNextBtn.addEventListener('click', () => switchSection('install'));
 
