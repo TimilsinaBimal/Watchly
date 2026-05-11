@@ -147,7 +147,7 @@ typing-inspection==0.4.2
     #   pydantic-settings
 tzlocal==5.3.1
     # via apscheduler
-urllib3==2.6.0
+urllib3==2.7.0
     # via requests
 uvicorn==0.38.0
     # via watchly (pyproject.toml)
