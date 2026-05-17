@@ -278,8 +278,8 @@ class RowGeneratorService:
         final = []
         for i, (axes, fallback) in enumerate(rows):
             result = results[i]
-            title = result.strip() if isinstance(result, str) else fallback
-            final.append(RowDefinition(title=title, id=build_row_id(axes)))
+            title = result.strip() if isinstance(result, str) else ""
+            final.append(RowDefinition(title=title or fallback, id=build_row_id(axes)))
         return final
 
     # --- LLM-based generation ---
