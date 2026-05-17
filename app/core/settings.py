@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.services.poster_ratings.factory import PosterProvider
 
@@ -14,6 +14,17 @@ class CatalogConfig(BaseModel):
     enabled_series: bool = Field(default=True, description="Enable series catalog for this configuration")
     display_at_home: bool = Field(default=True, description="Display this catalog on home page")
     shuffle: bool = Field(default=False, description="Randomize order of items in this catalog")
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _blank_name_is_none(cls, v):
+        # Users can clear the rename field in the configure UI; persisting "" or
+        # whitespace would produce a blank catalog row in Stremio. Normalize to
+        # None so downstream code falls back to the default catalog name.
+        if isinstance(v, str):
+            stripped = v.strip()
+            return stripped or None
+        return v
 
 
 class PosterRatingConfig(BaseModel):
