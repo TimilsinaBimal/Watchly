@@ -126,13 +126,18 @@ class DynamicCatalogService:
         else:
             catalog_id = item_id
 
+        # External-source items (Trakt/Simkl) and partial Stremio entries
+        # occasionally lack a title; without this guard the row renders as
+        # "Because you loved " with a trailing space, which Stremio shows as
+        # an empty catalog name.
+        suffix = (item_name or "").strip() or "this title"
         extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
         return {
             "type": self.normalize_type(item_type),
             "id": catalog_id,
-            "name": f"{label} {item_name}",
+            "name": f"{label} {suffix}",
             "_catalog_name_prefix": label,
-            "_catalog_name_suffix": item_name,
+            "_catalog_name_suffix": suffix,
             "extra": extra,
         }
 
