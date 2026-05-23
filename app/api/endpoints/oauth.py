@@ -173,7 +173,7 @@ def _oauth_success_page(provider: str, username: str, tokens: dict[str, str]) ->
 
     safe_username = html.escape(username or "")
     safe_provider = html.escape(provider.title())
-    payload = json.dumps({"provider": provider, "username": username, "tokens": tokens})
+    payload = json.dumps({"provider": provider, "username": username, "tokens": tokens}).replace("</", "<\\/")
     # Pin postMessage target to the configured app origin so we never broadcast
     # tokens to whatever origin the popup happens to be on.
     parsed = urlparse(settings.HOST_NAME or "")

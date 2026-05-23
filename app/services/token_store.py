@@ -222,7 +222,7 @@ class TokenStore:
 
                 # Invalidate cache so next read gets the migrated data
                 try:
-                    self.get_user_data.cache_invalidate(token)
+                    self._get_user_data_cached.cache_invalidate(token)
                 except Exception:
                     pass
 

@@ -95,20 +95,10 @@ class ProfileBuilder:
             # Add to processed IDs
             processed_ids.add(scored_items[i].item.id)
 
-            # Try to unpack as 3-tuple first (new format)
-            try:
-                features, evidence_weight, is_loved = result  # type: ignore
-            except (ValueError, TypeError):
-                # Try to unpack as 2-tuple (old format)
-                try:
-                    features, evidence_weight = result  # type: ignore
-                    is_loved = False
-                except (ValueError, TypeError):
-                    logger.debug(f"Failed to unpack result: {result}")
-                    continue
+            features, evidence_weight = result
 
             # Accumulate scores (pure addition)
-            self._accumulate_features(profile, features, evidence_weight, is_loved, feature_frequencies)
+            self._accumulate_features(profile, features, evidence_weight, feature_frequencies)
 
             # Track weighted episodes for average calculation (series only)
             if profile.content_type == "series" or profile.content_type is None:
@@ -136,9 +126,7 @@ class ProfileBuilder:
             )
         return profile
 
-    async def _process_item(
-        self, item: ScoredItem, content_type: str | None
-    ) -> tuple[dict[str, Any], float, bool] | None:
+    async def _process_item(self, item: ScoredItem, content_type: str | None) -> tuple[dict[str, Any], float] | None:
         """
         Process a single item and extract features.
 
@@ -147,7 +135,7 @@ class ProfileBuilder:
             content_type: Filter by content type
 
         Returns:
-            Tuple of (features_dict, evidence_weight, is_loved) or None
+            Tuple of (features_dict, evidence_weight) or None
         """
         # Filter by content type
         if content_type and item.item.type != content_type:
@@ -158,18 +146,16 @@ class ProfileBuilder:
         if not features:
             return None
 
-        # Calculate evidence weight
+        # Calculate evidence weight (loved/liked is already baked into the weight
+        # via EvidenceCalculator.weight_from_rating).
         evidence_weight = self.evidence_calculator.calculate_evidence_weight(item)
-        is_loved = item.item.is_loved or item.item.is_liked
-
-        return features, evidence_weight, is_loved
+        return features, evidence_weight
 
     def _accumulate_features(
         self,
         profile: TasteProfile,
         features: dict[str, Any],
         evidence_weight: float,
-        is_loved: bool,
         frequencies: dict[str, dict[Any, int]] | None = None,
     ) -> None:
         """
@@ -181,7 +167,6 @@ class ProfileBuilder:
             profile: Profile to update
             features: Extracted features
             evidence_weight: Weight for this item
-            is_loved: Whether the item is loved/liked
             frequencies: Frequency tracker for optional multipliers
         """
 
@@ -360,19 +345,9 @@ class ProfileBuilder:
             # Add to processed IDs
             existing_profile.processed_items.add(new_items[i].item.id)
 
-            # Try to unpack as 3-tuple first (new format)
-            try:
-                features, evidence_weight, is_loved = result  # type: ignore
-            except (ValueError, TypeError):
-                # Try to unpack as 2-tuple (old format)
-                try:
-                    features, evidence_weight = result  # type: ignore
-                    is_loved = False
-                except (ValueError, TypeError):
-                    logger.debug(f"Failed to unpack result: {result}")
-                    continue
+            features, evidence_weight = result
 
-            self._accumulate_features(existing_profile, features, evidence_weight, is_loved)
+            self._accumulate_features(existing_profile, features, evidence_weight)
 
         # Apply caps to prevent unbounded growth
         self._apply_caps(existing_profile)

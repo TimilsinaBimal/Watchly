@@ -179,7 +179,7 @@ class ItemVectorizer:
             features["era"] = self._year_to_era(features["year"])
 
         imdb_id = metadata.get("external_ids", {}).get("imdb_id")
-        cinemeta_metadata = await self.cinemeta_service.get_metadata(imdb_id, content_type)
+        cinemeta_metadata = await self.cinemeta_service.get_metadata(imdb_id, content_type) if imdb_id else {}
 
         # Extract runtime bucket
         runtime_bucket = await self._extract_runtime_bucket(cinemeta_metadata)
