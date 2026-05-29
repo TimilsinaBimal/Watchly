@@ -1,10 +1,150 @@
 import asyncio
+from datetime import datetime
 from typing import Any
 
 from async_lru import alru_cache
 from loguru import logger
 
+from app.models.history import WatchHistory, WatchHistoryItem
+from app.models.library import LibraryCollection, StremioLibraryItem, StremioState
 from app.services.stremio.client import StremioClient, StremioLikesClient
+
+
+def stremio_library_to_watch_history(library: LibraryCollection) -> WatchHistory:
+    """Convert typed LibraryCollection to unified WatchHistory format."""
+    items: list[WatchHistoryItem] = []
+    seen: set[str] = set()
+
+    category_items = [
+        (library.loved, True, False),
+        (library.liked, False, True),
+        (library.watched, False, False),
+        (library.added, False, False),
+    ]
+
+    for lib_items, is_loved, is_liked in category_items:
+        for item in lib_items:
+            imdb_id = item.id
+            if not imdb_id.startswith("tt") or imdb_id in seen:
+                continue
+            seen.add(imdb_id)
+
+            state = item.state
+            duration = state.duration
+            time_watched = state.timeWatched
+            times_watched = state.timesWatched
+            flagged_watched = state.flaggedWatched
+
+            if flagged_watched > 0 or times_watched > 0:
+                completion = 1.0
+            elif duration > 0:
+                completion = min(time_watched / duration, 1.0)
+            else:
+                completion = 0.0
+
+            rating: float | None = None
+            if is_loved or item.is_loved:
+                rating = 9.0
+            elif is_liked or item.is_liked:
+                rating = 7.0
+
+            last_watched: datetime | None = state.lastWatched
+            if not last_watched and item.mtime:
+                try:
+                    last_watched = datetime.fromisoformat(str(item.mtime).replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    pass
+
+            items.append(
+                WatchHistoryItem(
+                    imdb_id=imdb_id,
+                    type=item.type,
+                    name=item.name,
+                    rating=rating,
+                    watch_count=max(times_watched, 1) if completion > 0 else 0,
+                    completion=completion,
+                    last_watched=last_watched,
+                    source="stremio",
+                )
+            )
+
+    return WatchHistory(items=items, source="stremio")
+
+
+def _history_item_to_library_item(item: WatchHistoryItem, is_loved: bool, is_liked: bool) -> StremioLibraryItem:
+    state_kwargs: dict[str, Any] = {}
+    if item.last_watched:
+        state_kwargs["lastWatched"] = item.last_watched
+    state_kwargs["timesWatched"] = max(item.watch_count, 0)
+    if item.completion >= 1.0:
+        state_kwargs["flaggedWatched"] = 1
+        state_kwargs["timesWatched"] = max(item.watch_count, 1)
+    elif item.completion > 0:
+        state_kwargs["duration"] = 6000
+        state_kwargs["timeWatched"] = int(6000 * item.completion)
+
+    return StremioLibraryItem(
+        _id=item.imdb_id,
+        type=item.type,
+        name=item.name,
+        state=StremioState(**state_kwargs),
+        temp=False,
+        removed=False,
+        _is_loved=is_loved,
+        _is_liked=is_liked,
+    )
+
+
+def watch_history_to_library_collection(history: WatchHistory) -> LibraryCollection:
+    """Convert an external WatchHistory (Trakt/Simkl) into a LibraryCollection.
+
+    Bucketing rules:
+      loved:   rating >= 9, OR no rating + watch_count >= 2 (rewatch as love proxy)
+      liked:   7 <= rating < 9
+      watched: everything else with any completion/watch signal
+
+    Items without IMDb IDs are skipped — downstream code keys on `tt…` / `tmdb:…`
+    everywhere and dropping them up front avoids fanning empty IDs into TMDB lookups.
+    """
+    loved: list[StremioLibraryItem] = []
+    liked: list[StremioLibraryItem] = []
+    watched: list[StremioLibraryItem] = []
+    seen: set[str] = set()
+
+    for item in history.items:
+        if not item.imdb_id or item.imdb_id in seen:
+            continue
+        seen.add(item.imdb_id)
+
+        rating = item.rating
+        if rating is not None and rating >= 9.0:
+            bucket = "loved"
+        elif rating is not None and rating >= 7.0:
+            bucket = "liked"
+        elif rating is None and item.watch_count >= 2:
+            bucket = "loved"
+        else:
+            bucket = "watched"
+
+        is_loved = bucket == "loved"
+        is_liked = bucket == "liked"
+        lib_item = _history_item_to_library_item(item, is_loved, is_liked)
+
+        if bucket == "loved":
+            loved.append(lib_item)
+        elif bucket == "liked":
+            liked.append(lib_item)
+        else:
+            watched.append(lib_item)
+
+    return LibraryCollection(
+        loved=loved,
+        liked=liked,
+        watched=watched,
+        added=[],
+        removed=[],
+        source=history.source or "stremio",
+    )
 
 
 class StremioLibraryService:
@@ -33,7 +173,7 @@ class StremioLibraryService:
             logger.exception(f"Failed to fetch {status} {media_type} items: {e}")
             return []
 
-    async def get_library_items(self, auth_key: str) -> dict[str, list[dict[str, Any]]]:
+    async def get_library_items(self, auth_key: str) -> LibraryCollection:
         """
         Fetch all library items and categorize them (watched, loved, added, removed).
         """
@@ -111,24 +251,21 @@ class StremioLibraryService:
                         all_raw_items.append(virtual_item)
                         existing_library_ids.add(item_id)
 
-            # 3. Categorize items
-            watched: list[dict] = []
-            loved: list[dict] = []
-            added: list[dict] = []
-            removed: list[dict] = []
-            liked: list[dict] = []
-
-            # Create sets for faster lookup
-            # loved_set = set(loved_movies + loved_series)
-            # liked_set = set(liked_movies + liked_series)
+            # 3. Categorize items and convert to typed models at the boundary
+            watched: list[StremioLibraryItem] = []
+            loved: list[StremioLibraryItem] = []
+            added: list[StremioLibraryItem] = []
+            removed: list[StremioLibraryItem] = []
+            liked: list[StremioLibraryItem] = []
 
             for item in all_raw_items:
                 # Basic validation
                 if item.get("type") not in ["movie", "series"]:
                     continue
                 item_id = item.get("_id", "")
-                if not item_id.startswith("tt") and not item_id.startswith("tmdb:"):
-                    # either imdb id or tmdb id should be there.
+                # Downstream history/profile pipeline assumes IMDb ids; tmdb-only
+                # items can't be converted and would be silently dropped later.
+                if not item_id.startswith("tt"):
                     continue
 
                 # Check Watched status
@@ -141,36 +278,35 @@ class StremioLibraryService:
                 is_completion_high = duration > 0 and (time_watched / duration) >= 0.7
                 is_watched = times_watched > 0 or flagged_watched > 0 or is_completion_high
 
-                # if item is loved or liked and but not watched, then also we need to add it
-                # as users might not have watched it in stremio itself.
+                # Set enrichment flags before conversion
                 if item_id in loved_set:
                     item["_is_loved"] = True
-                    loved.append(item)
-
                 elif item_id in liked_set:
                     item["_is_liked"] = True
-                    liked.append(item)
 
+                # Convert raw dict to typed model
+                try:
+                    typed_item = StremioLibraryItem(**item)
+                except Exception:
+                    continue
+
+                # Categorize
+                if item_id in loved_set:
+                    loved.append(typed_item)
+                elif item_id in liked_set:
+                    liked.append(typed_item)
                 elif is_watched:
-                    watched.append(item)
-
+                    watched.append(typed_item)
                 elif not item.get("removed") and not item.get("temp"):
-                    # item has not removed and item is not temporary meaning item is not
-                    # added by stremio itself on user watch
-                    added.append(item)
+                    added.append(typed_item)
                 else:
                     continue
-                # elif item.get("removed"):
-                #     # do not do anything with removed items
-                #     # removed.append(item)
-                #     continue
 
-            # 4. Sort watched items by recency
-            def sort_by_recency(x: dict):
-                state = x.get("state", {}) or {}
+            # 4. Sort by recency
+            def sort_by_recency(x: StremioLibraryItem):
                 return (
-                    str(state.get("lastWatched") or str(x.get("_mtime") or "")),
-                    x.get("_mtime") or "",
+                    str(x.state.lastWatched or x.mtime or ""),
+                    x.mtime or "",
                 )
 
             watched.sort(key=sort_by_recency, reverse=True)
@@ -185,13 +321,14 @@ class StremioLibraryService:
                 f" {len(removed)} removed items"
             )
 
-            return {
-                "watched": watched,
-                "loved": loved,
-                "liked": liked,
-                "added": added,
-                "removed": removed,
-            }
+            return LibraryCollection(
+                watched=watched,
+                loved=loved,
+                liked=liked,
+                added=added,
+                removed=removed,
+                source="stremio",
+            )
         except Exception as e:
             logger.exception(f"Error processing library items: {e}")
-            return {"watched": [], "loved": [], "liked": [], "added": [], "removed": []}
+            return LibraryCollection()

@@ -55,9 +55,6 @@ TOP_PICKS_MIN_RATING: Final[float] = 6.0  # Default base (dynamic based on setti
 
 MAXIMUM_POPULARITY_SCORE: Final[float] = 100.0  # Increased from 15.0 to allow popular items
 
-# Genre whitelist limit (top N genres)
-GENRE_WHITELIST_LIMIT: Final[int] = 7
-
 # Runtime Bucket Boundaries (in minutes)
 RUNTIME_BUCKET_SHORT_MAX_SERIES: Final[int] = 30  # < 30 min
 RUNTIME_BUCKET_MEDIUM_MAX_SERIES: Final[int] = 60  # 30-60 min, > 60 is long

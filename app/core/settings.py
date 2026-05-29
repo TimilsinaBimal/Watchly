@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.services.poster_ratings.factory import PosterProvider
 
@@ -14,6 +15,17 @@ class CatalogConfig(BaseModel):
     display_at_home: bool = Field(default=True, description="Display this catalog on home page")
     shuffle: bool = Field(default=False, description="Randomize order of items in this catalog")
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def _blank_name_is_none(cls, v):
+        # Users can clear the rename field in the configure UI; persisting "" or
+        # whitespace would produce a blank catalog row in Stremio. Normalize to
+        # None so downstream code falls back to the default catalog name.
+        if isinstance(v, str):
+            stripped = v.strip()
+            return stripped or None
+        return v
+
 
 class PosterRatingConfig(BaseModel):
     """Configuration for poster rating provider."""
@@ -21,7 +33,25 @@ class PosterRatingConfig(BaseModel):
     provider: Literal[PosterProvider.RPDB.value, PosterProvider.TOP_POSTERS.value] = Field(
         description="Provider name: 'rpdb' or 'top_posters'"
     )
-    api_key: str = Field(description="API key for the provider")
+    api_key: str | None = Field(default=None, description="API key for the provider")
+
+
+def get_current_year() -> int:
+    return datetime.now().year
+
+
+DEFAULT_YEAR_MIN = 1970
+
+
+def get_default_year_max() -> int:
+    return get_current_year()
+
+
+def get_default_year_range() -> dict[str, int]:
+    return {
+        "min": DEFAULT_YEAR_MIN,
+        "max": get_default_year_max(),
+    }
 
 
 class UserSettings(BaseModel):
@@ -30,8 +60,8 @@ class UserSettings(BaseModel):
     poster_rating: PosterRatingConfig | None = Field(default=None, description="Poster rating provider configuration")
     excluded_movie_genres: list[str] = Field(default_factory=list)
     excluded_series_genres: list[str] = Field(default_factory=list)
-    year_min: int = Field(default=1970, description="Minimum release year")
-    year_max: int = Field(default=2026, description="Maximum release year")
+    year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year")
+    year_max: int = Field(default_factory=get_default_year_max, description="Maximum release year")
     popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(
         default="balanced", description="Popularity preference"
     )
@@ -41,24 +71,30 @@ class UserSettings(BaseModel):
     simkl_api_key: str | None = Field(default=None, description="Simkl API Key for the user")
     gemini_api_key: str | None = Field(default=None, description="Gemini API Key for AI-powered features")
     tmdb_api_key: str | None = Field(default=None, description="TMDB API Key (used if set; else server config)")
+    trakt_access_token: str | None = Field(default=None, description="Trakt OAuth access token")
+    trakt_refresh_token: str | None = Field(default=None, description="Trakt OAuth refresh token")
+    trakt_token_expires_at: int | None = Field(
+        default=None, description="Epoch seconds when the Trakt access token expires"
+    )
+    simkl_access_token: str | None = Field(default=None, description="Simkl OAuth access token")
+    watch_history_source: Literal["stremio", "trakt", "simkl"] = Field(
+        default="stremio", description="Source for watch history used in profile building"
+    )
 
 
 # Catalog descriptions for frontend
 CATALOG_DESCRIPTIONS = {
     "watchly.rec": "Personalized recommendations based on your watch history, library and your reactions.",
-    "watchly.loved": (
-        "Recommends items similar to the content you recently loved. example: If you loved 'The Dark Knight',"
-        " Then it will show similar items to 'The Dark Knight'. This takes your last 3 loved items and shuffles"
-        " them and picks one at random."
-    ),
-    "watchly.watched": (
-        "Recommends items similar to the content you recently watched. example: If you watched 'The Dark"
-        " Knight', Then it will show similar items to 'The Dark Knight'. This takes your last 3 watched items"
-        " and shuffles them and picks one at random."
+    "watchly.item": (
+        "Recommends items similar to one you recently watched or loved. The seed is picked uniformly at random"
+        " from a pool of your 3 most-recent loved items + your 3 most-recent watched items. The catalog title"
+        " becomes 'Because you loved <title>' or 'Because you watched <title>' depending on which bucket the"
+        " seed came from."
     ),
     "watchly.creators": (
-        "Recommends items from your top 5 favorite directors and top 5 favorite actors.(Favourite = Most"
-        " watched items)"
+        "Recommends items from your recurring directors and lead actors — those who appear across multiple"
+        " items in your library, not just one. Single-appearance creators are filtered out so the catalog"
+        " actually reflects who you keep coming back to."
     ),
     "watchly.all.loved": "Recommendations based on all your loved items",
     "watchly.liked.all": "Recommendations based on all your liked items",
@@ -84,17 +120,8 @@ def get_default_settings() -> UserSettings:
                 shuffle=False,
             ),
             CatalogConfig(
-                id="watchly.loved",
-                name="More Like",
-                enabled=True,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
-            CatalogConfig(
-                id="watchly.watched",
-                name="Because you watched",
+                id="watchly.item",
+                name="Because you Watched/Loved",
                 enabled=True,
                 enabled_movie=True,
                 enabled_series=True,

@@ -9,9 +9,9 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
-from app.api.endpoints.meta import fetch_languages_list
+from app.api.endpoints.languages import fetch_languages_list
 from app.api.router import api_router
-from app.core.settings import get_default_catalogs_for_frontend
+from app.core.settings import get_current_year, get_default_catalogs_for_frontend, get_default_year_range
 from app.services.redis_service import redis_service
 from app.services.tmdb.genre import movie_genres, series_genres
 from app.services.token_store import token_store
@@ -30,10 +30,10 @@ async def lifespan(app: FastAPI):
     Manage application lifespan events (startup/shutdown).
     """
     # Startup checks
-    if settings.TOKEN_SALT == "change-me" and settings.APP_ENV == "production":
-        logger.warning(
-            "Security Warning: TOKEN_SALT is set to default 'change-me' in production environment! "
-            "Please set the TOKEN_SALT environment variable."
+    if settings.APP_ENV == "production" and (not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me"):
+        raise RuntimeError(
+            "TOKEN_SALT is unset or using the insecure default 'change-me' in production. "
+            "Set the TOKEN_SALT environment variable to a strong, unique value before starting the app."
         )
 
     yield
@@ -89,6 +89,7 @@ async def configure_page(request: Request, _token: str | None = None):
 
     # Format default catalogs for frontend
     default_catalogs = get_default_catalogs_for_frontend()
+    year_range_defaults = get_default_year_range()
 
     # Format genres for frontend
     movie_genres_list = [{"id": str(id), "name": name} for id, name in movie_genres.items()]
@@ -103,6 +104,8 @@ async def configure_page(request: Request, _token: str | None = None):
         announcement_html=settings.ANNOUNCEMENT_HTML or "",
         languages=languages,
         default_catalogs=default_catalogs,
+        current_year=get_current_year(),
+        year_range_defaults=year_range_defaults,
         movie_genres=movie_genres_list,
         series_genres=series_genres_list,
     )

@@ -1,4 +1,5 @@
 import asyncio
+import random
 from typing import Any
 
 import httpx
@@ -53,7 +54,9 @@ class BaseClient:
                     is_retryable = e.response.status_code in (429, 500, 502, 503, 504)
 
                 if is_retryable and attempt < tries:
-                    wait_time = 0.5 * (2 ** (attempt - 1))  # Exponential backoff
+                    # Exponential backoff + small random jitter to avoid retry
+                    # stampedes when many concurrent users hit the same 429.
+                    wait_time = 0.5 * (2 ** (attempt - 1)) + random.uniform(0, 0.25)
                     logger.warning(
                         f"Request failed ({method} {url}): {str(e)}. "
                         f"Retrying in {wait_time}s... (Attempt {attempt}/{tries})"
@@ -69,12 +72,23 @@ class BaseClient:
 
         raise httpx.RequestError(f"Request failed for {method} {url} with 0 attempts configured")
 
+    @staticmethod
+    def _safe_json(response: httpx.Response, method: str, url: str) -> dict[str, Any]:
+        """Parse JSON body, returning {} on empty/non-JSON 2xx responses."""
+        if not response.content:
+            return {}
+        try:
+            return response.json()
+        except ValueError as e:
+            logger.warning(f"Non-JSON body from {method} {url} (status={response.status_code}): {e}")
+            return {}
+
     async def get(self, url: str, params: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
         """Perform a GET request and return the JSON response."""
         response = await self._request("GET", url, params=params, **kwargs)
-        return response.json()
+        return self._safe_json(response, "GET", url)
 
     async def post(self, url: str, json: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
         """Perform a POST request and return the JSON response."""
         response = await self._request("POST", url, json=json, **kwargs)
-        return response.json()
+        return self._safe_json(response, "POST", url)

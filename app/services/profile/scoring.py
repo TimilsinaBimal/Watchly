@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 
 from loguru import logger
 
-from app.models.scoring import ScoredItem, StremioLibraryItem
+from app.models.library import StremioLibraryItem
+from app.models.profile import ScoredItem
 
 
 class ScoringService:
@@ -22,12 +23,11 @@ class ScoringService:
     WEIGHT_EXPLICIT_RATING = 0.35
     ADDED_TO_LIBRARY_WEIGHT = 0.08
 
-    def process_item(self, raw_item: dict) -> ScoredItem:
+    def process_item(self, raw_item: dict | StremioLibraryItem) -> ScoredItem:
         """
-        Process a raw Stremio item dictionary into a ScoredItem.
+        Process a Stremio item (dict or typed model) into a ScoredItem.
         """
-        # Convert dict to Pydantic model for validation and typing
-        item = StremioLibraryItem(**raw_item)
+        item = raw_item if isinstance(raw_item, StremioLibraryItem) else StremioLibraryItem(**raw_item)
 
         score_data = self._calculate_score_components(item)
 
@@ -39,28 +39,6 @@ class ScoringService:
             is_recent=score_data["is_recent"],
             source_type="loved" if item.is_loved else ("liked" if item.is_liked else "watched"),
         )
-
-    def calculate_score(
-        self,
-        item: dict | StremioLibraryItem,
-        is_loved: bool = False,
-        is_liked: bool = False,
-    ) -> float:
-        """
-        Backwards compatible method to just get the float score.
-        Accepts either a raw dict or a StremioLibraryItem.
-        """
-        if isinstance(item, dict):
-            # Temporarily inject flags if passed separately (legacy support)
-            if "_is_loved" not in item:
-                item["_is_loved"] = is_loved
-            if "_is_liked" not in item:
-                item["_is_liked"] = is_liked
-            model_item = StremioLibraryItem(**item)
-        else:
-            model_item = item
-
-        return self._calculate_score_components(model_item)["final_score"]
 
     def _calculate_score_components(self, item: StremioLibraryItem) -> dict:
         """Internal logic to calculate score components."""
@@ -160,9 +138,6 @@ class ScoringService:
         added_to_library_score = 0.0
         if not item.temp and not item.removed:
             added_to_library_score = 100.0
-        # if item.removed:
-        #     # should we penalize for removed items?
-        #     added_to_library_score = -50.0
 
         # Calculate Final Score
         final_score = (

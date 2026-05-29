@@ -1,9 +1,13 @@
 import asyncio
+from datetime import datetime
 from typing import Any
 
+import httpx
 from cachetools import TTLCache
-from httpx import AsyncClient
 from loguru import logger
+
+from app.core.base_client import BaseClient
+from app.models.history import WatchHistory, WatchHistoryItem
 
 
 def get_popularity(rank: int | None, N: int = 100000, K: int = 100) -> float:
@@ -58,9 +62,33 @@ def normalize_simkl_to_tmdb(item: dict[str, Any], mtype: str) -> dict[str, Any]:
 class SimklService:
     def __init__(self):
         self.base_url = "https://api.simkl.com"
-        self.client = AsyncClient(timeout=10)
+        self.client = BaseClient(base_url=self.base_url, timeout=10.0, max_retries=3)
         self._semaphore = asyncio.Semaphore(10)  # Max 10 concurrent requests
-        self._details_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # Cache up to 1000 items  # 1 hour TTL
+        self._details_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour TTL
+
+    async def close(self) -> None:
+        await self.client.close()
+
+    async def exchange_code(self, code: str, redirect_uri: str, client_id: str, client_secret: str) -> dict[str, Any]:
+        """Exchange authorization code for an access token."""
+        return await self.client.post(
+            "/oauth/token",
+            json={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+
+    async def get_user_settings(self, access_token: str, client_id: str) -> dict[str, Any]:
+        """Fetch the authenticated user's profile (used to display 'Connected as ...')."""
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "simkl-api-key": client_id,
+        }
+        return await self.client.get("/users/settings", headers=headers)
 
     async def _fetch_with_semaphore(self, coro):
         """Execute a coroutine with semaphore for rate limiting."""
@@ -68,44 +96,115 @@ class SimklService:
             return await coro
 
     async def get_trending(self, api_key: str):
-        url = f"{self.base_url}/movies/trending"
-        params = {"client_id": api_key}
         try:
-            response = await self.client.get(url, params=params, follow_redirects=True)
-            response.raise_for_status()
-            json_response = response.json()
-            return json_response
-
-        except Exception as e:
-            logger.error(f"Error fetching details from Simkl: {e}")
+            return await self.client.get("/movies/trending", params={"client_id": api_key})
+        except httpx.HTTPStatusError as e:
+            # 401/403 indicate the user's Simkl token was revoked — let those
+            # propagate so callers can clear the token and prompt re-auth.
+            if e.response.status_code in (401, 403):
+                raise
+            logger.warning(f"Simkl trending returned {e.response.status_code}: {e}")
+            return []
+        except httpx.RequestError as e:
+            logger.warning(f"Simkl trending request failed: {e}")
             return []
 
     async def get_item_details(self, simkl_id, mtype: str, api_key: str) -> dict[str, Any]:
         """Fetch full item details from Simkl with caching."""
-        # Create cache key
         cache_key = f"{simkl_id}:{mtype}"
 
-        # Check cache first
         if cache_key in self._details_cache:
             logger.debug(f"Cache hit for Simkl item {simkl_id}")
             return self._details_cache[cache_key]
 
-        # Fetch from API
         mtype_path = "movies" if mtype == "movie" else "tv"
-        url = f"{self.base_url}/{mtype_path}/{simkl_id}"
-        params = {"client_id": api_key, "extended": "full"}
         try:
-            response = await self.client.get(url, params=params, follow_redirects=True)
-            response.raise_for_status()
-            result = response.json()
-
-            # Store in cache
+            result = await self.client.get(
+                f"/{mtype_path}/{simkl_id}",
+                params={"client_id": api_key, "extended": "full"},
+            )
             self._details_cache[cache_key] = result
             return result
-
-        except Exception as e:
-            logger.error(f"Error fetching details from Simkl: {e}")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (401, 403):
+                raise
+            logger.warning(f"Simkl item details {simkl_id} returned {e.response.status_code}: {e}")
             return {}
+        except httpx.RequestError as e:
+            logger.warning(f"Simkl item details {simkl_id} request failed: {e}")
+            return {}
+
+    async def get_history(self, access_token: str, client_id: str) -> WatchHistory:
+        """Fetch watch history from Simkl using OAuth access token."""
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+            "simkl-api-key": client_id,
+        }
+
+        results = await asyncio.gather(
+            self.client.get("/sync/all-items/movies", headers=headers),
+            self.client.get("/sync/all-items/shows", headers=headers),
+            return_exceptions=True,
+        )
+
+        items: list[WatchHistoryItem] = []
+        seen: set[str] = set()
+
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.warning(f"Simkl sync request failed: {result}")
+                continue
+            data = result if isinstance(result, dict) else {}
+            mtype = "movie" if idx == 0 else "series"
+            entries = data.get("movies", []) if idx == 0 else data.get("shows", [])
+
+            for entry in entries:
+                media = entry.get("movie") or entry.get("show") or {}
+                imdb_id = media.get("ids", {}).get("imdb")
+                if not imdb_id or imdb_id in seen:
+                    continue
+                seen.add(imdb_id)
+
+                user_rating = entry.get("user_rating")
+                rating = float(user_rating) if user_rating is not None else None
+
+                last_watched = None
+                raw_date = entry.get("last_watched_at")
+                if raw_date:
+                    try:
+                        last_watched = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        pass
+
+                # watch_count is a rewatch signal downstream (is_rewatched, the
+                # >=2 "loved" proxy). Only movies expose a real replay count;
+                # for shows every Simkl count is episode-based, so a fully
+                # watched multi-episode series would look rewatched and get
+                # mis-loved. Leave series at 1 and let ratings drive loved/liked.
+                if mtype == "movie":
+                    try:
+                        watch_count = max(int(entry.get("total_plays_count") or 0), 1)
+                    except (TypeError, ValueError):
+                        watch_count = 1
+                else:
+                    watch_count = 1
+
+                items.append(
+                    WatchHistoryItem(
+                        imdb_id=imdb_id,
+                        type=mtype,
+                        name=media.get("title", ""),
+                        rating=rating,
+                        watch_count=watch_count,
+                        completion=1.0,
+                        last_watched=last_watched,
+                        source="simkl",
+                    )
+                )
+
+        logger.info(f"Simkl history: {len(items)} items")
+        return WatchHistory(items=items, source="simkl")
 
     async def get_recommendations(self, imdb_id: str, mtype: str, api_key: str) -> list[dict[str, Any]]:
         """Get recommendations for a single item (original method for item-based)."""

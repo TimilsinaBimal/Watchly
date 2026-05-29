@@ -4,11 +4,13 @@
 let navItems = {};
 let sections = {};
 let mainEl = null;
+let appState = null;
 
-export function initializeNavigation(domElements) {
+export function initializeNavigation(domElements, state) {
     navItems = domElements.navItems;
     sections = domElements.sections;
     mainEl = domElements.mainEl;
+    appState = state;
 
     Object.keys(navItems).forEach(key => {
         if (navItems[key]) {
@@ -81,6 +83,10 @@ export function initializeMobileNav() {
 }
 
 export function switchSection(sectionKey) {
+    if (appState) {
+        appState.ui.currentSection = sectionKey;
+    }
+
     // Hide all sections
     Object.values(sections).forEach(el => {
         if (el) el.classList.add('hidden');

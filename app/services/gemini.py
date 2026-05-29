@@ -107,7 +107,11 @@ class GeminiService:
                 contents=prompt,
                 config=config,
             )
-            return json.loads(response.text)
+            try:
+                return json.loads(response.text)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Gemini returned non-JSON response: {e}; body={response.text[:200]!r}")
+                return None
         except Exception as e:
             logger.exception(f"Error generating structured content with Gemini Flash: {e}")
             return None

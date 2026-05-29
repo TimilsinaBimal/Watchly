@@ -2,7 +2,7 @@ from typing import Any
 
 import httpx
 
-from app.models.scoring import ScoredItem
+from app.models.profile import ScoredItem
 from app.services.cinemeta_service import CinemetaService, cinemeta_service
 from app.services.profile.constants import (
     CAST_POSITION_LEAD,
@@ -49,11 +49,14 @@ class ProfileVectorizer:
 
         keywords = [k.get("id") for k in keywords if k.get("id")]
 
-        # Extract cast (top 10)
+        # Top 3 cast only — main + two critical supporting. Tracking deeper into
+        # the credit list pollutes "favorite cast" with bit-part actors who
+        # happen to appear across many genre films but who the user wasn't
+        # actually drawn to. CreatorsService pairs this with a freq>=2 filter.
         cast = []
         credits = metadata.get("credits", {}) or {}
         cast_list = credits.get("cast", []) or []
-        for idx, actor in enumerate(cast_list[:10]):
+        for idx, actor in enumerate(cast_list[:3]):
             actor_id = actor.get("id") if isinstance(actor, dict) else actor
             if actor_id:
                 cast.append(actor_id)
@@ -176,7 +179,7 @@ class ItemVectorizer:
             features["era"] = self._year_to_era(features["year"])
 
         imdb_id = metadata.get("external_ids", {}).get("imdb_id")
-        cinemeta_metadata = await self.cinemeta_service.get_metadata(imdb_id, content_type)
+        cinemeta_metadata = await self.cinemeta_service.get_metadata(imdb_id, content_type) if imdb_id else {}
 
         # Extract runtime bucket
         runtime_bucket = await self._extract_runtime_bucket(cinemeta_metadata)
@@ -205,7 +208,7 @@ class ItemVectorizer:
             return []
 
         result = []
-        for idx, cast_item in enumerate(cast[:10]):  # Top 10 only
+        for idx, cast_item in enumerate(cast[:3]):  # Top 3 — leads only
             if isinstance(cast_item, dict):
                 cast_id = cast_item.get("id")
                 position = cast_item.get("position", idx)
@@ -289,7 +292,10 @@ class ItemVectorizer:
 
         runtime_str = cinemeta_metadata.get("runtime", "0 min")
         if runtime_str:
-            runtime = int(runtime_str.split(" ")[0])
+            try:
+                runtime = int(str(runtime_str).split(" ")[0])
+            except (ValueError, TypeError):
+                runtime = 0
 
         if not runtime or not isinstance(runtime, (int, float)):
             return None

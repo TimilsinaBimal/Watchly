@@ -5,8 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.models.scoring import ScoredItem
-from app.models.taste_profile import TasteProfile
+from app.models.profile import ScoredItem, TasteProfile
 from app.services.profile.constants import (
     CAP_CAST,
     CAP_COUNTRY,
@@ -96,20 +95,10 @@ class ProfileBuilder:
             # Add to processed IDs
             processed_ids.add(scored_items[i].item.id)
 
-            # Try to unpack as 3-tuple first (new format)
-            try:
-                features, evidence_weight, is_loved = result  # type: ignore
-            except (ValueError, TypeError):
-                # Try to unpack as 2-tuple (old format)
-                try:
-                    features, evidence_weight = result  # type: ignore
-                    is_loved = False
-                except (ValueError, TypeError):
-                    logger.debug(f"Failed to unpack result: {result}")
-                    continue
+            features, evidence_weight = result
 
             # Accumulate scores (pure addition)
-            self._accumulate_features(profile, features, evidence_weight, is_loved, feature_frequencies)
+            self._accumulate_features(profile, features, evidence_weight, feature_frequencies)
 
             # Track weighted episodes for average calculation (series only)
             if profile.content_type == "series" or profile.content_type is None:
@@ -137,9 +126,7 @@ class ProfileBuilder:
             )
         return profile
 
-    async def _process_item(
-        self, item: ScoredItem, content_type: str | None
-    ) -> tuple[dict[str, Any], float, bool] | None:
+    async def _process_item(self, item: ScoredItem, content_type: str | None) -> tuple[dict[str, Any], float] | None:
         """
         Process a single item and extract features.
 
@@ -148,7 +135,7 @@ class ProfileBuilder:
             content_type: Filter by content type
 
         Returns:
-            Tuple of (features_dict, evidence_weight, is_loved) or None
+            Tuple of (features_dict, evidence_weight) or None
         """
         # Filter by content type
         if content_type and item.item.type != content_type:
@@ -159,18 +146,16 @@ class ProfileBuilder:
         if not features:
             return None
 
-        # Calculate evidence weight
+        # Calculate evidence weight (loved/liked is already baked into the weight
+        # via EvidenceCalculator.weight_from_rating).
         evidence_weight = self.evidence_calculator.calculate_evidence_weight(item)
-        is_loved = item.item.is_loved or item.item.is_liked
-
-        return features, evidence_weight, is_loved
+        return features, evidence_weight
 
     def _accumulate_features(
         self,
         profile: TasteProfile,
         features: dict[str, Any],
         evidence_weight: float,
-        is_loved: bool,
         frequencies: dict[str, dict[Any, int]] | None = None,
     ) -> None:
         """
@@ -182,7 +167,6 @@ class ProfileBuilder:
             profile: Profile to update
             features: Extracted features
             evidence_weight: Weight for this item
-            is_loved: Whether the item is loved/liked
             frequencies: Frequency tracker for optional multipliers
         """
 
@@ -234,10 +218,10 @@ class ProfileBuilder:
                     job = ""
 
                 if crew_id:
-                    # Only count actual directors (for movies) and creators (for TV series)
                     if job in ["director", "creator"]:
                         weight = evidence_weight * FEATURE_WEIGHT_CREATOR
                         profile.director_scores[crew_id] = profile.director_scores.get(crew_id, 0.0) + weight
+                        profile.director_frequency[crew_id] = profile.director_frequency.get(crew_id, 0) + 1
                         if frequencies is not None:
                             frequencies["directors"][crew_id] += 1
 
@@ -250,9 +234,9 @@ class ProfileBuilder:
                 position_weight = 1.0
 
             if cast_id:
-                # Use evidence weight multiplied by position weight
                 weight = evidence_weight * FEATURE_WEIGHT_CREATOR * position_weight
                 profile.cast_scores[cast_id] = profile.cast_scores.get(cast_id, 0.0) + weight
+                profile.cast_frequency[cast_id] = profile.cast_frequency.get(cast_id, 0) + 1
                 if frequencies is not None:
                     frequencies["cast"][cast_id] += 1
 
@@ -306,39 +290,20 @@ class ProfileBuilder:
     @staticmethod
     def _apply_caps(profile: TasteProfile) -> None:
         """
-        Apply score caps to prevent unbounded growth.
-
-        Args:
-            profile: Profile to cap
+        Apply score caps to prevent unbounded growth (both positive and negative).
         """
-        # Cap genres
-        for genre_id in profile.genre_scores:
-            profile.genre_scores[genre_id] = min(profile.genre_scores[genre_id], CAP_GENRE)
-
-        # Cap keywords
-        for keyword_id in profile.keyword_scores:
-            profile.keyword_scores[keyword_id] = min(profile.keyword_scores[keyword_id], CAP_KEYWORD)
-
-        # Cap directors
-        for director_id in profile.director_scores:
-            profile.director_scores[director_id] = min(profile.director_scores[director_id], CAP_DIRECTOR)
-
-        # Cap cast
-        for cast_id in profile.cast_scores:
-            profile.cast_scores[cast_id] = min(profile.cast_scores[cast_id], CAP_CAST)
-
-        # Cap eras
-        for era in profile.era_scores:
-            profile.era_scores[era] = min(profile.era_scores[era], CAP_ERA)
-
-        # Cap countries
-        for country in profile.country_scores:
-            profile.country_scores[country] = min(profile.country_scores[country], CAP_COUNTRY)
-
-        # Cap runtime buckets
-        for runtime_bucket in profile.runtime_bucket_scores:
-            current_score = profile.runtime_bucket_scores[runtime_bucket]
-            profile.runtime_bucket_scores[runtime_bucket] = min(current_score, CAP_RUNTIME)
+        cap_pairs = [
+            (profile.genre_scores, CAP_GENRE),
+            (profile.keyword_scores, CAP_KEYWORD),
+            (profile.director_scores, CAP_DIRECTOR),
+            (profile.cast_scores, CAP_CAST),
+            (profile.era_scores, CAP_ERA),
+            (profile.country_scores, CAP_COUNTRY),
+            (profile.runtime_bucket_scores, CAP_RUNTIME),
+        ]
+        for scores, cap in cap_pairs:
+            for key in scores:
+                scores[key] = max(-cap, min(scores[key], cap))
 
     async def update_profile_incrementally(
         self,
@@ -380,19 +345,9 @@ class ProfileBuilder:
             # Add to processed IDs
             existing_profile.processed_items.add(new_items[i].item.id)
 
-            # Try to unpack as 3-tuple first (new format)
-            try:
-                features, evidence_weight, is_loved = result  # type: ignore
-            except (ValueError, TypeError):
-                # Try to unpack as 2-tuple (old format)
-                try:
-                    features, evidence_weight = result  # type: ignore
-                    is_loved = False
-                except (ValueError, TypeError):
-                    logger.debug(f"Failed to unpack result: {result}")
-                    continue
+            features, evidence_weight = result
 
-            self._accumulate_features(existing_profile, features, evidence_weight, is_loved)
+            self._accumulate_features(existing_profile, features, evidence_weight)
 
         # Apply caps to prevent unbounded growth
         self._apply_caps(existing_profile)

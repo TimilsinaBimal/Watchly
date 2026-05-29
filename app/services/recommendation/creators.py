@@ -5,29 +5,71 @@ from fastapi import HTTPException
 from loguru import logger
 
 from app.core.settings import UserSettings
-from app.models.taste_profile import TasteProfile
-from app.services.recommendation.filtering import RecommendationFiltering
+from app.models.profile import TasteProfile
+from app.services.recommendation.filtering import RecommendationFiltering, filter_watched_by_imdb
 from app.services.recommendation.metadata import RecommendationMetadata
-from app.services.recommendation.utils import content_type_to_mtype, filter_watched_by_imdb
+from app.services.recommendation.utils import content_type_to_mtype
 from app.services.tmdb.service import TMDBService
+
+SMALL_LIBRARY_THRESHOLD = 5
+DIRECTOR_LIMIT = 3
+CAST_LIMIT = 3
+MIN_FREQUENCY = 2
 
 
 class CreatorsService:
-    """
-    Handles recommendations from favorite creators (directors and cast).
+    """Recommendations from creators the user actually returns to.
 
-    Strategy:
-    1. Build profile from smart-sampled library items
-    2. Get top directors and cast from profile
-    3. Count raw frequencies to filter single-appearance creators
-    4. Prioritize creators with 2+ appearances, fill with single if needed
-    5. Fetch recommendations from each creator (fewer pages for single-appearance)
-    6. Filter and return results
+    A "favorite" creator is someone the user has watched across multiple
+    items, not just whoever made their last watch. With a sparse library
+    (1–3 items) every director and lead cast member trivially looks like
+    a "top creator", which made the old top-N-by-score selection feel
+    like "more from that one movie I watched". This service filters by
+    raw appearance frequency (`director_frequency` / `cast_frequency`
+    persisted on the profile) before fetching:
+
+    * Cast: strict freq >= 2. A movie contributes the top 3 cast, so any
+      user with two watched items has a real chance of overlap; if no
+      actor recurs, the cast half of the catalog is empty.
+    * Directors: freq >= 2 preferred. As a small-library safety net,
+      when the profile has fewer than 5 processed items and nobody
+      recurs, fall back to the single highest-scored director so brand
+      new users still see a row. Once the library grows past the
+      threshold, "no recurring directors" is honest signal — the
+      catalog hides itself.
+
+    If neither half qualifies, raise 404 (Stremio will hide the row).
     """
 
     def __init__(self, tmdb_service: TMDBService, user_settings: UserSettings | None = None):
         self.tmdb_service: TMDBService = tmdb_service
         self.user_settings: UserSettings | None = user_settings
+
+    @staticmethod
+    def _select_recurring(
+        score_pairs: list[tuple[int, float]],
+        frequency: dict[int, int],
+        limit: int,
+    ) -> list[tuple[int, float]]:
+        """Keep score-sorted creators whose appearance count meets the threshold."""
+        return [(cid, score) for cid, score in score_pairs if frequency.get(cid, 0) >= MIN_FREQUENCY][:limit]
+
+    def _select_directors(self, profile: TasteProfile) -> list[tuple[int, float]]:
+        all_directors = sorted(profile.director_scores.items(), key=lambda kv: kv[1], reverse=True)
+        recurring = self._select_recurring(all_directors, profile.director_frequency, DIRECTOR_LIMIT)
+        if recurring:
+            return recurring
+        # Small-library fallback: brand-new users haven't had a chance to
+        # rewatch anyone yet, so seeding from their top-scored director is
+        # better than an empty catalog. Larger libraries with no recurrence
+        # legitimately have no "favorite" director — let the catalog hide.
+        if len(profile.processed_items) < SMALL_LIBRARY_THRESHOLD and all_directors:
+            return all_directors[:1]
+        return []
+
+    def _select_cast(self, profile: TasteProfile) -> list[tuple[int, float]]:
+        all_cast = sorted(profile.cast_scores.items(), key=lambda kv: kv[1], reverse=True)
+        return self._select_recurring(all_cast, profile.cast_frequency, CAST_LIMIT)
 
     async def get_recommendations_from_creators(
         self,
@@ -37,58 +79,43 @@ class CreatorsService:
         watched_imdb: set[str],
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """
-        Get recommendations from user's top favorite directors and cast.
-
-        Args:
-            profile: User taste profile
-            content_type: Content type (movie/series)
-            watched_tmdb: Set of watched TMDB IDs
-            watched_imdb: Set of watched IMDB IDs
-            limit: Number of recommendations to return
-
-        Returns:
-            List of recommended items
-        """
         mtype = content_type_to_mtype(content_type)
 
-        # Get top 5 directors and cast directly from profile
-        selected_directors = profile.get_top_directors(limit=5)
-        selected_cast = profile.get_top_cast(limit=5)
+        selected_directors = self._select_directors(profile)
+        selected_cast = self._select_cast(profile)
 
         if not selected_directors and not selected_cast:
-            raise HTTPException(status_code=404, detail="No top directors or cast found")
+            raise HTTPException(status_code=404, detail="No recurring directors or cast in profile")
 
-        # Fetch recommendations from creators
+        logger.info(
+            f"Creators catalog: {len(selected_directors)} directors, {len(selected_cast)} cast "
+            f"(profile has {len(profile.processed_items)} processed items)"
+        )
+
+        min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
         all_candidates = {}
         tasks = []
 
-        # Create tasks for directors (fetch 2 pages each)
         for dir_id, _ in selected_directors:
             for page in [1, 2]:
-                # TV uses with_people, movies use with_crew
-                if mtype == "tv":
-                    discover_params = {"with_people": str(dir_id), "page": page}
-                else:
-                    discover_params = {"with_crew": str(dir_id), "page": page}
-
-                # Apply dynamic filters
-                min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
-                discover_params["vote_count.gte"] = min_votes
-                discover_params["vote_average.gte"] = min_rating
-
+                # TMDB /discover supports with_crew for both movies and TV;
+                # with_people is a search-people endpoint param, not valid here.
+                discover_params = {
+                    "with_crew": str(dir_id),
+                    "page": page,
+                    "vote_count.gte": min_votes,
+                    "vote_average.gte": min_rating,
+                }
                 tasks.append(self._fetch_discover_page(mtype, discover_params, dir_id, "director"))
 
-        # Create tasks for cast (fetch 2 pages each)
         for cast_id, _ in selected_cast:
             for page in [1, 2]:
-                discover_params = {"with_cast": str(cast_id), "page": page}
-
-                # Apply dynamic filters
-                min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(self.user_settings)
-                discover_params["vote_count.gte"] = min_votes
-                discover_params["vote_average.gte"] = min_rating
-
+                discover_params = {
+                    "with_cast": str(cast_id),
+                    "page": page,
+                    "vote_count.gte": min_votes,
+                    "vote_average.gte": min_rating,
+                }
                 tasks.append(self._fetch_discover_page(mtype, discover_params, cast_id, "cast"))
 
         # Execute all tasks in parallel

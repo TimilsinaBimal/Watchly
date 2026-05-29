@@ -28,11 +28,7 @@ class RecommendationMetadata:
 
     @classmethod
     async def format_for_stremio(
-        cls,
-        details: dict[str, Any],
-        media_type: str,
-        user_settings: Any = None,
-        logo_url: str | None = None,
+        cls, details: dict[str, Any], media_type: str, user_settings: Any = None, logo_url: str | None = None
     ) -> dict[str, Any] | None:
         """Format TMDB details into Stremio metadata object."""
         external_ids = details.get("external_ids", {})
@@ -156,7 +152,8 @@ class RecommendationMetadata:
                     return None
 
         tasks = [_fetch_one(it.get("id")) for it in valid_items]
-        details_list = await asyncio.gather(*tasks)
+        details_list = await asyncio.gather(*tasks, return_exceptions=True)
+        details_list = [d for d in details_list if d and not isinstance(d, Exception)]
 
         language = getattr(user_settings, "language", None) or "en-US"
         mt = "movie" if media_type == "movie" else "tv"

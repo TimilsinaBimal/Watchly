@@ -18,6 +18,9 @@ _STATIC_TRANSLATIONS: dict[tuple[str, str], str] = {
     ("fr", "More Like"): "Titres similaires à",
     ("fr", "More like"): "Titres similaires à",
     ("fr", "Because you watched"): "Parce que vous avez regardé",
+    ("fr", "Because you loved"): "Parce que vous avez adoré",
+    ("de", "Because you watched"): "Weil du angesehen hast",
+    ("de", "Because you loved"): "Weil du geliebt hast",
     ("fr", "Genre & Keyword Catalogs"): "Genres et mots-clés",
     ("fr", "From your favourite Creators"): "De vos créateurs préférés",
     ("fr", "Based on what you loved"): "D'après vos coups de cœur",
@@ -41,7 +44,6 @@ def _normalize_german_formality(text: str) -> str:
 
 
 class TranslationService:
-    @alru_cache(maxsize=1000, ttl=7 * 24 * 60 * 60)
     async def translate(self, text: str, target_lang: str | None) -> str:
         if not text or not target_lang:
             return text
@@ -56,18 +58,23 @@ class TranslationService:
             return _STATIC_TRANSLATIONS[static_key]
 
         try:
-            loop = asyncio.get_running_loop()
-
-            translated = await loop.run_in_executor(
-                None, lambda: GoogleTranslator(source="auto", target=lang).translate(text)
-            )
-            result = translated if translated else text
-            if lang == "de":
-                result = _normalize_german_formality(result)
-            return result
+            return await self._translate_cached(text, lang)
         except Exception as e:
+            # Fall back to source text on failure but don't cache the fallback —
+            # otherwise a transient API blip poisons the cache for 7 days.
             logger.exception(f"Translation failed for '{text}' to '{lang}': {e}")
             return text
+
+    @alru_cache(maxsize=1000, ttl=7 * 24 * 60 * 60)
+    async def _translate_cached(self, text: str, lang: str) -> str:
+        loop = asyncio.get_running_loop()
+        translated = await loop.run_in_executor(
+            None, lambda: GoogleTranslator(source="auto", target=lang).translate(text)
+        )
+        result = translated if translated else text
+        if lang == "de":
+            result = _normalize_german_formality(result)
+        return result
 
 
 translation_service = TranslationService()
