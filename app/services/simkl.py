@@ -177,16 +177,17 @@ class SimklService:
                     except (ValueError, TypeError):
                         pass
 
-                # Prefer the play/episode count Simkl reports; fall back to 1
-                # so 'watched but unmarked-count' items still register as seen.
-                raw_plays = (
-                    entry.get("total_plays_count")
-                    if mtype == "movie"
-                    else entry.get("watched_episodes_count") or entry.get("total_plays_count")
-                )
-                try:
-                    watch_count = max(int(raw_plays or 0), 1)
-                except (TypeError, ValueError):
+                # watch_count is a rewatch signal downstream (is_rewatched, the
+                # >=2 "loved" proxy). Only movies expose a real replay count;
+                # for shows every Simkl count is episode-based, so a fully
+                # watched multi-episode series would look rewatched and get
+                # mis-loved. Leave series at 1 and let ratings drive loved/liked.
+                if mtype == "movie":
+                    try:
+                        watch_count = max(int(entry.get("total_plays_count") or 0), 1)
+                    except (TypeError, ValueError):
+                        watch_count = 1
+                else:
                     watch_count = 1
 
                 items.append(
