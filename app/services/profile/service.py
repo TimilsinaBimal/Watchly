@@ -89,6 +89,23 @@ class ProfileService:
             profile.source = "stremio"
         return profile, watched_tmdb, watched_imdb
 
+    @staticmethod
+    def _is_legacy_profile(profile: TasteProfile) -> bool:
+        """A cached profile whose shape predates a field the recs now rely on.
+
+        Either case forces a full rebuild instead of an incremental update:
+        - processed_items was lost, so we can't diff it against the library; or
+        - creator scores exist but director_frequency/cast_frequency are empty.
+          The new code populates a frequency entry for every creator it sees, so
+          scores-without-frequency means the profile was cached before the field
+          existed. The creators catalog filters on those counts, so serving the
+          empty frequency view would silently blank the row.
+        """
+        if not profile.processed_items and (profile.genre_scores or profile.director_scores):
+            return True
+        has_creator_scores = profile.director_scores or profile.cast_scores
+        return bool(has_creator_scores and not (profile.director_frequency or profile.cast_frequency))
+
     async def build_profile_incremental(
         self,
         library_items: LibraryCollection,
@@ -109,19 +126,19 @@ class ProfileService:
             return None, watched_tmdb, watched_imdb
 
         try:
+            existing_profile = await user_cache.get_profile(token, content_type)
+            is_legacy = existing_profile is not None and self._is_legacy_profile(existing_profile)
+
             library_changed = await user_cache.has_library_changed(token, content_type, typed_items)
 
-            if not library_changed:
-                existing_profile = await user_cache.get_profile(token, content_type)
-                if existing_profile:
-                    return existing_profile, watched_tmdb, watched_imdb
-
-            existing_profile = await user_cache.get_profile(token, content_type)
+            # A legacy-shaped profile must be rebuilt even when the library is
+            # unchanged, otherwise the stale shape is served until TTL expiry.
+            if existing_profile and not library_changed and not is_legacy:
+                return existing_profile, watched_tmdb, watched_imdb
 
             if existing_profile:
                 processed_ids = existing_profile.processed_items
                 current_ids = {it.id for it in typed_items}
-                is_legacy = not processed_ids and (existing_profile.genre_scores or existing_profile.director_scores)
 
                 if not processed_ids.issubset(current_ids) or is_legacy:
                     reason = "Legacy profile detected" if is_legacy else "Items removed from library"
