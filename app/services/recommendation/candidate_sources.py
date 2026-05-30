@@ -273,7 +273,7 @@ class CandidateFetcher:
             if not rec_candidates:
                 logger.info("Simkl returned no results, falling back to TMDB")
                 rec_candidates = await self.fetch_recommendations_from_top_items(library_items, content_type, mtype)
-                rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings, simkl=True)
+                rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings)
         else:
             rec_candidates = await self.fetch_recommendations_from_top_items(library_items, content_type, mtype)
             rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings)

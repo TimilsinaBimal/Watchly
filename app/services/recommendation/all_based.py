@@ -96,7 +96,9 @@ class AllBasedService:
                 logger.info(f"Fetched {len(all_candidates)} candidates from Simkl")
                 # filter simkl candidates
                 simkl_candidates = list(all_candidates.values())
-                simkl_candidates = filter_items_by_settings(simkl_candidates, self.user_settings, simkl=True)
+                simkl_candidates = filter_items_by_settings(
+                    simkl_candidates, self.user_settings, apply_quality_band=False
+                )
                 logger.info(f"Total {len(simkl_candidates)} after filtering")
             else:
                 logger.info("Simkl returned no results, falling back to TMDB")
