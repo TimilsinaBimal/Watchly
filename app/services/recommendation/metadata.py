@@ -100,17 +100,24 @@ class RecommendationMetadata:
         path = details.get("poster_path")
         poster_url = f"https://image.tmdb.org/t/p/w500{path}"
 
-        if user_settings:
-            poster_rating = user_settings.poster_rating
-            if poster_rating and poster_rating.api_key:
-                try:
-                    provider_enum = PosterProvider(poster_rating.provider)
-                    poster_url = poster_ratings_factory.get_poster_url(
-                        provider_enum, poster_rating.api_key, "imdb", item_id, fallback=poster_url
-                    )
-                except ValueError as e:
-                    logger.warning(f"Error getting poster URL for item ID {item_id}: {e}")
-                    pass
+        poster_rating = getattr(user_settings, "poster_rating", None)
+        if poster_rating and (poster_rating.api_key or poster_rating.url_template):
+            try:
+                provider_enum = PosterProvider(poster_rating.provider)
+                custom_url = poster_ratings_factory.get_poster_url(
+                    provider_enum,
+                    poster_rating.api_key,
+                    "imdb",
+                    item_id,
+                    fallback=poster_url,
+                    url_template=poster_rating.url_template,
+                    language=user_settings.language,
+                )
+                # A custom template returns None for TMDB-only items; keep TMDB poster then.
+                if custom_url:
+                    poster_url = custom_url
+            except ValueError as e:
+                logger.warning(f"Error getting poster URL for item ID {item_id}: {e}")
 
         return poster_url
 

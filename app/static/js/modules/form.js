@@ -85,6 +85,7 @@ function getRequestPayload() {
         sorting_order: document.getElementById('sortingOrderSelect')?.value || 'default',
         poster_rating_provider: document.getElementById('posterRatingProvider')?.value || '',
         poster_rating_api_key: document.getElementById('posterRatingApiKey')?.value.trim() || '',
+        poster_rating_url_template: document.getElementById('posterRatingUrlTemplate')?.value.trim() || '',
         tmdb_api_key: document.getElementById('tmdbApiKey')?.value.trim() || '',
         simkl_api_key: document.getElementById('simklApiKey')?.value.trim() || '',
         gemini_api_key: document.getElementById('geminiApiKey')?.value.trim() || '',
@@ -96,7 +97,13 @@ function getRequestPayload() {
 
 function buildTokenPayload(formData) {
     let posterRating;
-    if (formData.poster_rating_provider && formData.poster_rating_api_key) {
+    if (formData.poster_rating_provider === 'custom' && formData.poster_rating_url_template) {
+        posterRating = {
+            provider: 'custom',
+            api_key: formData.poster_rating_api_key || null,
+            url_template: formData.poster_rating_url_template
+        };
+    } else if (formData.poster_rating_provider && formData.poster_rating_api_key) {
         posterRating = {
             provider: formData.poster_rating_provider,
             api_key: formData.poster_rating_api_key
@@ -160,7 +167,7 @@ function initializeFormSubmission() {
             return;
         }
 
-        if (formData.poster_rating_provider && formData.poster_rating_api_key && validatePosterRatingApiKey) {
+        if (formData.poster_rating_provider && validatePosterRatingApiKey) {
             const isValid = await validatePosterRatingApiKey();
             if (!isValid) {
                 return;
@@ -233,6 +240,9 @@ function initializePosterRatingProvider() {
     const eyeIcon = document.getElementById('posterRatingApiKeyEye');
     const eyeOffIcon = document.getElementById('posterRatingApiKeyEyeOff');
     const validationMessage = document.getElementById('posterRatingValidationMessage');
+    const templateContainer = document.getElementById('posterRatingTemplateContainer');
+    const templateInput = document.getElementById('posterRatingUrlTemplate');
+    const templateMessage = document.getElementById('posterRatingTemplateMessage');
 
     if (!providerSelect || !apiKeyContainer || !apiKeyInput || !helpContainer || !helpText) {
         return null;
@@ -251,6 +261,11 @@ function initializePosterRatingProvider() {
         }
     };
 
+    const CUSTOM_HELP = 'Paste a poster URL with placeholders: '
+        + '<code>{imdb_id}</code>, <code>{api_key}</code> (optional), '
+        + '<code>{language}</code> (e.g. en-US), <code>{language_short}</code> (e.g. en). '
+        + 'The API key field below is optional and fills <code>{api_key}</code>.';
+
     let isValidated = false;
 
     initializeEyeToggle({ input: apiKeyInput, toggleBtn, eyeIcon, eyeOffIcon });
@@ -258,12 +273,24 @@ function initializePosterRatingProvider() {
     function resetValidation() {
         isValidated = false;
         clearValidationMessage(validationMessage);
+        if (templateMessage) clearValidationMessage(templateMessage);
     }
 
     function updateUI() {
         const selectedProvider = providerSelect.value;
-        const info = providerInfo[selectedProvider];
 
+        if (selectedProvider === 'custom') {
+            if (templateContainer) templateContainer.style.display = 'block';
+            apiKeyContainer.style.display = 'block';
+            helpContainer.style.display = 'block';
+            helpText.innerHTML = CUSTOM_HELP;
+            resetValidation();
+            return;
+        }
+
+        if (templateContainer) templateContainer.style.display = 'none';
+
+        const info = providerInfo[selectedProvider];
         if (info) {
             apiKeyContainer.style.display = 'block';
             helpContainer.style.display = 'block';
@@ -278,8 +305,37 @@ function initializePosterRatingProvider() {
         resetValidation();
     }
 
+    function validateCustomTemplate() {
+        const template = templateInput?.value.trim() || '';
+        const msgEl = templateMessage || validationMessage;
+        let parsed;
+        try {
+            parsed = new URL(template);
+        } catch {
+            parsed = null;
+        }
+        if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
+            setValidationMessage(msgEl, 'Enter a valid http(s) URL', 'error');
+            isValidated = false;
+            return false;
+        }
+        if (!template.includes('{imdb_id}')) {
+            setValidationMessage(msgEl, 'Template must contain {imdb_id}', 'error');
+            isValidated = false;
+            return false;
+        }
+        setValidationMessage(msgEl, 'Template looks good ✓', 'success');
+        isValidated = true;
+        return true;
+    }
+
     async function validateApiKey() {
         const selectedProvider = providerSelect.value;
+
+        if (selectedProvider === 'custom') {
+            return validateCustomTemplate();
+        }
+
         const apiKey = apiKeyInput.value.trim();
 
         if (!selectedProvider || !apiKey) {
@@ -328,6 +384,7 @@ function initializePosterRatingProvider() {
     }
 
     apiKeyInput.addEventListener('input', resetValidation);
+    if (templateInput) templateInput.addEventListener('input', resetValidation);
     providerSelect.addEventListener('change', updateUI);
     updateUI();
 
