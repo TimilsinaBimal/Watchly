@@ -204,6 +204,9 @@ class AuthService:
         response = {"user_id": user_id, "email": email, "exists": exists}
 
         if exists and existing_data:
+            # Token is the user's manifest key; only returned once they've authenticated
+            # here, so the dashboard can read their install without a second login.
+            response["token"] = token
             # Reconstruct UserSettings to ensure defaults are included for old accounts
             raw_settings = existing_data.get("settings", {})
             try:

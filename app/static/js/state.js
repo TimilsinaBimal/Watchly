@@ -9,7 +9,9 @@ export function createAppState() {
         auth: {
             loggedIn: false,
             authKey: '',
-            userDisplay: null
+            userDisplay: null,
+            token: '',
+            hasInstall: false
         },
         ui: {
             currentSection: 'welcome'
@@ -22,6 +24,8 @@ export function resetAppState(state) {
     state.auth.loggedIn = false;
     state.auth.authKey = '';
     state.auth.userDisplay = null;
+    state.auth.token = '';
+    state.auth.hasInstall = false;
     state.ui.currentSection = 'welcome';
     state.catalogs = cloneDefaultCatalogs();
 }

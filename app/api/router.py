@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from .endpoints.announcement import router as announcement_router
 from .endpoints.catalogs import router as catalogs_router
+from .endpoints.dashboard import router as dashboard_router
 from .endpoints.health import router as health_router
 from .endpoints.languages import router as language_router
 from .endpoints.manifest import router as manifest_router
@@ -27,3 +28,4 @@ api_router.include_router(announcement_router)
 api_router.include_router(stats_router)
 api_router.include_router(validation_router)
 api_router.include_router(oauth_router)
+api_router.include_router(dashboard_router)
