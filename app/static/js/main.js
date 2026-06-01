@@ -7,6 +7,7 @@ import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
 import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
 import { initializeForm, clearErrors, refreshYearSlider } from './modules/form.js';
 import { initializeAccountsUI } from './modules/accounts.js';
+import { initializeDashboard } from './modules/dashboard.js';
 
 const appState = createAppState();
 
@@ -33,7 +34,8 @@ const navItems = {
     login: document.getElementById('nav-login'),
     config: document.getElementById('nav-config'),
     catalogs: document.getElementById('nav-catalogs'),
-    install: document.getElementById('nav-install')
+    install: document.getElementById('nav-install'),
+    dashboard: document.getElementById('nav-dashboard')
 };
 
 const sections = {
@@ -42,7 +44,8 @@ const sections = {
     config: document.getElementById('sect-config'),
     catalogs: document.getElementById('sect-catalogs'),
     install: document.getElementById('sect-install'),
-    success: document.getElementById('sect-success')
+    success: document.getElementById('sect-success'),
+    dashboard: document.getElementById('sect-dashboard')
 };
 
 // Main scroll container
@@ -141,6 +144,9 @@ document.addEventListener('DOMContentLoaded', () => {
             updateYearSlider: refreshYearSlider
         }
     );
+
+    // Initialize the Dashboard nav section
+    initializeDashboard({ switchSection }, appState);
 
     // Initialize mobile navigation
     initializeMobileNav();

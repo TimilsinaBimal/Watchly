@@ -252,6 +252,14 @@ async function fetchStremioIdentity(authKey) {
     const data = await res.json();
     const userDisplay = data.email || data.user_id;
 
+    // Remember whether this account already has an install (and its token) so the
+    // Dashboard section can load it without a second login.
+    if (appState) {
+        appState.auth.token = data.token || '';
+        appState.auth.hasInstall = !!data.exists;
+        appState.auth.userDisplay = userDisplay;
+    }
+
     // Show user profile in sidebar
     showUserProfile(userDisplay);
 
