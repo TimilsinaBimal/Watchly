@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.services.poster_ratings.factory import PosterProvider
 
@@ -30,10 +31,26 @@ class CatalogConfig(BaseModel):
 class PosterRatingConfig(BaseModel):
     """Configuration for poster rating provider."""
 
-    provider: Literal[PosterProvider.RPDB.value, PosterProvider.TOP_POSTERS.value] = Field(
-        description="Provider name: 'rpdb' or 'top_posters'"
+    provider: Literal[PosterProvider.RPDB.value, PosterProvider.TOP_POSTERS.value, PosterProvider.CUSTOM.value] = Field(
+        description="Provider name: 'rpdb', 'top_posters', or 'custom'"
     )
-    api_key: str | None = Field(default=None, description="API key for the provider")
+    api_key: str | None = Field(default=None, description="API key for the provider (optional for 'custom')")
+    url_template: str | None = Field(
+        default=None, description="URL template with {imdb_id}/{api_key}/{language}/{language_short} for 'custom'"
+    )
+
+    @model_validator(mode="after")
+    def _check_provider_requirements(self) -> "PosterRatingConfig":
+        if self.provider == PosterProvider.CUSTOM.value:
+            template = (self.url_template or "").strip()
+            parsed = urlparse(template)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise ValueError("custom poster provider needs an http(s) url_template")
+            if "{imdb_id}" not in template:
+                raise ValueError("custom poster url_template must contain {imdb_id}")
+        elif not (self.api_key or "").strip():
+            raise ValueError(f"{self.provider} poster provider requires an api_key")
+        return self
 
 
 def get_current_year() -> int:

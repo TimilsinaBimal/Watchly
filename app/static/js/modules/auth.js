@@ -252,6 +252,14 @@ async function fetchStremioIdentity(authKey) {
     const data = await res.json();
     const userDisplay = data.email || data.user_id;
 
+    // Remember whether this account already has an install (and its token) so the
+    // Dashboard section can load it without a second login.
+    if (appState) {
+        appState.auth.token = data.token || '';
+        appState.auth.hasInstall = !!data.exists;
+        appState.auth.userDisplay = userDisplay;
+    }
+
     // Show user profile in sidebar
     showUserProfile(userDisplay);
 
@@ -279,11 +287,13 @@ async function fetchStremioIdentity(authKey) {
             // Handle poster rating: prefer new format, fallback to old rpdb_key
             const posterRatingProvider = document.getElementById('posterRatingProvider');
             const posterRatingApiKey = document.getElementById('posterRatingApiKey');
+            const posterRatingUrlTemplate = document.getElementById('posterRatingUrlTemplate');
             if (posterRatingProvider && posterRatingApiKey) {
-                if (s.poster_rating && s.poster_rating.provider && s.poster_rating.api_key) {
+                if (s.poster_rating && s.poster_rating.provider && (s.poster_rating.api_key || s.poster_rating.url_template)) {
                     // New format
                     posterRatingProvider.value = s.poster_rating.provider;
-                    posterRatingApiKey.value = s.poster_rating.api_key;
+                    posterRatingApiKey.value = s.poster_rating.api_key || '';
+                    if (posterRatingUrlTemplate) posterRatingUrlTemplate.value = s.poster_rating.url_template || '';
                     // Trigger change event to show/hide fields
                     posterRatingProvider.dispatchEvent(new Event('change'));
                 } else if (s.rpdb_key) {

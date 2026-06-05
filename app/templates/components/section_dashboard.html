@@ -1,0 +1,218 @@
+<!-- Dashboard Section -->
+<style>
+    @keyframes dashRise {
+        from { opacity: 0; transform: translateY(18px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes dashPop {
+        from { opacity: 0; transform: scale(.82); }
+        to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes dashFloat {
+        0%, 100% { transform: translate(0, 0); }
+        50%      { transform: translate(10px, -12px); }
+    }
+
+    #dashContent > * { animation: dashRise .55s cubic-bezier(.16, 1, .3, 1) both; }
+    #dashContent > *:nth-child(1) { animation-delay: .04s; }
+    #dashContent > *:nth-child(2) { animation-delay: .11s; }
+    #dashContent > *:nth-child(3) { animation-delay: .18s; }
+    #dashContent > *:nth-child(4) { animation-delay: .25s; }
+    #dashContent > *:nth-child(5) { animation-delay: .32s; }
+
+    .dash-card {
+        position: relative;
+        background:
+            radial-gradient(120% 120% at 0% 0%, rgba(255, 255, 255, .05), transparent 40%),
+            rgba(23, 23, 23, .55);
+        border: 1px solid rgba(255, 255, 255, .08);
+        border-radius: 1.25rem;
+        backdrop-filter: blur(10px);
+        transition: border-color .3s ease, transform .3s ease;
+    }
+    .dash-card:hover { border-color: rgba(255, 255, 255, .16); }
+
+    .dash-blob {
+        position: absolute; border-radius: 9999px; filter: blur(48px);
+        pointer-events: none; animation: dashFloat 9s ease-in-out infinite;
+    }
+
+    .dash-gradient-text {
+        background: linear-gradient(92deg, #ffffff 10%, #d8b4fe 55%, #818cf8 95%);
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+
+    .dash-kpi { transition: transform .25s ease, border-color .25s ease, background-color .25s ease; }
+    .dash-kpi:hover { transform: translateY(-4px); border-color: rgba(255, 255, 255, .18); }
+
+    .dash-chip { animation: dashPop .35s cubic-bezier(.2, 1.3, .4, 1) both; }
+
+    .dash-poster-card { transition: transform .25s ease; }
+    .dash-poster-card:hover { transform: translateY(-6px); z-index: 5; }
+    .dash-poster-card:hover .dash-poster-img { box-shadow: 0 12px 30px -8px rgba(0, 0, 0, .7); }
+    .dash-poster-img { transition: box-shadow .25s ease, transform .25s ease; }
+
+    .dash-strip::-webkit-scrollbar { height: 6px; }
+    .dash-strip::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+
+    @media (prefers-reduced-motion: reduce) {
+        #dashContent > *, .dash-chip, .dash-blob { animation: none; }
+        .dash-kpi:hover, .dash-poster-card:hover { transform: none; }
+    }
+</style>
+
+<section id="sect-dashboard" class="hidden animate-fade-in">
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold dash-gradient-text mb-2">Dashboard</h2>
+        <p class="text-slate-400 text-sm">Your install at a glance — catalogs, taste profile, and a manual refresh.</p>
+    </div>
+
+    <!-- Logged-out (nav is open; gated by content) -->
+    <div id="dashLoggedOut" class="hidden dash-card p-8 text-center">
+        <p class="text-slate-300 mb-4">Log in with your Stremio account to view your dashboard.</p>
+        <button type="button" id="dashLoginBtn"
+            class="bg-white text-black font-medium rounded-xl px-5 py-2.5 hover:bg-slate-200 transition-colors">Go to
+            login</button>
+    </div>
+
+    <!-- Logged in but no install yet -->
+    <div id="dashNoInstall" class="hidden dash-card p-8 text-center">
+        <p class="text-slate-300">You haven't installed Watchly yet. Finish the Save &amp; Install step to see your
+            dashboard.</p>
+    </div>
+
+    <!-- Loading -->
+    <div id="dashLoading" class="hidden flex items-center gap-3 text-sm text-slate-400 py-10 justify-center">
+        <div class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+        Loading your dashboard…
+    </div>
+    <p id="dashError" class="hidden text-sm text-red-400 py-6 text-center"></p>
+
+    <!-- Content -->
+    <div id="dashContent" class="hidden space-y-5">
+        <!-- Hero: identity, manifest, install -->
+        <div class="dash-card p-6 sm:p-7 overflow-hidden">
+            <div class="dash-blob -top-24 -right-12 w-60 h-60 bg-pink-500/15"></div>
+            <div class="relative">
+                <div class="flex items-start justify-between gap-4 mb-6">
+                    <div class="flex items-center gap-4 min-w-0">
+                        <div class="p-[2px] rounded-full bg-gradient-to-br from-pink-400 via-purple-400 to-sky-400 flex-shrink-0 shadow-lg shadow-purple-900/20">
+                            <div id="dashAvatar"
+                                class="w-12 h-12 rounded-full bg-neutral-950 text-white flex items-center justify-center font-bold text-base"></div>
+                        </div>
+                        <div class="min-w-0">
+                            <p id="dashGreeting" class="text-xs text-slate-400"></p>
+                            <p id="dashEmail" class="text-base text-white font-semibold truncate"></p>
+                        </div>
+                    </div>
+                    <button type="button" id="dashRefreshBtn"
+                        class="group flex items-center gap-2 text-sm border border-slate-700 rounded-xl px-3.5 py-2 text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex-shrink-0">
+                        <svg id="dashRefreshIcon" class="w-4 h-4 group-hover:rotate-180 transition-transform duration-500"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                            </path>
+                        </svg>
+                        <span class="hidden sm:inline">Refresh</span>
+                    </button>
+                </div>
+
+                <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-2">Manifest URL</p>
+                <div class="flex items-center gap-2 mb-4">
+                    <code id="dashManifestUrl"
+                        class="text-sm text-slate-200 break-all font-mono bg-black/40 ring-1 ring-white/10 px-3 py-2 rounded-lg flex-1 min-w-0"></code>
+                    <button type="button" id="dashCopyBtn"
+                        class="text-sm border border-slate-700 rounded-xl px-4 py-2 text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex-shrink-0">Copy</button>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <a id="dashInstallBtn" href="#"
+                        class="flex-1 text-center bg-gradient-to-r from-stremio to-purple-600 hover:from-stremio-hover hover:to-purple-500 text-white font-semibold rounded-xl px-4 py-3 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-purple-900/30">Open
+                        in Stremio</a>
+                    <a id="dashInstallWebBtn" href="#" target="_blank" rel="noopener"
+                        class="flex-1 text-center bg-white/5 hover:bg-white/10 text-white font-medium rounded-xl px-4 py-3 transition-colors border border-white/10">Install
+                        on web</a>
+                </div>
+
+                <div id="dashSources" class="flex flex-wrap items-center gap-2 mt-4"></div>
+                <p id="dashLastRefresh" class="text-xs text-slate-500 mt-3 hidden"></p>
+                <p id="dashRefreshMsg" class="text-xs mt-2 hidden"></p>
+            </div>
+        </div>
+
+        <!-- KPI cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div class="dash-card dash-kpi p-4">
+                <div class="flex items-center gap-2 mb-2 text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                    <span class="text-xs">Library</span>
+                </div>
+                <p id="dashKpiTotal" class="text-2xl font-bold text-white tabular-nums">—</p>
+            </div>
+            <div class="dash-card dash-kpi p-4">
+                <div class="flex items-center gap-2 mb-2 text-rose-300/80">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z"></path></svg>
+                    <span class="text-xs">Loved</span>
+                </div>
+                <p id="dashKpiLoved" class="text-2xl font-bold text-rose-300 tabular-nums">—</p>
+            </div>
+            <div class="dash-card dash-kpi p-4">
+                <div class="flex items-center gap-2 mb-2 text-amber-300/80">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.005z"></path></svg>
+                    <span class="text-xs">Liked</span>
+                </div>
+                <p id="dashKpiLiked" class="text-2xl font-bold text-amber-300 tabular-nums">—</p>
+            </div>
+            <div class="dash-card dash-kpi p-4">
+                <div class="flex items-center gap-2 mb-2 text-sky-300/80">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    <span class="text-xs">Watched</span>
+                </div>
+                <p id="dashKpiWatched" class="text-2xl font-bold text-sky-300 tabular-nums">—</p>
+            </div>
+            <div class="dash-card dash-kpi p-4">
+                <div class="flex items-center gap-2 mb-2 text-emerald-300/80">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"></path></svg>
+                    <span class="text-xs">Catalogs</span>
+                </div>
+                <p id="dashKpiCatalogs" class="text-2xl font-bold text-emerald-300 tabular-nums">—</p>
+            </div>
+        </div>
+
+        <!-- Preferences -->
+        <div class="dash-card p-6">
+            <h3 class="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">Preferences</h3>
+            <div id="dashSettings" class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm"></div>
+        </div>
+
+        <!-- Taste profile -->
+        <div class="dash-card p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-medium text-slate-400 uppercase tracking-wider">Your taste profile</h3>
+                <div class="flex gap-1 text-xs">
+                    <button type="button" data-ct="movie"
+                        class="dashProfileTab px-3 py-1 rounded-lg border border-slate-700 text-slate-300 transition-colors">Movies</button>
+                    <button type="button" data-ct="series"
+                        class="dashProfileTab px-3 py-1 rounded-lg border border-slate-700 text-slate-300 transition-colors">Series</button>
+                </div>
+            </div>
+            <div id="dashProfileBody"></div>
+        </div>
+
+        <!-- Catalogs (live previews) -->
+        <div class="dash-card p-6">
+            <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                <h3 class="text-sm font-medium text-slate-400 uppercase tracking-wider">Your catalogs</h3>
+                <div class="flex gap-1 text-xs">
+                    <button type="button" data-filter="all"
+                        class="dashCatFilter px-3 py-1 rounded-lg border border-slate-700 text-slate-300 transition-colors">All</button>
+                    <button type="button" data-filter="movie"
+                        class="dashCatFilter px-3 py-1 rounded-lg border border-slate-700 text-slate-300 transition-colors">Movies</button>
+                    <button type="button" data-filter="series"
+                        class="dashCatFilter px-3 py-1 rounded-lg border border-slate-700 text-slate-300 transition-colors">Series</button>
+                </div>
+            </div>
+            <div id="dashCatalogRows" class="space-y-7"></div>
+        </div>
+    </div>
+</section>
