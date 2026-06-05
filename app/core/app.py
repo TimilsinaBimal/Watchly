@@ -49,7 +49,7 @@ app = FastAPI(
     description="Stremio catalog addon for movie and series recommendations",
     version=__version__,
     lifespan=lifespan,
-    docs_url=None if settings.APP_ENV in ["development", "vercel"] else "/docs",
+    docs_url=None if settings.APP_ENV not in ["development", "vercel"] else "/docs",
     redoc_url=None if settings.APP_ENV != "development" else "/redoc",
 )
 
