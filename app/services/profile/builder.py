@@ -5,6 +5,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.constants import DEFAULT_CONCURRENCY_LIMIT
 from app.models.profile import ScoredItem, TasteProfile
 from app.services.profile.constants import (
     CAP_CAST,
@@ -79,9 +80,8 @@ class ProfileBuilder:
         # Track processed items
         processed_ids = set()
 
-        # Process all items in parallel
-        tasks = [self._process_item(item, content_type) for item in scored_items]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Process all items concurrently but bounded (see _process_items_bounded).
+        results = await self._process_items_bounded(scored_items, content_type)
 
         # First pass: accumulate scores and track frequencies
         for i, result in enumerate(results):
@@ -125,6 +125,25 @@ class ProfileBuilder:
                 f"Built profile for {content_type} but all scores are empty. Library may have processing issues."
             )
         return profile
+
+    async def _process_items_bounded(self, items: list[ScoredItem], content_type: str | None) -> list[Any]:
+        """Enrich items concurrently but capped at DEFAULT_CONCURRENCY_LIMIT.
+
+        External sources (Trakt/Simkl) skip sampling and pass the user's whole
+        history here, so an unbounded gather would fire 2+ TMDB calls per item at
+        once. That burst overruns the connection pool / TMDB rate limit; failed
+        lookups make _process_item return None and the item silently vanishes
+        from the profile, so a 300-item history would build a profile from only
+        the few dozen that survived. The cap mirrors the recommendation metadata
+        enrichment path so all items get processed.
+        """
+        sem = asyncio.Semaphore(DEFAULT_CONCURRENCY_LIMIT)
+
+        async def _guarded(item: ScoredItem) -> tuple[dict[str, Any], float] | None:
+            async with sem:
+                return await self._process_item(item, content_type)
+
+        return await asyncio.gather(*[_guarded(item) for item in items], return_exceptions=True)
 
     async def _process_item(self, item: ScoredItem, content_type: str | None) -> tuple[dict[str, Any], float] | None:
         """
@@ -330,9 +349,8 @@ class ProfileBuilder:
         if PROFILE_DECAY_ENABLED:
             self._apply_age_decay(existing_profile)
 
-        # Process new items and accumulate features
-        tasks = [self._process_item(item, content_type) for item in new_items]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Process new items and accumulate features (bounded concurrency).
+        results = await self._process_items_bounded(new_items, content_type)
 
         for i, result in enumerate(results):
             if isinstance(result, Exception):
