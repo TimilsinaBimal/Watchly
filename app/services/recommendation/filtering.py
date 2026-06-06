@@ -144,18 +144,9 @@ class RecommendationFiltering:
         """
         Get dynamic quality thresholds (min_rating, min_votes) based on popularity preference.
         """
-
-        quality_rating_mapping = {
-            "mainstream": (6.2, 500),  # (min_rating, min_votes)
-            "balanced": (6.7, 250),
-            "gems": (7.2, 100),
-            "all": (5.0, 50),
-        }
-        if not user_settings:
-            return quality_rating_mapping.get("balanced")
-
-        pop_pref = getattr(user_settings, "popularity", "balanced")
-        return quality_rating_mapping.get(pop_pref)
+        pop_pref = getattr(user_settings, "popularity", "balanced") if user_settings else "balanced"
+        settings = DISCOVERY_SETTINGS.get(pop_pref) or DISCOVERY_SETTINGS["balanced"]
+        return settings.get("vote_average.gte", 6.7), settings.get("vote_count.gte", 250)
 
     @staticmethod
     def get_sort_by_preference(user_settings: Any) -> str:
@@ -244,39 +235,48 @@ def build_discover_params(user_settings: Any) -> dict[str, Any]:
     return params
 
 
+# DISCOVERY_SETTINGS keys TMDB /discover can actually filter on. popularity.* is
+# deliberately excluded — TMDB has no popularity filter, so those gates run
+# post-fetch only (see filter_items_by_settings).
+TMDB_DISCOVER_FILTER_KEYS = {"vote_count.gte", "vote_count.lte", "vote_average.gte", "vote_average.lte"}
+
+
 def apply_discover_filters(params: dict[str, Any], user_settings: Any) -> dict[str, Any]:
-    """Merge discover params with global user settings (years, popularity)."""
+    """Merge discover params with global user settings (years, quality band)."""
     if not user_settings:
         return params
 
-    global_params = build_discover_params(user_settings)
-    params = {**global_params, **params}
+    params = {**build_discover_params(user_settings), **params}
 
-    min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(user_settings)
-
-    if "vote_count.gte" not in params:
-        params["vote_count.gte"] = min_votes
-    if "vote_average.gte" not in params:
-        params["vote_average.gte"] = min_rating
+    pop_pref = getattr(user_settings, "popularity", "balanced")
+    for key, value in (DISCOVERY_SETTINGS.get(pop_pref) or {}).items():
+        if key in TMDB_DISCOVER_FILTER_KEYS:
+            params.setdefault(key, value)
 
     return params
 
 
 def filter_items_by_settings(
-    items: list[dict[str, Any]], user_settings: Any, simkl: bool = False
+    items: list[dict[str, Any]], user_settings: Any, apply_quality_band: bool = True
 ) -> list[dict[str, Any]]:
-    """Filter items post-fetch based on user settings (years, popularity)."""
+    """Filter items post-fetch: year window always, plus the DISCOVERY_SETTINGS
+    quality/reach band when apply_quality_band.
+
+    Simkl candidates pass apply_quality_band=False: their vote_count is often a flat
+    default and their popularity is estimated from rank, so the TMDB-calibrated band
+    would drop them on noise. They arrive already year-filtered by Simkl, and their
+    popularity/quality still feed scoring downstream.
+    """
     if not user_settings:
         return items
 
     year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
     year_max = getattr(user_settings, "year_max", get_current_year())
-    pop_pref = getattr(user_settings, "popularity", "balanced")
 
-    # Hoist out of the per-item loop: this lookup doesn't depend on the item.
-    # If pop_pref has no mapping, fall back to no popularity filtering rather
-    # than dropping every item.
-    params = DISCOVERY_SETTINGS.get(pop_pref) or {}
+    # If pop_pref has no mapping, fall back to no band filtering rather than
+    # dropping every item. Hoisted out of the per-item loop.
+    pop_pref = getattr(user_settings, "popularity", "balanced")
+    params = DISCOVERY_SETTINGS.get(pop_pref, {}) if apply_quality_band else {}
 
     ops = {
         "gte": lambda x, y: x >= y,
@@ -299,8 +299,6 @@ def filter_items_by_settings(
             t_param, param_ops = param.split(".")
             param_operator = ops.get(param_ops)
             if not param_operator:
-                continue
-            if simkl and t_param == "popularity":
                 continue
             item_value = item.get(t_param)
             if item_value is None or not param_operator(item_value, params[param]):
