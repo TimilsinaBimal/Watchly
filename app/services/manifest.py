@@ -9,7 +9,7 @@ from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.core.version import __version__
 from app.models.library import LibraryCollection
 from app.services.catalog_definitions import DynamicCatalogService, sort_catalogs
-from app.services.context import load_user_context
+from app.services.context import fetch_library_for_source, load_user_context
 from app.services.profile.service import ProfileService
 from app.services.stremio.service import StremioBundle
 from app.services.translation import apply_catalog_translation
@@ -59,10 +59,17 @@ class ManifestService:
 
         Called during token creation to pre-cache data so manifest generation is fast.
         """
-        logger.info(f"[{redact_token(token)}] Fetching library items for caching")
-        library_items = await bundle.library.get_library_items(auth_key)
+        # Cache the library from the user's configured source (Trakt/Simkl/Stremio),
+        # not always Stremio. Tagging the bootstrap cache as "stremio" for a Trakt/
+        # Simkl user made load_user_context see a source mismatch and re-fetch the
+        # whole external history on every manifest request (#144).
+        source = user_settings.watch_history_source
+        logger.info(f"[{redact_token(token)}] Fetching library items from '{source}' for caching")
+        library_items = await fetch_library_for_source(source, user_settings, token, bundle, auth_key)
+        if library_items is None:
+            library_items = LibraryCollection()
         await user_cache.set_library_items(token, library_items)
-        logger.debug(f"[{redact_token(token)}] Cached library items")
+        logger.debug(f"[{redact_token(token)}] Cached library items (source={library_items.source})")
 
         language = user_settings.language
         tmdb_key = resolve_tmdb_api_key(user_settings)

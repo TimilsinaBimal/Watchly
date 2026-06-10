@@ -94,7 +94,7 @@ async def load_user_context(
 
         library = cached
         if not library:
-            library = await _fetch_library_for_source(configured_source, user_settings, token, bundle, auth_key)
+            library = await fetch_library_for_source(configured_source, user_settings, token, bundle, auth_key)
             if library is not None:
                 await user_cache.set_library_items(token, library)
 
@@ -114,7 +114,7 @@ async def load_user_context(
         raise
 
 
-async def _fetch_library_for_source(
+async def fetch_library_for_source(
     source: str,
     user_settings: UserSettings,
     token: str,
