@@ -221,7 +221,24 @@ async function fetchStremioIdentity(authKey) {
         payload.email = emailInput.value.trim();
         payload.password = passwordInput.value;
     }
+    await fetchIdentity(payload);
+}
 
+// Look up an existing account by a freshly connected Trakt/Simkl token, so
+// provider-only users get their saved settings and dashboard back without a
+// Stremio login. Lookup failures are non-fatal — the user can still configure.
+export async function recallProviderAccount(provider, tokens) {
+    const payload = provider === 'trakt'
+        ? { trakt_access_token: tokens.access_token }
+        : { simkl_access_token: tokens.access_token };
+    try {
+        await fetchIdentity(payload);
+    } catch (e) {
+        console.warn(`Account lookup via ${provider} failed:`, e);
+    }
+}
+
+async function fetchIdentity(payload) {
     const sortingOrderSelect = document.getElementById("sortingOrderSelect");
     if (sortingOrderSelect) {
         payload.sorting_order = sortingOrderSelect.value;
@@ -238,7 +255,7 @@ async function fetchStremioIdentity(authKey) {
     if (geminiApiKeyInput) {
         payload.gemini_api_key = geminiApiKeyInput.value.trim();
     }
-    const res = await fetch('/tokens/stremio-identity', {
+    const res = await fetch('/tokens/identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -255,6 +272,7 @@ async function fetchStremioIdentity(authKey) {
     // Remember whether this account already has an install (and its token) so the
     // Dashboard section can load it without a second login.
     if (appState) {
+        appState.auth.loggedIn = true;
         appState.auth.token = data.token || '';
         appState.auth.hasInstall = !!data.exists;
         appState.auth.userDisplay = userDisplay;
