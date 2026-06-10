@@ -32,6 +32,10 @@ class CatalogService:
         """Get catalog recommendations."""
         self._validate_inputs(token, content_type, catalog_id)
 
+        # Resolve merge aliases up front so credential reads and cache keys all
+        # use the surviving account token.
+        token = await token_store.resolve_alias(token)
+
         headers: dict[str, Any] = {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "*",
