@@ -41,8 +41,8 @@ async def create_token(payload: TokenRequest) -> TokenResponse:
         raise HTTPException(status_code=503, detail="Storage temporarily unavailable.")
 
 
-@router.post("/stremio-identity", status_code=200)
-async def check_stremio_identity(payload: TokenRequest):
+@router.post("/identity", status_code=200)
+async def check_identity(payload: TokenRequest):
     try:
         return await auth_service.get_identity_with_settings(payload)
     except HTTPException:

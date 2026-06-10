@@ -237,10 +237,15 @@ class AuthService:
         }
         if "stremio" in identities:
             payload_to_store["user_id"] = identities["stremio"]
-        if stremio_auth_key:
             payload_to_store["authKey"] = stremio_auth_key
-        if payload.password:
-            payload_to_store["password"] = payload.password.strip()
+            if payload.password:
+                payload_to_store["password"] = payload.password.strip()
+        elif existing_data:
+            # Re-configuring through Trakt/Simkl alone must not drop the Stremio
+            # credentials already linked to this account.
+            for field in ("user_id", "authKey", "password"):
+                if existing_data.get(field):
+                    payload_to_store[field] = existing_data[field]
 
         if existing_data:
             payload_to_store["last_updated"] = existing_data.get("last_updated")
@@ -305,14 +310,24 @@ class AuthService:
             watch_history_source=payload.watch_history_source,
         )
 
-    async def get_identity_with_settings(self, payload: TokenRequest) -> dict:
-        """Fetch Stremio identity and associated user settings if they exist."""
-        user_id, email, _ = await self.get_stremio_user_data(payload)
+    async def _find_account_for_identities(self, identities: dict[str, str]) -> str | None:
+        for provider, provider_user_id in identities.items():
+            token = await self._find_account_token(provider, provider_user_id)
+            if token:
+                return token
+        return None
 
-        token = await self._find_account_token("stremio", user_id)
+    async def get_identity_with_settings(self, payload: TokenRequest) -> dict:
+        """Resolve the account for any verified provider credential and return its settings."""
+        identities, _, email = await self.resolve_identities(payload)
+
+        token = await self._find_account_for_identities(identities)
         existing_data = await self.get_credentials(token) if token else None
         exists = bool(existing_data)
 
+        # Keep the Stremio id as user_id when present so existing frontend
+        # display logic is unchanged; any verified identity works otherwise.
+        user_id = identities.get("stremio") or next(iter(identities.values()))
         response = {"user_id": user_id, "email": email, "exists": exists}
 
         if exists and existing_data:
@@ -332,8 +347,8 @@ class AuthService:
 
     async def delete_user_account(self, payload: TokenRequest) -> None:
         """Deletes user account and associated data."""
-        user_id, _, _ = await self.get_stremio_user_data(payload)
-        token = await self._find_account_token("stremio", user_id)
+        identities, _, _ = await self.resolve_identities(payload)
+        token = await self._find_account_for_identities(identities)
 
         existing_data = await self.get_credentials(token) if token else None
         if not token or not existing_data:
@@ -342,7 +357,7 @@ class AuthService:
         for provider, provider_user_id in (existing_data.get("identities") or {}).items():
             await token_store.delete_identity(provider, provider_user_id)
         await token_store.delete_token(token)
-        logger.info(f"[{redact_token(token)}] Token deleted for user {user_id}")
+        logger.info(f"[{redact_token(token)}] Account deleted")
 
 
 auth_service = AuthService()

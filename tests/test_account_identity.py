@@ -144,6 +144,37 @@ def test_identities_spanning_two_accounts_merge_into_oldest(monkeypatch):
     assert stored["identities"] == {"trakt": "trakt-bob", "stremio": "user123"}
 
 
+def test_recall_account_via_trakt(monkeypatch):
+    fake = setup_fakes(monkeypatch)
+    seed_account(fake, "tok_xyz", "2024-01-01T00:00:00+00:00", identities={"trakt": "trakt-bob"})
+    service = AuthService()
+
+    result = asyncio.run(service.get_identity_with_settings(TokenRequest(trakt_access_token="t-abc")))
+
+    assert result["exists"] is True
+    assert result["token"] == "tok_xyz"
+    assert result["user_id"] == "trakt-bob"
+    assert result["settings"]["watch_history_source"] == "stremio"
+
+
+def test_resubmit_without_stremio_keeps_stremio_credentials(monkeypatch):
+    setup_fakes(monkeypatch, stremio_identity=("user123", "user@example.com", "authkey-1"))
+    service = AuthService()
+
+    both = TokenRequest(authKey="some-key", trakt_access_token="t-abc", watch_history_source="stremio")
+    response, _, _ = asyncio.run(service.create_user_token(both))
+
+    trakt_only = TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt")
+    response2, auth_key2, _ = asyncio.run(service.create_user_token(trakt_only))
+
+    assert response2.token == response.token
+    assert auth_key2 is None
+    stored = asyncio.run(token_store.get_user_data(response.token))
+    assert stored["authKey"] == "authkey-1"
+    assert stored["user_id"] == "user123"
+    assert stored["email"] == "user@example.com"
+
+
 def test_relinking_keeps_identities_from_previous_configurations(monkeypatch):
     fake = setup_fakes(monkeypatch)
     service = AuthService()
