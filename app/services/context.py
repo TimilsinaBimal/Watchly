@@ -62,6 +62,8 @@ async def load_user_context(
             detail="Missing token. Please reconfigure the addon.",
         )
 
+    # Manifest URLs installed before an account merge carry the absorbed token.
+    token = await token_store.resolve_alias(token)
     credentials = await token_store.get_user_data(token)
     if not credentials:
         raise HTTPException(
@@ -73,12 +75,14 @@ async def load_user_context(
     bundle = StremioBundle()
 
     try:
-        if require_auth:
+        configured_source = user_settings.watch_history_source
+
+        # A valid Stremio session is only a hard requirement when Stremio is the
+        # history source; Trakt/Simkl-only accounts have no Stremio credentials.
+        if require_auth and configured_source == "stremio":
             auth_key = await auth_service.require_auth_key(bundle, credentials, token)
         else:
             auth_key = await auth_service.resolve_auth_key_with_bundle(bundle, credentials, token)
-
-        configured_source = user_settings.watch_history_source
 
         # Drop the cached library if it was built from a different source than
         # the one currently configured — otherwise switching sources in the

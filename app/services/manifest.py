@@ -51,7 +51,7 @@ class ManifestService:
     async def cache_library_and_profiles(
         self,
         bundle: StremioBundle,
-        auth_key: str,
+        auth_key: str | None,
         user_settings: UserSettings,
         token: str,
     ) -> LibraryCollection:
@@ -94,7 +94,9 @@ class ManifestService:
         ctx = await load_user_context(token, require_auth=False)
         fetched_catalogs: list[dict[str, Any]] = []
         try:
-            if ctx.auth_key:
+            # Trakt/Simkl-only accounts have no Stremio auth key but their
+            # external library still drives the dynamic catalogs.
+            if ctx.auth_key or ctx.user_settings.watch_history_source in ("trakt", "simkl"):
                 tmdb_key = resolve_tmdb_api_key(ctx.user_settings)
                 catalog_def_service = DynamicCatalogService(language=ctx.user_settings.language, tmdb_api_key=tmdb_key)
                 fetched_catalogs = await catalog_def_service.get_dynamic_catalogs(

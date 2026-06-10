@@ -20,6 +20,7 @@ class DashboardService:
     """
 
     async def get_data(self, token: str) -> dict[str, Any] | None:
+        token = await token_store.resolve_alias(token)
         credentials = await token_store.get_user_data(token)
         if not credentials:
             return None
@@ -107,6 +108,7 @@ class DashboardService:
     async def refresh(self, token: str) -> bool:
         """Drop the user's cached data so the next request rebuilds fresh, and warm
         the catalogs in the background. Returns False if the token is unknown."""
+        token = await token_store.resolve_alias(token)
         credentials = await token_store.get_user_data(token)
         if not credentials:
             return False

@@ -73,17 +73,16 @@ class CatalogUpdater:
         bundle = StremioBundle()
         try:
             auth_key = await auth_service.resolve_auth_key_with_bundle(bundle, credentials, token)
-            if not auth_key:
-                return True
 
             # Check if addon is still installed
-            try:
-                if not await bundle.addons.is_addon_installed(auth_key):
-                    logger.info(f"[{redact_token(token)}] Addon not installed, skipping update")
-                    return True
-            except Exception as e:
-                logger.exception(f"[{redact_token(token)}] Failed to check addon install status: {e}")
-                return False
+            if auth_key:
+                try:
+                    if not await bundle.addons.is_addon_installed(auth_key):
+                        logger.info(f"[{redact_token(token)}] Addon not installed, skipping update")
+                        return True
+                except Exception as e:
+                    logger.exception(f"[{redact_token(token)}] Failed to check addon install status: {e}")
+                    return False
 
             # Reuse ManifestService to build catalogs
             # (handles library caching, profile building, catalog definitions,
@@ -93,7 +92,14 @@ class CatalogUpdater:
             manifest = await manifest_service.get_manifest_for_token(token)
             catalogs = manifest.get("catalogs", [])
 
-            success = await bundle.addons.update_catalogs(auth_key, catalogs)
+            if auth_key:
+                success = await bundle.addons.update_catalogs(auth_key, catalogs)
+            else:
+                # No Stremio session to push to (Trakt/Simkl-only account).
+                # Rebuilding the manifest above refreshed the caches; Stremio
+                # picks up the new rows on its next periodic manifest pull.
+                logger.info(f"[{redact_token(token)}] No Stremio auth; manifest refreshed for pull only")
+                success = True
 
             if success and update_timestamp:
                 try:
