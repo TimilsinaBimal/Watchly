@@ -10,7 +10,7 @@ from app.services.stremio.service import StremioBundle
 router = APIRouter(prefix="/tokens", tags=["Tokens"])
 
 
-async def _trigger_initial_caching(auth_key: str, user_settings, token: str) -> None:
+async def _trigger_initial_caching(auth_key: str | None, user_settings, token: str) -> None:
     """Cache library and profiles after token creation. Failures are non-blocking."""
     from app.services.manifest import manifest_service
 

@@ -7,8 +7,10 @@ from app.api.models.tokens import TokenRequest, TokenResponse
 from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
+from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
+from app.services.trakt import trakt_service
 
 
 class AuthService:
@@ -69,18 +71,17 @@ class AuthService:
         """Get user credentials from token store."""
         return await token_store.get_user_data(token)
 
-    async def store_credentials(self, user_id: str, payload: dict) -> str:
+    async def store_credentials(self, token: str, payload: dict) -> str:
         """Store credentials, return token."""
         # Ensure last_updated is present if it's a new user
         if "last_updated" not in payload:
-            token = token_store.get_token_from_user_id(user_id)
             existing = await self.get_credentials(token)
             if existing:
                 payload["last_updated"] = existing.get("last_updated")
             else:
                 payload["last_updated"] = datetime.now(timezone.utc).isoformat()
 
-        return await token_store.store_user_data(user_id, payload)
+        return await token_store.store_user_data(token, payload)
 
     async def get_stremio_user_data(self, payload: TokenRequest) -> tuple[str, str, str]:
         """
@@ -107,36 +108,147 @@ class AuthService:
         finally:
             await bundle.close()
 
-    async def create_user_token(self, payload: TokenRequest) -> tuple[TokenResponse, str, UserSettings]:
+    async def resolve_identities(self, payload: TokenRequest) -> tuple[dict[str, str], str | None, str | None]:
+        """Verify every credential in the payload with its provider.
+
+        Returns ({provider: provider_user_id}, stremio_auth_key, stremio_email).
+        Identities must be derived server-side from the presented credentials —
+        trusting client-supplied IDs would let anyone claim another user's account.
+        """
+        identities: dict[str, str] = {}
+        stremio_auth_key: str | None = None
+        email: str | None = None
+
+        if payload.authKey or (payload.email and payload.password):
+            user_id, email, stremio_auth_key = await self.get_stremio_user_data(payload)
+            identities["stremio"] = user_id
+
+        if payload.trakt_access_token:
+            identities["trakt"] = await self._verify_trakt_identity(payload.trakt_access_token)
+
+        if payload.simkl_access_token:
+            identities["simkl"] = await self._verify_simkl_identity(payload.simkl_access_token)
+
+        if not identities:
+            raise HTTPException(
+                status_code=400,
+                detail="Connect at least one account: Stremio, Trakt, or Simkl.",
+            )
+
+        return identities, stremio_auth_key, email
+
+    async def _verify_trakt_identity(self, access_token: str) -> str:
+        try:
+            info = await trakt_service.get_user_info(access_token)
+        except Exception as e:
+            logger.error(f"Trakt identity verification failed: {e}")
+            raise HTTPException(status_code=400, detail="Failed to verify Trakt account. Reconnect and try again.")
+
+        user = info.get("user", info) if isinstance(info, dict) else {}
+        # The slug is Trakt's stable-ish user id; it only changes if the user
+        # renames their Trakt account.
+        slug = (user.get("ids") or {}).get("slug")
+        if not slug:
+            raise HTTPException(status_code=400, detail="Trakt did not return a user id. Reconnect and try again.")
+        return str(slug)
+
+    async def _verify_simkl_identity(self, access_token: str) -> str:
+        try:
+            info = await simkl_service.get_user_settings(access_token, settings.SIMKL_CLIENT_ID)
+        except Exception as e:
+            logger.error(f"Simkl identity verification failed: {e}")
+            raise HTTPException(status_code=400, detail="Failed to verify Simkl account. Reconnect and try again.")
+
+        account_id = (info.get("account") or {}).get("id") if isinstance(info, dict) else None
+        if not account_id:
+            raise HTTPException(status_code=400, detail="Simkl did not return a user id. Reconnect and try again.")
+        return str(account_id)
+
+    async def _find_account_token(self, provider: str, provider_user_id: str) -> str | None:
+        """Locate the account token for a verified provider identity."""
+        token = await token_store.get_token_for_identity(provider, provider_user_id)
+        if token and await token_store.get_user_data(token):
+            return token
+        if provider == "stremio":
+            # Accounts created before the identity index used the Stremio user id
+            # as their token.
+            legacy = await token_store.resolve_alias(provider_user_id)
+            if await token_store.get_user_data(legacy):
+                return legacy
+        return None
+
+    async def _resolve_account(self, identities: dict[str, str]) -> tuple[str, dict | None]:
+        """Map verified identities to a single account token.
+
+        When identities span multiple existing accounts (e.g. a Trakt-only
+        account and a Stremio account belonging to the same person), the oldest
+        account survives and the others are merged into it via token aliases.
+        """
+        matches: dict[str, dict] = {}
+        for provider, provider_user_id in identities.items():
+            token = await self._find_account_token(provider, provider_user_id)
+            if token and token not in matches:
+                data = await token_store.get_user_data(token)
+                if data:
+                    matches[token] = data
+
+        if not matches:
+            return token_store.mint_token(), None
+
+        survivor = min(matches, key=lambda t: matches[t].get("last_updated") or "9999")
+        for token in matches:
+            if token != survivor:
+                logger.info(f"Merging account {redact_token(token)} into {redact_token(survivor)}")
+                await token_store.merge_into(token, survivor)
+        return survivor, matches[survivor]
+
+    async def create_user_token(self, payload: TokenRequest) -> tuple[TokenResponse, str | None, UserSettings]:
         """
         Main logic for creating or updating a user token.
 
         Returns:
             Tuple of (TokenResponse, resolved_auth_key, user_settings) so the
             caller can trigger caching without re-fetching credentials.
+            resolved_auth_key is None for accounts without Stremio credentials.
         """
-        # 1. Authenticate and get user info
-        user_id, resolved_email, stremio_auth_key = await self.get_stremio_user_data(payload)
+        # 1. Verify provided credentials and resolve provider identities
+        identities, stremio_auth_key, resolved_email = await self.resolve_identities(payload)
 
-        # 2. Check if user already exists
-        token = token_store.get_token_from_user_id(user_id)
-        existing_data = await self.get_credentials(token)
+        if payload.watch_history_source not in identities:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Watch history source '{payload.watch_history_source}' requires connecting that account.",
+            )
 
-        # 3. Prepare payload
+        # 2. Resolve (and possibly merge) the account these identities belong to
+        token, existing_data = await self._resolve_account(identities)
+
+        # 3. Prepare payload. Identities from earlier configurations are kept:
+        # a previously linked provider still identifies this account even when
+        # this submit doesn't include it.
+        stored_identities = dict((existing_data or {}).get("identities") or {})
+        stored_identities.update(identities)
+
         user_settings = self._build_user_settings(payload)
         payload_to_store = {
-            "authKey": stremio_auth_key,
-            "email": resolved_email,
+            "email": resolved_email or (existing_data or {}).get("email"),
             "settings": user_settings.model_dump(),
+            "identities": stored_identities,
         }
+        if "stremio" in identities:
+            payload_to_store["user_id"] = identities["stremio"]
+        if stremio_auth_key:
+            payload_to_store["authKey"] = stremio_auth_key
         if payload.password:
             payload_to_store["password"] = payload.password.strip()
 
         if existing_data:
             payload_to_store["last_updated"] = existing_data.get("last_updated")
 
-        # 4. Store user data
-        token = await self.store_credentials(user_id, payload_to_store)
+        # 4. Store user data and index every identity to this token
+        token = await self.store_credentials(token, payload_to_store)
+        for provider, provider_user_id in stored_identities.items():
+            await token_store.set_identity(provider, provider_user_id, token)
 
         # If watch_history_source changed (or any other setting that affects
         # the profile), drop cached profiles so the next catalog request
@@ -197,8 +309,8 @@ class AuthService:
         """Fetch Stremio identity and associated user settings if they exist."""
         user_id, email, _ = await self.get_stremio_user_data(payload)
 
-        token = token_store.get_token_from_user_id(user_id)
-        existing_data = await self.get_credentials(token)
+        token = await self._find_account_token("stremio", user_id)
+        existing_data = await self.get_credentials(token) if token else None
         exists = bool(existing_data)
 
         response = {"user_id": user_id, "email": email, "exists": exists}
@@ -221,12 +333,14 @@ class AuthService:
     async def delete_user_account(self, payload: TokenRequest) -> None:
         """Deletes user account and associated data."""
         user_id, _, _ = await self.get_stremio_user_data(payload)
-        token = token_store.get_token_from_user_id(user_id)
+        token = await self._find_account_token("stremio", user_id)
 
-        existing_data = await self.get_credentials(token)
-        if not existing_data:
+        existing_data = await self.get_credentials(token) if token else None
+        if not token or not existing_data:
             raise HTTPException(status_code=404, detail="Account not found.")
 
+        for provider, provider_user_id in (existing_data.get("identities") or {}).items():
+            await token_store.delete_identity(provider, provider_user_id)
         await token_store.delete_token(token)
         logger.info(f"[{redact_token(token)}] Token deleted for user {user_id}")
 
