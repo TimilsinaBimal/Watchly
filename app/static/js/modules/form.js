@@ -135,8 +135,18 @@ function buildTokenPayload(formData) {
 }
 
 function validateFormData(formData) {
-    if (!formData.authKey && !(formData.email && formData.password)) {
-        showError('generalError', 'Please login with Stremio or enter email & password.');
+    const hasStremio = !!(formData.authKey || (formData.email && formData.password));
+    const hasTrakt = !!window._watchlyOAuth?.trakt?.access_token;
+    const hasSimkl = !!window._watchlyOAuth?.simkl?.access_token;
+
+    if (!hasStremio && !hasTrakt && !hasSimkl) {
+        showError('generalError', 'Connect at least one account: Stremio, Trakt, or Simkl.');
+        switchSection('login');
+        return false;
+    }
+
+    if (formData.watch_history_source === 'stremio' && !hasStremio) {
+        showError('generalError', 'Login with Stremio, or pick Trakt/Simkl as your watch history source.');
         switchSection('login');
         return false;
     }

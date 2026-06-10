@@ -7,6 +7,7 @@
 // silently doing nothing.
 
 import { showToast } from './ui.js';
+import { unlockNavigation } from './navigation.js';
 
 const ACTIVE_CLASSES = ['bg-white/10', 'text-white', 'shadow-sm'];
 const ACTIVE_BORDER_CLASS = 'border-white/20';
@@ -60,9 +61,28 @@ export function setProviderConnected(provider, connected) {
     setProviderDot(provider, connected);
     setProviderView(provider, connected);
 
-    if (!connected && currentSource() === provider) {
-        setWatchHistorySource('stremio');
+    if (connected) {
+        // Trakt/Simkl alone is enough to configure the addon — no Stremio needed.
+        unlockNavigation();
     }
+
+    if (connected && !connectedState.stremio && currentSource() === 'stremio') {
+        // No Stremio session to read history from — use the provider that just connected.
+        setWatchHistorySource(provider);
+    }
+
+    if (!connected && currentSource() === provider) {
+        setWatchHistorySource(firstConnectedSource());
+    }
+
+    syncAccountsNextButton();
+}
+
+function firstConnectedSource() {
+    if (connectedState.stremio) return 'stremio';
+    if (connectedState.trakt) return 'trakt';
+    if (connectedState.simkl) return 'simkl';
+    return 'stremio';
 }
 
 export function setWatchHistorySource(value) {
@@ -74,7 +94,7 @@ export function setWatchHistorySource(value) {
 }
 
 function onSourceButtonClick(provider) {
-    if (provider !== 'stremio' && !connectedState[provider]) {
+    if (!connectedState[provider]) {
         showToast(`Connect ${PROVIDER_LABELS[provider]} in Accounts to use it as your watch history source.`, 'info', 4000);
         goToAccounts(provider);
         return;
@@ -98,7 +118,7 @@ function goToAccounts(scrollTo) {
 function syncAccountsNextButton() {
     const btn = document.getElementById('accountsNextBtn');
     if (!btn) return;
-    btn.disabled = !connectedState.stremio;
+    btn.disabled = !(connectedState.stremio || connectedState.trakt || connectedState.simkl);
 }
 
 function setProviderView(provider, connected) {
