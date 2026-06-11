@@ -251,10 +251,6 @@ async function fetchIdentity(payload) {
     if (simklApiKeyInput) {
         payload.simkl_api_key = simklApiKeyInput.value.trim();
     }
-    const geminiApiKeyInput = document.getElementById("geminiApiKey");
-    if (geminiApiKeyInput) {
-        payload.gemini_api_key = geminiApiKeyInput.value.trim();
-    }
     const res = await fetch('/tokens/identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -329,8 +325,20 @@ async function fetchIdentity(payload) {
             const simklApiKeyInput = document.getElementById('simklApiKey');
             if (s.simkl_api_key && simklApiKeyInput) simklApiKeyInput.value = s.simkl_api_key;
 
-            const geminiApiKeyInput = document.getElementById('geminiApiKey');
-            if (s.gemini_api_key && geminiApiKeyInput) geminiApiKeyInput.value = s.gemini_api_key;
+            // LLM config; legacy gemini_api_key maps onto the gemini provider
+            const llmProviderSelect = document.getElementById('llmProvider');
+            const llmApiKeyInput = document.getElementById('llmApiKey');
+            const llmModelInput = document.getElementById('llmModel');
+            const llm = (s.llm && s.llm.api_key)
+                ? s.llm
+                : (s.gemini_api_key ? { provider: 'gemini', api_key: s.gemini_api_key, model: null } : null);
+            if (llm && llmProviderSelect && llmApiKeyInput) {
+                llmProviderSelect.value = llm.provider;
+                llmApiKeyInput.value = llm.api_key;
+                if (llmModelInput) llmModelInput.value = llm.model || '';
+                // Trigger change event to show the key/model fields
+                llmProviderSelect.dispatchEvent(new Event('change'));
+            }
 
             // Watch History Source + OAuth tokens
             restoreWatchHistoryState(s);

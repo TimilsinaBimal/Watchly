@@ -48,7 +48,7 @@ export function initializeForm(domElements, state, actions) {
     validatePosterRatingApiKey = initializePosterRatingProvider();
     initializeTmdb();
     initializeSimkl();
-    initializeGemini();
+    initializeLlm();
     updateYearSlider = initializeYearSliderControl();
     initializeWatchHistorySource();
 }
@@ -89,7 +89,9 @@ function getRequestPayload() {
         poster_rating_url_template: document.getElementById('posterRatingUrlTemplate')?.value.trim() || '',
         tmdb_api_key: document.getElementById('tmdbApiKey')?.value.trim() || '',
         simkl_api_key: document.getElementById('simklApiKey')?.value.trim() || '',
-        gemini_api_key: document.getElementById('geminiApiKey')?.value.trim() || '',
+        llm_provider: document.getElementById('llmProvider')?.value || '',
+        llm_api_key: document.getElementById('llmApiKey')?.value.trim() || '',
+        llm_model: document.getElementById('llmModel')?.value.trim() || '',
         excluded_movie_genres: Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value),
         excluded_series_genres: Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value),
         watch_history_source: document.getElementById('watchHistorySource')?.value || 'stremio',
@@ -124,7 +126,13 @@ function buildTokenPayload(formData) {
         poster_rating: posterRating || null,
         tmdb_api_key: formData.tmdb_api_key || undefined,
         simkl_api_key: formData.simkl_api_key,
-        gemini_api_key: formData.gemini_api_key,
+        llm: (formData.llm_provider && formData.llm_api_key)
+            ? {
+                provider: formData.llm_provider,
+                api_key: formData.llm_api_key,
+                model: formData.llm_model || undefined,
+            }
+            : undefined,
         excluded_movie_genres: formData.excluded_movie_genres,
         excluded_series_genres: formData.excluded_series_genres,
         watch_history_source: formData.watch_history_source,
@@ -440,19 +448,51 @@ function initializeSimkl() {
     });
 }
 
-// Gemini AI Integration
-function initializeGemini() {
+// AI / LLM Integration
+const LLM_PROVIDER_INFO = {
+    gemini: { keyPlaceholder: 'Paste your Gemini API key here', modelPlaceholder: 'Model (default: gemini-2.5-flash)' },
+    openai: { keyPlaceholder: 'Paste your OpenAI API key here', modelPlaceholder: 'Model (default: gpt-5-mini)' },
+    anthropic: { keyPlaceholder: 'Paste your Anthropic API key here', modelPlaceholder: 'Model (default: claude-haiku-4-5)' },
+    openrouter: { keyPlaceholder: 'Paste your OpenRouter API key here', modelPlaceholder: 'Model (default: openai/gpt-4o-mini)' },
+};
+
+function initializeLlm() {
+    const providerSelect = document.getElementById('llmProvider');
+    const keyContainer = document.getElementById('llmApiKeyContainer');
+    const keyInput = document.getElementById('llmApiKey');
+    const modelContainer = document.getElementById('llmModelContainer');
+    const modelInput = document.getElementById('llmModel');
+
+    if (providerSelect) {
+        providerSelect.addEventListener('change', () => {
+            const info = LLM_PROVIDER_INFO[providerSelect.value];
+            if (keyContainer) keyContainer.style.display = info ? 'block' : 'none';
+            if (modelContainer) modelContainer.style.display = info ? 'block' : 'none';
+            if (info) {
+                if (keyInput) keyInput.placeholder = info.keyPlaceholder;
+                if (modelInput) modelInput.placeholder = info.modelPlaceholder;
+            } else {
+                if (keyInput) keyInput.value = '';
+                if (modelInput) modelInput.value = '';
+            }
+        });
+    }
+
     initializeValidatedSecretField({
-        input: document.getElementById('geminiApiKey'),
-        validateBtn: document.getElementById('geminiApiKeyValidate'),
-        validationMessage: document.getElementById('geminiValidationMessage'),
-        toggleBtn: document.getElementById('geminiApiKeyToggle'),
-        eyeIcon: document.getElementById('geminiApiKeyEye'),
-        eyeOffIcon: document.getElementById('geminiApiKeyEyeOff'),
-        emptyMessage: 'Please enter a Gemini API key',
-        successMessage: 'Gemini API key is valid ✓',
-        request: (apiKey) => postJson('/gemini/validation', { api_key: apiKey }),
-        getErrorMessage: (data) => data.message || 'Invalid Gemini API key'
+        input: keyInput,
+        validateBtn: document.getElementById('llmApiKeyValidate'),
+        validationMessage: document.getElementById('llmValidationMessage'),
+        toggleBtn: document.getElementById('llmApiKeyToggle'),
+        eyeIcon: document.getElementById('llmApiKeyEye'),
+        eyeOffIcon: document.getElementById('llmApiKeyEyeOff'),
+        emptyMessage: 'Please enter an API key',
+        successMessage: 'API key works ✓',
+        request: (apiKey) => postJson('/llm/validation', {
+            provider: providerSelect?.value || 'gemini',
+            api_key: apiKey,
+            model: modelInput?.value.trim() || undefined,
+        }),
+        getErrorMessage: (data) => data.message || 'Could not validate this key'
     });
 }
 
