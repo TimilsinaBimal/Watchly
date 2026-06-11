@@ -141,6 +141,16 @@ class TokenStore:
                 except Exception as exc:
                     logger.warning(f"Failed to encrypt poster_rating api_key for {redact_token(token)}: {exc}")
 
+        # Encrypt llm api_key if present
+        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
+            llm_config = storage_data["settings"].get("llm")
+            if llm_config and isinstance(llm_config, dict) and llm_config.get("api_key"):
+                try:
+                    if not llm_config["api_key"].startswith("gAAAAAB"):
+                        llm_config["api_key"] = self.encrypt_token(llm_config["api_key"])
+                except Exception as exc:
+                    logger.warning(f"Failed to encrypt llm api_key for {redact_token(token)}: {exc}")
+
         # Encrypt simkl_api_key if present
         if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
             simkl_api_key = storage_data["settings"].get("simkl_api_key")
@@ -341,6 +351,14 @@ class TokenStore:
                     logger.debug(
                         f"Decryption failed for poster_rating api_key associated with {redact_token(token)}: {e}"
                     )
+
+            llm_config = data["settings"].get("llm")
+            if llm_config and isinstance(llm_config, dict) and llm_config.get("api_key"):
+                try:
+                    if llm_config["api_key"].startswith("gAAAAA"):
+                        llm_config["api_key"] = self.decrypt_token(llm_config["api_key"])
+                except Exception as e:
+                    logger.debug(f"Decryption failed for llm api_key associated with {redact_token(token)}: {e}")
 
             simkl_api_key = data["settings"].get("simkl_api_key")
             if simkl_api_key:

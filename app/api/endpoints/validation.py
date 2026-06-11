@@ -1,9 +1,12 @@
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException
-from google import genai
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.api.models.validation import BaseValidationInput, BaseValidationResponse, PosterRatingValidationInput
+from app.core.settings import LLMConfig
+from app.services.llm import llm_service
 from app.services.poster_ratings.factory import PosterProvider, poster_ratings_factory
 from app.services.simkl import simkl_service
 from app.services.tmdb.client import TMDBClient
@@ -12,15 +15,20 @@ from app.services.trakt import trakt_service
 router = APIRouter(tags=["Validation"])
 
 
-@router.post("/gemini/validation")
-async def validate_gemini_api_key(data: BaseValidationInput) -> BaseValidationResponse:
-    try:
-        client = genai.Client(api_key=data.api_key.strip())
-        await client.aio.models.list()
-        return BaseValidationResponse(valid=True, message="Gemini API key is valid")
-    except Exception as e:
-        logger.debug(f"Gemini API key validation failed: {e}")
-        return BaseValidationResponse(valid=False, message="Invalid Gemini API key")
+class LLMValidationInput(BaseModel):
+    provider: Literal["gemini", "openai", "anthropic", "openrouter"]
+    api_key: str = Field(description="API key for the provider")
+    model: str | None = Field(default=None, description="Optional model id override")
+
+
+@router.post("/llm/validation")
+async def validate_llm_key(data: LLMValidationInput) -> BaseValidationResponse:
+    """Validate the key (and model) with a minimal real generation."""
+    config = LLMConfig(provider=data.provider, api_key=data.api_key.strip(), model=(data.model or "").strip() or None)
+    title = await llm_service.generate_title("Genre: Action, Keyword: heist", config)
+    if title:
+        return BaseValidationResponse(valid=True, message=f"Key works with {config.resolved_model()}")
+    return BaseValidationResponse(valid=False, message="Could not generate with this key/model")
 
 
 @router.post("/tmdb/validation")

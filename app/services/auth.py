@@ -301,6 +301,7 @@ class AuthService:
             popularity=payload.popularity,
             sorting_order=payload.sorting_order,
             simkl_api_key=payload.simkl_api_key,
+            llm=payload.llm,
             gemini_api_key=payload.gemini_api_key,
             tmdb_api_key=payload.tmdb_api_key,
             trakt_access_token=payload.trakt_access_token,
