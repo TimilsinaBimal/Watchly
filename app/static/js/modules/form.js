@@ -280,10 +280,17 @@ function initializePosterRatingProvider() {
         }
     };
 
-    const CUSTOM_HELP = 'Paste a poster URL with placeholders: '
-        + '<code>{imdb_id}</code>, <code>{api_key}</code> (optional), '
-        + '<code>{language}</code> (e.g. en-US), <code>{language_short}</code> (e.g. en). '
-        + 'The API key field below is optional and fills <code>{api_key}</code>.';
+    const CUSTOM_HELP = 'Bring your own poster service. Paste one URL that Watchly fills in per title '
+        + 'before handing it to Stremio &mdash; the placeholders below are swapped for each item\'s values:'
+        + '<ul class="mt-2 space-y-1 list-disc list-inside">'
+        + '<li><code>{imdb_id}</code> &mdash; IMDb id, e.g. tt0468569 <em>(required)</em></li>'
+        + '<li><code>{type}</code> &mdash; <code>movie</code> or <code>series</code></li>'
+        + '<li><code>{language}</code> &mdash; full locale, e.g. en-US</li>'
+        + '<li><code>{language_short}</code> &mdash; language only, e.g. en</li>'
+        + '<li><code>{api_key}</code> &mdash; filled from the optional API key field below</li>'
+        + '</ul>'
+        + '<span class="block mt-2">Example: '
+        + '<code>https://example.com/{type}/{imdb_id}.jpg?lang={language_short}</code></span>';
 
     let isValidated = false;
 

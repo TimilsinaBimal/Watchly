@@ -36,7 +36,8 @@ class PosterRatingConfig(BaseModel):
     )
     api_key: str | None = Field(default=None, description="API key for the provider (optional for 'custom')")
     url_template: str | None = Field(
-        default=None, description="URL template with {imdb_id}/{api_key}/{language}/{language_short} for 'custom'"
+        default=None,
+        description="URL template with {imdb_id}/{type}/{api_key}/{language}/{language_short} for 'custom'",
     )
 
     @model_validator(mode="after")
