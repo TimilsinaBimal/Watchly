@@ -1,9 +1,10 @@
+import time
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from loguru import logger
 
-from app.api.models.tokens import TokenRequest, TokenResponse
+from app.api.models.tokens import TokenRequest, TokenResponse, TraktTokens
 from app.core.config import settings
 from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
@@ -108,12 +109,23 @@ class AuthService:
         finally:
             await bundle.close()
 
-    async def resolve_identities(self, payload: TokenRequest) -> tuple[dict[str, str], str | None, str | None]:
+    async def resolve_identities(
+        self, payload: TokenRequest, refresh_expired: bool = False
+    ) -> tuple[dict[str, str], str | None, str | None]:
         """Verify every credential in the payload with its provider.
 
         Returns ({provider: provider_user_id}, stremio_auth_key, stremio_email).
         Identities must be derived server-side from the presented credentials —
         trusting client-supplied IDs would let anyone claim another user's account.
+
+        A provider that won't confirm its credential is left out rather than
+        failing the whole call: the configure page replays every token it has
+        stored, so one stale token (or one provider being down) must not block a
+        save the user's other credentials can carry. `create_user_token` still
+        rejects the request when the watch history source is the provider that
+        failed. `refresh_expired` is only set by callers that store the result —
+        Trakt rotates refresh tokens, so spending one without persisting the new
+        pair would leave the account unable to refresh again.
         """
         identities: dict[str, str] = {}
         stremio_auth_key: str | None = None
@@ -124,45 +136,86 @@ class AuthService:
             identities["stremio"] = user_id
 
         if payload.trakt_access_token:
-            identities["trakt"] = await self._verify_trakt_identity(payload.trakt_access_token)
+            if slug := await self._verify_trakt_identity(payload, refresh_expired):
+                identities["trakt"] = slug
 
         if payload.simkl_access_token:
-            identities["simkl"] = await self._verify_simkl_identity(payload.simkl_access_token)
+            if account_id := await self._verify_simkl_identity(payload.simkl_access_token):
+                identities["simkl"] = account_id
 
         if not identities:
             raise HTTPException(
                 status_code=400,
-                detail="Connect at least one account: Stremio, Trakt, or Simkl.",
+                detail="Could not verify any connected account. Reconnect Stremio, Trakt, or Simkl and try again.",
             )
 
         return identities, stremio_auth_key, email
 
-    async def _verify_trakt_identity(self, access_token: str) -> str:
+    async def _verify_trakt_identity(self, payload: TokenRequest, refresh_expired: bool) -> str | None:
+        """Trakt user id for the payload's token, or None if Trakt won't confirm it."""
+        if slug := await self._fetch_trakt_slug(payload.trakt_access_token):
+            return slug
+
+        # A returning user's stored access token is regularly past Trakt's ~90
+        # day expiry, so retry once behind a refresh before giving up.
+        if not refresh_expired or not payload.trakt_refresh_token:
+            return None
+        if not await self._refresh_trakt_into_payload(payload):
+            return None
+        return await self._fetch_trakt_slug(payload.trakt_access_token)
+
+    async def _fetch_trakt_slug(self, access_token: str | None) -> str | None:
+        if not access_token:
+            return None
         try:
             info = await trakt_service.get_user_info(access_token)
         except Exception as e:
-            logger.error(f"Trakt identity verification failed: {e}")
-            raise HTTPException(status_code=400, detail="Failed to verify Trakt account. Reconnect and try again.")
+            logger.info(f"Trakt identity lookup failed: {e}")
+            return None
 
         user = info.get("user", info) if isinstance(info, dict) else {}
         # The slug is Trakt's stable-ish user id; it only changes if the user
         # renames their Trakt account.
         slug = (user.get("ids") or {}).get("slug")
-        if not slug:
-            raise HTTPException(status_code=400, detail="Trakt did not return a user id. Reconnect and try again.")
-        return str(slug)
+        return str(slug) if slug else None
 
-    async def _verify_simkl_identity(self, access_token: str) -> str:
+    async def _refresh_trakt_into_payload(self, payload: TokenRequest) -> bool:
+        """Exchange the payload's Trakt refresh token for a fresh pair.
+
+        The new tokens are written back onto the payload: there is no account
+        token to persist against this early, and `_build_user_settings` reads
+        them straight off the payload a few steps later.
+        """
+        redirect_uri = f"{settings.HOST_NAME}/auth/trakt/callback"
+        try:
+            data = await trakt_service.refresh_token(payload.trakt_refresh_token, redirect_uri)
+        except Exception as e:
+            logger.warning(f"Trakt token refresh during identity verification failed: {e}")
+            return False
+
+        access_token = data.get("access_token")
+        if not access_token:
+            logger.warning("Trakt refresh returned no access_token during identity verification")
+            return False
+
+        expires_in = int(data.get("expires_in") or 0)
+        created_at = int(data.get("created_at") or time.time())
+        payload.trakt_access_token = access_token
+        payload.trakt_refresh_token = data.get("refresh_token") or payload.trakt_refresh_token
+        payload.trakt_token_expires_at = created_at + expires_in if expires_in else 0
+        logger.info("Refreshed an expired Trakt token while verifying identity")
+        return True
+
+    async def _verify_simkl_identity(self, access_token: str) -> str | None:
+        """Simkl account id for the token, or None if Simkl won't confirm it."""
         try:
             info = await simkl_service.get_user_settings(access_token, settings.SIMKL_CLIENT_ID)
         except Exception as e:
-            logger.error(f"Simkl identity verification failed: {e}")
-            raise HTTPException(status_code=400, detail="Failed to verify Simkl account. Reconnect and try again.")
+            logger.info(f"Simkl identity lookup failed: {e}")
+            return None
 
         account_id = (info.get("account") or {}).get("id") if isinstance(info, dict) else None
-        if not account_id:
-            raise HTTPException(status_code=400, detail="Simkl did not return a user id. Reconnect and try again.")
-        return str(account_id)
+        return str(account_id) if account_id else None
 
     async def _find_account_token(self, provider: str, provider_user_id: str) -> str | None:
         """Locate the account token for a verified provider identity."""
@@ -212,12 +265,15 @@ class AuthService:
             resolved_auth_key is None for accounts without Stremio credentials.
         """
         # 1. Verify provided credentials and resolve provider identities
-        identities, stremio_auth_key, resolved_email = await self.resolve_identities(payload)
+        submitted_trakt_token = payload.trakt_access_token
+        identities, stremio_auth_key, resolved_email = await self.resolve_identities(payload, refresh_expired=True)
 
         if payload.watch_history_source not in identities:
+            provider = payload.watch_history_source
             raise HTTPException(
                 status_code=400,
-                detail=f"Watch history source '{payload.watch_history_source}' requires connecting that account.",
+                detail=f"Could not verify your {provider.capitalize()} account, "
+                f"which is set as your watch history source. Reconnect it and try again.",
             )
 
         # 2. Resolve (and possibly merge) the account these identities belong to
@@ -285,6 +341,15 @@ class AuthService:
             token=token,
             manifestUrl=manifest_url,
             expiresInSeconds=expires_in,
+            refreshedTrakt=(
+                TraktTokens(
+                    access_token=payload.trakt_access_token,
+                    refresh_token=payload.trakt_refresh_token or "",
+                    expires_at=payload.trakt_token_expires_at or 0,
+                )
+                if payload.trakt_access_token != submitted_trakt_token
+                else None
+            ),
         )
         return response, stremio_auth_key, user_settings
 

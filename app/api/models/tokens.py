@@ -37,10 +37,23 @@ class TokenRequest(BaseModel):
     )
 
 
+class TraktTokens(BaseModel):
+    access_token: str
+    refresh_token: str
+    expires_at: int
+
+
 class TokenResponse(BaseModel):
     token: str
     manifestUrl: str
     expiresInSeconds: int | None = Field(
         default=None,
         description="Number of seconds before the token expires (None means it does not expire)",
+    )
+    refreshedTrakt: TraktTokens | None = Field(
+        default=None,
+        description=(
+            "Set when the submitted Trakt tokens were expired and refreshed. Trakt rotates refresh tokens, "
+            "so the client must replace its copy or the next submit will present a spent refresh token."
+        ),
     )

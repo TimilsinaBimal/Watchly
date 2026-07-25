@@ -209,6 +209,19 @@ function initializeFormSubmission() {
             }
 
             const data = await response.json();
+
+            // The server refreshed an expired Trakt token while verifying it.
+            // Trakt rotates refresh tokens, so keeping our old pair would make
+            // a second save present a spent refresh token.
+            if (data.refreshedTrakt) {
+                window._watchlyOAuth = window._watchlyOAuth || {};
+                window._watchlyOAuth.trakt = {
+                    access_token: data.refreshedTrakt.access_token,
+                    refresh_token: data.refreshedTrakt.refresh_token,
+                    expires_at: data.refreshedTrakt.expires_at,
+                };
+            }
+
             showSuccess(data.manifestUrl);
         } catch (error) {
             console.error('Error:', error);

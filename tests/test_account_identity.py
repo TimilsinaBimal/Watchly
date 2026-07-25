@@ -1,6 +1,7 @@
 import asyncio
 import json
 
+import httpx
 import pytest
 from fastapi import HTTPException
 
@@ -173,6 +174,98 @@ def test_resubmit_without_stremio_keeps_stremio_credentials(monkeypatch):
     assert stored["authKey"] == "authkey-1"
     assert stored["user_id"] == "user123"
     assert stored["email"] == "user@example.com"
+
+
+def only_valid_trakt_token(monkeypatch, valid_token: str | None):
+    """Make Trakt reject every access token except `valid_token`."""
+
+    async def fake_trakt_user(access_token):
+        if access_token != valid_token:
+            raise httpx.HTTPStatusError("401", request=None, response=httpx.Response(401))
+        return {"username": "bob", "ids": {"slug": "trakt-bob"}}
+
+    monkeypatch.setattr("app.services.auth.trakt_service.get_user_info", fake_trakt_user)
+
+
+def test_expired_trakt_token_is_refreshed_and_stored(monkeypatch):
+    setup_fakes(monkeypatch)
+    only_valid_trakt_token(monkeypatch, "t-new")
+    refresh_calls = []
+
+    async def fake_refresh(refresh_token, redirect_uri):
+        refresh_calls.append(refresh_token)
+        return {"access_token": "t-new", "refresh_token": "r-new", "expires_in": 7776000, "created_at": 1000}
+
+    monkeypatch.setattr("app.services.auth.trakt_service.refresh_token", fake_refresh)
+
+    service = AuthService()
+    payload = TokenRequest(
+        trakt_access_token="t-expired",
+        trakt_refresh_token="r-old",
+        watch_history_source="trakt",
+    )
+
+    response, _, user_settings = asyncio.run(service.create_user_token(payload))
+
+    assert refresh_calls == ["r-old"]
+    assert user_settings.trakt_access_token == "t-new"
+    stored = asyncio.run(token_store.get_user_data(response.token))
+    assert stored["settings"]["trakt_access_token"] == "t-new"
+    assert stored["settings"]["trakt_refresh_token"] == "r-new"
+    # Trakt rotates refresh tokens, so the client has to be told the new pair
+    assert response.refreshedTrakt.access_token == "t-new"
+    assert response.refreshedTrakt.refresh_token == "r-new"
+    assert response.refreshedTrakt.expires_at == 1000 + 7776000
+
+
+def test_unverifiable_trakt_does_not_block_a_stremio_save(monkeypatch):
+    setup_fakes(monkeypatch, stremio_identity=("user123", "user@example.com", "authkey-1"))
+    only_valid_trakt_token(monkeypatch, None)
+
+    async def fail_if_called(refresh_token, redirect_uri):
+        raise AssertionError("must not refresh without a refresh token")
+
+    monkeypatch.setattr("app.services.auth.trakt_service.refresh_token", fail_if_called)
+
+    service = AuthService()
+    payload = TokenRequest(authKey="some-key", trakt_access_token="t-dead", watch_history_source="stremio")
+
+    response, auth_key, _ = asyncio.run(service.create_user_token(payload))
+
+    assert auth_key == "authkey-1"
+    stored = asyncio.run(token_store.get_user_data(response.token))
+    assert stored["identities"] == {"stremio": "user123"}
+    # The dead token is still stored; the profile pipeline refreshes or clears it later.
+    assert stored["settings"]["trakt_access_token"] == "t-dead"
+
+
+def test_unverifiable_source_provider_is_rejected(monkeypatch):
+    setup_fakes(monkeypatch)
+    only_valid_trakt_token(monkeypatch, None)
+    service = AuthService()
+    payload = TokenRequest(trakt_access_token="t-dead", watch_history_source="trakt")
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.create_user_token(payload))
+    assert exc.value.status_code == 400
+
+
+def test_identity_lookup_never_spends_the_refresh_token(monkeypatch):
+    """Refreshing rotates the stored pair, so a read-only lookup must not do it."""
+    setup_fakes(monkeypatch)
+    only_valid_trakt_token(monkeypatch, None)
+
+    async def fail_if_called(refresh_token, redirect_uri):
+        raise AssertionError("get_identity_with_settings must not refresh")
+
+    monkeypatch.setattr("app.services.auth.trakt_service.refresh_token", fail_if_called)
+
+    service = AuthService()
+    payload = TokenRequest(trakt_access_token="t-expired", trakt_refresh_token="r-old")
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.get_identity_with_settings(payload))
+    assert exc.value.status_code == 400
 
 
 def test_relinking_keeps_identities_from_previous_configurations(monkeypatch):
