@@ -15,6 +15,7 @@ from app.core.constants import (
 from app.core.security import redact_token
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
+from app.services import cache_codec
 from app.services.redis_service import redis_service
 
 
@@ -48,7 +49,7 @@ class UserCacheService:
 
         if cached:
             try:
-                data = json.loads(cached)
+                data = json.loads(cache_codec.decode(cached))
                 # Refresh TTL on read so active users' caches stay warm.
                 await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
                 return LibraryCollection.model_validate(data)
@@ -61,7 +62,9 @@ class UserCacheService:
     async def set_library_items(self, token: str, library_items: LibraryCollection) -> None:
         """Cache library items for a user."""
         key = self._library_items_key(token)
-        await redis_service.set(key, library_items.model_dump_json(by_alias=True), USER_CACHE_TTL_SECONDS)
+        await redis_service.set(
+            key, cache_codec.encode(library_items.model_dump_json(by_alias=True)), USER_CACHE_TTL_SECONDS
+        )
         logger.debug(f"[{redact_token(token)}...] Cached library items")
 
         await self.invalidate_all_catalogs(token)
@@ -95,7 +98,7 @@ class UserCacheService:
 
         if cached:
             try:
-                profile = TasteProfile.model_validate_json(cached)
+                profile = TasteProfile.model_validate_json(cache_codec.decode(cached))
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Failed to decode cached profile for {redact_token(token)}.../{content_type}: {e}")
                 return None
@@ -126,7 +129,7 @@ class UserCacheService:
             profile: TasteProfile instance to cache
         """
         key = self._profile_key(token, content_type)
-        await redis_service.set(key, profile.model_dump_json(), USER_CACHE_TTL_SECONDS)
+        await redis_service.set(key, cache_codec.encode(profile.model_dump_json()), USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Cached profile for {content_type}")
 
     async def invalidate_profile(self, token: str, content_type: str) -> None:
@@ -159,7 +162,7 @@ class UserCacheService:
 
         if cached:
             try:
-                data = json.loads(cached)
+                data = json.loads(cache_codec.decode(cached))
                 watched_tmdb = set(data.get("watched_tmdb", []))
                 watched_imdb = set(data.get("watched_imdb", []))
                 await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
@@ -191,7 +194,7 @@ class UserCacheService:
             "watched_tmdb": list(watched_tmdb),
             "watched_imdb": list(watched_imdb),
         }
-        await redis_service.set(key, json.dumps(data), USER_CACHE_TTL_SECONDS)
+        await redis_service.set(key, cache_codec.encode(json.dumps(data)), USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Cached watched sets for {content_type}")
 
     async def invalidate_watched_sets(self, token: str, content_type: str) -> None:
@@ -255,14 +258,15 @@ class UserCacheService:
         if not cached:
             return None
         try:
-            return json.loads(cached)
+            return json.loads(cache_codec.decode(cached))
         except json.JSONDecodeError:
             return None
 
     async def set_library_buckets(self, token: str, content_type: str, typed: LibraryCollection) -> None:
         """Record the bucket map the profile was just built from."""
         key = self._library_buckets_key(token, content_type)
-        await redis_service.set(key, json.dumps(self.bucket_map(typed)), USER_CACHE_TTL_SECONDS)
+        payload = cache_codec.encode(json.dumps(self.bucket_map(typed)))
+        await redis_service.set(key, payload, USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Updated library buckets for {content_type}")
 
     async def invalidate_library_buckets(self, token: str, content_type: str) -> None:
@@ -327,7 +331,7 @@ class UserCacheService:
         cached = await redis_service.get(key)
         if cached:
             try:
-                data = json.loads(cached)
+                data = json.loads(cache_codec.decode(cached))
                 # Handle new format with timestamp wrapper
                 if "data" in data and "created_at" in data:
                     return data["data"], data["created_at"]
@@ -362,7 +366,7 @@ class UserCacheService:
             "data": catalog,
             "created_at": int(time.time()),
         }
-        await redis_service.set(key, json.dumps(wrapped_data), ttl)
+        await redis_service.set(key, cache_codec.encode(json.dumps(wrapped_data)), ttl)
         logger.debug(f"[{redact_token(token)}...] Cached catalog for {type}/{id}")
 
     async def invalidate_catalog(self, token: str, type: str, id: str) -> None:
