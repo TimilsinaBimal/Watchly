@@ -97,13 +97,17 @@ function ensureModal() {
                 <h3 class="text-lg font-semibold text-white">Install on Nuvio</h3>
                 <button type="button" class="text-slate-500 hover:text-white transition" data-nuvio-close aria-label="Close">✕</button>
             </div>
-            <p class="text-xs text-slate-500 mb-5">Sign in with your Nuvio account. Credentials go directly from your
-                browser to Nuvio and are never stored or seen by Watchly.</p>
+            <p class="text-xs text-slate-500 mb-2">This signs you in to <strong class="text-slate-400">Nuvio</strong>,
+                not Watchly. Your Nuvio email and password go straight from this page to Nuvio's own servers &mdash;
+                Watchly never receives, stores or logs them.</p>
+            <p class="text-xs text-slate-500 mb-5">Prefer not to type them here? Close this and use
+                <strong class="text-slate-400">Copy Link</strong> instead, then paste the URL into Nuvio under
+                Settings &rarr; Addons.</p>
 
             <div id="nuvioLoginStep" class="grid gap-3">
-                <input id="nuvioEmail" type="email" autocomplete="email" placeholder="Nuvio email"
+                <input id="nuvioEmail" type="email" autocomplete="off" placeholder="Nuvio email"
                     class="w-full bg-neutral-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
-                <input id="nuvioPassword" type="password" autocomplete="current-password" placeholder="Nuvio password"
+                <input id="nuvioPassword" type="password" autocomplete="off" placeholder="Nuvio password"
                     class="w-full bg-neutral-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
                 <button type="button" id="nuvioSubmitBtn"
                     class="mt-1 w-full bg-white text-black hover:bg-white/90 font-medium py-3 rounded-xl transition border border-white/10">
@@ -198,6 +202,8 @@ export function openNuvioInstall(manifestUrl) {
         setBusy(submitBtn, true, 'Signing in…');
         try {
             session = await nuvioLogin(email, password);
+            // Session token in hand, so the password has no reason to stay in the DOM.
+            modal.querySelector('#nuvioPassword').value = '';
             const profiles = await nuvioProfiles(session.token);
 
             if (profiles.length === 1) {
