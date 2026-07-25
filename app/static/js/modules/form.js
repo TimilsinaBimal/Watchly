@@ -222,7 +222,7 @@ function initializeFormSubmission() {
                 };
             }
 
-            showSuccess(data.manifestUrl);
+            showSuccess(data.manifestUrl, data.token);
         } catch (error) {
             console.error('Error:', error);
             showError('generalError', error.message);
@@ -593,8 +593,8 @@ export function refreshYearSlider() {
     updateYearSlider();
 }
 
-function showSuccess(url) {
-    showSuccessSection(url);
+function showSuccess(url, token) {
+    showSuccessSection(url, token);
 }
 
 // Watch History Source + OAuth

@@ -67,19 +67,38 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
         </svg>
     </div>
-    <h3 class="text-3xl font-bold text-white mb-2">You're all set!</h3>
-    <p class="text-slate-400 mb-8">Your personalized catalog is ready.</p>
+    <h3 id="successHeading" class="text-3xl font-bold text-white mb-2">You're all set!</h3>
+    <p id="successSubheading" class="text-slate-400 mb-8">Your personalized catalog is ready.</p>
 
-    <div
-        class="bg-neutral-950 rounded-xl p-4 mb-8 border border-white/10 font-mono text-sm text-slate-200 break-all relative group">
-        <div id="addonUrl">https://...</div>
-        <div
-            class="absolute inset-0 bg-neutral-900/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl cursor-default">
-            <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
+    <!-- Shown while the account warms up; replaced by the URL and install buttons below -->
+    <div id="warmProgress" class="hidden max-w-lg mx-auto mb-8">
+        <div class="flex items-center justify-center gap-3 text-sm text-slate-300">
+            <svg class="w-5 h-5 animate-spin text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                </path>
+            </svg>
+            <span id="warmProgressLabel">Setting up your account…</span>
         </div>
+        <div class="mt-3 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+            <div id="warmProgressBar" class="h-full bg-white/40 rounded-full transition-all duration-500"
+                style="width: 10%"></div>
+        </div>
+        <p id="warmProgressDetail" class="mt-3 text-xs text-slate-500"></p>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2 max-w-lg mx-auto">
+    <div id="successPayload" class="hidden">
+        <div
+            class="bg-neutral-950 rounded-xl p-4 mb-8 border border-white/10 font-mono text-sm text-slate-200 break-all relative group">
+            <div id="addonUrl">https://...</div>
+            <div
+                class="absolute inset-0 bg-neutral-900/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl cursor-default">
+                <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
+            </div>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2 max-w-lg mx-auto">
         <button type="button" id="installDesktopBtn"
             class="col-span-full md:col-span-1 bg-white hover:bg-white/90 text-black font-semibold py-3.5 rounded-xl transition shadow-lg shadow-black/10 hover:shadow-black/20 hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0 px-4 border border-white/10">Install
             on App</button>
@@ -89,9 +108,10 @@
         <button type="button" id="installNuvioBtn"
             class="col-span-full md:col-span-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium py-3.5 rounded-xl transition border border-white/10 px-4">Install
             on Nuvio</button>
-        <button type="button" id="copyBtn"
-            class="col-span-full md:col-span-1 bg-transparent hover:bg-neutral-800 text-slate-400 hover:text-white font-medium py-3 rounded-xl transition border border-white/10 px-4">Copy
-            Link</button>
+            <button type="button" id="copyBtn"
+                class="col-span-full md:col-span-1 bg-transparent hover:bg-neutral-800 text-slate-400 hover:text-white font-medium py-3 rounded-xl transition border border-white/10 px-4">Copy
+                Link</button>
+        </div>
     </div>
     <button type="button" id="successResetBtn"
         class="mt-8 text-sm text-slate-500 hover:text-slate-300">Start Over</button>
