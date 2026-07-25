@@ -1,17 +1,20 @@
 import time
 from datetime import datetime, timezone
+from typing import TypeVar
 
 from fastapi import HTTPException
 from loguru import logger
 
 from app.api.models.tokens import TokenRequest, TokenResponse, TraktTokens
 from app.core.config import settings
-from app.core.security import redact_token
-from app.core.settings import UserSettings, get_default_settings
+from app.core.security import STORED_SECRET_SENTINEL, mask_stored_secrets, redact_token
+from app.core.settings import LLMConfig, PosterRatingConfig, UserSettings, get_default_settings
 from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.trakt import trakt_service
+
+KeyedConfigT = TypeVar("KeyedConfigT", LLMConfig, PosterRatingConfig)
 
 
 class AuthService:
@@ -268,14 +271,6 @@ class AuthService:
         submitted_trakt_token = payload.trakt_access_token
         identities, stremio_auth_key, resolved_email = await self.resolve_identities(payload, refresh_expired=True)
 
-        if payload.watch_history_source not in identities:
-            provider = payload.watch_history_source
-            raise HTTPException(
-                status_code=400,
-                detail=f"Could not verify your {provider.capitalize()} account, "
-                f"which is set as your watch history source. Reconnect it and try again.",
-            )
-
         # 2. Resolve (and possibly merge) the account these identities belong to
         token, existing_data = await self._resolve_account(identities)
 
@@ -285,7 +280,18 @@ class AuthService:
         stored_identities = dict((existing_data or {}).get("identities") or {})
         stored_identities.update(identities)
 
-        user_settings = self._build_user_settings(payload)
+        # The source is checked against the linked set, not just this submit: the
+        # account was already reached through a verified identity, and the
+        # configure page submits a masked token for a provider it can't re-verify.
+        if payload.watch_history_source not in stored_identities:
+            provider = payload.watch_history_source
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not verify your {provider.capitalize()} account, "
+                f"which is set as your watch history source. Reconnect it and try again.",
+            )
+
+        user_settings = self._build_user_settings(payload, (existing_data or {}).get("settings"))
         payload_to_store = {
             "email": resolved_email or (existing_data or {}).get("email"),
             "settings": user_settings.model_dump(),
@@ -353,28 +359,64 @@ class AuthService:
         )
         return response, stremio_auth_key, user_settings
 
-    def _build_user_settings(self, payload: TokenRequest) -> UserSettings:
+    def _build_user_settings(self, payload: TokenRequest, stored: dict | None = None) -> UserSettings:
         default_settings = get_default_settings()
+        stored = stored or {}
+
+        def unmasked(field: str, value: str | None) -> str | None:
+            """A sentinel means the client was never shown this secret — keep the stored one."""
+            return stored.get(field) if value == STORED_SECRET_SENTINEL else value
+
         return UserSettings(
             language=payload.language or default_settings.language,
             catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
-            poster_rating=payload.poster_rating,
+            poster_rating=self._unmask_nested_key(payload.poster_rating, stored.get("poster_rating")),
             excluded_movie_genres=payload.excluded_movie_genres,
             excluded_series_genres=payload.excluded_series_genres,
             year_min=payload.year_min,
             year_max=payload.year_max,
             popularity=payload.popularity,
             sorting_order=payload.sorting_order,
-            simkl_api_key=payload.simkl_api_key,
-            llm=payload.llm,
-            gemini_api_key=payload.gemini_api_key,
-            tmdb_api_key=payload.tmdb_api_key,
-            trakt_access_token=payload.trakt_access_token,
-            trakt_refresh_token=payload.trakt_refresh_token,
+            simkl_api_key=unmasked("simkl_api_key", payload.simkl_api_key),
+            llm=self._unmask_nested_key(payload.llm, self._stored_llm(stored)),
+            gemini_api_key=unmasked("gemini_api_key", payload.gemini_api_key),
+            tmdb_api_key=unmasked("tmdb_api_key", payload.tmdb_api_key),
+            trakt_access_token=unmasked("trakt_access_token", payload.trakt_access_token),
+            trakt_refresh_token=unmasked("trakt_refresh_token", payload.trakt_refresh_token),
             trakt_token_expires_at=payload.trakt_token_expires_at,
-            simkl_access_token=payload.simkl_access_token,
+            simkl_access_token=unmasked("simkl_access_token", payload.simkl_access_token),
             watch_history_source=payload.watch_history_source,
         )
+
+    @staticmethod
+    def _stored_llm(stored: dict) -> dict | None:
+        """The stored LLM config, including a legacy gemini_api_key seen as one.
+
+        The configure page loads a legacy key into the LLM fields, so it submits
+        a masked gemini config that has to resolve against that older field.
+        """
+        if stored.get("llm"):
+            return stored["llm"]
+        if stored.get("gemini_api_key"):
+            return {"provider": "gemini", "api_key": stored["gemini_api_key"]}
+        return None
+
+    @staticmethod
+    def _unmask_nested_key(config: KeyedConfigT | None, stored: dict | None) -> KeyedConfigT | None:
+        """Restore the stored api_key on an LLM/poster-rating config submitted with a sentinel.
+
+        The stored key only carries over while the provider is unchanged; picking
+        a different provider without supplying its key turns the feature off,
+        since both models reject a provider with no usable key.
+        """
+        if config is None or config.api_key != STORED_SECRET_SENTINEL:
+            return config
+
+        stored = stored or {}
+        if stored.get("provider") != config.provider or not stored.get("api_key"):
+            logger.info(f"Masked {config.provider} api_key submitted with no stored key to restore; disabling it")
+            return None
+        return config.model_copy(update={"api_key": stored["api_key"]})
 
     async def _find_account_for_identities(self, identities: dict[str, str]) -> str | None:
         for provider, provider_user_id in identities.items():
@@ -404,10 +446,10 @@ class AuthService:
             raw_settings = existing_data.get("settings", {})
             try:
                 user_settings = UserSettings(**raw_settings)
-                response["settings"] = user_settings.model_dump()
+                response["settings"] = mask_stored_secrets(user_settings.model_dump())
             except Exception as e:
                 logger.warning(f"Failed to normalize settings for user {user_id}: {e}")
-                response["settings"] = raw_settings
+                response["settings"] = mask_stored_secrets(raw_settings)
 
         return response
 

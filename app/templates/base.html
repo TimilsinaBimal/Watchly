@@ -294,6 +294,9 @@
         window.DEFAULT_CATALOGS = {{ default_catalogs | tojson }};
         window.YEAR_RANGE_DEFAULTS = {{ year_range_defaults | tojson }};
 
+        // Placeholder that stands in for a saved API key the server won't send back
+        window.STORED_SECRET = {{ stored_secret_sentinel | tojson }};
+
         // Genre constants from backend
         window.MOVIE_GENRES = {{ movie_genres | tojson }};
         window.SERIES_GENRES = {{ series_genres | tojson }};

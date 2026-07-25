@@ -382,6 +382,13 @@ function initializePosterRatingProvider() {
             return false;
         }
 
+        if (apiKey === window.STORED_SECRET) {
+            // Placeholder for the saved key, which we never received — nothing to
+            // validate, and the server swaps the real key back in on submit.
+            isValidated = true;
+            return true;
+        }
+
         if (!validateBtn) {
             return false;
         }

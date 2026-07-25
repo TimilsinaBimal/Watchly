@@ -6,6 +6,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.models.tokens import TokenRequest
+from app.core.security import STORED_SECRET_SENTINEL
+from app.core.settings import LLMConfig
 from app.services.auth import AuthService
 from app.services.token_store import token_store
 
@@ -266,6 +268,144 @@ def test_identity_lookup_never_spends_the_refresh_token(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.get_identity_with_settings(payload))
     assert exc.value.status_code == 400
+
+
+def test_identity_lookup_masks_stored_secrets(monkeypatch):
+    fake = setup_fakes(monkeypatch)
+    service = AuthService()
+    asyncio.run(
+        service.create_user_token(
+            TokenRequest(
+                trakt_access_token="t-abc",
+                trakt_refresh_token="r-abc",
+                watch_history_source="trakt",
+                tmdb_api_key="tmdb-secret",
+                llm=LLMConfig(provider="anthropic", api_key="sk-ant-secret"),
+            )
+        )
+    )
+
+    result = asyncio.run(service.get_identity_with_settings(TokenRequest(trakt_access_token="t-abc")))
+
+    settings = result["settings"]
+    for field in ("tmdb_api_key", "trakt_access_token", "trakt_refresh_token"):
+        assert settings[field] == STORED_SECRET_SENTINEL
+    assert settings["llm"]["api_key"] == STORED_SECRET_SENTINEL
+    # Non-secret settings still come through so the page can restore them
+    assert settings["llm"]["provider"] == "anthropic"
+    assert settings["watch_history_source"] == "trakt"
+    assert STORED_SECRET_SENTINEL not in json.dumps(fake.data)
+
+
+def test_resubmitting_masked_secrets_keeps_the_stored_values(monkeypatch):
+    setup_fakes(monkeypatch)
+    service = AuthService()
+    first = TokenRequest(
+        trakt_access_token="t-abc",
+        trakt_refresh_token="r-abc",
+        watch_history_source="trakt",
+        tmdb_api_key="tmdb-secret",
+        llm=LLMConfig(provider="anthropic", api_key="sk-ant-secret"),
+    )
+    response, _, _ = asyncio.run(service.create_user_token(first))
+
+    # What the configure page sends back after loading masked settings
+    masked = TokenRequest(
+        trakt_access_token=STORED_SECRET_SENTINEL,
+        trakt_refresh_token=STORED_SECRET_SENTINEL,
+        watch_history_source="trakt",
+        tmdb_api_key=STORED_SECRET_SENTINEL,
+        llm=LLMConfig(provider="anthropic", api_key=STORED_SECRET_SENTINEL),
+        language="de-DE",
+    )
+    response2, _, user_settings = asyncio.run(service.create_user_token(masked))
+
+    assert response2.token == response.token
+    assert user_settings.tmdb_api_key == "tmdb-secret"
+    assert user_settings.trakt_access_token == "t-abc"
+    assert user_settings.trakt_refresh_token == "r-abc"
+    assert user_settings.llm.api_key == "sk-ant-secret"
+    assert user_settings.language == "de-DE"
+
+
+def test_masked_key_is_not_carried_across_providers(monkeypatch):
+    setup_fakes(monkeypatch)
+    service = AuthService()
+    asyncio.run(
+        service.create_user_token(
+            TokenRequest(
+                trakt_access_token="t-abc",
+                watch_history_source="trakt",
+                llm=LLMConfig(provider="anthropic", api_key="sk-ant-secret"),
+            )
+        )
+    )
+
+    switched = TokenRequest(
+        trakt_access_token="t-abc",
+        watch_history_source="trakt",
+        llm=LLMConfig(provider="openai", api_key=STORED_SECRET_SENTINEL),
+    )
+    _, _, user_settings = asyncio.run(service.create_user_token(switched))
+
+    assert user_settings.llm is None
+
+
+def test_masked_legacy_gemini_key_migrates_into_llm(monkeypatch):
+    """The page shows a legacy gemini_api_key in the LLM fields, so it comes back masked."""
+    setup_fakes(monkeypatch)
+    service = AuthService()
+    asyncio.run(
+        service.create_user_token(
+            TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt", gemini_api_key="legacy-gemini")
+        )
+    )
+
+    masked = TokenRequest(
+        trakt_access_token="t-abc",
+        watch_history_source="trakt",
+        llm=LLMConfig(provider="gemini", api_key=STORED_SECRET_SENTINEL),
+    )
+    _, _, user_settings = asyncio.run(service.create_user_token(masked))
+
+    assert user_settings.llm.api_key == "legacy-gemini"
+
+
+def test_emptied_secret_field_still_clears_the_stored_value(monkeypatch):
+    setup_fakes(monkeypatch)
+    service = AuthService()
+    asyncio.run(
+        service.create_user_token(
+            TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt", tmdb_api_key="tmdb-secret")
+        )
+    )
+
+    cleared = TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt", tmdb_api_key="")
+    _, _, user_settings = asyncio.run(service.create_user_token(cleared))
+
+    assert not user_settings.tmdb_api_key
+
+
+def test_masked_trakt_token_still_saves_with_trakt_as_source(monkeypatch):
+    """The page can't re-verify a masked token, but the link is already on record."""
+    setup_fakes(monkeypatch, stremio_identity=("user123", "user@example.com", "authkey-1"))
+    service = AuthService()
+    asyncio.run(
+        service.create_user_token(
+            TokenRequest(authKey="some-key", trakt_access_token="t-abc", watch_history_source="trakt")
+        )
+    )
+    only_valid_trakt_token(monkeypatch, None)
+
+    resubmit = TokenRequest(
+        authKey="some-key",
+        trakt_access_token=STORED_SECRET_SENTINEL,
+        watch_history_source="trakt",
+    )
+    _, _, user_settings = asyncio.run(service.create_user_token(resubmit))
+
+    assert user_settings.trakt_access_token == "t-abc"
+    assert user_settings.watch_history_source == "trakt"
 
 
 def test_relinking_keeps_identities_from_previous_configurations(monkeypatch):
