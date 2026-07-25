@@ -1,4 +1,10 @@
 import copy
+import re
+
+# Tokens are either legacy Stremio user ids (~24 char alphanumeric) or minted
+# base64url strings (token_urlsafe, includes '-' and '_'). Accept up to 64 chars of
+# that alphabet as a sanity check; anything else is malformed.
+TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 # Placeholder swapped in for stored secrets before settings are sent to the
 # configure page, and swapped back out when that page submits them again.

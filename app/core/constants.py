@@ -25,6 +25,13 @@ LIBRARY_ITEMS_KEY: str = "watchly:library_items:{token}"
 PROFILE_KEY: str = "watchly:profile:{token}:{content_type}"
 WATCHED_SETS_KEY: str = "watchly:watched_sets:{token}:{content_type}"
 CATALOG_KEY: str = "watchly:catalog:{token}:{type}:{id}"
+# Versioned because the manifest embeds the addon version: a deploy orphans the old
+# entries rather than serving a stale version string until the TTL runs out.
+MANIFEST_KEY: str = "watchly:manifest:{version}:{token}"
+
+# The manifest is rebuilt on save and by the catalog updater, so this is only a
+# backstop against an invalidation being missed.
+MANIFEST_CACHE_TTL_SECONDS: int = 86400
 
 # Bounded TTL for per-user caches (library items, profile, watched sets,
 # library hash, last-build timestamp). Refreshed on every read so an active

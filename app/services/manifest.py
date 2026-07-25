@@ -1,3 +1,4 @@
+import asyncio
 import copy
 from typing import Any
 
@@ -75,7 +76,7 @@ class ManifestService:
         tmdb_key = resolve_tmdb_api_key(user_settings)
         profile_service = ProfileService(language=language, tmdb_api_key=tmdb_key)
 
-        for content_type in ["movie", "series"]:
+        async def build(content_type: str) -> None:
             try:
                 logger.info(f"[{redact_token(token)}] Building and caching profile for {content_type}")
                 await profile_service.build_and_cache_profile(
@@ -85,10 +86,27 @@ class ManifestService:
             except Exception as e:
                 logger.warning(f"[{redact_token(token)}] Failed to build/cache profile for {content_type}: {e}")
 
+        # Movie and series profiles are independent and write to separate cache
+        # keys, so there is no reason to pay for them one after the other.
+        await asyncio.gather(build("movie"), build("series"))
+
         return library_items
 
-    async def get_manifest_for_token(self, token: str) -> dict[str, Any]:
-        """Generate manifest for a given token."""
+    async def get_manifest_for_token(self, token: str, force_rebuild: bool = False) -> dict[str, Any]:
+        """Generate manifest for a given token, from cache when possible.
+
+        Stremio and Nuvio fetch this the moment the addon is installed, and the
+        dashboard fetches it too, so building it per request put row generation and
+        its TMDB lookups on the critical path. `force_rebuild` is for callers whose
+        whole job is producing a fresh catalog list — reading their own cache would
+        make them no-ops.
+        """
+        if not force_rebuild:
+            cached = await user_cache.get_manifest(token)
+            if cached:
+                logger.debug(f"[{redact_token(token)}] Serving cached manifest")
+                return cached
+
         base_manifest = self.get_base_manifest()
 
         ctx = await load_user_context(token, require_auth=False)
@@ -122,6 +140,7 @@ class ManifestService:
         if sorted_catalogs:
             base_manifest["catalogs"] = sorted_catalogs
 
+        await user_cache.set_manifest(token, base_manifest)
         return base_manifest
 
     async def _translate_catalogs(self, catalogs: list[dict[str, Any]], language: str | None) -> list[dict[str, Any]]:

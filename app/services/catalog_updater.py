@@ -89,7 +89,9 @@ class CatalogUpdater:
             #  translation, and sorting — no need to reimplement here)
             from app.services.manifest import manifest_service
 
-            manifest = await manifest_service.get_manifest_for_token(token)
+            # Force a rebuild: this job exists to push a *fresh* catalog list to
+            # Stremio, so reading the manifest cache would make it a no-op.
+            manifest = await manifest_service.get_manifest_for_token(token, force_rebuild=True)
             catalogs = manifest.get("catalogs", [])
 
             if auth_key:

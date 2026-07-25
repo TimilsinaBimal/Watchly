@@ -23,6 +23,7 @@ from app.services.recommendation.top_picks import TopPicksService
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
+from app.services.warmup import warmup_service
 
 
 class CatalogService:
@@ -56,8 +57,11 @@ class CatalogService:
                 detail="Invalid or expired token. Please reconfigure the addon.",
             )
 
-        # Trigger lazy update if needed
-        if settings.AUTO_UPDATE_CATALOGS:
+        # Trigger lazy update if needed. Skipped while a warm-up is running: on a
+        # re-configure last_updated carries over from the old record, so this would
+        # otherwise fire a full manifest rebuild and Stremio push alongside the warm
+        # that is already doing exactly that.
+        if settings.AUTO_UPDATE_CATALOGS and not await warmup_service.is_warming(token):
             try:
                 await catalog_updater.trigger_update(token, credentials)
             except Exception as e:

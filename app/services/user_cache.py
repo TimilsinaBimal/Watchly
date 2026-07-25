@@ -7,12 +7,15 @@ from loguru import logger
 from app.core.constants import (
     CATALOG_KEY,
     LIBRARY_ITEMS_KEY,
+    MANIFEST_CACHE_TTL_SECONDS,
+    MANIFEST_KEY,
     PROFILE_KEY,
     PROFILE_SCORING_VERSION,
     USER_CACHE_TTL_SECONDS,
     WATCHED_SETS_KEY,
 )
 from app.core.security import redact_token
+from app.core.version import __version__
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
 from app.services import cache_codec
@@ -36,9 +39,37 @@ class UserCacheService:
         return WATCHED_SETS_KEY.format(token=token, content_type=content_type)
 
     @staticmethod
+    def _manifest_key(token: str) -> str:
+        """Generate cache key for the assembled manifest."""
+        return MANIFEST_KEY.format(version=__version__, token=token)
+
+    @staticmethod
     def _library_buckets_key(token: str, content_type: str) -> str:
         """Generate cache key for the rating-bucket map behind the cached profile."""
         return f"watchly:library_buckets:v1:{token}:{content_type}"
+
+    # Manifest Methods
+
+    async def get_manifest(self, token: str) -> dict[str, Any] | None:
+        """Get the cached manifest for a user."""
+        cached = await redis_service.get(self._manifest_key(token))
+        if not cached:
+            return None
+        try:
+            return json.loads(cache_codec.decode(cached))
+        except json.JSONDecodeError:
+            return None
+
+    async def set_manifest(self, token: str, manifest: dict[str, Any]) -> None:
+        """Cache the assembled manifest for a user."""
+        payload = cache_codec.encode(json.dumps(manifest))
+        await redis_service.set(self._manifest_key(token), payload, MANIFEST_CACHE_TTL_SECONDS)
+        logger.debug(f"[{redact_token(token)}...] Cached manifest")
+
+    async def invalidate_manifest(self, token: str) -> None:
+        """Drop the cached manifest — settings changes alter the catalog list."""
+        await redis_service.delete(self._manifest_key(token))
+        logger.debug(f"[{redact_token(token)}...] Invalidated manifest cache")
 
     # Library Items Methods
 
