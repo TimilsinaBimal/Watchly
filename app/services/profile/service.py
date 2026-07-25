@@ -3,55 +3,17 @@ from typing import Any
 from loguru import logger
 
 from app.core.settings import UserSettings
-from app.models.history import WatchHistory, WatchHistoryItem
-from app.models.library import LibraryCollection, StremioLibraryItem, StremioState
+from app.models.history import WatchHistory
+from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
 from app.services.profile.vectorizer import ItemVectorizer
 from app.services.recommendation.filtering import RecommendationFiltering
-from app.services.stremio.library import stremio_library_to_watch_history
+from app.services.stremio.library import stremio_library_to_watch_history, watch_history_to_library_collection
 from app.services.tmdb.service import get_tmdb_service
 from app.services.user_cache import user_cache
-
-# Stand-in runtime for external items, which report completion as a fraction with
-# no duration. Only the timeWatched/duration ratio is ever read, so the value is
-# arbitrary — it just has to be large enough that int() rounding doesn't bite.
-_COMPLETION_DURATION_PROXY = 6000
-
-
-def _watch_history_item_to_library_item(item: WatchHistoryItem) -> StremioLibraryItem:
-    """Convert a WatchHistoryItem into the library shape the scorer understands.
-
-    Scoring is deliberately left to ScoringService. This used to hand back a
-    ScoredItem with a flat score of 50.0 and is_recent=False for every item,
-    which silently discarded completion, rewatch and recency for Trakt/Simkl
-    users and left their scores unrankable.
-    """
-    # External sources report completion as a fraction, the scorer wants a
-    # watched/total pair, so completion is expressed against an arbitrary fixed
-    # duration. Deliberately not setting flaggedWatched: the scorer skips its
-    # rewatch bonus entirely when that flag is set (see _calculate_score_components),
-    # and a full timeWatched/duration ratio already says "watched".
-    completion = min(max(item.completion, 0.0), 1.0)
-    state = StremioState(
-        lastWatched=item.last_watched,
-        duration=_COMPLETION_DURATION_PROXY,
-        timeWatched=int(_COMPLETION_DURATION_PROXY * completion),
-        timesWatched=item.watch_count,
-    )
-
-    return StremioLibraryItem(
-        _id=item.imdb_id,
-        type=item.type,
-        name=item.name,
-        state=state,
-        temp=False,
-        removed=False,
-        _is_loved=item.rating is not None and item.rating >= 9.0,
-        _is_liked=item.rating is not None and 7.0 <= item.rating < 9.0,
-    )
 
 
 class ProfileService:
@@ -186,23 +148,35 @@ class ProfileService:
         source: str | None = None,
     ) -> tuple[TasteProfile | None, set[str]]:
         """Build taste profile from external watch history (Trakt/Simkl)."""
-        typed_items = [it for it in watch_history.items if it.type == content_type]
-        if not typed_items:
-            return None, extra_exclusion_imdb or set()
-
-        scored_items = [
-            self.scoring_service.process_item(_watch_history_item_to_library_item(it)) for it in typed_items
-        ]
-        profile = await self.builder.build_profile(scored_items, content_type=content_type)
-
-        if profile is not None:
-            profile.source = source or watch_history.source or "stremio"
+        collection = watch_history_to_library_collection(watch_history)
+        profile = await self._build_from_collection(
+            collection, content_type, source or watch_history.source or "stremio"
+        )
 
         watched_imdb = watch_history.imdb_ids()
         if extra_exclusion_imdb:
             watched_imdb |= extra_exclusion_imdb
 
         return profile, watched_imdb
+
+    async def _build_from_collection(
+        self, collection: LibraryCollection, content_type: str, source: str
+    ) -> TasteProfile | None:
+        """Score and vectorise a library collection into a profile.
+
+        The single build path for external sources. Every item is scored — unlike
+        the Stremio path, which samples first — so the ratings a user connected
+        Trakt or Simkl for all reach the profile.
+        """
+        typed_items = collection.for_type(content_type).all_items()
+        if not typed_items:
+            return None
+
+        scored_items = [self.scoring_service.process_item(it) for it in typed_items]
+        profile = await self.builder.build_profile(scored_items, content_type=content_type)
+        if profile is not None:
+            profile.source = source
+        return profile
 
     async def build_and_cache_profile(
         self,
@@ -375,8 +349,6 @@ class ProfileService:
         network failure). The collection's `source` field carries the origin
         so cache layers can detect a source switch.
         """
-        from app.services.stremio.library import watch_history_to_library_collection
-
         history, _, _ = await self.fetch_external_watch_history(source, user_settings, token)
         if history is None:
             return None
@@ -409,52 +381,26 @@ class ProfileService:
                 logger.debug(f"[{token[:8]}...] {source} library unchanged; reusing cached {content_type} profile")
                 return cached
 
-        watch_history: WatchHistory | None = None
-
         if library.source == source:
-            # context layer already pulled from the same source — reuse it.
-            watch_history = WatchHistory(
-                items=[
-                    item
-                    for items in (library.loved, library.liked, library.watched)
-                    for item in (
-                        WatchHistoryItem(
-                            imdb_id=lib.id,
-                            type=lib.type,
-                            name=lib.name,
-                            rating=(9.0 if lib.is_loved else (7.0 if lib.is_liked else None)),
-                            watch_count=lib.state.timesWatched or (1 if lib.state.flaggedWatched else 0),
-                            completion=(
-                                1.0
-                                if lib.state.flaggedWatched or (lib.state.timesWatched or 0) > 0
-                                else (
-                                    min((lib.state.timeWatched or 0) / lib.state.duration, 1.0)
-                                    if lib.state.duration
-                                    else 0.0
-                                )
-                            ),
-                            last_watched=lib.state.lastWatched,
-                            source=source,
-                        )
-                        for lib in items
-                    )
-                ],
-                source=source,
-            )
+            # The context layer already pulled from this source, and the library is
+            # itself a conversion of that history — so build straight from it. This
+            # used to reconstruct a WatchHistory from the library and convert it
+            # back, which re-derived every rating from its bucket and lost the rest.
+            profile = await self._build_from_collection(library, content_type, source)
+            watched_imdb = library.all_imdb_ids()
         else:
             watch_history, _, _ = await self.fetch_external_watch_history(source, user_settings, token)
 
-        # An empty WatchHistory still counts as "the source spoke" — only fall back
-        # on actual failure (None), not on a user with zero history.
-        effective_source = source
-        if watch_history is None:
-            watch_history = stremio_library_to_watch_history(library)
-            effective_source = "stremio"
+            # An empty WatchHistory still counts as "the source spoke" — only fall
+            # back on actual failure (None), not on a user with zero history.
+            effective_source = source
+            if watch_history is None:
+                watch_history = stremio_library_to_watch_history(library)
+                effective_source = "stremio"
 
-        stremio_imdb = library.all_imdb_ids()
-        profile, watched_imdb = await self.build_profile_from_watch_history(
-            watch_history, content_type, extra_exclusion_imdb=stremio_imdb, source=effective_source
-        )
+            profile, watched_imdb = await self.build_profile_from_watch_history(
+                watch_history, content_type, extra_exclusion_imdb=library.all_imdb_ids(), source=effective_source
+            )
 
         if library_is_source:
             await user_cache.update_library_signature(token, content_type, typed)

@@ -60,11 +60,11 @@ def service():
     svc = ProfileService.__new__(ProfileService)
     rebuilds = []
 
-    async def fake_build(watch_history, content_type, extra_exclusion_imdb=None, source=None):
+    async def fake_build(collection, content_type, source):
         rebuilds.append(content_type)
-        return TasteProfile(source=source or "trakt", scoring_version=PROFILE_SCORING_VERSION), {"tt-rebuilt"}
+        return TasteProfile(source=source, scoring_version=PROFILE_SCORING_VERSION)
 
-    svc.build_profile_from_watch_history = fake_build
+    svc._build_from_collection = fake_build
     return svc, rebuilds
 
 
@@ -106,7 +106,7 @@ def test_rerating_an_existing_title_forces_a_rebuild(fake_redis):
     _, _, watched_imdb = asyncio.run(svc._build_from_external_source("trakt", None, "movie", promoted, token=TOKEN))
 
     assert rebuilds == ["movie"]
-    assert watched_imdb == {"tt-rebuilt"}
+    assert watched_imdb == {"tt1", "tt2"}
 
 
 def test_added_title_forces_a_rebuild(fake_redis):
@@ -166,13 +166,13 @@ def test_external_items_get_real_scores_not_a_flat_constant():
     and recency never reached the profile — and nothing could be ranked."""
     from app.models.history import WatchHistoryItem
     from app.services.profile.scoring import ScoringService
-    from app.services.profile.service import _watch_history_item_to_library_item
+    from app.services.stremio.library import watch_history_item_to_library_item
 
     scoring = ScoringService()
 
     def score_for(**kwargs):
-        item = WatchHistoryItem(imdb_id="tt1", type="movie", name="X", **kwargs)
-        return scoring.process_item(_watch_history_item_to_library_item(item))
+        history_item = WatchHistoryItem(imdb_id="tt1", type="movie", name="X", **kwargs)
+        return scoring.process_item(watch_history_item_to_library_item(history_item, False, False))
 
     part_watched = score_for(completion=0.4, watch_count=1)
     watched_once = score_for(completion=1.0, watch_count=1)
@@ -184,11 +184,22 @@ def test_external_items_get_real_scores_not_a_flat_constant():
     assert part_watched.completion_rate < watched_once.completion_rate
 
     # A completed rewatch must keep its rewatch credit: the scorer drops the
-    # rewatch bonus when flaggedWatched is set, so the adapter must not set it.
+    # rewatch bonus when flaggedWatched is set, so the converter must not set it.
     assert rewatched.is_rewatched
     assert not watched_once.is_rewatched
 
-    # Ratings still map to the same buckets the recommendation code keys on.
-    assert score_for(rating=9.5).source_type == "loved"
-    assert score_for(rating=7.5).source_type == "liked"
-    assert score_for(rating=None).source_type == "watched"
+
+def test_ratings_still_map_to_buckets():
+    """Bucketing is what reaches the profile as source_type, so it has to survive
+    the conversion the profile build now relies on."""
+    from app.models.history import WatchHistory, WatchHistoryItem
+    from app.services.stremio.library import watch_history_to_library_collection
+
+    def one(rating, watch_count=1):
+        return WatchHistoryItem(imdb_id=f"tt{rating}", type="movie", name="X", rating=rating, watch_count=watch_count)
+
+    collection = watch_history_to_library_collection(WatchHistory(items=[one(9.5), one(7.5), one(4.0)], source="trakt"))
+
+    assert [i.id for i in collection.loved] == ["tt9.5"]
+    assert [i.id for i in collection.liked] == ["tt7.5"]
+    assert [i.id for i in collection.watched] == ["tt4.0"]
