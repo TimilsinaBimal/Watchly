@@ -5,7 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.constants import DEFAULT_CONCURRENCY_LIMIT
+from app.core.constants import DEFAULT_CONCURRENCY_LIMIT, PROFILE_SCORING_VERSION
 from app.models.profile import ScoredItem, TasteProfile
 from app.services.profile.constants import (
     CAP_CAST,
@@ -119,6 +119,7 @@ class ProfileBuilder:
             profile.average_episodes = total_weighted_episodes / total_weight_for_episodes
 
         profile.processed_items = processed_ids
+        profile.scoring_version = PROFILE_SCORING_VERSION
 
         if not profile.genre_scores and not profile.keyword_scores:
             logger.warning(

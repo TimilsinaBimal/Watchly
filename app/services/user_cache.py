@@ -5,7 +5,14 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.constants import CATALOG_KEY, LIBRARY_ITEMS_KEY, PROFILE_KEY, USER_CACHE_TTL_SECONDS, WATCHED_SETS_KEY
+from app.core.constants import (
+    CATALOG_KEY,
+    LIBRARY_ITEMS_KEY,
+    PROFILE_KEY,
+    PROFILE_SCORING_VERSION,
+    USER_CACHE_TTL_SECONDS,
+    WATCHED_SETS_KEY,
+)
 from app.core.security import redact_token
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
@@ -92,7 +99,7 @@ class UserCacheService:
             content_type: Content type (movie or series)
 
         Returns:
-            TasteProfile instance, or None if not cached
+            TasteProfile instance, or None if not cached or built by older scoring
         """
         key = self._profile_key(token, content_type)
         cached = await redis_service.get(key)
@@ -100,11 +107,23 @@ class UserCacheService:
         if cached:
             try:
                 profile = TasteProfile.model_validate_json(cached)
-                await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
-                return profile
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Failed to decode cached profile for {redact_token(token)}.../{content_type}: {e}")
                 return None
+
+            # Dropped here rather than at the build sites: catalog_service reads
+            # profiles straight out of the cache, so a version check anywhere else
+            # would be bypassed on the hot path.
+            if profile.scoring_version < PROFILE_SCORING_VERSION:
+                logger.info(
+                    f"[{redact_token(token)}...] Dropping {content_type} profile from scoring "
+                    f"v{profile.scoring_version}; rebuilding at v{PROFILE_SCORING_VERSION}"
+                )
+                await redis_service.delete(key)
+                return None
+
+            await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
+            return profile
 
         return None
 

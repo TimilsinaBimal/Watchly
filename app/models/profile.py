@@ -64,6 +64,9 @@ class TasteProfile(BaseModel):
     # cached profiles when the user changes watch_history_source in settings,
     # so a Stremio-built profile isn't served after switching to Trakt/Simkl.
     source: str = Field(default="stremio", description="stremio | trakt | simkl")
+    # Defaults to 1 so profiles cached before this field existed read as v1 and
+    # get rebuilt. See PROFILE_SCORING_VERSION.
+    scoring_version: int = Field(default=1, description="Scoring maths version this profile was built with")
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}

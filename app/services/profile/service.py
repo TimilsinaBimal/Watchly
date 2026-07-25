@@ -5,7 +5,7 @@ from loguru import logger
 from app.core.settings import UserSettings
 from app.models.history import WatchHistory, WatchHistoryItem
 from app.models.library import LibraryCollection, StremioLibraryItem, StremioState
-from app.models.profile import ScoredItem, TasteProfile
+from app.models.profile import TasteProfile
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
@@ -15,46 +15,42 @@ from app.services.stremio.library import stremio_library_to_watch_history
 from app.services.tmdb.service import get_tmdb_service
 from app.services.user_cache import user_cache
 
+# Stand-in runtime for external items, which report completion as a fraction with
+# no duration. Only the timeWatched/duration ratio is ever read, so the value is
+# arbitrary — it just has to be large enough that int() rounding doesn't bite.
+_COMPLETION_DURATION_PROXY = 6000
 
-def _watch_history_item_to_scored(item: WatchHistoryItem) -> ScoredItem:
-    """Convert a WatchHistoryItem to a ScoredItem for the existing vectorizer pipeline."""
-    state_kwargs: dict[str, Any] = {}
-    if item.last_watched:
-        state_kwargs["lastWatched"] = item.last_watched
-    state_kwargs["timesWatched"] = item.watch_count
 
-    if item.completion < 1.0:
-        state_kwargs["duration"] = 6000
-        state_kwargs["timeWatched"] = int(6000 * item.completion)
-    else:
-        state_kwargs["timesWatched"] = max(item.watch_count, 1)
-        state_kwargs["flaggedWatched"] = 1
+def _watch_history_item_to_library_item(item: WatchHistoryItem) -> StremioLibraryItem:
+    """Convert a WatchHistoryItem into the library shape the scorer understands.
 
-    state = StremioState(**state_kwargs)
+    Scoring is deliberately left to ScoringService. This used to hand back a
+    ScoredItem with a flat score of 50.0 and is_recent=False for every item,
+    which silently discarded completion, rewatch and recency for Trakt/Simkl
+    users and left their scores unrankable.
+    """
+    # External sources report completion as a fraction, the scorer wants a
+    # watched/total pair, so completion is expressed against an arbitrary fixed
+    # duration. Deliberately not setting flaggedWatched: the scorer skips its
+    # rewatch bonus entirely when that flag is set (see _calculate_score_components),
+    # and a full timeWatched/duration ratio already says "watched".
+    completion = min(max(item.completion, 0.0), 1.0)
+    state = StremioState(
+        lastWatched=item.last_watched,
+        duration=_COMPLETION_DURATION_PROXY,
+        timeWatched=int(_COMPLETION_DURATION_PROXY * completion),
+        timesWatched=item.watch_count,
+    )
 
-    is_loved = item.rating is not None and item.rating >= 9.0
-    is_liked = item.rating is not None and 7.0 <= item.rating < 9.0
-
-    lib_item = StremioLibraryItem(
+    return StremioLibraryItem(
         _id=item.imdb_id,
         type=item.type,
         name=item.name,
         state=state,
         temp=False,
         removed=False,
-        _is_loved=is_loved,
-        _is_liked=is_liked,
-    )
-
-    source_type = "loved" if is_loved else ("liked" if is_liked else "watched")
-
-    return ScoredItem(
-        item=lib_item,
-        score=50.0,
-        completion_rate=item.completion,
-        is_rewatched=item.watch_count > 1,
-        is_recent=False,
-        source_type=source_type,
+        _is_loved=item.rating is not None and item.rating >= 9.0,
+        _is_liked=item.rating is not None and 7.0 <= item.rating < 9.0,
     )
 
 
@@ -194,7 +190,9 @@ class ProfileService:
         if not typed_items:
             return None, extra_exclusion_imdb or set()
 
-        scored_items = [_watch_history_item_to_scored(it) for it in typed_items]
+        scored_items = [
+            self.scoring_service.process_item(_watch_history_item_to_library_item(it)) for it in typed_items
+        ]
         profile = await self.builder.build_profile(scored_items, content_type=content_type)
 
         if profile is not None:
