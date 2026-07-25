@@ -221,7 +221,24 @@ async function fetchStremioIdentity(authKey) {
         payload.email = emailInput.value.trim();
         payload.password = passwordInput.value;
     }
+    await fetchIdentity(payload);
+}
 
+// Look up an existing account by a freshly connected Trakt/Simkl token, so
+// provider-only users get their saved settings and dashboard back without a
+// Stremio login. Lookup failures are non-fatal — the user can still configure.
+export async function recallProviderAccount(provider, tokens) {
+    const payload = provider === 'trakt'
+        ? { trakt_access_token: tokens.access_token }
+        : { simkl_access_token: tokens.access_token };
+    try {
+        await fetchIdentity(payload);
+    } catch (e) {
+        console.warn(`Account lookup via ${provider} failed:`, e);
+    }
+}
+
+async function fetchIdentity(payload) {
     const sortingOrderSelect = document.getElementById("sortingOrderSelect");
     if (sortingOrderSelect) {
         payload.sorting_order = sortingOrderSelect.value;
@@ -234,11 +251,7 @@ async function fetchStremioIdentity(authKey) {
     if (simklApiKeyInput) {
         payload.simkl_api_key = simklApiKeyInput.value.trim();
     }
-    const geminiApiKeyInput = document.getElementById("geminiApiKey");
-    if (geminiApiKeyInput) {
-        payload.gemini_api_key = geminiApiKeyInput.value.trim();
-    }
-    const res = await fetch('/tokens/stremio-identity', {
+    const res = await fetch('/tokens/identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -255,6 +268,7 @@ async function fetchStremioIdentity(authKey) {
     // Remember whether this account already has an install (and its token) so the
     // Dashboard section can load it without a second login.
     if (appState) {
+        appState.auth.loggedIn = true;
         appState.auth.token = data.token || '';
         appState.auth.hasInstall = !!data.exists;
         appState.auth.userDisplay = userDisplay;
@@ -311,8 +325,20 @@ async function fetchStremioIdentity(authKey) {
             const simklApiKeyInput = document.getElementById('simklApiKey');
             if (s.simkl_api_key && simklApiKeyInput) simklApiKeyInput.value = s.simkl_api_key;
 
-            const geminiApiKeyInput = document.getElementById('geminiApiKey');
-            if (s.gemini_api_key && geminiApiKeyInput) geminiApiKeyInput.value = s.gemini_api_key;
+            // LLM config; legacy gemini_api_key maps onto the gemini provider
+            const llmProviderSelect = document.getElementById('llmProvider');
+            const llmApiKeyInput = document.getElementById('llmApiKey');
+            const llmModelInput = document.getElementById('llmModel');
+            const llm = (s.llm && s.llm.api_key)
+                ? s.llm
+                : (s.gemini_api_key ? { provider: 'gemini', api_key: s.gemini_api_key, model: null } : null);
+            if (llm && llmProviderSelect && llmApiKeyInput) {
+                llmProviderSelect.value = llm.provider;
+                llmApiKeyInput.value = llm.api_key;
+                if (llmModelInput) llmModelInput.value = llm.model || '';
+                // Trigger change event to show the key/model fields
+                llmProviderSelect.dispatchEvent(new Event('change'));
+            }
 
             // Watch History Source + OAuth tokens
             restoreWatchHistoryState(s);

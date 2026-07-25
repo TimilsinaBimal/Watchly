@@ -6,7 +6,7 @@ from typing import Any, cast
 from loguru import logger
 
 from app.core.constants import DISCOVER_ONLY_EXTRA
-from app.core.settings import CatalogConfig, UserSettings
+from app.core.settings import CatalogConfig, LLMConfig, UserSettings, resolve_llm_config
 from app.models.library import LibraryCollection
 from app.services.profile.service import ProfileService
 from app.services.row_generator import RowGeneratorService
@@ -213,13 +213,13 @@ class DynamicCatalogService:
         display_at_home: bool,
         token: str | None,
     ) -> list[dict[str, Any]]:
-        gemini_api_key = user_settings.gemini_api_key if user_settings else None
+        llm_config = resolve_llm_config(user_settings)
 
         tasks = []
         if enabled_movie:
-            tasks.append(self._build_theme_rows_for_type(library_items, "movie", gemini_api_key, token, user_settings))
+            tasks.append(self._build_theme_rows_for_type(library_items, "movie", llm_config, token, user_settings))
         if enabled_series:
-            tasks.append(self._build_theme_rows_for_type(library_items, "series", gemini_api_key, token, user_settings))
+            tasks.append(self._build_theme_rows_for_type(library_items, "series", llm_config, token, user_settings))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         catalogs: list[dict[str, Any]] = []
@@ -245,7 +245,7 @@ class DynamicCatalogService:
         self,
         library_items: LibraryCollection,
         media_type: str,
-        gemini_api_key: str | None,
+        llm_config: LLMConfig | None,
         token: str | None,
         user_settings: UserSettings | None = None,
     ) -> tuple[str, list[Any]]:
@@ -270,7 +270,7 @@ class DynamicCatalogService:
             logger.warning(f"Failed to build profile for {media_type}")
             return media_type, []
 
-        rows = await self.row_generator.generate_rows(profile, media_type, api_key=gemini_api_key)
+        rows = await self.row_generator.generate_rows(profile, media_type, llm_config=llm_config)
         return media_type, rows
 
     # --- Item-based rows ---

@@ -8,9 +8,10 @@ from app.services.recommendation.catalog_service import catalog_service
 
 router = APIRouter()
 
-# Stremio auth tokens are short (~24 char) hex/alphanumeric strings. Accept up
-# to 32 chars of [A-Za-z0-9] as a sanity check; anything else is malformed.
-_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9]{1,32}$")
+# Tokens are either legacy Stremio user ids (~24 char alphanumeric) or minted
+# base64url strings (token_urlsafe, includes '-' and '_'). Accept up to 64
+# chars of that alphabet as a sanity check; anything else is malformed.
+_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 @router.get("/{token}/catalog/{type}/{id}.json")

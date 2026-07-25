@@ -1,5 +1,6 @@
 import base64
 import json
+import secrets
 from typing import Any
 
 import redis.asyncio as redis
@@ -19,6 +20,10 @@ class TokenStore:
     """Redis-backed store for user credentials and auth tokens."""
 
     KEY_PREFIX = settings.REDIS_TOKEN_KEY
+    # provider identity (stremio user id / trakt slug / simkl account id) -> account token
+    IDENTITY_KEY_PREFIX = "watchly:identity:"
+    # absorbed account token -> surviving account token (written on account merge)
+    ALIAS_KEY_PREFIX = "watchly:token_alias:"
 
     def __init__(self) -> None:
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
@@ -55,22 +60,59 @@ class TokenStore:
         """Format Redis key from token."""
         return f"{self.KEY_PREFIX}{token}"
 
-    def get_token_from_user_id(self, user_id: str) -> str:
-        return user_id.strip()
+    @staticmethod
+    def mint_token() -> str:
+        """Generate an opaque account token for the manifest URL."""
+        return secrets.token_urlsafe(16)
 
-    def get_user_id_from_token(self, token: str) -> str:
-        return token.strip() if token else ""
+    def _identity_key(self, provider: str, provider_user_id: str) -> str:
+        return f"{self.IDENTITY_KEY_PREFIX}{provider}:{provider_user_id}"
 
-    async def store_user_data(self, user_id: str, payload: dict[str, Any]) -> str:
+    async def _set_with_token_ttl(self, key: str, value: str) -> None:
+        if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
+            await redis_service.set(key, value, settings.TOKEN_TTL_SECONDS)
+        else:
+            await redis_service.set(key, value)
+
+    async def get_token_for_identity(self, provider: str, provider_user_id: str) -> str | None:
+        token = await redis_service.get(self._identity_key(provider, provider_user_id))
+        return await self.resolve_alias(token) if token else None
+
+    async def set_identity(self, provider: str, provider_user_id: str, token: str) -> None:
+        await self._set_with_token_ttl(self._identity_key(provider, provider_user_id), token)
+
+    async def delete_identity(self, provider: str, provider_user_id: str) -> None:
+        await redis_service.delete(self._identity_key(provider, provider_user_id))
+
+    async def resolve_alias(self, token: str) -> str:
+        """Follow merge aliases to the surviving account token.
+
+        Bounded walk: chains only grow when an already-merged account is merged
+        again, so they stay short.
+        """
+        for _ in range(5):
+            target = await redis_service.get(f"{self.ALIAS_KEY_PREFIX}{token}")
+            if not target:
+                break
+            token = target
+        return token
+
+    async def merge_into(self, absorbed_token: str, surviving_token: str) -> None:
+        """Merge an account into another, keeping the absorbed manifest URL working.
+
+        The alias is written before the absorbed record is deleted so concurrent
+        requests never hit a window where neither resolves. Identity index
+        entries still pointing at the absorbed token resolve through the alias.
+        """
+        await self._set_with_token_ttl(f"{self.ALIAS_KEY_PREFIX}{absorbed_token}", surviving_token)
+        await self.delete_token(absorbed_token)
+
+    async def store_user_data(self, token: str, payload: dict[str, Any]) -> str:
         self._ensure_secure_salt()
-        token = self.get_token_from_user_id(user_id)
         key = self._format_key(token)
 
         # Prepare data for storage (Plain JSON, no encryption needed)
         storage_data = payload.copy()
-
-        # Store user_id in payload for convenience
-        storage_data["user_id"] = user_id
 
         if storage_data.get("authKey"):
             storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
@@ -80,7 +122,7 @@ class TokenStore:
             try:
                 storage_data["password"] = self.encrypt_token(storage_data["password"])
             except Exception as exc:
-                logger.error(f"Password encryption failed for {redact_token(user_id)}: {exc}")
+                logger.error(f"Password encryption failed for {redact_token(token)}: {exc}")
                 # Do not store plaintext passwords
                 raise RuntimeError("PASSWORD_ENCRYPT_FAILED")
 
@@ -97,7 +139,17 @@ class TokenStore:
                     if not api_key.startswith("gAAAAAB"):
                         poster_rating["api_key"] = self.encrypt_token(api_key)
                 except Exception as exc:
-                    logger.warning(f"Failed to encrypt poster_rating api_key for {redact_token(user_id)}: {exc}")
+                    logger.warning(f"Failed to encrypt poster_rating api_key for {redact_token(token)}: {exc}")
+
+        # Encrypt llm api_key if present
+        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
+            llm_config = storage_data["settings"].get("llm")
+            if llm_config and isinstance(llm_config, dict) and llm_config.get("api_key"):
+                try:
+                    if not llm_config["api_key"].startswith("gAAAAAB"):
+                        llm_config["api_key"] = self.encrypt_token(llm_config["api_key"])
+                except Exception as exc:
+                    logger.warning(f"Failed to encrypt llm api_key for {redact_token(token)}: {exc}")
 
         # Encrypt simkl_api_key if present
         if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
@@ -107,7 +159,7 @@ class TokenStore:
                     if not simkl_api_key.startswith("gAAAAAB"):
                         storage_data["settings"]["simkl_api_key"] = self.encrypt_token(simkl_api_key)
                 except Exception as exc:
-                    logger.warning(f"Failed to encrypt simkl_api_key for {redact_token(user_id)}: {exc}")
+                    logger.warning(f"Failed to encrypt simkl_api_key for {redact_token(token)}: {exc}")
 
         # Encrypt gemini_api_key if present
         if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
@@ -117,7 +169,7 @@ class TokenStore:
                     if not gemini_api_key.startswith("gAAAAAB"):
                         storage_data["settings"]["gemini_api_key"] = self.encrypt_token(gemini_api_key)
                 except Exception as exc:
-                    logger.warning(f"Failed to encrypt gemini_api_key for {redact_token(user_id)}: {exc}")
+                    logger.warning(f"Failed to encrypt gemini_api_key for {redact_token(token)}: {exc}")
 
         # Encrypt tmdb_api_key if present
         if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
@@ -127,7 +179,7 @@ class TokenStore:
                     if not tmdb_api_key.startswith("gAAAAAB"):
                         storage_data["settings"]["tmdb_api_key"] = self.encrypt_token(tmdb_api_key)
                 except Exception as exc:
-                    logger.warning(f"Failed to encrypt tmdb_api_key for {redact_token(user_id)}: {exc}")
+                    logger.warning(f"Failed to encrypt tmdb_api_key for {redact_token(token)}: {exc}")
 
         # Encrypt trakt tokens if present
         if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
@@ -138,7 +190,7 @@ class TokenStore:
                         if not value.startswith("gAAAAAB"):
                             storage_data["settings"][trakt_field] = self.encrypt_token(value)
                     except Exception as exc:
-                        logger.warning(f"Failed to encrypt {trakt_field} for {redact_token(user_id)}: {exc}")
+                        logger.warning(f"Failed to encrypt {trakt_field} for {redact_token(token)}: {exc}")
 
         # Encrypt simkl_access_token if present
         if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
@@ -148,7 +200,7 @@ class TokenStore:
                     if not simkl_access_token.startswith("gAAAAAB"):
                         storage_data["settings"]["simkl_access_token"] = self.encrypt_token(simkl_access_token)
                 except Exception as exc:
-                    logger.warning(f"Failed to encrypt simkl_access_token for {redact_token(user_id)}: {exc}")
+                    logger.warning(f"Failed to encrypt simkl_access_token for {redact_token(token)}: {exc}")
 
         json_str = json.dumps(storage_data)
 
@@ -172,9 +224,13 @@ class TokenStore:
         return token
 
     async def update_user_data(self, token: str, payload: dict[str, Any]) -> str:
-        """Update user data by token. This is a convenience wrapper around store_user_data."""
-        user_id = self.get_user_id_from_token(token)
-        return await self.store_user_data(user_id, payload)
+        """Update user data by token. This is a convenience wrapper around store_user_data.
+
+        Resolves merge aliases first so writes through an absorbed token land on
+        the surviving account instead of resurrecting the absorbed one.
+        """
+        token = await self.resolve_alias(token)
+        return await self.store_user_data(token, payload)
 
     async def _migrate_poster_rating_format_raw(self, token: str, redis_key: str, data: dict) -> dict | None:
         """Migrate old rpdb_key format to new poster_rating format in raw Redis data if needed."""
@@ -295,6 +351,14 @@ class TokenStore:
                     logger.debug(
                         f"Decryption failed for poster_rating api_key associated with {redact_token(token)}: {e}"
                     )
+
+            llm_config = data["settings"].get("llm")
+            if llm_config and isinstance(llm_config, dict) and llm_config.get("api_key"):
+                try:
+                    if llm_config["api_key"].startswith("gAAAAA"):
+                        llm_config["api_key"] = self.decrypt_token(llm_config["api_key"])
+                except Exception as e:
+                    logger.debug(f"Decryption failed for llm api_key associated with {redact_token(token)}: {e}")
 
             simkl_api_key = data["settings"].get("simkl_api_key")
             if simkl_api_key:

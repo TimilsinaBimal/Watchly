@@ -42,6 +42,7 @@ class PosterRatingsFactory:
                 imdb_id=item_id if item_id.startswith("tt") else None,
                 api_key=api_key,
                 language=kwargs.get("language"),
+                media_type=kwargs.get("media_type"),
             )
 
         poster_provider_map = {

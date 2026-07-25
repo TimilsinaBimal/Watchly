@@ -10,7 +10,7 @@ from app.services.stremio.service import StremioBundle
 router = APIRouter(prefix="/tokens", tags=["Tokens"])
 
 
-async def _trigger_initial_caching(auth_key: str, user_settings, token: str) -> None:
+async def _trigger_initial_caching(auth_key: str | None, user_settings, token: str) -> None:
     """Cache library and profiles after token creation. Failures are non-blocking."""
     from app.services.manifest import manifest_service
 
@@ -41,8 +41,8 @@ async def create_token(payload: TokenRequest) -> TokenResponse:
         raise HTTPException(status_code=503, detail="Storage temporarily unavailable.")
 
 
-@router.post("/stremio-identity", status_code=200)
-async def check_stremio_identity(payload: TokenRequest):
+@router.post("/identity", status_code=200)
+async def check_identity(payload: TokenRequest):
     try:
         return await auth_service.get_identity_with_settings(payload)
     except HTTPException:

@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Watchly - Personalized Stremio Recommendations</title>
+    <title>Watchly - Personalized Stremio &amp; Nuvio Recommendations</title>
     <meta name="description"
-        content="Stremio catalog addon that provides personalized movie and series recommendations based on your library.">
+        content="Catalog addon for Stremio and Nuvio that provides personalized movie and series recommendations based on your watch history.">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" href="/app/static/logo.png" type="image/png">
     <script>
@@ -293,6 +293,9 @@
         // Default catalog configurations from backend
         window.DEFAULT_CATALOGS = {{ default_catalogs | tojson }};
         window.YEAR_RANGE_DEFAULTS = {{ year_range_defaults | tojson }};
+
+        // Placeholder that stands in for a saved API key the server won't send back
+        window.STORED_SECRET = {{ stored_secret_sentinel | tojson }};
 
         // Genre constants from backend
         window.MOVIE_GENRES = {{ movie_genres | tojson }};

@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.api.endpoints.languages import fetch_languages_list
 from app.api.router import api_router
+from app.core.security import STORED_SECRET_SENTINEL
 from app.core.settings import get_current_year, get_default_catalogs_for_frontend, get_default_year_range
 from app.services.redis_service import redis_service
 from app.services.tmdb.genre import movie_genres, series_genres
@@ -106,6 +107,7 @@ async def configure_page(request: Request, _token: str | None = None):
         default_catalogs=default_catalogs,
         current_year=get_current_year(),
         year_range_defaults=year_range_defaults,
+        stored_secret_sentinel=STORED_SECRET_SENTINEL,
         movie_genres=movie_genres_list,
         series_genres=series_genres_list,
     )

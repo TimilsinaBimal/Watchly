@@ -73,6 +73,12 @@ export function initializeValidatedSecretField({
             return false;
         }
 
+        if (value === window.STORED_SECRET) {
+            // Placeholder for the saved key, which the server never sends back.
+            setValidationMessage(validationMessage, 'Using your saved key', 'success');
+            return true;
+        }
+
         validateBtn.disabled = true;
         validateBtn.classList.add('opacity-50', 'cursor-not-allowed');
         const originalHTML = validateBtn.innerHTML;

@@ -50,12 +50,13 @@ class RecommendationMetadata:
         genres_full = details.get("genres", []) or []
         release_date = details.get("release_date") or details.get("first_air_date") or ""
 
+        stremio_type = "series" if media_type in ["tv", "series"] else "movie"
         meta_data = {
             "id": stremio_id,
             "imdb_id": imdb_id,
-            "type": "series" if media_type in ["tv", "series"] else "movie",
+            "type": stremio_type,
             "name": title,
-            "poster": cls._get_poster_url(details, stremio_id, user_settings),
+            "poster": cls._get_poster_url(details, stremio_id, user_settings, stremio_type),
             "background": cls._get_backdrop_url(details),
             "description": details.get("overview"),
             "releaseInfo": release_date[:4] if release_date else None,
@@ -95,7 +96,7 @@ class RecommendationMetadata:
         return meta_data
 
     @staticmethod
-    def _get_poster_url(details: dict, item_id: str, user_settings: Any) -> str | None:
+    def _get_poster_url(details: dict, item_id: str, user_settings: Any, media_type: str) -> str | None:
         """Resolve poster URL using poster rating provider if configured, otherwise TMDB."""
         path = details.get("poster_path")
         poster_url = f"https://image.tmdb.org/t/p/w500{path}"
@@ -112,6 +113,7 @@ class RecommendationMetadata:
                     fallback=poster_url,
                     url_template=poster_rating.url_template,
                     language=user_settings.language,
+                    media_type=media_type,
                 )
                 # A custom template returns None for TMDB-only items; keep TMDB poster then.
                 if custom_url:

@@ -13,6 +13,7 @@ import { initializeSuccessActions, showSuccessSection } from './form-success.js'
 import { initializeYearSliderControl } from './year-slider.js';
 import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 import { setProviderConnected } from './accounts.js';
+import { recallProviderAccount } from './auth.js';
 
 const YEAR_RANGE_DEFAULTS = window.YEAR_RANGE_DEFAULTS || { min: 1970, max: new Date().getFullYear() };
 const LOADING_ICON = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
@@ -47,7 +48,7 @@ export function initializeForm(domElements, state, actions) {
     validatePosterRatingApiKey = initializePosterRatingProvider();
     initializeTmdb();
     initializeSimkl();
-    initializeGemini();
+    initializeLlm();
     updateYearSlider = initializeYearSliderControl();
     initializeWatchHistorySource();
 }
@@ -88,7 +89,9 @@ function getRequestPayload() {
         poster_rating_url_template: document.getElementById('posterRatingUrlTemplate')?.value.trim() || '',
         tmdb_api_key: document.getElementById('tmdbApiKey')?.value.trim() || '',
         simkl_api_key: document.getElementById('simklApiKey')?.value.trim() || '',
-        gemini_api_key: document.getElementById('geminiApiKey')?.value.trim() || '',
+        llm_provider: document.getElementById('llmProvider')?.value || '',
+        llm_api_key: document.getElementById('llmApiKey')?.value.trim() || '',
+        llm_model: document.getElementById('llmModel')?.value.trim() || '',
         excluded_movie_genres: Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value),
         excluded_series_genres: Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value),
         watch_history_source: document.getElementById('watchHistorySource')?.value || 'stremio',
@@ -123,7 +126,13 @@ function buildTokenPayload(formData) {
         poster_rating: posterRating || null,
         tmdb_api_key: formData.tmdb_api_key || undefined,
         simkl_api_key: formData.simkl_api_key,
-        gemini_api_key: formData.gemini_api_key,
+        llm: (formData.llm_provider && formData.llm_api_key)
+            ? {
+                provider: formData.llm_provider,
+                api_key: formData.llm_api_key,
+                model: formData.llm_model || undefined,
+            }
+            : undefined,
         excluded_movie_genres: formData.excluded_movie_genres,
         excluded_series_genres: formData.excluded_series_genres,
         watch_history_source: formData.watch_history_source,
@@ -135,8 +144,18 @@ function buildTokenPayload(formData) {
 }
 
 function validateFormData(formData) {
-    if (!formData.authKey && !(formData.email && formData.password)) {
-        showError('generalError', 'Please login with Stremio or enter email & password.');
+    const hasStremio = !!(formData.authKey || (formData.email && formData.password));
+    const hasTrakt = !!window._watchlyOAuth?.trakt?.access_token;
+    const hasSimkl = !!window._watchlyOAuth?.simkl?.access_token;
+
+    if (!hasStremio && !hasTrakt && !hasSimkl) {
+        showError('generalError', 'Connect at least one account: Stremio, Trakt, or Simkl.');
+        switchSection('login');
+        return false;
+    }
+
+    if (formData.watch_history_source === 'stremio' && !hasStremio) {
+        showError('generalError', 'Login with Stremio, or pick Trakt/Simkl as your watch history source.');
         switchSection('login');
         return false;
     }
@@ -190,6 +209,19 @@ function initializeFormSubmission() {
             }
 
             const data = await response.json();
+
+            // The server refreshed an expired Trakt token while verifying it.
+            // Trakt rotates refresh tokens, so keeping our old pair would make
+            // a second save present a spent refresh token.
+            if (data.refreshedTrakt) {
+                window._watchlyOAuth = window._watchlyOAuth || {};
+                window._watchlyOAuth.trakt = {
+                    access_token: data.refreshedTrakt.access_token,
+                    refresh_token: data.refreshedTrakt.refresh_token,
+                    expires_at: data.refreshedTrakt.expires_at,
+                };
+            }
+
             showSuccess(data.manifestUrl);
         } catch (error) {
             console.error('Error:', error);
@@ -261,10 +293,17 @@ function initializePosterRatingProvider() {
         }
     };
 
-    const CUSTOM_HELP = 'Paste a poster URL with placeholders: '
-        + '<code>{imdb_id}</code>, <code>{api_key}</code> (optional), '
-        + '<code>{language}</code> (e.g. en-US), <code>{language_short}</code> (e.g. en). '
-        + 'The API key field below is optional and fills <code>{api_key}</code>.';
+    const CUSTOM_HELP = 'Bring your own poster service. Paste one URL that Watchly fills in per title '
+        + 'before handing it to Stremio &mdash; the placeholders below are swapped for each item\'s values:'
+        + '<ul class="mt-2 space-y-1 list-disc list-inside">'
+        + '<li><code>{imdb_id}</code> &mdash; IMDb id, e.g. tt0468569 <em>(required)</em></li>'
+        + '<li><code>{type}</code> &mdash; <code>movie</code> or <code>series</code></li>'
+        + '<li><code>{language}</code> &mdash; full locale, e.g. en-US</li>'
+        + '<li><code>{language_short}</code> &mdash; language only, e.g. en</li>'
+        + '<li><code>{api_key}</code> &mdash; filled from the optional API key field below</li>'
+        + '</ul>'
+        + '<span class="block mt-2">Example: '
+        + '<code>https://example.com/{type}/{imdb_id}.jpg?lang={language_short}</code></span>';
 
     let isValidated = false;
 
@@ -341,6 +380,13 @@ function initializePosterRatingProvider() {
         if (!selectedProvider || !apiKey) {
             setValidationMessage(validationMessage, 'Please select a provider and enter an API key', 'error');
             return false;
+        }
+
+        if (apiKey === window.STORED_SECRET) {
+            // Placeholder for the saved key, which we never received — nothing to
+            // validate, and the server swaps the real key back in on submit.
+            isValidated = true;
+            return true;
         }
 
         if (!validateBtn) {
@@ -429,19 +475,51 @@ function initializeSimkl() {
     });
 }
 
-// Gemini AI Integration
-function initializeGemini() {
+// AI / LLM Integration
+const LLM_PROVIDER_INFO = {
+    gemini: { keyPlaceholder: 'Paste your Gemini API key here', modelPlaceholder: 'Model (default: gemini-2.5-flash)' },
+    openai: { keyPlaceholder: 'Paste your OpenAI API key here', modelPlaceholder: 'Model (default: gpt-5-mini)' },
+    anthropic: { keyPlaceholder: 'Paste your Anthropic API key here', modelPlaceholder: 'Model (default: claude-haiku-4-5)' },
+    openrouter: { keyPlaceholder: 'Paste your OpenRouter API key here', modelPlaceholder: 'Model (default: openai/gpt-4o-mini)' },
+};
+
+function initializeLlm() {
+    const providerSelect = document.getElementById('llmProvider');
+    const keyContainer = document.getElementById('llmApiKeyContainer');
+    const keyInput = document.getElementById('llmApiKey');
+    const modelContainer = document.getElementById('llmModelContainer');
+    const modelInput = document.getElementById('llmModel');
+
+    if (providerSelect) {
+        providerSelect.addEventListener('change', () => {
+            const info = LLM_PROVIDER_INFO[providerSelect.value];
+            if (keyContainer) keyContainer.style.display = info ? 'block' : 'none';
+            if (modelContainer) modelContainer.style.display = info ? 'block' : 'none';
+            if (info) {
+                if (keyInput) keyInput.placeholder = info.keyPlaceholder;
+                if (modelInput) modelInput.placeholder = info.modelPlaceholder;
+            } else {
+                if (keyInput) keyInput.value = '';
+                if (modelInput) modelInput.value = '';
+            }
+        });
+    }
+
     initializeValidatedSecretField({
-        input: document.getElementById('geminiApiKey'),
-        validateBtn: document.getElementById('geminiApiKeyValidate'),
-        validationMessage: document.getElementById('geminiValidationMessage'),
-        toggleBtn: document.getElementById('geminiApiKeyToggle'),
-        eyeIcon: document.getElementById('geminiApiKeyEye'),
-        eyeOffIcon: document.getElementById('geminiApiKeyEyeOff'),
-        emptyMessage: 'Please enter a Gemini API key',
-        successMessage: 'Gemini API key is valid ✓',
-        request: (apiKey) => postJson('/gemini/validation', { api_key: apiKey }),
-        getErrorMessage: (data) => data.message || 'Invalid Gemini API key'
+        input: keyInput,
+        validateBtn: document.getElementById('llmApiKeyValidate'),
+        validationMessage: document.getElementById('llmValidationMessage'),
+        toggleBtn: document.getElementById('llmApiKeyToggle'),
+        eyeIcon: document.getElementById('llmApiKeyEye'),
+        eyeOffIcon: document.getElementById('llmApiKeyEyeOff'),
+        emptyMessage: 'Please enter an API key',
+        successMessage: 'API key works ✓',
+        request: (apiKey) => postJson('/llm/validation', {
+            provider: providerSelect?.value || 'gemini',
+            api_key: apiKey,
+            model: modelInput?.value.trim() || undefined,
+        }),
+        getErrorMessage: (data) => data.message || 'Could not validate this key'
     });
 }
 
@@ -552,6 +630,13 @@ function initializeWatchHistorySource() {
             }
             if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
             setProviderConnected('simkl', true);
+        }
+
+        // First login this session: look up an existing account for this provider
+        // and load its saved settings. Skipped when an account is already loaded
+        // (e.g. via Stremio) so connecting a second provider can't overwrite it.
+        if ((data.provider === 'trakt' || data.provider === 'simkl') && !appState?.auth?.loggedIn) {
+            recallProviderAccount(data.provider, data.tokens);
         }
     });
 

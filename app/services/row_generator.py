@@ -14,8 +14,9 @@ from typing import Any
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from app.core.settings import LLMConfig
 from app.models.profile import TasteProfile
-from app.services.gemini import gemini_service
+from app.services.llm import llm_service
 from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres
 from app.services.tmdb.service import TMDBService, get_tmdb_service
@@ -43,7 +44,7 @@ class RowDefinition(BaseModel):
 
 
 class LLMRowTheme(BaseModel):
-    """Schema for Gemini structured output — a single themed catalog row."""
+    """Schema for LLM structured output — a single themed catalog row."""
 
     title: str = Field(description="Creative, short title for the collection (2-5 words)")
     genres: list[int] = Field(description="List of valid TMDB genre IDs")
@@ -237,9 +238,13 @@ class RowGeneratorService:
         self,
         profile: TasteProfile,
         content_type: str = "movie",
-        api_key: str | None = None,
+        llm_config: LLMConfig | None = None,
     ) -> list[RowDefinition]:
-        """Generate up to 3 personalized catalog rows."""
+        """Generate up to 3 personalized catalog rows.
+
+        Without an LLM config (user supplied no key) the rows come purely from
+        the template fallback — no LLM calls are made at all.
+        """
         genres = profile.get_top_genres(limit=5)
         keywords = profile.get_top_keywords(limit=10)
         countries = profile.get_top_countries(limit=2)
@@ -247,10 +252,10 @@ class RowGeneratorService:
 
         keyword_names = await self._resolve_keyword_names([kid for kid, _ in keywords])
 
-        if api_key:
+        if llm_config:
             try:
                 llm_rows = await self._generate_with_llm(
-                    profile, genres, keywords, keyword_names, content_type, api_key
+                    profile, genres, keywords, keyword_names, content_type, llm_config
                 )
                 if llm_rows:
                     logger.info(f"Generated {len(llm_rows)} LLM-driven rows for {content_type}")
@@ -259,19 +264,26 @@ class RowGeneratorService:
                 logger.warning(f"LLM row generation failed, using fallback: {e}")
 
         rows = build_fallback_rows(genres, keywords, countries, runtimes, keyword_names, content_type)
-        titled = await self._generate_titles(rows)
+        titled = await self._generate_titles(rows, llm_config)
         logger.info(f"Generated {len(titled)} rows (fallback) for {content_type}")
         return titled
 
-    # --- Title generation via Gemini ---
+    # --- Title polish via the user's LLM ---
 
-    async def _generate_titles(self, rows: list[tuple[list[tuple[str, str, Any]], str]]) -> list[RowDefinition]:
+    async def _generate_titles(
+        self,
+        rows: list[tuple[list[tuple[str, str, Any]], str]],
+        llm_config: LLMConfig | None,
+    ) -> list[RowDefinition]:
         if not rows:
             return []
 
+        if not llm_config:
+            return [RowDefinition(title=fallback, id=build_row_id(axes)) for axes, fallback in rows]
+
         prompts = [fallback for _, fallback in rows]
         results = await asyncio.gather(
-            *[gemini_service.generate_content_async(p) for p in prompts],
+            *[llm_service.generate_title(p, llm_config) for p in prompts],
             return_exceptions=True,
         )
 
@@ -291,7 +303,7 @@ class RowGeneratorService:
         keywords: list[tuple[int, float]],
         keyword_names: dict[int, str],
         content_type: str,
-        api_key: str,
+        llm_config: LLMConfig,
     ) -> list[RowDefinition] | None:
         genre_map = movie_genres if content_type == "movie" else series_genres
         valid_genres = ", ".join(f"{name} (ID: {gid})" for gid, name in genre_map.items())
@@ -327,15 +339,15 @@ class RowGeneratorService:
             "Output a JSON array of 3 objects."
         )
 
-        data = await gemini_service.generate_structured_async(
+        data = await llm_service.generate_structured(
             prompt=prompt,
-            response_schema=list[LLMRowTheme],
+            output_type=list[LLMRowTheme],
             system_instruction=(
                 "You are a creative film curator. Design 3 catalog rows from the user's interest summary. "
                 "Row 1: strong match. Row 2: blend + variety. Row 3: discovery. "
-                "Use genres, keywords, and country. Output valid JSON only."
+                "Use genres, keywords, and country."
             ),
-            api_key=api_key,
+            config=llm_config,
         )
 
         if not data or not isinstance(data, list):

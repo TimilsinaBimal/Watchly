@@ -1,5 +1,6 @@
 import { showConfirm, showToast } from './ui.js';
 import { switchSection } from './navigation.js';
+import { openNuvioInstall } from './nuvio.js';
 
 export function initializeSuccessActions({ emailInput, passwordInput, resetApp, setLoading, showError }) {
     const copyBtn = document.getElementById('copyBtn');
@@ -34,6 +35,15 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
             e.stopPropagation();
             const url = document.getElementById('addonUrl').textContent;
             window.open(`https://web.stremio.com/#/addons?addon=${encodeURIComponent(url)}`, '_blank');
+        });
+    }
+
+    const installNuvioBtn = document.getElementById('installNuvioBtn');
+    if (installNuvioBtn) {
+        installNuvioBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openNuvioInstall(document.getElementById('addonUrl').textContent);
         });
     }
 

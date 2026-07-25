@@ -36,7 +36,8 @@ class PosterRatingConfig(BaseModel):
     )
     api_key: str | None = Field(default=None, description="API key for the provider (optional for 'custom')")
     url_template: str | None = Field(
-        default=None, description="URL template with {imdb_id}/{api_key}/{language}/{language_short} for 'custom'"
+        default=None,
+        description="URL template with {imdb_id}/{type}/{api_key}/{language}/{language_short} for 'custom'",
     )
 
     @model_validator(mode="after")
@@ -51,6 +52,25 @@ class PosterRatingConfig(BaseModel):
         elif not (self.api_key or "").strip():
             raise ValueError(f"{self.provider} poster provider requires an api_key")
         return self
+
+
+LLM_PROVIDER_DEFAULT_MODELS = {
+    "gemini": "gemini-2.5-flash",
+    "openai": "gpt-5-mini",
+    "anthropic": "claude-haiku-4-5",
+    "openrouter": "openai/gpt-4o-mini",
+}
+
+
+class LLMConfig(BaseModel):
+    """User-supplied LLM provider configuration for AI features."""
+
+    provider: Literal["gemini", "openai", "anthropic", "openrouter"]
+    api_key: str = Field(description="API key for the provider")
+    model: str | None = Field(default=None, description="Model id; falls back to the provider default")
+
+    def resolved_model(self) -> str:
+        return self.model or LLM_PROVIDER_DEFAULT_MODELS[self.provider]
 
 
 def get_current_year() -> int:
@@ -86,6 +106,9 @@ class UserSettings(BaseModel):
         default="default", description="Order of movies and series catalogs"
     )
     simkl_api_key: str | None = Field(default=None, description="Simkl API Key for the user")
+    llm: LLMConfig | None = Field(default=None, description="LLM provider configuration for AI features")
+    # Superseded by `llm`; kept so accounts configured before multi-provider
+    # support keep their AI features (see resolve_llm_config).
     gemini_api_key: str | None = Field(default=None, description="Gemini API Key for AI-powered features")
     tmdb_api_key: str | None = Field(default=None, description="TMDB API Key (used if set; else server config)")
     trakt_access_token: str | None = Field(default=None, description="Trakt OAuth access token")
@@ -203,6 +226,21 @@ def get_default_catalogs_for_frontend() -> list[dict]:
             }
         )
     return catalogs
+
+
+def resolve_llm_config(user_settings: UserSettings | None) -> LLMConfig | None:
+    """The user's LLM config, or their legacy gemini_api_key wrapped as one.
+
+    Returns None when the user supplied no key — AI features are disabled then;
+    there is deliberately no server-key fallback.
+    """
+    if user_settings is None:
+        return None
+    if user_settings.llm and user_settings.llm.api_key:
+        return user_settings.llm
+    if user_settings.gemini_api_key:
+        return LLMConfig(provider="gemini", api_key=user_settings.gemini_api_key)
+    return None
 
 
 def resolve_tmdb_api_key(user_settings: UserSettings | None) -> str | None:
