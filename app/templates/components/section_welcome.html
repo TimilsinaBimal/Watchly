@@ -37,11 +37,11 @@
             </div>
         </div>
         <p class="text-lg md:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
-            Personalized Recommendation Engine for Stremio
+            Personalized Recommendation Engine for Stremio &amp; Nuvio
         </p>
         <p class="text-sm text-slate-400 max-w-2xl mx-auto">
-            Discover movies and series tailored to your unique taste, powered by your Stremio library
-            and watch history.
+            Discover movies and series tailored to your unique taste, powered by your Stremio, Trakt,
+            or Simkl watch history.
         </p>
         <!-- Announcement (from Jinja2 context) -->
         {% if announcement_html %}
@@ -157,6 +157,23 @@
             <h3 class="text-base font-bold text-white mb-1">Based on Your own Taste Profile</h3>
             <p class="text-xs text-slate-400 leading-relaxed">
                 Recommendations that are tailored to your own taste profile.
+            </p>
+        </div>
+
+        <!-- Feature 7 -->
+        <div
+            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-indigo-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-indigo-900/10">
+            <div
+                class="w-10 h-10 bg-indigo-500/10 text-indigo-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4">
+                    </path>
+                </svg>
+            </div>
+            <h3 class="text-base font-bold text-white mb-1">Stremio &amp; Nuvio</h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+                One-click install into either app, or copy the link and add it yourself.
             </p>
         </div>
     </div>
