@@ -7,6 +7,7 @@ from app.core.settings import UserSettings
 from app.models.history import WatchHistory
 from app.models.library import LibraryCollection, StremioLibraryItem
 from app.models.profile import TasteProfile
+from app.services.profile.scoring import ScoringService
 from app.services.profile.service import ProfileService
 from app.services.user_cache import user_cache
 
@@ -52,112 +53,154 @@ def library(loved=(), liked=(), watched=(), source="trakt") -> LibraryCollection
     )
 
 
+class FakeBuilder:
+    """Records incremental updates and folds the new ids into processed_items."""
+
+    def __init__(self, calls: dict):
+        self.calls = calls
+
+    async def update_profile_incrementally(self, existing, new_items, content_type=None):
+        self.calls["incremental"].append(content_type)
+        existing.processed_items |= {scored.item.id for scored in new_items}
+        return existing
+
+
 def service():
-    """ProfileService with the expensive build stubbed, so we can count rebuilds.
+    """ProfileService with the expensive build stubbed, so builds can be counted.
 
     __new__ skips __init__, which would construct a real vectorizer and TMDB client.
+    ScoringService is real — it does no I/O.
     """
     svc = ProfileService.__new__(ProfileService)
-    rebuilds = []
+    calls: dict[str, list] = {"full": [], "incremental": []}
 
-    async def fake_build(collection, content_type, source):
-        rebuilds.append(content_type)
-        return TasteProfile(source=source, scoring_version=PROFILE_SCORING_VERSION)
+    async def fake_full(collection, content_type, source):
+        calls["full"].append(content_type)
+        scored_ids = {i.id for i in collection.for_type(content_type).all_items()}
+        return TasteProfile(source=source, scoring_version=PROFILE_SCORING_VERSION, processed_items=scored_ids)
 
-    svc._build_from_collection = fake_build
-    return svc, rebuilds
+    svc._build_from_collection = fake_full
+    svc.scoring_service = ScoringService()
+    svc.builder = FakeBuilder(calls)
+    return svc, calls
 
 
 def seed_cached_profile(lib: LibraryCollection, content_type: str = "movie"):
-    """Store a profile plus the signature it was built from."""
-    asyncio.run(
-        user_cache.set_profile_and_watched_sets(
-            TOKEN,
-            content_type,
-            TasteProfile(source="trakt", scoring_version=PROFILE_SCORING_VERSION),
-            set(),
-            {"tt-cached"},
-        )
+    """Store a profile alongside the bucket map it was built from.
+
+    processed_items has to list the ids the profile actually scored — that is what
+    the build planner diffs against.
+    """
+    typed = lib.for_type(content_type)
+    profile = TasteProfile(
+        source="trakt",
+        scoring_version=PROFILE_SCORING_VERSION,
+        processed_items={i.id for i in typed.all_items()},
     )
-    asyncio.run(user_cache.update_library_signature(TOKEN, content_type, lib.for_type(content_type)))
+    asyncio.run(user_cache.set_profile_and_watched_sets(TOKEN, content_type, profile, set(), {"tt-cached"}))
+    asyncio.run(user_cache.set_library_buckets(TOKEN, content_type, typed))
+
+
+def build(svc, lib, content_type="movie", source="trakt"):
+    return asyncio.run(svc._build_from_external_source(source, None, content_type, lib, token=TOKEN))
 
 
 def test_unchanged_library_reuses_cached_profile(fake_redis):
     lib = library(loved=["tt1"], watched=["tt2"])
     seed_cached_profile(lib)
-    svc, rebuilds = service()
+    svc, calls = service()
 
-    profile, watched_tmdb, watched_imdb = asyncio.run(
-        svc._build_from_external_source("trakt", None, "movie", lib, token=TOKEN)
-    )
+    profile, _, watched_imdb = build(svc, lib)
 
-    assert rebuilds == []
+    assert calls == {"full": [], "incremental": []}
     assert watched_imdb == {"tt-cached"}
     assert profile.source == "trakt"
 
 
-def test_rerating_an_existing_title_forces_a_rebuild(fake_redis):
-    """The id set is identical here — only the bucket moved. An id-only hash would
-    treat this as unchanged and keep serving a profile built from the old rating."""
-    seed_cached_profile(library(watched=["tt1", "tt2"]))
-    svc, rebuilds = service()
-
-    promoted = library(loved=["tt1"], watched=["tt2"])
-    _, _, watched_imdb = asyncio.run(svc._build_from_external_source("trakt", None, "movie", promoted, token=TOKEN))
-
-    assert rebuilds == ["movie"]
-    assert watched_imdb == {"tt1", "tt2"}
-
-
-def test_added_title_forces_a_rebuild(fake_redis):
+def test_added_title_is_folded_in_incrementally(fake_redis):
+    """The whole point of the bucket map: a new title extends the profile instead
+    of rebuilding it from scratch."""
     seed_cached_profile(library(loved=["tt1"]))
-    svc, rebuilds = service()
+    svc, calls = service()
 
-    asyncio.run(svc._build_from_external_source("trakt", None, "movie", library(loved=["tt1", "tt3"]), token=TOKEN))
+    build(svc, library(loved=["tt1", "tt3"]))
 
-    assert rebuilds == ["movie"]
+    assert calls["incremental"] == ["movie"]
+    assert calls["full"] == []
+
+
+def test_rerating_a_scored_title_forces_a_full_rebuild(fake_redis):
+    """Identical id set — only the bucket moved. Scores accumulate additively, so
+    the old rating's contribution can't be subtracted by adding more."""
+    seed_cached_profile(library(watched=["tt1", "tt2"]))
+    svc, calls = service()
+
+    build(svc, library(loved=["tt1"], watched=["tt2"]))
+
+    assert calls["full"] == ["movie"]
+    assert calls["incremental"] == []
+
+
+def test_removing_a_scored_title_forces_a_full_rebuild(fake_redis):
+    seed_cached_profile(library(loved=["tt1"], watched=["tt2"]))
+    svc, calls = service()
+
+    build(svc, library(loved=["tt1"]))
+
+    assert calls["full"] == ["movie"]
+    assert calls["incremental"] == []
 
 
 def test_second_build_of_an_unchanged_library_is_skipped(fake_redis):
     """Through the real entry point, which is what caches the profile the skip needs."""
     lib = library(loved=["tt1"])
     settings = UserSettings(catalogs=[], watch_history_source="trakt")
-    svc, rebuilds = service()
+    svc, calls = service()
 
     asyncio.run(svc.build_and_cache_profile(TOKEN, "movie", lib, user_settings=settings))
-    assert rebuilds == ["movie"]  # nothing cached yet
+    assert calls["full"] == ["movie"]  # nothing cached yet
 
     asyncio.run(svc.build_and_cache_profile(TOKEN, "movie", lib, user_settings=settings))
-    assert rebuilds == ["movie"]  # signature and profile both cached, so no rebuild
+    assert calls["full"] == ["movie"]  # unchanged, so neither path runs again
+    assert calls["incremental"] == []
 
 
 def test_other_content_type_is_tracked_separately(fake_redis):
     lib = LibraryCollection(loved=[item("tt1", "movie"), item("tt9", "series")], source="trakt")
     seed_cached_profile(lib, "movie")
-    svc, rebuilds = service()
+    svc, calls = service()
 
-    asyncio.run(svc._build_from_external_source("trakt", None, "movie", lib, token=TOKEN))
-    assert rebuilds == []
+    build(svc, lib, "movie")
+    assert calls["full"] == []
 
-    asyncio.run(svc._build_from_external_source("trakt", None, "series", lib, token=TOKEN))
-    assert rebuilds == ["series"]
+    build(svc, lib, "series")
+    assert calls["full"] == ["series"]
 
 
 def test_no_reuse_when_library_came_from_another_source(fake_redis):
     """A Stremio-sourced library says nothing about the Trakt history that gets
-    fetched instead, so even a matching signature must not gate the rebuild."""
+    fetched instead, so even a matching bucket map must not gate the rebuild."""
     stremio_lib = library(loved=["tt1"], source="stremio")
     seed_cached_profile(stremio_lib)
-    svc, rebuilds = service()
+    svc, calls = service()
 
     async def fake_fetch(source, user_settings, token=None):
         return WatchHistory(items=[], source=source), False, False
 
     svc.fetch_external_watch_history = fake_fetch
 
-    asyncio.run(svc._build_from_external_source("trakt", None, "movie", stremio_lib, token=TOKEN))
+    build(svc, stremio_lib)
 
-    assert rebuilds == ["movie"]
+    assert calls["full"] == ["movie"]
+
+
+def test_bucket_map_distinguishes_rating_changes():
+    watched_only = user_cache.bucket_map(library(watched=["tt1"]).for_type("movie"))
+    promoted = user_cache.bucket_map(library(loved=["tt1"]).for_type("movie"))
+
+    assert watched_only == {"tt1": "w"}
+    assert promoted == {"tt1": "l"}
+    assert watched_only != promoted
 
 
 def test_external_items_get_real_scores_not_a_flat_constant():
@@ -165,7 +208,6 @@ def test_external_items_get_real_scores_not_a_flat_constant():
     is_recent=False regardless of how they were watched, so completion, rewatch
     and recency never reached the profile — and nothing could be ranked."""
     from app.models.history import WatchHistoryItem
-    from app.services.profile.scoring import ScoringService
     from app.services.stremio.library import watch_history_item_to_library_item
 
     scoring = ScoringService()
@@ -192,7 +234,7 @@ def test_external_items_get_real_scores_not_a_flat_constant():
 def test_ratings_still_map_to_buckets():
     """Bucketing is what reaches the profile as source_type, so it has to survive
     the conversion the profile build now relies on."""
-    from app.models.history import WatchHistory, WatchHistoryItem
+    from app.models.history import WatchHistoryItem
     from app.services.stremio.library import watch_history_to_library_collection
 
     def one(rating, watch_count=1):

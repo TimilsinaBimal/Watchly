@@ -85,60 +85,80 @@ class ProfileService:
 
         try:
             existing_profile = await user_cache.get_profile(token, content_type)
-            is_legacy = existing_profile is not None and self._is_legacy_profile(existing_profile)
+            plan, new_ids = await self._plan_build(token, content_type, typed, existing_profile)
 
-            library_changed = await user_cache.has_library_changed(token, content_type, typed_items)
-
-            # A legacy-shaped profile must be rebuilt even when the library is
-            # unchanged, otherwise the stale shape is served until TTL expiry.
-            if existing_profile and not library_changed and not is_legacy:
+            if plan == "reuse":
                 return existing_profile, watched_tmdb, watched_imdb
 
-            if existing_profile:
-                processed_ids = existing_profile.processed_items
-                current_ids = {it.id for it in typed_items}
+            if plan == "incremental":
+                logger.debug(f"[{token[:8]}...] {len(new_ids)} new items for {content_type}, updating incrementally")
+                sampled = sample_items(self._items_with_ids(typed, new_ids), content_type, self.scoring_service)
+                if not sampled:
+                    return existing_profile, watched_tmdb, watched_imdb
 
-                if not processed_ids.issubset(current_ids) or is_legacy:
-                    reason = "Legacy profile detected" if is_legacy else "Items removed from library"
-                    logger.debug(f"[{token[:8]}...] {reason}, falling back to full rebuild")
-                else:
-                    new_item_ids = current_ids - processed_ids
-
-                    if not new_item_ids:
-                        return existing_profile, watched_tmdb, watched_imdb
-
-                    logger.debug(f"[{token[:8]}...] Found {len(new_item_ids)} new items, using incremental update")
-
-                    def _is_new(it) -> bool:
-                        item_id = it.id if hasattr(it, "id") else (it.get("_id") or it.get("id"))
-                        return item_id in new_item_ids
-
-                    new_library = LibraryCollection(
-                        loved=[it for it in typed.loved if _is_new(it)],
-                        liked=[it for it in typed.liked if _is_new(it)],
-                        watched=[it for it in typed.watched if _is_new(it)],
-                        added=[it for it in typed.added if _is_new(it)],
-                    )
-
-                    sampled = sample_items(new_library, content_type, self.scoring_service)
-
-                    if not sampled:
-                        return existing_profile, watched_tmdb, watched_imdb
-
-                    updated_profile = await self.builder.update_profile_incrementally(
-                        existing_profile, sampled, content_type=content_type
-                    )
-
-                    await user_cache.update_library_hash(token, content_type, typed_items)
-                    return updated_profile, watched_tmdb, watched_imdb
+                updated_profile = await self.builder.update_profile_incrementally(
+                    existing_profile, sampled, content_type=content_type
+                )
+                await user_cache.set_library_buckets(token, content_type, typed)
+                return updated_profile, watched_tmdb, watched_imdb
 
         except Exception as e:
             logger.warning(f"[{token[:8]}...] Incremental update failed, falling back to full rebuild: {e}")
 
         logger.debug(f"[{token[:8]}...] Using full rebuild")
         profile, _, _ = await self.build_profile_from_library(library_items, content_type, stremio_service, auth_key)
-        await user_cache.update_library_hash(token, content_type, typed_items)
+        await user_cache.set_library_buckets(token, content_type, typed)
         return profile, watched_tmdb, watched_imdb
+
+    async def _plan_build(
+        self,
+        token: str,
+        content_type: str,
+        typed: LibraryCollection,
+        existing_profile: TasteProfile | None,
+    ) -> tuple[str, set[str]]:
+        """Decide between reusing, extending or rebuilding a cached profile.
+
+        Returns (plan, new_item_ids) where plan is "reuse", "incremental" or "full".
+
+        Scores accumulate additively, so an item already in the profile that has
+        been removed or re-rated can't be corrected by adding more — those force a
+        full rebuild. Only additions can be folded in.
+
+        The decision is keyed on the profile's own processed_items rather than on
+        the whole library, because sampling means the profile may hold a subset:
+        changes to items it never scored can't invalidate it.
+        """
+        stored_buckets = await user_cache.get_library_buckets(token, content_type)
+        if existing_profile is None or stored_buckets is None:
+            return "full", set()
+
+        if self._is_legacy_profile(existing_profile):
+            logger.debug(f"[{token[:8]}...] Legacy profile shape, falling back to full rebuild")
+            return "full", set()
+
+        current_buckets = user_cache.bucket_map(typed)
+        for item_id in existing_profile.processed_items:
+            if item_id not in current_buckets:
+                logger.debug(f"[{token[:8]}...] Scored item left the library, falling back to full rebuild")
+                return "full", set()
+            if stored_buckets.get(item_id) != current_buckets[item_id]:
+                logger.debug(f"[{token[:8]}...] Scored item was re-rated, falling back to full rebuild")
+                return "full", set()
+
+        new_ids = current_buckets.keys() - existing_profile.processed_items
+        return ("incremental", set(new_ids)) if new_ids else ("reuse", set())
+
+    @staticmethod
+    def _items_with_ids(typed: LibraryCollection, ids: set[str]) -> LibraryCollection:
+        """The subset of a collection whose items are in `ids`, buckets preserved."""
+        return LibraryCollection(
+            loved=[i for i in typed.loved if i.id in ids],
+            liked=[i for i in typed.liked if i.id in ids],
+            watched=[i for i in typed.watched if i.id in ids],
+            added=[i for i in typed.added if i.id in ids],
+            source=typed.source,
+        )
 
     async def build_profile_from_watch_history(
         self,
@@ -369,26 +389,10 @@ class ProfileService:
         source (load_user_context handles that), we avoid the duplicate fetch
         and read history straight off the library.
         """
-        # The signature only describes the library, so it can only stand in for the
-        # build input when the library came from this same source. In the fallback
-        # branch below the history is re-fetched instead, and that isn't hashed.
-        library_is_source = bool(token) and library.source == source
-        typed = library.for_type(content_type)
-
-        if library_is_source and not await user_cache.has_library_signature_changed(token, content_type, typed):
-            cached = await user_cache.get_profile_and_watched_sets(token, content_type)
-            if cached:
-                logger.debug(f"[{token[:8]}...] {source} library unchanged; reusing cached {content_type} profile")
-                return cached
-
-        if library.source == source:
-            # The context layer already pulled from this source, and the library is
-            # itself a conversion of that history — so build straight from it. This
-            # used to reconstruct a WatchHistory from the library and convert it
-            # back, which re-derived every rating from its bucket and lost the rest.
-            profile = await self._build_from_collection(library, content_type, source)
-            watched_imdb = library.all_imdb_ids()
-        else:
+        # The bucket map describes the library, so it can only stand in for the build
+        # input when the library came from this same source. The fallback branch
+        # re-fetches history that was never recorded, so it always rebuilds.
+        if not token or library.source != source:
             watch_history, _, _ = await self.fetch_external_watch_history(source, user_settings, token)
 
             # An empty WatchHistory still counts as "the source spoke" — only fall
@@ -401,10 +405,36 @@ class ProfileService:
             profile, watched_imdb = await self.build_profile_from_watch_history(
                 watch_history, content_type, extra_exclusion_imdb=library.all_imdb_ids(), source=effective_source
             )
+            return profile, set(), watched_imdb
 
-        if library_is_source:
-            await user_cache.update_library_signature(token, content_type, typed)
+        # The context layer already pulled from this source and the library is itself
+        # a conversion of that history, so it is the build input.
+        typed = library.for_type(content_type)
+        watched_imdb = library.all_imdb_ids()
+        existing_profile = await user_cache.get_profile(token, content_type)
+        plan, new_ids = await self._plan_build(token, content_type, typed, existing_profile)
 
+        if plan == "reuse":
+            cached = await user_cache.get_profile_and_watched_sets(token, content_type)
+            if cached:
+                logger.debug(f"[{token[:8]}...] {source} library unchanged; reusing cached {content_type} profile")
+                return cached
+
+        elif plan == "incremental":
+            new_items = self._items_with_ids(typed, new_ids).all_items()
+            scored = [self.scoring_service.process_item(item) for item in new_items]
+            if scored:
+                logger.debug(
+                    f"[{token[:8]}...] {len(scored)} new {source} items, updating {content_type} incrementally"
+                )
+                profile = await self.builder.update_profile_incrementally(
+                    existing_profile, scored, content_type=content_type
+                )
+                await user_cache.set_library_buckets(token, content_type, typed)
+                return profile, set(), watched_imdb
+
+        profile = await self._build_from_collection(library, content_type, source)
+        await user_cache.set_library_buckets(token, content_type, typed)
         return profile, set(), watched_imdb
 
     async def _ensure_trakt_token_fresh(self, token: str | None, user_settings: UserSettings) -> tuple[str, bool]:

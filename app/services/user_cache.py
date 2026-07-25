@@ -1,4 +1,3 @@
-import hashlib
 import json
 import time
 from typing import Any
@@ -36,19 +35,9 @@ class UserCacheService:
         return WATCHED_SETS_KEY.format(token=token, content_type=content_type)
 
     @staticmethod
-    def _library_hash_key(token: str, content_type: str) -> str:
-        """Generate cache key for library hash."""
-        return f"watchly:library_hash:{token}:{content_type}"
-
-    @staticmethod
-    def _last_profile_build_key(token: str, content_type: str) -> str:
-        """Generate cache key for last profile build timestamp."""
-        return f"watchly:last_profile_build:{token}:{content_type}"
-
-    @staticmethod
-    def _library_signature_key(token: str, content_type: str) -> str:
-        """Generate cache key for the rating-aware library signature."""
-        return f"watchly:library_sig:v1:{token}:{content_type}"
+    def _library_buckets_key(token: str, content_type: str) -> str:
+        """Generate cache key for the rating-bucket map behind the cached profile."""
+        return f"watchly:library_buckets:v1:{token}:{content_type}"
 
     # Library Items Methods
 
@@ -245,106 +234,39 @@ class UserCacheService:
     # Library Change Detection Methods
 
     @staticmethod
-    def _extract_item_id(item) -> str:
-        """Extract item ID from either a typed StremioLibraryItem or a raw dict."""
-        if hasattr(item, "id"):
-            return item.id
-        return item.get("_id", item.get("id", ""))
+    def bucket_map(typed: LibraryCollection) -> dict[str, str]:
+        """Map every item of one content type to the rating bucket it sits in.
 
-    async def has_library_changed(self, token: str, content_type: str, library_items: list) -> bool:
+        Buckets, not just ids: for Trakt and Simkl the rating *is* the signal
+        (>=9 loved, 7-8.9 liked), so an id-only digest reads a re-rating as no
+        change at all. Written last-wins in strength order so an item that
+        somehow appears in two buckets resolves to the strongest.
         """
-        Check if library has changed since last profile build.
+        return {
+            **{i.id: "a" for i in typed.added},
+            **{i.id: "w" for i in typed.watched},
+            **{i.id: "k" for i in typed.liked},
+            **{i.id: "l" for i in typed.loved},
+        }
 
-        Args:
-            token: User token
-            content_type: Content type (movie or series)
-            library_items: Current library items list
-
-        Returns:
-            True if library has changed, False otherwise
-        """
-        current_ids = [self._extract_item_id(item) for item in library_items]
-        current_hash = hashlib.md5("".join(sorted(current_ids)).encode()).hexdigest()
-
-        stored_hash = await redis_service.get(self._library_hash_key(token, content_type))
-
-        if stored_hash is None:
-            return True
-
-        # redis_service is configured with decode_responses=True so stored_hash is always str.
-        return current_hash != stored_hash
-
-    async def update_library_hash(self, token: str, content_type: str, library_items: list) -> None:
-        """
-        Update the stored library hash after successful profile build.
-
-        Args:
-            token: User token
-            content_type: Content type (movie or series)
-            library_items: Current library items list
-        """
-        current_ids = [self._extract_item_id(item) for item in library_items]
-        current_hash = hashlib.md5("".join(sorted(current_ids)).encode()).hexdigest()
-
-        hash_key = self._library_hash_key(token, content_type)
-        build_time_key = self._last_profile_build_key(token, content_type)
-
-        # Store hash and build timestamp
-        await redis_service.set(hash_key, current_hash, USER_CACHE_TTL_SECONDS)
-        await redis_service.set(build_time_key, str(time.time()), USER_CACHE_TTL_SECONDS)
-
-        logger.debug(f"[{redact_token(token)}...] Updated library hash for {content_type}")
-
-    @staticmethod
-    def _library_signature(typed: LibraryCollection) -> str:
-        """Digest the rating buckets of a single content type's library.
-
-        Bucket-aware, unlike the id-only `has_library_changed` hash: for Trakt and
-        Simkl the rating *is* the signal (>=9 loved, 7-8.9 liked), so re-rating a
-        title the user already had would otherwise read as no change at all.
-        """
-        parts = sorted(
-            f"{bucket}:{item.id}"
-            for bucket, items in (("loved", typed.loved), ("liked", typed.liked), ("watched", typed.watched))
-            for item in items
-        )
-        return hashlib.md5("|".join(parts).encode()).hexdigest()
-
-    async def has_library_signature_changed(self, token: str, content_type: str, typed: LibraryCollection) -> bool:
-        """Whether this content type's rated library differs from the last profile build."""
-        stored = await redis_service.get(self._library_signature_key(token, content_type))
-        if stored is None:
-            return True
-        return stored != self._library_signature(typed)
-
-    async def update_library_signature(self, token: str, content_type: str, typed: LibraryCollection) -> None:
-        """Record the signature the current profile was built from."""
-        key = self._library_signature_key(token, content_type)
-        await redis_service.set(key, self._library_signature(typed), USER_CACHE_TTL_SECONDS)
-        logger.debug(f"[{redact_token(token)}...] Updated library signature for {content_type}")
-
-    async def invalidate_library_signature(self, token: str, content_type: str) -> None:
-        await redis_service.delete(self._library_signature_key(token, content_type))
-
-    async def get_last_profile_build_time(self, token: str, content_type: str) -> int | None:
-        """
-        Get the timestamp of the last profile build.
-
-        Args:
-            token: User token
-            content_type: Content type (movie or series)
-
-        Returns:
-            Unix timestamp of last build, or None if never built
-        """
-        build_time = await redis_service.get(self._last_profile_build_key(token, content_type))
-        if build_time is None:
+    async def get_library_buckets(self, token: str, content_type: str) -> dict[str, str] | None:
+        """The bucket map the cached profile was built from, or None if unknown."""
+        cached = await redis_service.get(self._library_buckets_key(token, content_type))
+        if not cached:
             return None
-
         try:
-            return int(float(build_time))
-        except (ValueError, TypeError):
+            return json.loads(cached)
+        except json.JSONDecodeError:
             return None
+
+    async def set_library_buckets(self, token: str, content_type: str, typed: LibraryCollection) -> None:
+        """Record the bucket map the profile was just built from."""
+        key = self._library_buckets_key(token, content_type)
+        await redis_service.set(key, json.dumps(self.bucket_map(typed)), USER_CACHE_TTL_SECONDS)
+        logger.debug(f"[{redact_token(token)}...] Updated library buckets for {content_type}")
+
+    async def invalidate_library_buckets(self, token: str, content_type: str) -> None:
+        await redis_service.delete(self._library_buckets_key(token, content_type))
 
     async def set_profile_and_watched_sets(
         self,
@@ -385,7 +307,7 @@ class UserCacheService:
         for content_type in ["movie", "series"]:
             await self.invalidate_profile(token, content_type)
             await self.invalidate_watched_sets(token, content_type)
-            await self.invalidate_library_signature(token, content_type)
+            await self.invalidate_library_buckets(token, content_type)
         await self.invalidate_all_catalogs(token)
         logger.debug(f"[{redact_token(token)}...] Invalidated all user data cache")
 
