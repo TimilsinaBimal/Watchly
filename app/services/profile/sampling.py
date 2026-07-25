@@ -1,4 +1,4 @@
-from app.models.library import LibraryCollection
+from app.models.library import LibraryCollection, StremioLibraryItem
 from app.models.profile import ScoredItem
 from app.services.profile.constants import SMART_SAMPLING_MAX_ITEMS
 from app.services.profile.scoring import ScoringService
@@ -10,12 +10,15 @@ def sample_items(
     scoring_service: ScoringService,
     max_items: int = SMART_SAMPLING_MAX_ITEMS,
 ) -> list[ScoredItem]:
-    """Sample items for profile building with quota-based selection.
+    """Pick the highest-signal items for profile building, capped at max_items.
 
-    Strategy:
-    1. Always include all loved/liked/added items (strong signals)
-    2. Fill remaining slots with top watched items by score
-    3. Limit total to prevent excessive API calls
+    At or under the cap every item is used. Above it, items are pooled by signal
+    strength (loved/liked, added, watched), each pool sorted by score, and drawn
+    against a 40/20/40 quota split, with any leftover slots backfilled
+    strongest-first in that same pool order.
+
+    Note the quotas: a user with more loved titles than the loved quota
+    contributes only their strongest, not all of them.
     """
     typed_items = [it for it in library_items.all_items() if it.type == content_type]
 
@@ -26,7 +29,7 @@ def sample_items(
         return [scoring_service.process_item(it) for it in typed_items]
 
     # De-duplicate by ID
-    unique_items: dict[str, any] = {}
+    unique_items: dict[str, StremioLibraryItem] = {}
     for it in typed_items:
         if it.id:
             unique_items[it.id] = it
@@ -49,6 +52,12 @@ def sample_items(
             added_pool.append(scored)
         else:
             watched_pool.append(scored)
+
+    # Strongest first. The quota slices below take a prefix of each pool, so
+    # without this they took whatever order the library happened to arrive in —
+    # making a 30-item sample 30 arbitrary items rather than the strongest 30.
+    for pool in (loved_liked_pool, added_pool, watched_pool):
+        pool.sort(key=lambda scored: scored.score, reverse=True)
 
     # Fill quotas
     final: list[ScoredItem] = []

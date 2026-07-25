@@ -15,7 +15,9 @@ DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV: float = 6.8
 # importing anything under app.services.profile pulls in ProfileService via that
 # package's __init__ — a cycle.
 # v2: Trakt/Simkl items are scored by ScoringService instead of a flat 50.0.
-PROFILE_SCORING_VERSION: int = 2
+# v3: the sampler sorts by score, so a capped sample is the strongest items
+#     rather than an arbitrary slice of the library.
+PROFILE_SCORING_VERSION: int = 3
 
 # cache keys
 LIBRARY_ITEMS_KEY: str = "watchly:library_items:{token}"
