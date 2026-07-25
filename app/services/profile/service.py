@@ -399,6 +399,18 @@ class ProfileService:
         source (load_user_context handles that), we avoid the duplicate fetch
         and read history straight off the library.
         """
+        # The signature only describes the library, so it can only stand in for the
+        # build input when the library came from this same source. In the fallback
+        # branch below the history is re-fetched instead, and that isn't hashed.
+        library_is_source = bool(token) and library.source == source
+        typed = library.for_type(content_type)
+
+        if library_is_source and not await user_cache.has_library_signature_changed(token, content_type, typed):
+            cached = await user_cache.get_profile_and_watched_sets(token, content_type)
+            if cached:
+                logger.debug(f"[{token[:8]}...] {source} library unchanged; reusing cached {content_type} profile")
+                return cached
+
         watch_history: WatchHistory | None = None
 
         if library.source == source:
@@ -445,6 +457,10 @@ class ProfileService:
         profile, watched_imdb = await self.build_profile_from_watch_history(
             watch_history, content_type, extra_exclusion_imdb=stremio_imdb, source=effective_source
         )
+
+        if library_is_source:
+            await user_cache.update_library_signature(token, content_type, typed)
+
         return profile, set(), watched_imdb
 
     async def _ensure_trakt_token_fresh(self, token: str | None, user_settings: UserSettings) -> tuple[str, bool]:

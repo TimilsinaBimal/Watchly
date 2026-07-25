@@ -38,6 +38,11 @@ class UserCacheService:
         """Generate cache key for last profile build timestamp."""
         return f"watchly:last_profile_build:{token}:{content_type}"
 
+    @staticmethod
+    def _library_signature_key(token: str, content_type: str) -> str:
+        """Generate cache key for the rating-aware library signature."""
+        return f"watchly:library_sig:v1:{token}:{content_type}"
+
     # Library Items Methods
 
     async def get_library_items(self, token: str) -> LibraryCollection | None:
@@ -271,6 +276,37 @@ class UserCacheService:
 
         logger.debug(f"[{redact_token(token)}...] Updated library hash for {content_type}")
 
+    @staticmethod
+    def _library_signature(typed: LibraryCollection) -> str:
+        """Digest the rating buckets of a single content type's library.
+
+        Bucket-aware, unlike the id-only `has_library_changed` hash: for Trakt and
+        Simkl the rating *is* the signal (>=9 loved, 7-8.9 liked), so re-rating a
+        title the user already had would otherwise read as no change at all.
+        """
+        parts = sorted(
+            f"{bucket}:{item.id}"
+            for bucket, items in (("loved", typed.loved), ("liked", typed.liked), ("watched", typed.watched))
+            for item in items
+        )
+        return hashlib.md5("|".join(parts).encode()).hexdigest()
+
+    async def has_library_signature_changed(self, token: str, content_type: str, typed: LibraryCollection) -> bool:
+        """Whether this content type's rated library differs from the last profile build."""
+        stored = await redis_service.get(self._library_signature_key(token, content_type))
+        if stored is None:
+            return True
+        return stored != self._library_signature(typed)
+
+    async def update_library_signature(self, token: str, content_type: str, typed: LibraryCollection) -> None:
+        """Record the signature the current profile was built from."""
+        key = self._library_signature_key(token, content_type)
+        await redis_service.set(key, self._library_signature(typed), USER_CACHE_TTL_SECONDS)
+        logger.debug(f"[{redact_token(token)}...] Updated library signature for {content_type}")
+
+    async def invalidate_library_signature(self, token: str, content_type: str) -> None:
+        await redis_service.delete(self._library_signature_key(token, content_type))
+
     async def get_last_profile_build_time(self, token: str, content_type: str) -> int | None:
         """
         Get the timestamp of the last profile build.
@@ -330,6 +366,7 @@ class UserCacheService:
         for content_type in ["movie", "series"]:
             await self.invalidate_profile(token, content_type)
             await self.invalidate_watched_sets(token, content_type)
+            await self.invalidate_library_signature(token, content_type)
         await self.invalidate_all_catalogs(token)
         logger.debug(f"[{redact_token(token)}...] Invalidated all user data cache")
 
