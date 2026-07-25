@@ -1,6 +1,6 @@
 from app.models.library import LibraryCollection, StremioLibraryItem
 from app.models.profile import ScoredItem
-from app.services.profile.constants import SMART_SAMPLING_MAX_ITEMS
+from app.services.profile.constants import SAMPLING_QUOTA_ADDED, SAMPLING_QUOTA_RATED, SMART_SAMPLING_MAX_ITEMS
 from app.services.profile.scoring import ScoringService
 
 
@@ -14,11 +14,13 @@ def sample_items(
 
     At or under the cap every item is used. Above it, items are pooled by signal
     strength (loved/liked, added, watched), each pool sorted by score, and drawn
-    against a 40/20/40 quota split, with any leftover slots backfilled
-    strongest-first in that same pool order.
+    against the quota split in profile/constants.py, with any leftover slots
+    backfilled strongest-first in that same pool order.
 
-    Note the quotas: a user with more loved titles than the loved quota
-    contributes only their strongest, not all of them.
+    Note the quotas: a user with more loved titles than the rated quota
+    contributes only their strongest, not all of them. Backfill still tops the
+    sample up to the cap when a pool is short, so the split bounds each pool's
+    guaranteed share rather than its maximum.
     """
     typed_items = [it for it in library_items.all_items() if it.type == content_type]
 
@@ -63,12 +65,12 @@ def sample_items(
     final: list[ScoredItem] = []
     used_ids: set[str] = set()
 
-    loved_quota = int(max_items * 0.40)
-    added_quota = int(max_items * 0.20)
-    watched_quota = max_items - loved_quota - added_quota
+    rated_quota = int(max_items * SAMPLING_QUOTA_RATED)
+    added_quota = int(max_items * SAMPLING_QUOTA_ADDED)
+    watched_quota = max_items - rated_quota - added_quota
 
     for pool, quota in [
-        (loved_liked_pool, loved_quota),
+        (loved_liked_pool, rated_quota),
         (added_pool, added_quota),
         (watched_pool, watched_quota),
     ]:

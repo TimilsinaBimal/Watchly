@@ -55,12 +55,12 @@ def test_everything_is_used_when_under_the_cap():
 
 
 def test_rated_items_get_their_own_quota():
-    """Loved/liked draw from a 40% quota, so a barely-watched favourite still gets a
+    """Loved/liked draw from a 55% quota, so a barely-watched favourite still gets a
     slot against fully-watched but unrated titles.
 
     The cap is 10 rather than something tighter because the quotas are computed as
-    int(max_items * 0.4): below about 3 the loved pool rounds down to no slots at
-    all. Production only ever uses SMART_SAMPLING_MAX_ITEMS (30).
+    int(max_items * 0.55), which rounds down to no slots at all below 2. Production
+    only ever uses SMART_SAMPLING_MAX_ITEMS (30).
     """
     scoring = ScoringService()
     loved = watched_item("tt-loved", 0.3)
@@ -86,3 +86,31 @@ def test_other_content_types_are_ignored():
     library = LibraryCollection(watched=[movie, series], source="stremio")
 
     assert {s.item.id for s in sample_items(library, "movie", scoring)} == {"tt-movie"}
+
+
+def test_quota_split_favours_rated_titles_over_the_watchlist():
+    """A watchlist entry carries 0.3 evidence weight against a loved title's 3.0, so
+    it should hold few slots — it costs the same TMDB lookups for a tenth the signal.
+
+    All three pools are deliberately over-quota here: when a pool is short, backfill
+    tops the sample up from the others and the split stops being observable.
+    """
+    scoring = ScoringService()
+    loved = [watched_item(f"loved{i}", 0.9) for i in range(20)]
+    for it in loved:
+        it.is_loved = True
+
+    library = LibraryCollection(
+        loved=loved,
+        added=[watched_item(f"added{i}", 0.0) for i in range(20)],
+        watched=[watched_item(f"watched{i}", 1.0) for i in range(20)],
+        source="stremio",
+    )
+
+    sampled = sample_items(library, "movie", scoring, max_items=30)
+
+    kept = [s.item.id for s in sampled]
+    assert len(kept) == 30
+    assert sum(1 for k in kept if k.startswith("loved")) == 16  # 55%
+    assert sum(1 for k in kept if k.startswith("added")) == 3  # 10%
+    assert sum(1 for k in kept if k.startswith("watched")) == 11  # remainder
