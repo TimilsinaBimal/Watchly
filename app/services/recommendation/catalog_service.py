@@ -31,8 +31,6 @@ REFRESH_LOCK_PREFIX = "watchly:refreshlock:"
 # Long enough to cover a slow rebuild, short enough that a worker killed mid-refresh
 # doesn't keep a row stale for long.
 REFRESH_LOCK_TTL_SECONDS = 600
-# Stale bodies are cacheable only briefly, so the refreshed version lands soon.
-STALE_RESPONSE_MAX_AGE = 60
 
 
 class CatalogService:
@@ -94,7 +92,7 @@ class CatalogService:
                 "serving stale and refreshing in the background"
             )
             self._enqueue_refresh(token, content_type, catalog_id)
-            return data, self._headers(stale=True)
+            return data, headers
 
         logger.info(
             f"[{redact_token(token)}] Catalog not cached for {content_type}/{catalog_id}, building from scratch"
@@ -108,10 +106,15 @@ class CatalogService:
             await ctx.close()
 
     @staticmethod
-    def _headers(stale: bool = False) -> dict[str, Any]:
-        """Response headers. A stale body gets a short max-age so the client comes
-        back for the refreshed version instead of pinning it for half a day."""
-        max_age = STALE_RESPONSE_MAX_AGE if stale else settings.CATALOG_CACHE_TTL
+    def _headers() -> dict[str, Any]:
+        """Response headers.
+
+        One max-age for fresh and stale bodies alike. A fresh body used to be
+        cacheable 720x longer, which made sense only while ids churned and acted as
+        accidental cache-busters; with stable slot ids this header is what tells a
+        client a row has changed.
+        """
+        max_age = settings.CATALOG_CACHE_TTL
         return {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "*",
@@ -190,8 +193,10 @@ class CatalogService:
                     user_settings=ctx.user_settings,
                 )
 
+            # Resolved only for building. The cache key stays the slot id the client
+            # asked for, which is the whole point: it survives a definition change.
             recommendations = await self._get_recommendations(
-                catalog_id=catalog_id,
+                catalog_id=await self._resolve_slot(ctx.token, content_type, catalog_id),
                 content_type=content_type,
                 services=services,
                 profile=profile,
@@ -294,6 +299,30 @@ class CatalogService:
         except Exception as e:
             logger.warning(f"Failed to fetch trending items: {e}")
             return []
+
+    @staticmethod
+    async def _resolve_slot(token: str, content_type: str, catalog_id: str) -> str:
+        """Expand a slot id into the row definition it currently points at.
+
+        Served ids are stable slots (`watchly.theme.2`) so the cache key never moves
+        when the row's definition changes. The definitions live in the slot map, and
+        expanding one back into the old self-describing form means the existing
+        parsers are untouched.
+
+        Ids that aren't slots are returned unchanged: manifests installed before this
+        carry self-describing ids and Stremio keeps requesting them until it refreshes.
+        """
+        match = re.match(r"^watchly\.(theme|item)\.(\d+)$", catalog_id)
+        if not match:
+            return catalog_id
+
+        prefix, slot = match.groups()
+        definition = (await user_cache.get_row_map(token, content_type)).get(f"{prefix}.{slot}")
+        if not definition:
+            logger.warning(f"[{redact_token(token)}] No row definition for {catalog_id} ({content_type})")
+            return catalog_id
+
+        return f"watchly.{prefix}.{definition}"
 
     async def _get_recommendations(
         self,

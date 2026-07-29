@@ -90,7 +90,6 @@ def test_fresh_cache_is_served_without_building(harness):
 
     assert data["metas"][0]["id"] == "tt-fresh"
     assert harness["builds"] == 0
-    assert "max-age=60," not in headers["Cache-Control"]
 
 
 def test_stale_cache_is_served_immediately(harness):
@@ -109,7 +108,6 @@ def test_stale_cache_is_served_immediately(harness):
     data, headers = asyncio.run(scenario())
 
     assert data["metas"][0]["id"] == "tt-stale"  # served the stale body, not a rebuild
-    assert "max-age=60," in headers["Cache-Control"]  # so the client comes back soon
     assert harness["builds"] == 1  # and the rebuild did happen, behind the response
 
 
@@ -137,4 +135,16 @@ def test_cold_cache_builds_on_the_request(harness):
 
     assert data["metas"][0]["id"] == "tt-fresh"
     assert harness["builds"] == 1
-    assert "max-age=60," not in headers["Cache-Control"]
+
+
+def test_client_cache_window_stays_short(harness):
+    """Served ids are stable slots now, so this header is the only thing telling a
+    client a row's content moved. It was 12h back when churning ids busted client
+    caches by accident."""
+    harness["cached"] = FRESH
+    harness["age"] = 60
+
+    _, headers = get()
+
+    assert "max-age=60," in headers["Cache-Control"]
+    assert "stale-while-revalidate=3600" in headers["Cache-Control"]

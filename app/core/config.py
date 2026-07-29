@@ -38,7 +38,10 @@ class Settings(BaseSettings):
     RECOMMENDATION_SOURCE_ITEMS_LIMIT: int = 10
     LIBRARY_ITEMS_LIMIT: int = 20
 
-    CATALOG_CACHE_TTL: int = 43200  # 12 hours
+    # How long a client may reuse a catalog response. Short on purpose: served ids
+    # are stable slots now, so this header is the only thing telling Stremio a row's
+    # content has moved. stale-while-revalidate keeps the UI instant past it.
+    CATALOG_CACHE_TTL: int = 60
     CATALOG_STALE_TTL: int = 604800  # 7 days (soft expiration fallback)
 
     # External history providers (OAuth app credentials)

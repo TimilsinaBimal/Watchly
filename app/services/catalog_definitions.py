@@ -152,6 +152,10 @@ class DynamicCatalogService:
         if not user_settings:
             return catalogs
 
+        # Slot id -> row definition, collected as the rows are built and stored so
+        # the served ids can stay stable while their definitions change.
+        row_slots: dict[str, dict[str, str]] = {}
+
         theme_cfg, item_cfg = self._resolve_catalog_configs(user_settings)
 
         if theme_cfg and theme_cfg.enabled:
@@ -165,11 +169,12 @@ class DynamicCatalogService:
                 enabled_series,
                 display_at_home,
                 token,
+                row_slots,
             )
             catalogs.extend(theme_catalogs)
 
         for mtype in ["movie", "series"]:
-            await self._add_item_based_rows(catalogs, library_items, mtype, item_cfg)
+            await self._add_item_based_rows(catalogs, library_items, mtype, item_cfg, row_slots)
 
         catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rec", "Top Picks for You", True, True))
         catalogs.extend(
@@ -200,6 +205,10 @@ class DynamicCatalogService:
             )
         )
 
+        if token:
+            for content_type in ("movie", "series"):
+                await user_cache.set_row_map(token, content_type, row_slots.get(content_type, {}))
+
         return catalogs
 
     # --- Theme catalog building (was ThemeCatalogService) ---
@@ -212,6 +221,7 @@ class DynamicCatalogService:
         enabled_series: bool,
         display_at_home: bool,
         token: str | None,
+        row_slots: dict[str, dict[str, str]],
     ) -> list[dict[str, Any]]:
         llm_config = resolve_llm_config(user_settings)
 
@@ -229,11 +239,16 @@ class DynamicCatalogService:
             if not isinstance(result, tuple):
                 continue
             media_type, rows = cast(tuple[str, list[Any]], result)
-            for row in rows:
+            for slot, row in enumerate(rows, start=1):
+                # The row's axes go in the slot map, not in the id. Encoding them in
+                # the id meant a new id whenever the definition changed — every LLM
+                # rebuild — which moved the cache key and lost the row's content.
+                catalog_id = f"watchly.theme.{slot}"
+                row_slots.setdefault(media_type, {})[f"theme.{slot}"] = row.id.replace("watchly.theme.", "", 1)
                 catalogs.append(
                     {
                         "type": media_type,
-                        "id": row.id,
+                        "id": catalog_id,
                         "name": row.title,
                         "extra": extra,
                     }
@@ -341,6 +356,7 @@ class DynamicCatalogService:
         library_items: LibraryCollection,
         content_type: str,
         item_config: Any,
+        row_slots: dict[str, dict[str, str]],
     ) -> None:
         """Emit one item-based row per content type.
 
@@ -378,4 +394,9 @@ class DynamicCatalogService:
         label = "Because you loved" if seed_is_loved else "Because you watched"
 
         display_at_home = getattr(item_config, "display_at_home", True)
-        catalogs.append(self.build_catalog_entry(seed, label, "watchly.item", display_at_home))
+        entry = self.build_catalog_entry(seed, label, "watchly.item", display_at_home)
+        # The seed is re-randomised on every rebuild, so keeping it in the id gave
+        # this row a new cache key each time. It lives in the slot map instead.
+        row_slots.setdefault(content_type, {})["item.1"] = entry["id"].replace("watchly.item.", "", 1)
+        entry["id"] = "watchly.item.1"
+        catalogs.append(entry)

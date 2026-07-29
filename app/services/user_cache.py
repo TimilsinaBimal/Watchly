@@ -44,6 +44,11 @@ class UserCacheService:
         return MANIFEST_KEY.format(version=__version__, token=token)
 
     @staticmethod
+    def _row_map_key(token: str, content_type: str) -> str:
+        """Generate cache key for the slot -> row definition map."""
+        return f"watchly:rowmap:v1:{token}:{content_type}"
+
+    @staticmethod
     def _library_buckets_key(token: str, content_type: str) -> str:
         """Generate cache key for the rating-bucket map behind the cached profile."""
         return f"watchly:library_buckets:v1:{token}:{content_type}"
@@ -70,6 +75,36 @@ class UserCacheService:
         """Drop the cached manifest — settings changes alter the catalog list."""
         await redis_service.delete(self._manifest_key(token))
         logger.debug(f"[{redact_token(token)}...] Invalidated manifest cache")
+
+    # Row Map Methods
+
+    async def get_row_map(self, token: str, content_type: str) -> dict[str, str]:
+        """Slot id -> row definition for this user's dynamic rows.
+
+        Empty when unknown, which leaves the affected rows empty until the next
+        manifest rebuild rewrites the map.
+        """
+        key = self._row_map_key(token, content_type)
+        cached = await redis_service.get(key)
+        if not cached:
+            return {}
+        try:
+            mapping = json.loads(cache_codec.decode(cached))
+        except json.JSONDecodeError:
+            return {}
+        await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
+        return mapping
+
+    async def set_row_map(self, token: str, content_type: str, mapping: dict[str, str]) -> None:
+        """Record what each slot currently points at.
+
+        Deliberately absent from invalidate_all_user_data: dropping this would leave
+        every slot unresolvable until Stremio next pulls the manifest, so it is only
+        ever replaced by a manifest rebuild, never cleared.
+        """
+        payload = cache_codec.encode(json.dumps(mapping))
+        await redis_service.set(self._row_map_key(token, content_type), payload, USER_CACHE_TTL_SECONDS)
+        logger.debug(f"[{redact_token(token)}...] Stored {len(mapping)} row slots for {content_type}")
 
     # Library Items Methods
 
