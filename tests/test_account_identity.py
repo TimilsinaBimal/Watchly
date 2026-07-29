@@ -422,3 +422,28 @@ def test_relinking_keeps_identities_from_previous_configurations(monkeypatch):
 
     assert response2.token == response.token
     assert fake.data["watchly:identity:simkl:9876"] == response.token
+
+
+def test_identity_lookup_returns_key_fingerprints(monkeypatch):
+    """The page can't show a saved key, so it shows the last few characters instead —
+    enough to recognise which key is on file, useless for anything else."""
+    setup_fakes(monkeypatch)
+    service = AuthService()
+    asyncio.run(
+        service.create_user_token(
+            TokenRequest(
+                trakt_access_token="t-abc",
+                watch_history_source="trakt",
+                tmdb_api_key="tmdb-secret-ending-f3a9",
+                llm=LLMConfig(provider="anthropic", api_key="sk-ant-secret-9zQ4"),
+            )
+        )
+    )
+
+    result = asyncio.run(service.get_identity_with_settings(TokenRequest(trakt_access_token="t-abc")))
+
+    assert result["secret_hints"] == {"tmdb_api_key": "f3a9", "llm.api_key": "9zQ4"}
+    # The keys themselves are still masked, and the hints are too short to be one.
+    assert result["settings"]["tmdb_api_key"] == STORED_SECRET_SENTINEL
+    assert "tmdb-secret-ending-f3a9" not in json.dumps(result)
+    assert "sk-ant-secret-9zQ4" not in json.dumps(result)

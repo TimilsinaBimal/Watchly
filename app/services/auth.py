@@ -7,7 +7,7 @@ from loguru import logger
 
 from app.api.models.tokens import TokenRequest, TokenResponse, TraktTokens
 from app.core.config import settings
-from app.core.security import STORED_SECRET_SENTINEL, mask_stored_secrets, redact_token
+from app.core.security import STORED_SECRET_SENTINEL, mask_stored_secrets, redact_token, secret_hints
 from app.core.settings import LLMConfig, PosterRatingConfig, UserSettings, get_default_settings
 from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
@@ -445,11 +445,15 @@ class AuthService:
             # Reconstruct UserSettings to ensure defaults are included for old accounts
             raw_settings = existing_data.get("settings", {})
             try:
-                user_settings = UserSettings(**raw_settings)
-                response["settings"] = mask_stored_secrets(user_settings.model_dump())
+                plain_settings = UserSettings(**raw_settings).model_dump()
             except Exception as e:
                 logger.warning(f"Failed to normalize settings for user {user_id}: {e}")
-                response["settings"] = mask_stored_secrets(raw_settings)
+                plain_settings = raw_settings
+
+            # Hints are derived before masking, from the plaintext, so the page can
+            # say which key is stored without ever receiving it.
+            response["secret_hints"] = secret_hints(plain_settings)
+            response["settings"] = mask_stored_secrets(plain_settings)
 
         return response
 

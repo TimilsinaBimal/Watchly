@@ -14,6 +14,7 @@ import {
     setStremioConnected,
     setWatchHistorySource,
 } from './accounts.js';
+import { markFieldAsSaved } from './field-helpers.js';
 
 // DOM Elements - will be initialized
 let stremioLoginBtn = null;
@@ -283,6 +284,7 @@ async function fetchIdentity(payload) {
         // POPULATE SETTINGS
         if (data.settings) {
             const s = data.settings;
+            const hints = data.secret_hints || {};
             if (s.language && languageSelect) languageSelect.value = s.language;
 
             // Popularity & Year Range
@@ -306,7 +308,11 @@ async function fetchIdentity(payload) {
                 if (s.poster_rating && s.poster_rating.provider && (s.poster_rating.api_key || s.poster_rating.url_template)) {
                     // New format
                     posterRatingProvider.value = s.poster_rating.provider;
-                    posterRatingApiKey.value = s.poster_rating.api_key || '';
+                    setSecretField(posterRatingApiKey, s.poster_rating.api_key, {
+                        toggleId: 'posterRatingApiKeyToggle',
+                        hintId: 'posterRatingValidationMessage',
+                        hint: hints['poster_rating.api_key'],
+                    });
                     if (posterRatingUrlTemplate) posterRatingUrlTemplate.value = s.poster_rating.url_template || '';
                     // Trigger change event to show/hide fields
                     posterRatingProvider.dispatchEvent(new Event('change'));
@@ -319,11 +325,17 @@ async function fetchIdentity(payload) {
                 }
             }
 
-            const tmdbApiKeyInput = document.getElementById('tmdbApiKey');
-            if (s.tmdb_api_key && tmdbApiKeyInput) tmdbApiKeyInput.value = s.tmdb_api_key;
+            setSecretField(document.getElementById('tmdbApiKey'), s.tmdb_api_key, {
+                toggleId: 'tmdbApiKeyToggle',
+                hintId: 'tmdbValidationMessage',
+                hint: hints.tmdb_api_key,
+            });
 
-            const simklApiKeyInput = document.getElementById('simklApiKey');
-            if (s.simkl_api_key && simklApiKeyInput) simklApiKeyInput.value = s.simkl_api_key;
+            setSecretField(document.getElementById('simklApiKey'), s.simkl_api_key, {
+                toggleId: 'simklApiKeyToggle',
+                hintId: 'simklValidationMessage',
+                hint: hints.simkl_api_key,
+            });
 
             // LLM config; legacy gemini_api_key maps onto the gemini provider
             const llmProviderSelect = document.getElementById('llmProvider');
@@ -334,10 +346,15 @@ async function fetchIdentity(payload) {
                 : (s.gemini_api_key ? { provider: 'gemini', api_key: s.gemini_api_key, model: null } : null);
             if (llm && llmProviderSelect && llmApiKeyInput) {
                 llmProviderSelect.value = llm.provider;
-                llmApiKeyInput.value = llm.api_key;
                 if (llmModelInput) llmModelInput.value = llm.model || '';
                 // Trigger change event to show the key/model fields
                 llmProviderSelect.dispatchEvent(new Event('change'));
+                // After the change handler, which resets placeholders on this field.
+                setSecretField(llmApiKeyInput, llm.api_key, {
+                    toggleId: 'llmApiKeyToggle',
+                    hintId: 'llmValidationMessage',
+                    hint: hints['llm.api_key'] || hints.gemini_api_key,
+                });
             }
 
             // Watch History Source + OAuth tokens
@@ -479,6 +496,33 @@ export function setStremioLoggedOutState() {
 
     renderLoggedOutControls({ stremioLoginBtn, stremioLoginText, emailInput, passwordInput });
     setStremioConnected(false);
+}
+
+// Populate one API key field from saved settings.
+//
+// The server sends an opaque marker rather than the key itself, so a saved key is
+// shown as its last few characters and the reveal button is hidden — see
+// mask_stored_secrets and secret_hints on the backend. Submitting the marker
+// unchanged keeps the stored key; clearing the field removes it.
+function setSecretField(input, value, { toggleId, hintId, hint } = {}) {
+    if (!input) return;
+
+    if (!value) {
+        input.value = '';
+        return;
+    }
+
+    if (value === window.STORED_SECRET) {
+        markFieldAsSaved({
+            input,
+            toggleBtn: toggleId ? document.getElementById(toggleId) : null,
+            hintEl: hintId ? document.getElementById(hintId) : null,
+            hint,
+        });
+        return;
+    }
+
+    input.value = value;
 }
 
 // Restore Watch History Source and OAuth connected state from saved settings
