@@ -18,7 +18,8 @@ DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV: float = 6.8
 # v3: the sampler sorts by score, so a capped sample is the strongest items
 #     rather than an arbitrary slice of the library, and its quota split favours
 #     rated titles over watchlist entries.
-PROFILE_SCORING_VERSION: int = 3
+# v4: Stremio profiles sample up to 200 items instead of 30.
+PROFILE_SCORING_VERSION: int = 4
 
 # cache keys
 LIBRARY_ITEMS_KEY: str = "watchly:library_items:{token}"

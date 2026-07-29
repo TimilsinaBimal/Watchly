@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from app.models.library import LibraryCollection, StremioLibraryItem, StremioState
+from app.services.profile.constants import SMART_SAMPLING_MAX_ITEMS
 from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
 
@@ -60,7 +61,7 @@ def test_rated_items_get_their_own_quota():
 
     The cap is 10 rather than something tighter because the quotas are computed as
     int(max_items * 0.55), which rounds down to no slots at all below 2. Production
-    only ever uses SMART_SAMPLING_MAX_ITEMS (30).
+    only ever uses SMART_SAMPLING_MAX_ITEMS.
     """
     scoring = ScoringService()
     loved = watched_item("tt-loved", 0.3)
@@ -114,3 +115,32 @@ def test_quota_split_favours_rated_titles_over_the_watchlist():
     assert sum(1 for k in kept if k.startswith("loved")) == 16  # 55%
     assert sum(1 for k in kept if k.startswith("added")) == 3  # 10%
     assert sum(1 for k in kept if k.startswith("watched")) == 11  # remainder
+
+
+def test_production_cap_keeps_the_quota_split():
+    """Guards the split at the real cap, not just the small one the other tests use:
+    the quotas are int(cap * ratio), so they have to still add up at 200."""
+    scoring = ScoringService()
+    loved = [watched_item(f"loved{i}", 0.9) for i in range(300)]
+    for it in loved:
+        it.is_loved = True
+
+    library = LibraryCollection(
+        loved=loved,
+        added=[watched_item(f"added{i}", 0.0) for i in range(300)],
+        watched=[watched_item(f"watched{i}", 1.0) for i in range(300)],
+        source="stremio",
+    )
+
+    kept = [s.item.id for s in sample_items(library, "movie", scoring)]
+
+    assert len(kept) == SMART_SAMPLING_MAX_ITEMS
+    assert sum(1 for k in kept if k.startswith("loved")) == 110  # 55%
+    assert sum(1 for k in kept if k.startswith("added")) == 20  # 10%
+    assert sum(1 for k in kept if k.startswith("watched")) == 70  # remainder
+
+
+def test_enough_items_for_a_creator_to_recur():
+    """The reason the cap went up: recommendation/creators.py drops anyone appearing
+    fewer than twice, which a 30-item sample almost never produced."""
+    assert SMART_SAMPLING_MAX_ITEMS >= 100
