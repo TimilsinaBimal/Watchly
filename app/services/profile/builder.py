@@ -121,6 +121,19 @@ class ProfileBuilder:
         profile.processed_items = processed_ids
         profile.scoring_version = PROFILE_SCORING_VERSION
 
+        # Items whose TMDB lookup failed contribute nothing and drop out silently,
+        # so say how many made it in. A large gap here means the profile is thinner
+        # than the library suggests, which looks like bad recommendations rather
+        # than like an API problem.
+        dropped = len(scored_items) - len(processed_ids)
+        if dropped:
+            logger.warning(
+                f"Built {content_type} profile from {len(processed_ids)}/{len(scored_items)} items "
+                f"({dropped} dropped, most likely failed TMDB lookups)"
+            )
+        else:
+            logger.info(f"Built {content_type} profile from all {len(processed_ids)} items")
+
         if not profile.genre_scores and not profile.keyword_scores:
             logger.warning(
                 f"Built profile for {content_type} but all scores are empty. Library may have processing issues."
