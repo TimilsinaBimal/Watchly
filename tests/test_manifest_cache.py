@@ -103,3 +103,33 @@ def test_cache_key_is_scoped_to_the_addon_version(fake_redis):
 
     assert user_cache_module.__version__ in key
     assert TOKEN in key
+
+
+def test_saving_settings_invalidates_the_manifest(fake_redis, count_builds, monkeypatch):
+    """A config change alters the catalog list, so the cached manifest must not
+    survive the write that stores the new settings."""
+    from app.services.token_store import token_store
+
+    monkeypatch.setattr("app.services.token_store.redis_service.set", fake_redis.set)
+    monkeypatch.setattr("app.services.token_store.redis_service.get", fake_redis.get)
+    monkeypatch.setattr("app.services.token_store.redis_service.delete", fake_redis.delete)
+    monkeypatch.setattr("app.services.token_store.settings.TOKEN_SALT", "unit-test-salt")
+    token_store._get_user_data_cached.cache_clear()
+
+    asyncio.run(manifest_service.get_manifest_for_token(TOKEN))
+    assert asyncio.run(user_cache.get_manifest(TOKEN)) is not None
+
+    asyncio.run(token_store.store_user_data(TOKEN, {"settings": {"language": "de-DE"}}))
+
+    assert asyncio.run(user_cache.get_manifest(TOKEN)) is None
+
+
+def test_dashboard_refresh_invalidates_the_manifest(fake_redis, count_builds):
+    """invalidate_all_user_data is what the dashboard Refresh button drops through;
+    without the manifest it would rebuild every row and still serve the old list."""
+    asyncio.run(manifest_service.get_manifest_for_token(TOKEN))
+    assert asyncio.run(user_cache.get_manifest(TOKEN)) is not None
+
+    asyncio.run(user_cache.invalidate_all_user_data(TOKEN))
+
+    assert asyncio.run(user_cache.get_manifest(TOKEN)) is None

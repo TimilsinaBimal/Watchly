@@ -344,6 +344,10 @@ class UserCacheService:
             await self.invalidate_watched_sets(token, content_type)
             await self.invalidate_library_buckets(token, content_type)
         await self.invalidate_all_catalogs(token)
+        # The manifest belongs here too: the dashboard's Refresh drops everything
+        # through this, and leaving it would rebuild every row while still serving
+        # the previous catalog list.
+        await self.invalidate_manifest(token)
         logger.debug(f"[{redact_token(token)}...] Invalidated all user data cache")
 
     async def get_catalog(self, token: str, type: str, id: str) -> tuple[dict[str, Any], int] | None:
