@@ -148,12 +148,12 @@ class ManifestService:
         if not language:
             return catalogs
 
-        translated_catalogs = []
-        for cat in catalogs:
-            await apply_catalog_translation(cat, language)
-            translated_catalogs.append(cat)
-
-        return translated_catalogs
+        # Concurrently: each uncached name is a blocking call to Google in a worker
+        # thread, and a manifest carries 20-30 of them. Serially that is 20-30 round
+        # trips on a cold cache, which is enough to time the manifest request out.
+        # Each call mutates its own catalog dict, so there is nothing to collect.
+        await asyncio.gather(*(apply_catalog_translation(cat, language) for cat in catalogs))
+        return catalogs
 
 
 manifest_service = ManifestService()

@@ -28,6 +28,32 @@ _STATIC_TRANSLATIONS: dict[tuple[str, str], str] = {
 }
 
 
+# Google's translate codes predate ISO 639-1 in a few places, and TMDB hands us the
+# ISO form. Without these the language is simply rejected and every catalog name
+# silently falls back to English (#157).
+_GOOGLE_LANG_OVERRIDES: dict[str, str] = {
+    "he": "iw",  # Hebrew
+    "jv": "jw",  # Javanese
+    "nb": "no",  # Norwegian Bokmal
+    "fil": "tl",  # Filipino
+    "zh": "zh-CN",  # Chinese; the regional variant is lost when the tag is split
+}
+
+# Static dict inside deep-translator, no network call.
+_SUPPORTED_GOOGLE_CODES: frozenset[str] = frozenset(GoogleTranslator().get_supported_languages(as_dict=True).values())
+
+
+def _google_lang(lang: str) -> str | None:
+    """Google's code for an ISO language, or None when it cannot translate it.
+
+    Checking up front rather than letting the constructor raise: it raises once per
+    catalog, and each one logged a full traceback for a condition that is a property
+    of the language, not of the call.
+    """
+    code = _GOOGLE_LANG_OVERRIDES.get(lang, lang)
+    return code if code in _SUPPORTED_GOOGLE_CODES else None
+
+
 def _normalize_german_formality(text: str) -> str:
     """Normalize German text to use the informal (du) address form consistently."""
     text = re.sub(r"\bWeil Sie\b", "Weil du", text)
@@ -57,8 +83,13 @@ class TranslationService:
         if static_key in _STATIC_TRANSLATIONS:
             return _STATIC_TRANSLATIONS[static_key]
 
+        google_lang = _google_lang(lang)
+        if google_lang is None:
+            logger.debug(f"Google Translate has no code for '{lang}'; keeping the source text")
+            return text
+
         try:
-            return await self._translate_cached(text, lang)
+            return await self._translate_cached(text, google_lang)
         except Exception as e:
             # Fall back to source text on failure but don't cache the fallback —
             # otherwise a transient API blip poisons the cache for 7 days.
