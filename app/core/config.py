@@ -15,6 +15,10 @@ class Settings(BaseSettings):
         extra="allow",
     )
 
+    # Debug is deliberately noisy — per-item and per-cache-hit detail — so it is
+    # opt-in rather than the default the app used to run on.
+    LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
     TMDB_API_KEY: str | None = None
     PORT: int = 8000
     ADDON_ID: str = "com.bimal.watchly"
