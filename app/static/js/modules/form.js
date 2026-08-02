@@ -288,7 +288,7 @@ function initializePosterRatingProvider() {
         },
         top_posters: {
             name: 'Top Posters',
-            url: 'https://api.top-streaming.stream/',
+            url: 'https://api.top-posters.com/',
             description: 'Enable ratings on posters via Top Posters'
         }
     };
