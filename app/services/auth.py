@@ -108,7 +108,7 @@ class AuthService:
             return user_id, resolved_email, auth_key
         except Exception as e:
             logger.error(f"Stremio identity verification failed: {e}")
-            raise HTTPException(status_code=400, detail=f"Failed to verify Stremio identity: {e}")
+            raise HTTPException(status_code=400, detail="Failed to verify Stremio identity.")
         finally:
             await bundle.close()
 

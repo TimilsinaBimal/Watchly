@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Response
-from loguru import logger
 
-from app.core.security import TOKEN_PATTERN, redact_token
+from app.core.security import TOKEN_PATTERN
 from app.services.recommendation.catalog_service import catalog_service
 
 router = APIRouter()
@@ -16,22 +15,13 @@ async def get_catalog(response: Response, type: str, id: str, token: str, extra:
     if not TOKEN_PATTERN.match(token):
         raise HTTPException(status_code=400, detail="Invalid token.")
 
-    try:
-        # Delegate to catalog service facade
-        recommendations, headers = await catalog_service.get_catalog(token, type, id)
+    recommendations, headers = await catalog_service.get_catalog(token, type, id)
 
-        # Set response headers
-        for key, value in headers.items():
-            response.headers[key] = value
+    for key, value in headers.items():
+        response.headers[key] = value
 
-        # If recommendations are empty, avoid caching the empty payload aggressively.
-        if recommendations is not None and not recommendations.get("metas"):
-            response.headers["Cache-Control"] = "no-cache"
+    # If recommendations are empty, avoid caching the empty payload aggressively.
+    if recommendations is not None and not recommendations.get("metas"):
+        response.headers["Cache-Control"] = "no-cache"
 
-        return recommendations
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"[{redact_token(token)}] Error fetching catalog for {type}/{id}: {e}")
-        raise HTTPException(status_code=500, detail="Something went wrong. Please try again.")
+    return recommendations
