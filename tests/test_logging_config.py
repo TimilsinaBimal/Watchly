@@ -75,6 +75,70 @@ def test_levels_are_labelled(capsys, monkeypatch):
     assert "ERROR" in output and "an error line" in output
 
 
+def test_request_id_tags_every_line_from_that_request(capsys, monkeypatch):
+    """Messages carry a redacted token, which identifies the account but not the
+    request — and Stremio asks for every row at once, so one account's lines
+    interleave with no way to tell them apart."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.core.logging import register_request_id_middleware
+
+    monkeypatch.setattr("app.core.logging.settings.LOG_LEVEL", "INFO")
+    configure_logging()
+
+    app = FastAPI()
+    register_request_id_middleware(app)
+
+    @app.get("/probe")
+    async def probe():
+        logger.info("deep inside the route")
+        return {"ok": True}
+
+    response = TestClient(app).get("/probe")
+    request_id = response.headers["X-Request-ID"]
+
+    assert request_id
+    output = capsys.readouterr().err
+    assert f"| {request_id} |" in output
+    assert "deep inside the route" in output
+
+
+def test_a_supplied_request_id_is_honoured(capsys, monkeypatch):
+    """So an id assigned upstream, by a proxy or the client, survives into our logs."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.core.logging import register_request_id_middleware
+
+    monkeypatch.setattr("app.core.logging.settings.LOG_LEVEL", "INFO")
+    configure_logging()
+
+    app = FastAPI()
+    register_request_id_middleware(app)
+
+    @app.get("/probe")
+    async def probe():
+        logger.info("handled")
+        return {"ok": True}
+
+    response = TestClient(app).get("/probe", headers={"X-Request-ID": "from-upstream"})
+
+    assert response.headers["X-Request-ID"] == "from-upstream"
+    assert "| from-upstream |" in capsys.readouterr().err
+
+
+def test_lines_outside_a_request_still_render(capsys, monkeypatch):
+    """Startup and background work have no request; the field needs a default or the
+    format string raises."""
+    monkeypatch.setattr("app.core.logging.settings.LOG_LEVEL", "INFO")
+    configure_logging()
+
+    logger.info("started up")
+
+    assert "| - |" in capsys.readouterr().err
+
+
 def teardown_module() -> None:
     """Leave loguru writing to the real stderr for the rest of the suite."""
     logger.remove()

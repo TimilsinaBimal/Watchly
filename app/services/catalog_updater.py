@@ -160,5 +160,4 @@ class CatalogUpdater:
             self._updating_tokens.discard(token)
 
 
-logger.info(f"Catalog updater initialized with refresh interval of {settings.CATALOG_REFRESH_INTERVAL_SECONDS} seconds")
 catalog_updater = CatalogUpdater()

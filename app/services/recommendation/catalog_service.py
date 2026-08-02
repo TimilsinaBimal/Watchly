@@ -50,7 +50,7 @@ class CatalogService:
 
         headers = self._headers()
 
-        logger.info(f"[{redact_token(token)}] Fetching catalog for {content_type} with id {catalog_id}")
+        logger.debug(f"[{redact_token(token)}] Fetching catalog for {content_type} with id {catalog_id}")
 
         # Load credentials (needed for cache check + shuffle settings)
         credentials = await token_store.get_user_data(token)
@@ -207,7 +207,7 @@ class CatalogService:
                 user_settings=ctx.user_settings,
             )
 
-            logger.info(f"Returning {len(recommendations)} items for {content_type}")
+            logger.debug(f"Returning {len(recommendations)} items for {content_type}")
 
             cleaned = [m for m in (clean_meta(m) for m in recommendations) if m is not None]
             cleaned = shuffle_data_if_needed(ctx.user_settings, catalog_id, cleaned)
@@ -348,7 +348,7 @@ class CatalogService:
                 watched_imdb=watched_imdb,
                 limit=limit,
             )
-            logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
+            logger.debug(f"Found {len(recommendations)} recommendations for item {item_id}")
 
         elif catalog_id.startswith("watchly.theme."):
             theme_service: ThemeBasedService = services["theme"]
@@ -361,7 +361,7 @@ class CatalogService:
                 watched_imdb=watched_imdb,
                 limit=limit,
             )
-            logger.info(f"Found {len(recommendations)} recommendations for theme {catalog_id}")
+            logger.debug(f"Found {len(recommendations)} recommendations for theme {catalog_id}")
 
         elif catalog_id == "watchly.creators":
             creators_service: CreatorsService = services["creators"]
@@ -377,7 +377,7 @@ class CatalogService:
             else:
                 logger.info(f"No profile for creators, showing trending {content_type}")
                 recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
-            logger.info(f"Found {len(recommendations)} recommendations from creators")
+            logger.debug(f"Found {len(recommendations)} recommendations from creators")
 
         elif catalog_id == "watchly.rec":
             if profile:
@@ -394,7 +394,7 @@ class CatalogService:
             else:
                 logger.info(f"No profile for top picks, showing trending {content_type}")
                 recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
-            logger.info(f"Found {len(recommendations)} top picks for {content_type}")
+            logger.debug(f"Found {len(recommendations)} top picks for {content_type}")
 
         elif catalog_id in ("watchly.all.loved", "watchly.liked.all"):
             item_type = "loved" if catalog_id == "watchly.all.loved" else "liked"
