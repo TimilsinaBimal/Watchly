@@ -92,6 +92,8 @@ class ManifestService:
         base_manifest = self.get_base_manifest()
 
         ctx = await load_user_context(token, require_auth=False)
+        if ctx.user_settings.stremio_profile_name:
+            base_manifest["name"] = self._profiled_addon_name(ctx.user_settings.stremio_profile_name)
         fetched_catalogs: list[dict[str, Any]] = []
         try:
             # Trakt/Simkl-only accounts have no Stremio auth key but their
@@ -123,6 +125,10 @@ class ManifestService:
             base_manifest["catalogs"] = sorted_catalogs
 
         return base_manifest
+
+    @staticmethod
+    def _profiled_addon_name(profile_name: str) -> str:
+        return f"{settings.ADDON_NAME} - {profile_name.strip()}"[:64]
 
     async def _translate_catalogs(self, catalogs: list[dict[str, Any]], language: str | None) -> list[dict[str, Any]]:
         """Translate catalog names to target language."""

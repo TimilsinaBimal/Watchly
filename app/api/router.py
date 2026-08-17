@@ -8,6 +8,7 @@ from .endpoints.languages import router as language_router
 from .endpoints.manifest import router as manifest_router
 from .endpoints.oauth import router as oauth_router
 from .endpoints.stats import router as stats_router
+from .endpoints.stremio_profiles import router as stremio_profiles_router
 from .endpoints.tokens import router as tokens_router
 from .endpoints.validation import router as validation_router
 
@@ -26,6 +27,7 @@ api_router.include_router(health_router)
 api_router.include_router(language_router)
 api_router.include_router(announcement_router)
 api_router.include_router(stats_router)
+api_router.include_router(stremio_profiles_router)
 api_router.include_router(validation_router)
 api_router.include_router(oauth_router)
 api_router.include_router(dashboard_router)

@@ -13,7 +13,7 @@ import { initializeSuccessActions, showSuccessSection } from './form-success.js'
 import { initializeYearSliderControl } from './year-slider.js';
 import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 import { setProviderConnected } from './accounts.js';
-import { recallProviderAccount } from './auth.js';
+import { getPreparedStremioProfiles, recallProviderAccount } from './auth.js';
 
 const YEAR_RANGE_DEFAULTS = window.YEAR_RANGE_DEFAULTS || { min: 1970, max: new Date().getFullYear() };
 const LOADING_ICON = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
@@ -65,11 +65,13 @@ async function postJson(url, payload) {
 
 function getRequestPayload() {
     const catalogs = appState ? appState.catalogs : [];
+    const authKey = (document.getElementById('authKey')?.value || '').trim() || undefined;
+    const hasSelectedProfile = !!(document.getElementById('stremioProfileId')?.value && authKey);
 
     return {
-        authKey: (document.getElementById('authKey')?.value || '').trim() || undefined,
-        email: emailInput?.value.trim() || undefined,
-        password: passwordInput?.value || undefined,
+        authKey,
+        email: hasSelectedProfile ? undefined : emailInput?.value.trim() || undefined,
+        password: hasSelectedProfile ? undefined : passwordInput?.value || undefined,
         catalogs: catalogs.map(catalog => ({
             id: catalog.id,
             name: catalog.name,
@@ -197,32 +199,70 @@ function initializeFormSubmission() {
 
         try {
             const payload = buildTokenPayload(formData);
-            const response = await fetch('/tokens/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            const preparedProfiles = getPreparedStremioProfiles();
+            const profileRequests = preparedProfiles.length ? preparedProfiles : [null];
+            const installations = [];
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to generate manifest URL');
+            if (preparedProfiles.length > 1 && payload.watch_history_source !== 'stremio') {
+                showToast('Multi-profile instances use each Stremio profile as their history source.', 'info', 5000);
             }
 
-            const data = await response.json();
+            for (const profile of profileRequests) {
+                const profilePayload = profile
+                    ? { ...payload, authKey: profile.authKey, email: undefined, password: undefined }
+                    : payload;
 
-            // The server refreshed an expired Trakt token while verifying it.
-            // Trakt rotates refresh tokens, so keeping our old pair would make
-            // a second save present a spent refresh token.
-            if (data.refreshedTrakt) {
-                window._watchlyOAuth = window._watchlyOAuth || {};
-                window._watchlyOAuth.trakt = {
-                    access_token: data.refreshedTrakt.access_token,
-                    refresh_token: data.refreshedTrakt.refresh_token,
-                    expires_at: data.refreshedTrakt.expires_at,
-                };
+                // A shared Trakt or Simkl identity would merge the separate Stremio
+                // profiles back into one Watchly account. Batch mode is deliberately
+                // driven only by each profile's own Stremio history.
+                if (preparedProfiles.length > 1) {
+                    profilePayload.watch_history_source = 'stremio';
+                    profilePayload.trakt_access_token = undefined;
+                    profilePayload.trakt_refresh_token = undefined;
+                    profilePayload.trakt_token_expires_at = undefined;
+                    profilePayload.simkl_access_token = undefined;
+                }
+
+                const response = await fetch('/tokens/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(profilePayload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    const prefix = profile ? `${profile.name}: ` : '';
+                    throw new Error(prefix + (errorData.detail || 'Failed to generate manifest URL'));
+                }
+
+                const data = await response.json();
+                installations.push({
+                    profileName: profile?.name || 'Watchly',
+                    profileId: profile?.id,
+                    authKey: profile?.authKey,
+                    url: data.manifestUrl,
+                });
+
+                // The server refreshed an expired Trakt token while verifying it.
+                // Trakt rotates refresh tokens, so keeping our old pair would make
+                // a second save present a spent refresh token.
+                if (data.refreshedTrakt) {
+                    window._watchlyOAuth = window._watchlyOAuth || {};
+                    window._watchlyOAuth.trakt = {
+                        access_token: data.refreshedTrakt.access_token,
+                        refresh_token: data.refreshedTrakt.refresh_token,
+                        expires_at: data.refreshedTrakt.expires_at,
+                    };
+                }
             }
 
-            showSuccess(data.manifestUrl);
+            if (appState && installations.length) {
+                const manifestPath = new URL(installations[0].url).pathname.split('/').filter(Boolean);
+                appState.auth.token = manifestPath.at(-2) || '';
+                appState.auth.hasInstall = !!appState.auth.token;
+            }
+
+            showSuccess(installations.length === 1 ? installations[0].url : installations);
         } catch (error) {
             console.error('Error:', error);
             showError('generalError', error.message);

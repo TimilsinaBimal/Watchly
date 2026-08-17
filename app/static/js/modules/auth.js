@@ -28,6 +28,9 @@ let resetApp = null;
 let switchSection = null;
 let unlockNavigation = null;
 let updateYearSlider = null;
+let stremioProfileCredentials = null;
+let stremioProfiles = [];
+let preparedStremioProfiles = [];
 
 export function initializeAuth(domElements, state, actions) {
     stremioLoginBtn = domElements.stremioLoginBtn;
@@ -46,6 +49,7 @@ export function initializeAuth(domElements, state, actions) {
     // Initialize logout buttons
     initializeLoginStatusLogoutButton();
     initializeUserProfileDropdown();
+    initializeStremioProfileSelection();
 
     // Try to auto-login from localStorage
     attemptAutoLogin();
@@ -137,11 +141,16 @@ async function attemptAutoLogin() {
     const storedAuth = getAuthFromStorage();
     if (!storedAuth) return;
 
+    stremioProfileCredentials = storedAuth.email && storedAuth.password
+        ? { email: storedAuth.email, password: storedAuth.password }
+        : { authKey: storedAuth.rootAuthKey || storedAuth.authKey };
+
     try {
         // If we have an auth key, use it
         if (storedAuth.authKey) {
             setStremioLoggedInState(storedAuth.authKey);
             await fetchStremioIdentity(storedAuth.authKey);
+            await loadStremioProfiles(stremioProfileCredentials, storedAuth.profileId);
             unlockNavigation();
             switchSection('config');
             return;
@@ -156,6 +165,7 @@ async function attemptAutoLogin() {
             // Try to login
             await fetchStremioIdentity(null);
             setStremioLoggedInState('');
+            await loadStremioProfiles(stremioProfileCredentials, storedAuth.profileId);
             unlockNavigation();
             switchSection('config');
             return;
@@ -179,8 +189,10 @@ async function initializeStremioLogin() {
 
         try {
             await fetchStremioIdentity(authKey);
+            stremioProfileCredentials = { authKey };
+            await loadStremioProfiles(stremioProfileCredentials);
             // Save auth key to localStorage for persistent login
-            saveAuthToStorage({ authKey });
+            saveAuthToStorage({ authKey, rootAuthKey: authKey });
             unlockNavigation();
             switchSection('login');
         } catch (error) {
@@ -222,6 +234,233 @@ async function fetchStremioIdentity(authKey) {
         payload.password = passwordInput.value;
     }
     await fetchIdentity(payload);
+}
+
+function initializeStremioProfileSelection() {
+    const select = document.getElementById('stremioProfileSelect');
+    const applyBtn = document.getElementById('stremioProfileApplyBtn');
+    const pinInput = document.getElementById('stremioProfilePin');
+    const allProfiles = document.getElementById('stremioAllProfiles');
+    if (!select || !applyBtn || !allProfiles) return;
+
+    select.addEventListener('change', updateStremioProfilePinVisibility);
+    allProfiles.addEventListener('change', updateStremioProfileMode);
+    applyBtn.addEventListener('click', prepareStremioProfiles);
+    pinInput?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            prepareStremioProfiles();
+        }
+    });
+}
+
+async function loadStremioProfiles(credentials, preferredProfileId = null) {
+    const section = document.getElementById('stremioProfileSection');
+    const select = document.getElementById('stremioProfileSelect');
+    if (!section || !select || !credentials) return;
+
+    try {
+        const response = await fetch('/stremio/profiles/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(credentials),
+        });
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Could not load Stremio profiles.');
+        }
+
+        const data = await response.json();
+        stremioProfiles = Array.isArray(data.profiles) ? data.profiles : [];
+        if (stremioProfiles.length <= 1) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        select.replaceChildren(...stremioProfiles.map(profile => new Option(
+            profile.is_master ? `${profile.name} (primary)` : profile.name,
+            profile.id,
+        )));
+        const preferredProfile = stremioProfiles.find(profile => profile.id === preferredProfileId);
+        const activeProfile = preferredProfile
+            || stremioProfiles.find(profile => profile.selected)
+            || stremioProfiles.find(profile => profile.is_master)
+            || stremioProfiles[0];
+        select.value = activeProfile.id;
+        section.classList.remove('hidden');
+        renderStremioProfilePinList();
+        updateStremioProfileMode();
+
+        const allProfilesEnabled = document.getElementById('stremioAllProfiles')?.checked;
+        if (preferredProfile && !allProfilesEnabled) {
+            setSelectedStremioProfile(preferredProfile.id, preferredProfile.name);
+            setStremioProfileStatus(`Using ${preferredProfile.name} for this Watchly instance.`, 'success');
+        } else if (!allProfilesEnabled) {
+            setSelectedStremioProfile('', '');
+            setStremioProfileStatus('Select the profile that should power this Watchly instance.');
+        }
+    } catch (error) {
+        console.warn('Could not load Stremio profiles:', error);
+        section.classList.remove('hidden');
+        setStremioProfileStatus(error.message || 'Could not load Stremio profiles.', 'error');
+    }
+}
+
+function renderStremioProfilePinList() {
+    const container = document.getElementById('stremioProfilePinList');
+    if (!container) return;
+    container.replaceChildren();
+
+    stremioProfiles.filter(profile => profile.has_pin).forEach(profile => {
+        const wrapper = document.createElement('div');
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+
+        label.className = 'block text-xs text-slate-400 mb-2';
+        label.htmlFor = `stremio-profile-pin-${profile.id}`;
+        label.textContent = `PIN for ${profile.name}`;
+        input.id = `stremio-profile-pin-${profile.id}`;
+        input.type = 'password';
+        input.inputMode = 'numeric';
+        input.autocomplete = 'one-time-code';
+        input.placeholder = `Enter ${profile.name}'s PIN`;
+        input.dataset.stremioProfilePin = profile.id;
+        input.className = 'w-full bg-neutral-900 border border-slate-700 rounded-lg px-3 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition';
+        wrapper.append(label, input);
+        container.append(wrapper);
+    });
+}
+
+function updateStremioProfileMode() {
+    const allProfiles = document.getElementById('stremioAllProfiles')?.checked;
+    const singleControls = document.getElementById('stremioSingleProfileControls');
+    const pinList = document.getElementById('stremioProfilePinList');
+    const applyBtn = document.getElementById('stremioProfileApplyBtn');
+
+    singleControls?.classList.toggle('hidden', allProfiles);
+    pinList?.classList.toggle('hidden', !allProfiles || !stremioProfiles.some(profile => profile.has_pin));
+    if (applyBtn) applyBtn.textContent = allProfiles ? 'Prepare all profiles' : 'Use this profile';
+    preparedStremioProfiles = [];
+    setSelectedStremioProfile('', '');
+    if (!allProfiles) updateStremioProfilePinVisibility();
+    setStremioProfileStatus(allProfiles
+        ? `${stremioProfiles.length} profiles will receive separate Watchly instances.`
+        : 'Choose the profile that should power this Watchly instance.');
+}
+
+function updateStremioProfilePinVisibility() {
+    const select = document.getElementById('stremioProfileSelect');
+    const pinRow = document.getElementById('stremioProfilePinRow');
+    const pinInput = document.getElementById('stremioProfilePin');
+    const profile = stremioProfiles.find(item => item.id === select?.value);
+    const needsPin = !!profile?.has_pin;
+    pinRow?.classList.toggle('hidden', !needsPin);
+    if (!needsPin && pinInput) pinInput.value = '';
+    setStremioProfileStatus('');
+}
+
+async function prepareStremioProfiles() {
+    const select = document.getElementById('stremioProfileSelect');
+    const pinInput = document.getElementById('stremioProfilePin');
+    const applyBtn = document.getElementById('stremioProfileApplyBtn');
+    const allProfiles = document.getElementById('stremioAllProfiles')?.checked;
+    const targets = allProfiles
+        ? stremioProfiles
+        : stremioProfiles.filter(profile => profile.id === select?.value);
+    if (!targets.length || !stremioProfileCredentials || !applyBtn) return;
+
+    const profilePins = new Map();
+    for (const profile of targets) {
+        const profilePinInput = allProfiles
+            ? document.querySelector(`[data-stremio-profile-pin="${CSS.escape(profile.id)}"]`)
+            : pinInput;
+        const pin = profilePinInput?.value.trim() || '';
+        if (profile.has_pin && !pin) {
+            setStremioProfileStatus(`Enter the PIN for ${profile.name}.`, 'error');
+            profilePinInput?.focus();
+            return;
+        }
+        profilePins.set(profile.id, pin);
+    }
+
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Preparing...';
+    preparedStremioProfiles = [];
+    try {
+        for (const [index, profile] of targets.entries()) {
+            setStremioProfileStatus(`Preparing ${profile.name} (${index + 1}/${targets.length})...`);
+            const response = await fetch('/stremio/profiles/authenticate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...stremioProfileCredentials,
+                    profile_id: profile.id,
+                    pin: profilePins.get(profile.id) || undefined,
+                }),
+            });
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(`${profile.name}: ${error.detail || 'Could not unlock this profile.'}`);
+            }
+
+            const data = await response.json();
+            preparedStremioProfiles.push({
+                id: data.profile_id || profile.id,
+                name: data.profile_name || profile.name,
+                authKey: data.authKey,
+            });
+        }
+
+        const firstProfile = preparedStremioProfiles[0];
+        setStremioLoggedInState(firstProfile.authKey);
+        setSelectedStremioProfile(firstProfile.id, firstProfile.name);
+        await fetchStremioIdentity(firstProfile.authKey);
+
+        const storedAuth = {
+            authKey: firstProfile.authKey,
+            profileId: firstProfile.id,
+            profileName: firstProfile.name,
+        };
+        if (stremioProfileCredentials.email && stremioProfileCredentials.password) {
+            storedAuth.email = stremioProfileCredentials.email;
+            storedAuth.password = stremioProfileCredentials.password;
+        } else if (stremioProfileCredentials.authKey) {
+            storedAuth.rootAuthKey = stremioProfileCredentials.authKey;
+        }
+        saveAuthToStorage(storedAuth);
+        if (pinInput) pinInput.value = '';
+        document.querySelectorAll('[data-stremio-profile-pin]').forEach(input => { input.value = ''; });
+        const message = preparedStremioProfiles.length > 1
+            ? `${preparedStremioProfiles.length} profiles ready. Configure Watchly once, then generate every instance.`
+            : `${firstProfile.name} is ready for this Watchly instance.`;
+        setStremioProfileStatus(message, 'success');
+        showToast(message, 'success', 5000);
+    } catch (error) {
+        preparedStremioProfiles = [];
+        setStremioProfileStatus(error.message || 'Could not select this profile.', 'error');
+    } finally {
+        applyBtn.disabled = false;
+        applyBtn.textContent = allProfiles ? 'Prepare all profiles' : 'Use this profile';
+    }
+}
+
+export function getPreparedStremioProfiles() {
+    return preparedStremioProfiles.map(profile => ({ ...profile }));
+}
+
+function setSelectedStremioProfile(profileId, profileName) {
+    const idInput = document.getElementById('stremioProfileId');
+    const nameInput = document.getElementById('stremioProfileName');
+    if (idInput) idInput.value = profileId || '';
+    if (nameInput) nameInput.value = profileName || '';
+}
+
+function setStremioProfileStatus(message, kind = 'neutral') {
+    const status = document.getElementById('stremioProfileStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.classList.remove('text-slate-400', 'text-green-400', 'text-red-300');
+    status.classList.add(kind === 'success' ? 'text-green-400' : kind === 'error' ? 'text-red-300' : 'text-slate-400');
 }
 
 // Look up an existing account by a freshly connected Trakt/Simkl token, so
@@ -407,10 +646,12 @@ function initializeEmailPasswordLogin() {
             setEmailPwdLoading(true);
             // Reuse the shared identity handler to populate settings if account exists
             await fetchStremioIdentity(null);
+            stremioProfileCredentials = { email, password: pwd };
             // Save email/password to localStorage for persistent login
             saveAuthToStorage({ email, password: pwd });
             // Mark as logged-in (disables inputs and flips button to Logout)
             setStremioLoggedInState('');
+            await loadStremioProfiles(stremioProfileCredentials);
             // Stay on Accounts so the user can connect optional providers
             unlockNavigation();
         } catch (e) {
@@ -473,6 +714,15 @@ export function setStremioLoggedOutState() {
 
     // Clear stored auth credentials
     clearAuthFromStorage();
+    stremioProfileCredentials = null;
+    stremioProfiles = [];
+    preparedStremioProfiles = [];
+    setSelectedStremioProfile('', '');
+    document.getElementById('stremioProfileSection')?.classList.add('hidden');
+    const profileSelect = document.getElementById('stremioProfileSelect');
+    if (profileSelect) profileSelect.replaceChildren();
+    const profilePin = document.getElementById('stremioProfilePin');
+    if (profilePin) profilePin.value = '';
 
     // Hide user profile
     hideUserProfile();

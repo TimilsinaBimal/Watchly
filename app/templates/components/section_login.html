@@ -110,6 +110,43 @@
                     <span>Logout</span>
                 </button>
             </div>
+
+            <div id="stremioProfileSection" class="hidden mt-5 pt-5 border-t border-white/10">
+                <div class="mb-3">
+                    <div class="text-sm font-medium text-white">Recommendation profiles</div>
+                    <p class="text-xs text-slate-500 mt-1">Reuse one configuration while keeping every profile's history and recommendations separate.</p>
+                </div>
+
+                <label class="flex items-start gap-3 mb-4 cursor-pointer">
+                    <input id="stremioAllProfiles" type="checkbox" checked
+                        class="mt-0.5 w-4 h-4 rounded border-slate-600 bg-neutral-900 text-white focus:ring-white/20">
+                    <span>
+                        <span class="block text-sm text-slate-200">Create an instance for every profile</span>
+                        <span class="block text-xs text-slate-500 mt-0.5">The same TMDB and Gemini keys will be reused.</span>
+                    </span>
+                </label>
+
+                <div id="stremioSingleProfileControls">
+                    <select id="stremioProfileSelect"
+                        class="w-full bg-neutral-900 border border-slate-700 rounded-lg px-3 py-3 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition">
+                    </select>
+                    <div id="stremioProfilePinRow" class="hidden mt-3">
+                        <label for="stremioProfilePin" class="block text-xs text-slate-400 mb-2">Profile PIN</label>
+                        <input id="stremioProfilePin" type="password" inputmode="numeric" autocomplete="one-time-code"
+                            placeholder="Enter the Stremio profile PIN"
+                            class="w-full bg-neutral-900 border border-slate-700 rounded-lg px-3 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition">
+                    </div>
+                </div>
+
+                <div id="stremioProfilePinList" class="hidden grid gap-3"></div>
+                <button type="button" id="stremioProfileApplyBtn"
+                    class="mt-4 w-full bg-white text-black hover:bg-white/90 font-medium px-5 py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    Prepare all profiles
+                </button>
+                <p id="stremioProfileStatus" class="mt-3 text-xs text-slate-400" aria-live="polite"></p>
+                <input type="hidden" id="stremioProfileId">
+                <input type="hidden" id="stremioProfileName">
+            </div>
         </div>
     </div>
 

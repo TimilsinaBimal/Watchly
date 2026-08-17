@@ -9,6 +9,8 @@ class TokenRequest(BaseModel):
     authKey: str | None = Field(default=None, description="Stremio auth key")
     email: str | None = Field(default=None, description="Stremio account email")
     password: str | None = Field(default=None, description="Stremio account password")
+    stremio_profile_id: str | None = Field(default=None, description="Verified Stremio profile ID")
+    stremio_profile_name: str | None = Field(default=None, description="Verified Stremio profile name")
     catalogs: list[CatalogConfig] | None = Field(default=None, description="Catalog configuration")
     language: str = Field(default="en-US", description="Language for TMDB API")
     poster_rating: PosterRatingConfig | None = Field(default=None, description="Poster rating provider configuration")

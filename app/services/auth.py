@@ -105,6 +105,8 @@ class AuthService:
             user_info = await bundle.auth.get_user_info(auth_key)
             user_id = user_info["user_id"]
             resolved_email = user_info.get("email", payload.email or "")
+            payload.stremio_profile_id = user_info.get("profile_id")
+            payload.stremio_profile_name = user_info.get("profile_name")
             return user_id, resolved_email, auth_key
         except Exception as e:
             logger.error(f"Stremio identity verification failed: {e}")
@@ -368,6 +370,8 @@ class AuthService:
             return stored.get(field) if value == STORED_SECRET_SENTINEL else value
 
         return UserSettings(
+            stremio_profile_id=payload.stremio_profile_id,
+            stremio_profile_name=payload.stremio_profile_name,
             language=payload.language or default_settings.language,
             catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
             poster_rating=self._unmask_nested_key(payload.poster_rating, stored.get("poster_rating")),
@@ -436,7 +440,13 @@ class AuthService:
         # Keep the Stremio id as user_id when present so existing frontend
         # display logic is unchanged; any verified identity works otherwise.
         user_id = identities.get("stremio") or next(iter(identities.values()))
-        response = {"user_id": user_id, "email": email, "exists": exists}
+        response = {
+            "user_id": user_id,
+            "email": email,
+            "exists": exists,
+            "stremio_profile_id": payload.stremio_profile_id,
+            "stremio_profile_name": payload.stremio_profile_name,
+        }
 
         if exists and existing_data:
             # Token is the user's manifest key; only returned once they've authenticated
