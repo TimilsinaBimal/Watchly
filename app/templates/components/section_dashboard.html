@@ -67,6 +67,18 @@
         <p class="text-slate-400 text-sm">Your install at a glance — catalogs, taste profile, and a manual refresh.</p>
     </div>
 
+    <div id="dashInstancePicker" class="hidden dash-card p-4 mb-5">
+        <div class="sm:flex sm:items-center sm:justify-between gap-4">
+            <div class="mb-3 sm:mb-0">
+                <label for="dashProfileSelect" class="block text-sm font-semibold text-slate-200">Preview profile</label>
+                <p id="dashProfileHint" class="text-xs text-slate-500 mt-1">Choose which Watchly instance to inspect.</p>
+            </div>
+            <select id="dashProfileSelect"
+                class="w-full sm:w-64 bg-neutral-950 border border-slate-700 text-slate-100 text-sm rounded-lg px-3 py-2.5 focus:outline-none focus:border-slate-500 disabled:opacity-50">
+            </select>
+        </div>
+    </div>
+
     <!-- Logged-out (nav is open; gated by content) -->
     <div id="dashLoggedOut" class="hidden dash-card p-8 text-center">
         <p class="text-slate-300 mb-4">Log in with your Stremio account to view your dashboard.</p>

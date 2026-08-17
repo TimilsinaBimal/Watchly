@@ -68,31 +68,42 @@
         </svg>
     </div>
     <h3 class="text-3xl font-bold text-white mb-2">You're all set!</h3>
-    <p class="text-slate-400 mb-8">Your personalized catalog is ready.</p>
+    <p id="successDescription" class="text-slate-400 mb-8">Your personalized catalog is ready.</p>
 
-    <div
-        class="bg-neutral-950 rounded-xl p-4 mb-8 border border-white/10 font-mono text-sm text-slate-200 break-all relative group">
-        <div id="addonUrl">https://...</div>
+    <div id="singleAddonInstall">
         <div
-            class="absolute inset-0 bg-neutral-900/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl cursor-default">
-            <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
+            class="bg-neutral-950 rounded-xl p-4 mb-8 border border-white/10 font-mono text-sm text-slate-200 break-all relative group">
+            <div id="addonUrl">https://...</div>
+            <div
+                class="absolute inset-0 bg-neutral-900/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl cursor-default">
+                <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
+            </div>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2 max-w-lg mx-auto">
+            <button type="button" id="installDesktopBtn"
+                class="col-span-full md:col-span-1 bg-white hover:bg-white/90 text-black font-semibold py-3.5 rounded-xl transition shadow-lg shadow-black/10 hover:shadow-black/20 hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0 px-4 border border-white/10">Install
+                on App</button>
+            <button type="button" id="installWebBtn"
+                class="col-span-full md:col-span-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium py-3.5 rounded-xl transition border border-white/10 px-4">Install
+                on Web</button>
+            <button type="button" id="installNuvioBtn"
+                class="col-span-full md:col-span-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium py-3.5 rounded-xl transition border border-white/10 px-4">Install
+                on Nuvio</button>
+            <button type="button" id="copyBtn"
+                class="col-span-full md:col-span-1 bg-transparent hover:bg-neutral-800 text-slate-400 hover:text-white font-medium py-3 rounded-xl transition border border-white/10 px-4">Copy
+                Link</button>
         </div>
     </div>
 
-    <div class="grid gap-4 md:grid-cols-2 max-w-lg mx-auto">
-        <button type="button" id="installDesktopBtn"
-            class="col-span-full md:col-span-1 bg-white hover:bg-white/90 text-black font-semibold py-3.5 rounded-xl transition shadow-lg shadow-black/10 hover:shadow-black/20 hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0 px-4 border border-white/10">Install
-            on App</button>
-        <button type="button" id="installWebBtn"
-            class="col-span-full md:col-span-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium py-3.5 rounded-xl transition border border-white/10 px-4">Install
-            on Web</button>
-        <button type="button" id="installNuvioBtn"
-            class="col-span-full md:col-span-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium py-3.5 rounded-xl transition border border-white/10 px-4">Install
-            on Nuvio</button>
-        <button type="button" id="copyBtn"
-            class="col-span-full md:col-span-1 bg-transparent hover:bg-neutral-800 text-slate-400 hover:text-white font-medium py-3 rounded-xl transition border border-white/10 px-4">Copy
-            Link</button>
+    <div id="profileBatchInstall" class="hidden max-w-2xl mx-auto mb-6 text-left">
+        <button type="button" id="installAllProfilesBtn"
+            class="w-full bg-white hover:bg-white/90 text-black font-semibold py-3.5 rounded-lg transition disabled:cursor-wait disabled:opacity-60">
+            Install all profiles in Stremio
+        </button>
+        <p class="mt-2 text-xs text-slate-500 text-center">Each private instance will be assigned to its matching profile.</p>
     </div>
+    <div id="profileAddonInstances" class="hidden max-w-2xl mx-auto text-left divide-y divide-white/10 border-y border-white/10"></div>
     <button type="button" id="successResetBtn"
         class="mt-8 text-sm text-slate-500 hover:text-slate-300">Start Over</button>
 </section>
