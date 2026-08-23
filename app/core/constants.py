@@ -9,11 +9,30 @@ DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE: float = 7.2
 DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV: float = 6.8
 
 
+# Bumped whenever the scoring maths changes, so cached profiles built by older
+# code get dropped on read instead of being served with stale numbers until TTL.
+# Lives here rather than in profile/constants.py because user_cache reads it, and
+# importing anything under app.services.profile pulls in ProfileService via that
+# package's __init__ — a cycle.
+# v2: Trakt/Simkl items are scored by ScoringService instead of a flat 50.0.
+# v3: the sampler sorts by score, so a capped sample is the strongest items
+#     rather than an arbitrary slice of the library, and its quota split favours
+#     rated titles over watchlist entries.
+# v4: Stremio profiles sample up to 200 items instead of 30.
+PROFILE_SCORING_VERSION: int = 4
+
 # cache keys
 LIBRARY_ITEMS_KEY: str = "watchly:library_items:{token}"
 PROFILE_KEY: str = "watchly:profile:{token}:{content_type}"
 WATCHED_SETS_KEY: str = "watchly:watched_sets:{token}:{content_type}"
 CATALOG_KEY: str = "watchly:catalog:{token}:{type}:{id}"
+# Versioned because the manifest embeds the addon version: a deploy orphans the old
+# entries rather than serving a stale version string until the TTL runs out.
+MANIFEST_KEY: str = "watchly:manifest:{version}:{token}"
+
+# The manifest is rebuilt on save and by the catalog updater, so this is only a
+# backstop against an invalidation being missed.
+MANIFEST_CACHE_TTL_SECONDS: int = 86400
 
 # Bounded TTL for per-user caches (library items, profile, watched sets,
 # library hash, last-build timestamp). Refreshed on every read so an active

@@ -209,6 +209,13 @@ class TokenStore:
         else:
             await redis_service.set(key, json_str)
 
+        # Settings changes alter the catalog list, so a cached manifest built from
+        # the old settings must not survive the write.
+        try:
+            await user_cache.invalidate_manifest(token)
+        except Exception as e:
+            logger.warning(f"Failed to invalidate manifest for {redact_token(token)}: {e}")
+
         # Invalidate async LRU cache for fresh reads on subsequent requests
         try:
             self._get_user_data_cached.cache_invalidate(token)

@@ -150,7 +150,7 @@ async def fetch_library_for_source(
         )
 
     if auth_key:
-        logger.info(f"[{redact_token(token)}] Fetching library from Stremio")
+        logger.debug(f"[{redact_token(token)}] Fetching library from Stremio")
         return await bundle.library.get_library_items(auth_key)
 
     return None

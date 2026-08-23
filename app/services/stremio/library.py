@@ -71,23 +71,34 @@ def stremio_library_to_watch_history(library: LibraryCollection) -> WatchHistory
     return WatchHistory(items=items, source="stremio")
 
 
-def _history_item_to_library_item(item: WatchHistoryItem, is_loved: bool, is_liked: bool) -> StremioLibraryItem:
-    state_kwargs: dict[str, Any] = {}
-    if item.last_watched:
-        state_kwargs["lastWatched"] = item.last_watched
-    state_kwargs["timesWatched"] = max(item.watch_count, 0)
-    if item.completion >= 1.0:
-        state_kwargs["flaggedWatched"] = 1
-        state_kwargs["timesWatched"] = max(item.watch_count, 1)
-    elif item.completion > 0:
-        state_kwargs["duration"] = 6000
-        state_kwargs["timeWatched"] = int(6000 * item.completion)
+# Stand-in runtime for external items, which report completion as a fraction with
+# no duration attached. Only the timeWatched/duration ratio is ever read, so the
+# value is arbitrary — it just has to be large enough that int() rounding doesn't
+# bite.
+_COMPLETION_DURATION_PROXY = 6000
+
+
+def watch_history_item_to_library_item(item: WatchHistoryItem, is_loved: bool, is_liked: bool) -> StremioLibraryItem:
+    """Convert one external history item into the library shape the scorer reads.
+
+    Completion is written as a timeWatched/duration ratio rather than via the
+    flaggedWatched flag, because ScoringService skips its rewatch bonus outright
+    when that flag is set — flagging a completed item would cost it the rewatch
+    credit its watch_count earned.
+    """
+    completion = min(max(item.completion, 0.0), 1.0)
+    state = StremioState(
+        lastWatched=item.last_watched,
+        duration=_COMPLETION_DURATION_PROXY,
+        timeWatched=int(_COMPLETION_DURATION_PROXY * completion),
+        timesWatched=max(item.watch_count, 0),
+    )
 
     return StremioLibraryItem(
         _id=item.imdb_id,
         type=item.type,
         name=item.name,
-        state=StremioState(**state_kwargs),
+        state=state,
         temp=False,
         removed=False,
         _is_loved=is_loved,
@@ -128,7 +139,7 @@ def watch_history_to_library_collection(history: WatchHistory) -> LibraryCollect
 
         is_loved = bucket == "loved"
         is_liked = bucket == "liked"
-        lib_item = _history_item_to_library_item(item, is_loved, is_liked)
+        lib_item = watch_history_item_to_library_item(item, is_loved, is_liked)
 
         if bucket == "loved":
             loved.append(lib_item)

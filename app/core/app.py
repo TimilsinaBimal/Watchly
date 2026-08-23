@@ -11,6 +11,8 @@ from loguru import logger
 
 from app.api.endpoints.languages import fetch_languages_list
 from app.api.router import api_router
+from app.core.errors import register_exception_handlers
+from app.core.logging import configure_logging, register_request_id_middleware
 from app.core.security import STORED_SECRET_SENTINEL
 from app.core.settings import get_current_year, get_default_catalogs_for_frontend, get_default_year_range
 from app.services.redis_service import redis_service
@@ -19,6 +21,8 @@ from app.services.token_store import token_store
 
 from .config import settings
 from .version import __version__
+
+configure_logging()
 
 project_root = Path(__file__).resolve().parent.parent.parent
 static_dir = project_root / "app/static"
@@ -53,6 +57,9 @@ app = FastAPI(
     docs_url=None if settings.APP_ENV not in ["development", "vercel"] else "/docs",
     redoc_url=None if settings.APP_ENV != "development" else "/redoc",
 )
+
+register_exception_handlers(app)
+register_request_id_middleware(app)
 
 app.add_middleware(
     CORSMiddleware,

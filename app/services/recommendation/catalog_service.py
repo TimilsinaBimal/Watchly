@@ -1,3 +1,4 @@
+import asyncio
 import re
 import time
 from typing import Any
@@ -20,12 +21,23 @@ from app.services.recommendation.creators import CreatorsService
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
+from app.services.redis_service import redis_service
 from app.services.tmdb.service import get_tmdb_service
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
+from app.services.warmup import warmup_service
+
+REFRESH_LOCK_PREFIX = "watchly:refreshlock:"
+# Long enough to cover a slow rebuild, short enough that a worker killed mid-refresh
+# doesn't keep a row stale for long.
+REFRESH_LOCK_TTL_SECONDS = 600
 
 
 class CatalogService:
+    def __init__(self) -> None:
+        # Retained so a background refresh isn't garbage collected mid-flight.
+        self._refresh_tasks: set[asyncio.Task] = set()
+
     async def get_catalog(
         self, token: str, content_type: str, catalog_id: str
     ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -36,16 +48,9 @@ class CatalogService:
         # use the surviving account token.
         token = await token_store.resolve_alias(token)
 
-        headers: dict[str, Any] = {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-            "Content-Type": "application/json",
-            "Cache-Control": (
-                f"private, max-age={settings.CATALOG_CACHE_TTL},stale-while-revalidate=3600, stale-if-error=1800"
-            ),
-        }
+        headers = self._headers()
 
-        logger.info(f"[{redact_token(token)}] Fetching catalog for {content_type} with id {catalog_id}")
+        logger.debug(f"[{redact_token(token)}] Fetching catalog for {content_type} with id {catalog_id}")
 
         # Load credentials (needed for cache check + shuffle settings)
         credentials = await token_store.get_user_data(token)
@@ -56,43 +61,96 @@ class CatalogService:
                 detail="Invalid or expired token. Please reconfigure the addon.",
             )
 
-        # Trigger lazy update if needed
-        if settings.AUTO_UPDATE_CATALOGS:
+        # Trigger lazy update if needed. Skipped while a warm-up is running: on a
+        # re-configure last_updated carries over from the old record, so this would
+        # otherwise fire a full manifest rebuild and Stremio push alongside the warm
+        # that is already doing exactly that.
+        if settings.AUTO_UPDATE_CATALOGS and not await warmup_service.is_warming(token):
             try:
                 await catalog_updater.trigger_update(token, credentials)
             except Exception as e:
                 logger.error(f"[{redact_token(token)}] Failed to trigger auto update: {e}")
 
         # Check cache first — avoids auth/library/profile loading on cache hit
-        stale_data = None
         cached_result = await user_cache.get_catalog(token, content_type, catalog_id)
 
         if cached_result:
             data, created_at = cached_result
             age = int(time.time()) - created_at
+            user_settings = extract_settings(credentials)
+            data["metas"] = shuffle_data_if_needed(user_settings, catalog_id, data["metas"])
 
             if age < settings.CATALOG_REFRESH_INTERVAL_SECONDS:
                 logger.debug(f"[{redact_token(token)}] Using cached catalog for {content_type}/{catalog_id}")
-                user_settings = extract_settings(credentials)
-                data["metas"] = shuffle_data_if_needed(user_settings, catalog_id, data["metas"])
                 return data, headers
 
-            stale_data = data
+            # Stale but serveable: hand it back now and rebuild behind the response.
+            # Rebuilding inline meant every row on a home screen stalled for a full
+            # rebuild once the cache aged out, which is most of the wait users saw.
             logger.info(
-                f"[{redact_token(token)}] Catalog stale (age: {age}s) for "
-                f"{content_type}/{catalog_id}, refreshing..."
+                f"[{redact_token(token)}] Catalog stale (age: {age}s) for {content_type}/{catalog_id}, "
+                "serving stale and refreshing in the background"
             )
-        else:
-            logger.info(
-                f"[{redact_token(token)}] Catalog not cached for " f"{content_type}/{catalog_id}, building from scratch"
-            )
+            self._enqueue_refresh(token, content_type, catalog_id)
+            return data, headers
 
-        # Cache miss — load full user context
+        logger.info(
+            f"[{redact_token(token)}] Catalog not cached for {content_type}/{catalog_id}, building from scratch"
+        )
+
+        # Nothing cached to serve, so this one has to build on the request.
         ctx = await load_user_context(token)
         try:
-            return await self._build_catalog(ctx, content_type, catalog_id, headers, stale_data)
+            return await self._build_catalog(ctx, content_type, catalog_id, headers)
         finally:
             await ctx.close()
+
+    @staticmethod
+    def _headers() -> dict[str, Any]:
+        """Response headers.
+
+        One max-age for fresh and stale bodies alike. A fresh body used to be
+        cacheable 720x longer, which made sense only while ids churned and acted as
+        accidental cache-busters; with stable slot ids this header is what tells a
+        client a row has changed.
+        """
+        max_age = settings.CATALOG_CACHE_TTL
+        return {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Content-Type": "application/json",
+            "Cache-Control": f"private, max-age={max_age},stale-while-revalidate=3600, stale-if-error=1800",
+        }
+
+    def _enqueue_refresh(self, token: str, content_type: str, catalog_id: str) -> None:
+        task = asyncio.create_task(self._refresh_in_background(token, content_type, catalog_id))
+        self._refresh_tasks.add(task)
+        task.add_done_callback(self._refresh_tasks.discard)
+
+    async def _refresh_in_background(self, token: str, content_type: str, catalog_id: str) -> None:
+        """Rebuild a stale catalog into the cache.
+
+        Locked in Redis rather than in-process because Stremio asks for every
+        enabled row at once: without it, one home screen open would kick off a full
+        rebuild per row.
+        """
+        lock_key = f"{REFRESH_LOCK_PREFIX}{token}:{content_type}:{catalog_id}"
+        if not await redis_service.set_nx(lock_key, "1", REFRESH_LOCK_TTL_SECONDS):
+            logger.debug(f"[{redact_token(token)}] Refresh already running for {content_type}/{catalog_id}")
+            return
+
+        try:
+            ctx = await load_user_context(token)
+            try:
+                # Called for the cache write it performs; the response is discarded.
+                await self._build_catalog(ctx, content_type, catalog_id, self._headers())
+            finally:
+                await ctx.close()
+            logger.info(f"[{redact_token(token)}] Background refresh done for {content_type}/{catalog_id}")
+        except Exception as e:
+            logger.warning(f"[{redact_token(token)}] Background refresh failed for {content_type}/{catalog_id}: {e}")
+        finally:
+            await redis_service.delete(lock_key)
 
     async def _build_catalog(
         self,
@@ -100,7 +158,6 @@ class CatalogService:
         content_type: str,
         catalog_id: str,
         headers: dict[str, Any],
-        stale_data: dict[str, Any] | None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Build fresh catalog content using the loaded user context."""
         try:
@@ -136,8 +193,10 @@ class CatalogService:
                     user_settings=ctx.user_settings,
                 )
 
+            # Resolved only for building. The cache key stays the slot id the client
+            # asked for, which is the whole point: it survives a definition change.
             recommendations = await self._get_recommendations(
-                catalog_id=catalog_id,
+                catalog_id=await self._resolve_slot(ctx.token, content_type, catalog_id),
                 content_type=content_type,
                 services=services,
                 profile=profile,
@@ -148,7 +207,7 @@ class CatalogService:
                 user_settings=ctx.user_settings,
             )
 
-            logger.info(f"Returning {len(recommendations)} items for {content_type}")
+            logger.debug(f"Returning {len(recommendations)} items for {content_type}")
 
             cleaned = [m for m in (clean_meta(m) for m in recommendations) if m is not None]
             cleaned = shuffle_data_if_needed(ctx.user_settings, catalog_id, cleaned)
@@ -162,16 +221,7 @@ class CatalogService:
         except Exception as e:
             logger.error(f"[{redact_token(ctx.token)}] Failed to generate catalog: {e}")
 
-            if stale_data:
-                logger.warning(
-                    f"[{redact_token(ctx.token)}] Serving stale content for "
-                    f"{content_type}/{catalog_id} due to error"
-                )
-                meta_data = stale_data.get("metas", [])
-                meta_data = shuffle_data_if_needed(ctx.user_settings, catalog_id, meta_data)
-                stale_data["metas"] = meta_data
-                return stale_data, headers
-
+            # A stale copy, when one exists, is served before this is ever reached.
             return {"metas": []}, headers
 
     def _validate_inputs(self, token: str, content_type: str, catalog_id: str) -> None:
@@ -250,6 +300,30 @@ class CatalogService:
             logger.warning(f"Failed to fetch trending items: {e}")
             return []
 
+    @staticmethod
+    async def _resolve_slot(token: str, content_type: str, catalog_id: str) -> str:
+        """Expand a slot id into the row definition it currently points at.
+
+        Served ids are stable slots (`watchly.theme.2`) so the cache key never moves
+        when the row's definition changes. The definitions live in the slot map, and
+        expanding one back into the old self-describing form means the existing
+        parsers are untouched.
+
+        Ids that aren't slots are returned unchanged: manifests installed before this
+        carry self-describing ids and Stremio keeps requesting them until it refreshes.
+        """
+        match = re.match(r"^watchly\.(theme|item)\.(\d+)$", catalog_id)
+        if not match:
+            return catalog_id
+
+        prefix, slot = match.groups()
+        definition = (await user_cache.get_row_map(token, content_type)).get(f"{prefix}.{slot}")
+        if not definition:
+            logger.warning(f"[{redact_token(token)}] No row definition for {catalog_id} ({content_type})")
+            return catalog_id
+
+        return f"watchly.{prefix}.{definition}"
+
     async def _get_recommendations(
         self,
         catalog_id: str,
@@ -274,7 +348,7 @@ class CatalogService:
                 watched_imdb=watched_imdb,
                 limit=limit,
             )
-            logger.info(f"Found {len(recommendations)} recommendations for item {item_id}")
+            logger.debug(f"Found {len(recommendations)} recommendations for item {item_id}")
 
         elif catalog_id.startswith("watchly.theme."):
             theme_service: ThemeBasedService = services["theme"]
@@ -287,7 +361,7 @@ class CatalogService:
                 watched_imdb=watched_imdb,
                 limit=limit,
             )
-            logger.info(f"Found {len(recommendations)} recommendations for theme {catalog_id}")
+            logger.debug(f"Found {len(recommendations)} recommendations for theme {catalog_id}")
 
         elif catalog_id == "watchly.creators":
             creators_service: CreatorsService = services["creators"]
@@ -303,7 +377,7 @@ class CatalogService:
             else:
                 logger.info(f"No profile for creators, showing trending {content_type}")
                 recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
-            logger.info(f"Found {len(recommendations)} recommendations from creators")
+            logger.debug(f"Found {len(recommendations)} recommendations from creators")
 
         elif catalog_id == "watchly.rec":
             if profile:
@@ -320,7 +394,7 @@ class CatalogService:
             else:
                 logger.info(f"No profile for top picks, showing trending {content_type}")
                 recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
-            logger.info(f"Found {len(recommendations)} top picks for {content_type}")
+            logger.debug(f"Found {len(recommendations)} top picks for {content_type}")
 
         elif catalog_id in ("watchly.all.loved", "watchly.liked.all"):
             item_type = "loved" if catalog_id == "watchly.all.loved" else "liked"

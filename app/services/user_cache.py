@@ -1,14 +1,24 @@
-import hashlib
 import json
 import time
 from typing import Any
 
 from loguru import logger
 
-from app.core.constants import CATALOG_KEY, LIBRARY_ITEMS_KEY, PROFILE_KEY, USER_CACHE_TTL_SECONDS, WATCHED_SETS_KEY
+from app.core.constants import (
+    CATALOG_KEY,
+    LIBRARY_ITEMS_KEY,
+    MANIFEST_CACHE_TTL_SECONDS,
+    MANIFEST_KEY,
+    PROFILE_KEY,
+    PROFILE_SCORING_VERSION,
+    USER_CACHE_TTL_SECONDS,
+    WATCHED_SETS_KEY,
+)
 from app.core.security import redact_token
+from app.core.version import __version__
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
+from app.services import cache_codec
 from app.services.redis_service import redis_service
 
 
@@ -29,14 +39,72 @@ class UserCacheService:
         return WATCHED_SETS_KEY.format(token=token, content_type=content_type)
 
     @staticmethod
-    def _library_hash_key(token: str, content_type: str) -> str:
-        """Generate cache key for library hash."""
-        return f"watchly:library_hash:{token}:{content_type}"
+    def _manifest_key(token: str) -> str:
+        """Generate cache key for the assembled manifest."""
+        return MANIFEST_KEY.format(version=__version__, token=token)
 
     @staticmethod
-    def _last_profile_build_key(token: str, content_type: str) -> str:
-        """Generate cache key for last profile build timestamp."""
-        return f"watchly:last_profile_build:{token}:{content_type}"
+    def _row_map_key(token: str, content_type: str) -> str:
+        """Generate cache key for the slot -> row definition map."""
+        return f"watchly:rowmap:v1:{token}:{content_type}"
+
+    @staticmethod
+    def _library_buckets_key(token: str, content_type: str) -> str:
+        """Generate cache key for the rating-bucket map behind the cached profile."""
+        return f"watchly:library_buckets:v1:{token}:{content_type}"
+
+    # Manifest Methods
+
+    async def get_manifest(self, token: str) -> dict[str, Any] | None:
+        """Get the cached manifest for a user."""
+        cached = await redis_service.get(self._manifest_key(token))
+        if not cached:
+            return None
+        try:
+            return json.loads(cache_codec.decode(cached))
+        except json.JSONDecodeError:
+            return None
+
+    async def set_manifest(self, token: str, manifest: dict[str, Any]) -> None:
+        """Cache the assembled manifest for a user."""
+        payload = cache_codec.encode(json.dumps(manifest))
+        await redis_service.set(self._manifest_key(token), payload, MANIFEST_CACHE_TTL_SECONDS)
+        logger.debug(f"[{redact_token(token)}...] Cached manifest")
+
+    async def invalidate_manifest(self, token: str) -> None:
+        """Drop the cached manifest — settings changes alter the catalog list."""
+        await redis_service.delete(self._manifest_key(token))
+        logger.debug(f"[{redact_token(token)}...] Invalidated manifest cache")
+
+    # Row Map Methods
+
+    async def get_row_map(self, token: str, content_type: str) -> dict[str, str]:
+        """Slot id -> row definition for this user's dynamic rows.
+
+        Empty when unknown, which leaves the affected rows empty until the next
+        manifest rebuild rewrites the map.
+        """
+        key = self._row_map_key(token, content_type)
+        cached = await redis_service.get(key)
+        if not cached:
+            return {}
+        try:
+            mapping = json.loads(cache_codec.decode(cached))
+        except json.JSONDecodeError:
+            return {}
+        await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
+        return mapping
+
+    async def set_row_map(self, token: str, content_type: str, mapping: dict[str, str]) -> None:
+        """Record what each slot currently points at.
+
+        Deliberately absent from invalidate_all_user_data: dropping this would leave
+        every slot unresolvable until Stremio next pulls the manifest, so it is only
+        ever replaced by a manifest rebuild, never cleared.
+        """
+        payload = cache_codec.encode(json.dumps(mapping))
+        await redis_service.set(self._row_map_key(token, content_type), payload, USER_CACHE_TTL_SECONDS)
+        logger.debug(f"[{redact_token(token)}...] Stored {len(mapping)} row slots for {content_type}")
 
     # Library Items Methods
 
@@ -47,7 +115,7 @@ class UserCacheService:
 
         if cached:
             try:
-                data = json.loads(cached)
+                data = json.loads(cache_codec.decode(cached))
                 # Refresh TTL on read so active users' caches stay warm.
                 await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
                 return LibraryCollection.model_validate(data)
@@ -60,7 +128,9 @@ class UserCacheService:
     async def set_library_items(self, token: str, library_items: LibraryCollection) -> None:
         """Cache library items for a user."""
         key = self._library_items_key(token)
-        await redis_service.set(key, library_items.model_dump_json(by_alias=True), USER_CACHE_TTL_SECONDS)
+        await redis_service.set(
+            key, cache_codec.encode(library_items.model_dump_json(by_alias=True)), USER_CACHE_TTL_SECONDS
+        )
         logger.debug(f"[{redact_token(token)}...] Cached library items")
 
         await self.invalidate_all_catalogs(token)
@@ -87,19 +157,31 @@ class UserCacheService:
             content_type: Content type (movie or series)
 
         Returns:
-            TasteProfile instance, or None if not cached
+            TasteProfile instance, or None if not cached or built by older scoring
         """
         key = self._profile_key(token, content_type)
         cached = await redis_service.get(key)
 
         if cached:
             try:
-                profile = TasteProfile.model_validate_json(cached)
-                await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
-                return profile
+                profile = TasteProfile.model_validate_json(cache_codec.decode(cached))
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Failed to decode cached profile for {redact_token(token)}.../{content_type}: {e}")
                 return None
+
+            # Dropped here rather than at the build sites: catalog_service reads
+            # profiles straight out of the cache, so a version check anywhere else
+            # would be bypassed on the hot path.
+            if profile.scoring_version < PROFILE_SCORING_VERSION:
+                logger.info(
+                    f"[{redact_token(token)}...] Dropping {content_type} profile from scoring "
+                    f"v{profile.scoring_version}; rebuilding at v{PROFILE_SCORING_VERSION}"
+                )
+                await redis_service.delete(key)
+                return None
+
+            await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
+            return profile
 
         return None
 
@@ -113,7 +195,7 @@ class UserCacheService:
             profile: TasteProfile instance to cache
         """
         key = self._profile_key(token, content_type)
-        await redis_service.set(key, profile.model_dump_json(), USER_CACHE_TTL_SECONDS)
+        await redis_service.set(key, cache_codec.encode(profile.model_dump_json()), USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Cached profile for {content_type}")
 
     async def invalidate_profile(self, token: str, content_type: str) -> None:
@@ -146,7 +228,7 @@ class UserCacheService:
 
         if cached:
             try:
-                data = json.loads(cached)
+                data = json.loads(cache_codec.decode(cached))
                 watched_tmdb = set(data.get("watched_tmdb", []))
                 watched_imdb = set(data.get("watched_imdb", []))
                 await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
@@ -178,7 +260,7 @@ class UserCacheService:
             "watched_tmdb": list(watched_tmdb),
             "watched_imdb": list(watched_imdb),
         }
-        await redis_service.set(key, json.dumps(data), USER_CACHE_TTL_SECONDS)
+        await redis_service.set(key, cache_codec.encode(json.dumps(data)), USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Cached watched sets for {content_type}")
 
     async def invalidate_watched_sets(self, token: str, content_type: str) -> None:
@@ -221,75 +303,40 @@ class UserCacheService:
     # Library Change Detection Methods
 
     @staticmethod
-    def _extract_item_id(item) -> str:
-        """Extract item ID from either a typed StremioLibraryItem or a raw dict."""
-        if hasattr(item, "id"):
-            return item.id
-        return item.get("_id", item.get("id", ""))
+    def bucket_map(typed: LibraryCollection) -> dict[str, str]:
+        """Map every item of one content type to the rating bucket it sits in.
 
-    async def has_library_changed(self, token: str, content_type: str, library_items: list) -> bool:
+        Buckets, not just ids: for Trakt and Simkl the rating *is* the signal
+        (>=9 loved, 7-8.9 liked), so an id-only digest reads a re-rating as no
+        change at all. Written last-wins in strength order so an item that
+        somehow appears in two buckets resolves to the strongest.
         """
-        Check if library has changed since last profile build.
+        return {
+            **{i.id: "a" for i in typed.added},
+            **{i.id: "w" for i in typed.watched},
+            **{i.id: "k" for i in typed.liked},
+            **{i.id: "l" for i in typed.loved},
+        }
 
-        Args:
-            token: User token
-            content_type: Content type (movie or series)
-            library_items: Current library items list
-
-        Returns:
-            True if library has changed, False otherwise
-        """
-        current_ids = [self._extract_item_id(item) for item in library_items]
-        current_hash = hashlib.md5("".join(sorted(current_ids)).encode()).hexdigest()
-
-        stored_hash = await redis_service.get(self._library_hash_key(token, content_type))
-
-        if stored_hash is None:
-            return True
-
-        # redis_service is configured with decode_responses=True so stored_hash is always str.
-        return current_hash != stored_hash
-
-    async def update_library_hash(self, token: str, content_type: str, library_items: list) -> None:
-        """
-        Update the stored library hash after successful profile build.
-
-        Args:
-            token: User token
-            content_type: Content type (movie or series)
-            library_items: Current library items list
-        """
-        current_ids = [self._extract_item_id(item) for item in library_items]
-        current_hash = hashlib.md5("".join(sorted(current_ids)).encode()).hexdigest()
-
-        hash_key = self._library_hash_key(token, content_type)
-        build_time_key = self._last_profile_build_key(token, content_type)
-
-        # Store hash and build timestamp
-        await redis_service.set(hash_key, current_hash, USER_CACHE_TTL_SECONDS)
-        await redis_service.set(build_time_key, str(time.time()), USER_CACHE_TTL_SECONDS)
-
-        logger.debug(f"[{redact_token(token)}...] Updated library hash for {content_type}")
-
-    async def get_last_profile_build_time(self, token: str, content_type: str) -> int | None:
-        """
-        Get the timestamp of the last profile build.
-
-        Args:
-            token: User token
-            content_type: Content type (movie or series)
-
-        Returns:
-            Unix timestamp of last build, or None if never built
-        """
-        build_time = await redis_service.get(self._last_profile_build_key(token, content_type))
-        if build_time is None:
+    async def get_library_buckets(self, token: str, content_type: str) -> dict[str, str] | None:
+        """The bucket map the cached profile was built from, or None if unknown."""
+        cached = await redis_service.get(self._library_buckets_key(token, content_type))
+        if not cached:
             return None
-
         try:
-            return int(float(build_time))
-        except (ValueError, TypeError):
+            return json.loads(cache_codec.decode(cached))
+        except json.JSONDecodeError:
             return None
+
+    async def set_library_buckets(self, token: str, content_type: str, typed: LibraryCollection) -> None:
+        """Record the bucket map the profile was just built from."""
+        key = self._library_buckets_key(token, content_type)
+        payload = cache_codec.encode(json.dumps(self.bucket_map(typed)))
+        await redis_service.set(key, payload, USER_CACHE_TTL_SECONDS)
+        logger.debug(f"[{redact_token(token)}...] Updated library buckets for {content_type}")
+
+    async def invalidate_library_buckets(self, token: str, content_type: str) -> None:
+        await redis_service.delete(self._library_buckets_key(token, content_type))
 
     async def set_profile_and_watched_sets(
         self,
@@ -330,7 +377,12 @@ class UserCacheService:
         for content_type in ["movie", "series"]:
             await self.invalidate_profile(token, content_type)
             await self.invalidate_watched_sets(token, content_type)
+            await self.invalidate_library_buckets(token, content_type)
         await self.invalidate_all_catalogs(token)
+        # The manifest belongs here too: the dashboard's Refresh drops everything
+        # through this, and leaving it would rebuild every row while still serving
+        # the previous catalog list.
+        await self.invalidate_manifest(token)
         logger.debug(f"[{redact_token(token)}...] Invalidated all user data cache")
 
     async def get_catalog(self, token: str, type: str, id: str) -> tuple[dict[str, Any], int] | None:
@@ -349,7 +401,7 @@ class UserCacheService:
         cached = await redis_service.get(key)
         if cached:
             try:
-                data = json.loads(cached)
+                data = json.loads(cache_codec.decode(cached))
                 # Handle new format with timestamp wrapper
                 if "data" in data and "created_at" in data:
                     return data["data"], data["created_at"]
@@ -384,7 +436,7 @@ class UserCacheService:
             "data": catalog,
             "created_at": int(time.time()),
         }
-        await redis_service.set(key, json.dumps(wrapped_data), ttl)
+        await redis_service.set(key, cache_codec.encode(json.dumps(wrapped_data)), ttl)
         logger.debug(f"[{redact_token(token)}...] Cached catalog for {type}/{id}")
 
     async def invalidate_catalog(self, token: str, type: str, id: str) -> None:

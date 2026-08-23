@@ -1,6 +1,6 @@
-from app.models.library import LibraryCollection
+from app.models.library import LibraryCollection, StremioLibraryItem
 from app.models.profile import ScoredItem
-from app.services.profile.constants import SMART_SAMPLING_MAX_ITEMS
+from app.services.profile.constants import SAMPLING_QUOTA_ADDED, SAMPLING_QUOTA_RATED, SMART_SAMPLING_MAX_ITEMS
 from app.services.profile.scoring import ScoringService
 
 
@@ -10,12 +10,17 @@ def sample_items(
     scoring_service: ScoringService,
     max_items: int = SMART_SAMPLING_MAX_ITEMS,
 ) -> list[ScoredItem]:
-    """Sample items for profile building with quota-based selection.
+    """Pick the highest-signal items for profile building, capped at max_items.
 
-    Strategy:
-    1. Always include all loved/liked/added items (strong signals)
-    2. Fill remaining slots with top watched items by score
-    3. Limit total to prevent excessive API calls
+    At or under the cap every item is used. Above it, items are pooled by signal
+    strength (loved/liked, added, watched), each pool sorted by score, and drawn
+    against the quota split in profile/constants.py, with any leftover slots
+    backfilled strongest-first in that same pool order.
+
+    Note the quotas: a user with more loved titles than the rated quota
+    contributes only their strongest, not all of them. Backfill still tops the
+    sample up to the cap when a pool is short, so the split bounds each pool's
+    guaranteed share rather than its maximum.
     """
     typed_items = [it for it in library_items.all_items() if it.type == content_type]
 
@@ -26,7 +31,7 @@ def sample_items(
         return [scoring_service.process_item(it) for it in typed_items]
 
     # De-duplicate by ID
-    unique_items: dict[str, any] = {}
+    unique_items: dict[str, StremioLibraryItem] = {}
     for it in typed_items:
         if it.id:
             unique_items[it.id] = it
@@ -50,16 +55,22 @@ def sample_items(
         else:
             watched_pool.append(scored)
 
+    # Strongest first. The quota slices below take a prefix of each pool, so
+    # without this they took whatever order the library happened to arrive in —
+    # making a 30-item sample 30 arbitrary items rather than the strongest 30.
+    for pool in (loved_liked_pool, added_pool, watched_pool):
+        pool.sort(key=lambda scored: scored.score, reverse=True)
+
     # Fill quotas
     final: list[ScoredItem] = []
     used_ids: set[str] = set()
 
-    loved_quota = int(max_items * 0.40)
-    added_quota = int(max_items * 0.20)
-    watched_quota = max_items - loved_quota - added_quota
+    rated_quota = int(max_items * SAMPLING_QUOTA_RATED)
+    added_quota = int(max_items * SAMPLING_QUOTA_ADDED)
+    watched_quota = max_items - rated_quota - added_quota
 
     for pool, quota in [
-        (loved_liked_pool, loved_quota),
+        (loved_liked_pool, rated_quota),
         (added_pool, added_quota),
         (watched_pool, watched_quota),
     ]:

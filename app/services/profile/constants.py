@@ -7,6 +7,13 @@ EVIDENCE_WEIGHT_WATCHED_HIGH: Final[float] = 1.0  # Completion ≥80%
 EVIDENCE_WEIGHT_WATCHED_MEDIUM: Final[float] = 0.5  # Completion 40-79%
 EVIDENCE_WEIGHT_ADDED: Final[float] = 0.3
 
+# Share of a capped sample handed to each signal pool; watched takes the remainder.
+# Weighted toward rated titles to match the evidence weights above — a watchlist
+# item contributes 0.3 where a loved one contributes 3.0, so a slot spent there
+# buys a tenth of the signal for the same TMDB lookups.
+SAMPLING_QUOTA_RATED: Final[float] = 0.55
+SAMPLING_QUOTA_ADDED: Final[float] = 0.10
+
 # Feature Weights (relative importance of different feature types)
 FEATURE_WEIGHT_GENRE: Final[float] = 0.9  # Most important
 FEATURE_WEIGHT_KEYWORD: Final[float] = 0.7
@@ -38,7 +45,15 @@ RECENCY_HALF_LIFE_DAYS: Final[float] = 30.0
 RECENCY_DECAY_RATE: Final[float] = 0.98  # Daily decay multiplier (soft decay)
 
 # Smart Sampling
-SMART_SAMPLING_MAX_ITEMS: Final[int] = 30
+# Was 30, which starved the parts of the profile that need volume: the creators
+# catalog only keeps a director or actor appearing at least twice (MIN_FREQUENCY in
+# recommendation/creators.py), and almost nobody recurs across 30 items. Top genres
+# saturate long before this — CAP_GENRE is reached after roughly 20 loved items — so
+# the gain here is in the long tail of keywords, creators and countries that the
+# theme and creator rows read from. Still bounded rather than unlimited: past a few
+# hundred items the top-N rankings stop moving, and enrichment costs ~2 TMDB calls
+# per item.
+SMART_SAMPLING_MAX_ITEMS: Final[int] = 200
 
 # Frequency Multiplier (optional, subtle boost for repeated patterns)
 FREQUENCY_ENABLED: Final[bool] = True

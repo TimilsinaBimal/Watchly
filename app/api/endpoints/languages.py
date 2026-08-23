@@ -14,7 +14,7 @@ async def get_languages():
         return languages
     except Exception as e:
         logger.error(f"Failed to fetch languages: {e}")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch languages from TMDB: {e}")
+        raise HTTPException(status_code=502, detail="Could not reach TMDB. Please try again.")
 
 
 @router.get("/api/meta/images")
@@ -30,4 +30,4 @@ async def get_meta_images(
         return images
     except Exception as e:
         logger.error(f"Failed to fetch images for {media_type}/{tmdb_id}: {e}")
-        raise HTTPException(status_code=502, detail=f"Failed to fetch images from TMDB: {e}")
+        raise HTTPException(status_code=502, detail="Could not reach TMDB. Please try again.")

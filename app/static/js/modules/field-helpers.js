@@ -17,11 +17,42 @@ export function initializeEyeToggle({ input, toggleBtn, eyeIcon, eyeOffIcon }) {
     if (!input || !toggleBtn || !eyeIcon || !eyeOffIcon) return;
 
     toggleBtn.addEventListener('click', () => {
+        // A saved key reaches the page as an opaque marker, never the key itself,
+        // so there is nothing worth revealing — showing it would just leak an
+        // internal string at the user.
+        if (input.value === window.STORED_SECRET) return;
+
         const isPassword = input.type === 'password';
         input.type = isPassword ? 'text' : 'password';
         eyeIcon.classList.toggle('hidden', !isPassword);
         eyeOffIcon.classList.toggle('hidden', isPassword);
     });
+}
+
+// Fields holding a saved key show its last few characters instead of the key, so
+// the user can tell which one is on file. The reveal button is hidden until they
+// start typing a replacement, since there is nothing to reveal before then.
+export function markFieldAsSaved({ input, toggleBtn, hintEl, hint }) {
+    if (!input) return;
+
+    input.value = window.STORED_SECRET;
+    input.type = 'password';
+    if (toggleBtn) toggleBtn.classList.add('hidden');
+
+    if (hintEl) {
+        hintEl.textContent = hint
+            ? `Saved key ending …${hint}. Type to replace it, or clear the field to remove it.`
+            : 'A saved key is in use. Type to replace it, or clear the field to remove it.';
+        hintEl.className = 'mt-2 text-xs text-slate-500';
+    }
+
+    const onEdit = () => {
+        if (input.value === window.STORED_SECRET) return;
+        if (toggleBtn) toggleBtn.classList.remove('hidden');
+        if (hintEl) hintEl.classList.add('hidden');
+        input.removeEventListener('input', onEdit);
+    };
+    input.addEventListener('input', onEdit);
 }
 
 export function initializePasswordToggleButton(selector = '.toggle-btn') {

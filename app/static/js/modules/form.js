@@ -222,7 +222,7 @@ function initializeFormSubmission() {
                 };
             }
 
-            showSuccess(data.manifestUrl);
+            showSuccess(data.manifestUrl, data.token);
         } catch (error) {
             console.error('Error:', error);
             showError('generalError', error.message);
@@ -288,7 +288,7 @@ function initializePosterRatingProvider() {
         },
         top_posters: {
             name: 'Top Posters',
-            url: 'https://api.top-streaming.stream/',
+            url: 'https://api.top-posters.com/',
             description: 'Enable ratings on posters via Top Posters'
         }
     };
@@ -593,8 +593,8 @@ export function refreshYearSlider() {
     updateYearSlider();
 }
 
-function showSuccess(url) {
-    showSuccessSection(url);
+function showSuccess(url, token) {
+    showSuccessSection(url, token);
 }
 
 // Watch History Source + OAuth

@@ -7,6 +7,12 @@ from app.core.base_client import BaseClient
 from app.core.config import settings
 from app.models.history import WatchHistory, WatchHistoryItem
 
+# Trakt's own maximum page size, so this is the fewest requests possible.
+HISTORY_PAGE_LIMIT = 100
+# Backstop against a pagination contract change turning the loop endless. 100
+# pages is 10k titles — far past any real library.
+MAX_HISTORY_PAGES = 100
+
 
 class TraktService:
     """Service for interacting with the Trakt API."""
@@ -57,6 +63,31 @@ class TraktService:
             },
         )
 
+    async def _get_all_pages(self, url: str, headers: dict[str, str]) -> list[dict[str, Any]]:
+        """Fetch every page of a Trakt list endpoint.
+
+        Without explicit paging we only ever received Trakt's first page, so a
+        history longer than one page was silently truncated — which also truncated
+        the already-watched exclusion set, letting watched titles come back as
+        recommendations.
+
+        Safe for Trakt's unpaginated endpoints too: they ignore the page params and
+        return the lot, so the "exactly one full page" test fails and the loop stops
+        after a single request.
+        """
+        items: list[dict[str, Any]] = []
+        for page in range(1, MAX_HISTORY_PAGES + 1):
+            batch = self._safe_list(
+                await self.client.get(url, params={"page": page, "limit": HISTORY_PAGE_LIMIT}, headers=headers),
+                url,
+            )
+            items.extend(batch)
+            if len(batch) != HISTORY_PAGE_LIMIT:
+                return items
+
+        logger.warning(f"Trakt {url}: stopped at the {MAX_HISTORY_PAGES}-page cap with {len(items)} items")
+        return items
+
     async def get_history(self, access_token: str) -> WatchHistory:
         """Fetch watched + rated items, return as WatchHistory."""
         headers = self._headers(access_token)
@@ -64,10 +95,10 @@ class TraktService:
         # Fetch all 4 endpoints in parallel; BaseClient returns parsed JSON
         # and handles retry on 429/5xx internally.
         results = await asyncio.gather(
-            self.client.get("/users/me/watched/movies", headers=headers),
-            self.client.get("/users/me/watched/shows", headers=headers),
-            self.client.get("/users/me/ratings/movies", headers=headers),
-            self.client.get("/users/me/ratings/shows", headers=headers),
+            self._get_all_pages("/users/me/watched/movies", headers),
+            self._get_all_pages("/users/me/watched/shows", headers),
+            self._get_all_pages("/users/me/ratings/movies", headers),
+            self._get_all_pages("/users/me/ratings/shows", headers),
             return_exceptions=True,
         )
 

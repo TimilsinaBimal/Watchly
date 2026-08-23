@@ -87,7 +87,7 @@ async def trakt_callback(request: Request, code: str, state: str | None = None):
         username = user_info.get("user", {}).get("username") or user_info.get("username", "Unknown")
     except Exception as e:
         logger.error(f"Trakt OAuth callback failed: {e}")
-        return HTMLResponse(_oauth_error_page("Trakt", str(e)))
+        return HTMLResponse(_oauth_error_page("Trakt", "Could not complete sign-in. Please try again."))
 
     return HTMLResponse(
         _oauth_success_page(
@@ -151,7 +151,7 @@ async def simkl_callback(request: Request, code: str, state: str | None = None):
         username = user_info.get("user", {}).get("name") or user_info.get("account", {}).get("id", "Unknown")
     except Exception as e:
         logger.error(f"Simkl OAuth callback failed: {e}")
-        return HTMLResponse(_oauth_error_page("Simkl", str(e)))
+        return HTMLResponse(_oauth_error_page("Simkl", "Could not complete sign-in. Please try again."))
 
     return HTMLResponse(
         _oauth_success_page(

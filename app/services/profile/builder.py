@@ -5,7 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.constants import DEFAULT_CONCURRENCY_LIMIT
+from app.core.constants import DEFAULT_CONCURRENCY_LIMIT, PROFILE_SCORING_VERSION
 from app.models.profile import ScoredItem, TasteProfile
 from app.services.profile.constants import (
     CAP_CAST,
@@ -119,6 +119,20 @@ class ProfileBuilder:
             profile.average_episodes = total_weighted_episodes / total_weight_for_episodes
 
         profile.processed_items = processed_ids
+        profile.scoring_version = PROFILE_SCORING_VERSION
+
+        # Items whose TMDB lookup failed contribute nothing and drop out silently,
+        # so say how many made it in. A large gap here means the profile is thinner
+        # than the library suggests, which looks like bad recommendations rather
+        # than like an API problem.
+        dropped = len(scored_items) - len(processed_ids)
+        if dropped:
+            logger.warning(
+                f"Built {content_type} profile from {len(processed_ids)}/{len(scored_items)} items "
+                f"({dropped} dropped, most likely failed TMDB lookups)"
+            )
+        else:
+            logger.info(f"Built {content_type} profile from all {len(processed_ids)} items")
 
         if not profile.genre_scores and not profile.keyword_scores:
             logger.warning(
