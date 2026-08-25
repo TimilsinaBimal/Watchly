@@ -525,11 +525,15 @@ function setSecretField(input, value, { toggleId, hintId, hint } = {}) {
     input.value = value;
 }
 
-// Restore Watch History Source and OAuth connected state from saved settings
+function hasLiveToken(provider) {
+    const token = window._watchlyOAuth?.[provider]?.access_token;
+    return !!token && token !== window.STORED_SECRET;
+}
+
 function restoreWatchHistoryState(settings) {
     window._watchlyOAuth = window._watchlyOAuth || {};
 
-    if (settings.trakt_access_token) {
+    if (settings.trakt_access_token && !hasLiveToken('trakt')) {
         window._watchlyOAuth.trakt = {
             access_token: settings.trakt_access_token,
             refresh_token: settings.trakt_refresh_token || '',
@@ -544,10 +548,12 @@ function restoreWatchHistoryState(settings) {
         const traktLogoutBtn = document.getElementById('traktLogoutBtn');
         if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
         setProviderConnected('trakt', true);
-        validateAndShowTraktUser(settings.trakt_access_token);
+        if (settings.trakt_access_token !== window.STORED_SECRET) {
+            validateAndShowTraktUser(settings.trakt_access_token);
+        }
     }
 
-    if (settings.simkl_access_token) {
+    if (settings.simkl_access_token && !hasLiveToken('simkl')) {
         window._watchlyOAuth.simkl = {
             access_token: settings.simkl_access_token,
         };
@@ -560,7 +566,9 @@ function restoreWatchHistoryState(settings) {
         const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');
         if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
         setProviderConnected('simkl', true);
-        validateAndShowSimklUser(settings.simkl_access_token);
+        if (settings.simkl_access_token !== window.STORED_SECRET) {
+            validateAndShowSimklUser(settings.simkl_access_token);
+        }
     }
 
     if (settings.watch_history_source) {
