@@ -308,11 +308,9 @@ def test_resubmitting_masked_secrets_keeps_the_stored_values(monkeypatch):
         llm=LLMConfig(provider="anthropic", api_key="sk-ant-secret"),
     )
     response, _, _ = asyncio.run(service.create_user_token(first))
-
-    # What the configure page sends back after loading masked settings
     masked = TokenRequest(
-        trakt_access_token=STORED_SECRET_SENTINEL,
-        trakt_refresh_token=STORED_SECRET_SENTINEL,
+        trakt_access_token="t-abc",
+        trakt_refresh_token="r-abc",
         watch_history_source="trakt",
         tmdb_api_key=STORED_SECRET_SENTINEL,
         llm=LLMConfig(provider="anthropic", api_key=STORED_SECRET_SENTINEL),
@@ -447,3 +445,57 @@ def test_identity_lookup_returns_key_fingerprints(monkeypatch):
     assert result["settings"]["tmdb_api_key"] == STORED_SECRET_SENTINEL
     assert "tmdb-secret-ending-f3a9" not in json.dumps(result)
     assert "sk-ant-secret-9zQ4" not in json.dumps(result)
+
+
+def test_masked_provider_tokens_are_never_presented_to_the_provider(monkeypatch):
+    """The configure page replays a stored token as an opaque marker.
+
+    Sending that marker on to Trakt/Simkl can only 401, and the failed refresh
+    that follows it looks like a revoked account rather than a masked one.
+    """
+    fake = setup_fakes(monkeypatch, stremio_identity=("user123", "user@example.com", "authkey-1"))
+    service = AuthService()
+    first = TokenRequest(
+        authKey="some-key",
+        trakt_access_token="t-abc",
+        trakt_refresh_token="r-abc",
+        simkl_access_token="s-abc",
+        watch_history_source="trakt",
+    )
+    token = asyncio.run(service.create_user_token(first))[0].token
+
+    calls: list[str] = []
+
+    async def spy_trakt_user(access_token):
+        calls.append("get_user_info")
+        return {"ids": {"slug": "trakt-bob"}}
+
+    async def spy_trakt_refresh(refresh_token, redirect_uri):
+        calls.append("refresh_token")
+        return {}
+
+    async def spy_simkl_settings(access_token, client_id):
+        calls.append("get_user_settings")
+        return {"account": {"id": 9876}}
+
+    monkeypatch.setattr("app.services.auth.trakt_service.get_user_info", spy_trakt_user)
+    monkeypatch.setattr("app.services.auth.trakt_service.refresh_token", spy_trakt_refresh)
+    monkeypatch.setattr("app.services.auth.simkl_service.get_user_settings", spy_simkl_settings)
+
+    masked = TokenRequest(
+        authKey="some-key",
+        trakt_access_token=STORED_SECRET_SENTINEL,
+        trakt_refresh_token=STORED_SECRET_SENTINEL,
+        simkl_access_token=STORED_SECRET_SENTINEL,
+        watch_history_source="trakt",
+    )
+    response, _, user_settings = asyncio.run(service.create_user_token(masked))
+
+    assert calls == []
+    assert response.token == token
+    # The marker resolves back to the stored tokens rather than clearing them.
+    assert user_settings.trakt_access_token == "t-abc"
+    assert user_settings.trakt_refresh_token == "r-abc"
+    assert user_settings.simkl_access_token == "s-abc"
+    stored = json.loads(fake.data[f"watchly:token:{token}"])
+    assert set(stored["identities"]) == {"stremio", "trakt", "simkl"}

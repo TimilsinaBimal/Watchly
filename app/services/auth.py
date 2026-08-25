@@ -138,11 +138,11 @@ class AuthService:
             user_id, email, stremio_auth_key = await self.get_stremio_user_data(payload)
             identities["stremio"] = user_id
 
-        if payload.trakt_access_token:
+        if payload.trakt_access_token and payload.trakt_access_token != STORED_SECRET_SENTINEL:
             if slug := await self._verify_trakt_identity(payload, refresh_expired):
                 identities["trakt"] = slug
 
-        if payload.simkl_access_token:
+        if payload.simkl_access_token and payload.simkl_access_token != STORED_SECRET_SENTINEL:
             if account_id := await self._verify_simkl_identity(payload.simkl_access_token):
                 identities["simkl"] = account_id
 
