@@ -2,7 +2,7 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -69,8 +69,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+class RevalidatedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope) -> Response:
+        # Browsers cache each ES module separately, so without this a deploy can
+        # leave a stale modules/*.js running against a newer backend (#167).
+        # no-cache still allows caching but forces an ETag revalidation, which
+        # is a 304 until the file actually changes.
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 if static_dir.exists():
-    app.mount("/app/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.mount("/app/static", RevalidatedStaticFiles(directory=str(static_dir)), name="static")
 
 # Initialize Jinja2 templates
 jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
