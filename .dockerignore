@@ -23,6 +23,8 @@ ENV/
 # Documentation
 README.md
 *.md
+# The /changelog endpoint serves this file
+!CHANGELOG.md
 
 # Docker
 Dockerfile
