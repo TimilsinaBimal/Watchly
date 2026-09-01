@@ -143,10 +143,15 @@ function applyActive(btn, isActive) {
 }
 
 function setProviderDot(provider, connected) {
-    const dot = document.querySelector(`[data-account-dot="${provider}"]`);
-    if (dot) {
-        dot.classList.toggle('bg-green-400', connected);
-        dot.classList.toggle('bg-slate-500', !connected);
+    const badge = document.querySelector(`[data-account-dot="${provider}"]`);
+    if (badge) {
+        badge.textContent = connected ? 'Connected' : 'Not connected';
+        badge.classList.toggle('bg-green-500/15', connected);
+        badge.classList.toggle('text-green-300', connected);
+        badge.classList.toggle('border-green-400/20', connected);
+        badge.classList.toggle('bg-red-500/15', !connected);
+        badge.classList.toggle('text-red-300', !connected);
+        badge.classList.toggle('border-red-400/20', !connected);
     }
 
     const pip = document.querySelector(`[data-source-pip="${provider}"]`);

@@ -110,6 +110,29 @@ def test_source_must_match_a_connected_provider(monkeypatch):
     assert exc.value.status_code == 400
 
 
+def test_signups_disabled_rejects_new_identity(monkeypatch):
+    setup_fakes(monkeypatch)
+    monkeypatch.setattr("app.services.auth.settings.ALLOW_SIGNUPS", False)
+    service = AuthService()
+    payload = TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt")
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.create_user_token(payload))
+    assert exc.value.status_code == 403
+
+
+def test_signups_disabled_still_updates_existing_account(monkeypatch):
+    fake = setup_fakes(monkeypatch)
+    seed_account(fake, "tok_existing", "2024-01-01T00:00:00+00:00", identities={"trakt": "trakt-bob"})
+    monkeypatch.setattr("app.services.auth.settings.ALLOW_SIGNUPS", False)
+    service = AuthService()
+    payload = TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt")
+
+    response, _, _ = asyncio.run(service.create_user_token(payload))
+
+    assert response.token == "tok_existing"
+
+
 def test_legacy_stremio_account_keeps_its_token(monkeypatch):
     fake = setup_fakes(monkeypatch, stremio_identity=("user123", "user@example.com", "authkey-1"))
     # Pre-identity-index account: token IS the Stremio user id, no index entry.

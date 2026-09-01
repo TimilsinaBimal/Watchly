@@ -18,6 +18,7 @@ ENV PATH="/root/.local/bin/:$PATH"
 
 COPY app/ ./app/
 COPY main.py .
+COPY CHANGELOG.md .
 COPY pyproject.toml .
 COPY uv.lock .
 

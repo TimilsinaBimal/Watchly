@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watchly — Changelog</title>
+    <link rel="icon" href="/app/static/logo.png" type="image/png">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background-color: #0c0d10;
+            background-image: radial-gradient(1200px 600px at 50% -10%, rgba(255, 255, 255, 0.05), transparent 60%);
+            color: #cbd5e1;
+            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.65;
+        }
+
+        main {
+            max-width: 46rem;
+            margin: 0 auto;
+            padding: 3rem 1.25rem 5rem;
+        }
+
+        header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            color: #f1f5f9;
+            font-size: 1.5rem;
+            margin: 0;
+        }
+
+        header a {
+            color: #94a3b8;
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+
+        header a:hover {
+            color: #e2e8f0;
+        }
+
+        article h1 {
+            display: none;
+        }
+
+        article h2 {
+            color: #f1f5f9;
+            font-size: 1.15rem;
+            margin: 2.5rem 0 0.75rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        article h3 {
+            color: #93c5fd;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin: 1.5rem 0 0.5rem;
+        }
+
+        article ul {
+            padding-left: 1.25rem;
+            margin: 0.5rem 0;
+        }
+
+        article li {
+            margin: 0.35rem 0;
+        }
+
+        article a {
+            color: #93c5fd;
+        }
+
+        article code {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+            padding: 0.1em 0.35em;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <header>
+            <h1>Changelog</h1>
+            <a href="/configure">&larr; Back to Watchly v{{ app_version }}</a>
+        </header>
+        <article>{{ changelog_html|safe }}</article>
+    </main>
+</body>
+
+</html>

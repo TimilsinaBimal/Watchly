@@ -25,3 +25,20 @@ def test_configure_page_bootstraps_current_year_and_year_defaults(monkeypatch):
     assert 'window.YEAR_RANGE_DEFAULTS = {"min": 1970, "max": ' in html
     assert 'id="yearMin" min="1970"' in html
     assert 'id="yearMax" min="1970"' in html
+
+
+def test_changelog_page_renders_markdown():
+    response = client.get("/changelog")
+
+    assert response.status_code == 200
+    assert "<h2>1.14.0" in response.text
+
+
+def test_static_files_require_revalidation():
+    # A cached stale ES module against a newer backend broke saves (#167);
+    # no-cache makes browsers revalidate each module against its ETag.
+    response = client.get("/app/static/js/main.js")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-cache"
+    assert "etag" in response.headers

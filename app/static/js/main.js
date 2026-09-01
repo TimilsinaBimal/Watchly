@@ -1,7 +1,7 @@
 // Main entry point - initializes all modules
 
 import { createAppState, resetAppState } from './state.js';
-import { initializeFooter, initializeKofi } from './modules/ui.js';
+import { initializeChangelog, initializeFooter, initializeKofi, initializeProviderCards } from './modules/ui.js';
 import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initializeMobileNav, updateMobileLayout, unlockNavigation } from './modules/navigation.js';
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
 import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
@@ -154,6 +154,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize UI components
     initializeFooter();
     initializeKofi();
+    initializeChangelog();
+    initializeProviderCards();
 
     // Layout adjustments for fixed mobile header
     updateMobileLayout();

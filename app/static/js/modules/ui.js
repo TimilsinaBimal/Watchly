@@ -214,3 +214,67 @@ export function initializeKofi() {
         }
     });
 }
+
+// Collapsible provider cards on the accounts page
+export function initializeProviderCards() {
+    document.querySelectorAll('[data-provider-toggle]').forEach((btn) => {
+        const provider = btn.dataset.providerToggle;
+        const body = document.querySelector(`[data-provider-body="${provider}"]`);
+        const chevron = document.querySelector(`[data-provider-chevron="${provider}"]`);
+        if (!body) return;
+        btn.addEventListener('click', () => {
+            const open = !body.classList.toggle('hidden');
+            btn.setAttribute('aria-expanded', String(open));
+            if (chevron) chevron.classList.toggle('rotate-180', open);
+        });
+    });
+}
+
+// Changelog Modal Logic
+export function initializeChangelog() {
+    const badge = document.getElementById('versionBadge');
+    const modal = document.getElementById('changelog-modal');
+    const backdrop = document.getElementById('changelog-backdrop');
+    const closeBtn = document.getElementById('close-changelog');
+    const content = document.getElementById('changelog-content');
+
+    if (!badge || !modal) return;
+
+    let loaded = false;
+    const loadChangelog = async () => {
+        if (loaded) return;
+        try {
+            const res = await fetch('/changelog');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+            const article = doc.querySelector('article');
+            if (!article) throw new Error('changelog page had no article');
+            // Same-origin markup rendered by our own /changelog endpoint, not user data.
+            content.replaceChildren(...article.children);
+            loaded = true;
+        } catch (err) {
+            content.textContent = 'Could not load the changelog.';
+        }
+    };
+
+    const openModal = (e) => {
+        e.preventDefault();
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        loadChangelog();
+    };
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    };
+
+    badge.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', closeModal);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeModal();
+        }
+    });
+}

@@ -2,7 +2,8 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+import markdown
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -69,8 +70,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+class RevalidatedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope) -> Response:
+        # Browsers cache each ES module separately, so without this a deploy can
+        # leave a stale modules/*.js running against a newer backend (#167).
+        # no-cache still allows caching but forces an ETag revalidation, which
+        # is a 304 until the file actually changes.
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 if static_dir.exists():
-    app.mount("/app/static", StaticFiles(directory=str(static_dir)), name="static")
+    app.mount("/app/static", RevalidatedStaticFiles(directory=str(static_dir)), name="static")
 
 # Initialize Jinja2 templates
 jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
@@ -117,8 +130,19 @@ async def configure_page(request: Request, _token: str | None = None):
         stored_secret_sentinel=STORED_SECRET_SENTINEL,
         movie_genres=movie_genres_list,
         series_genres=series_genres_list,
+        allow_signups=settings.ALLOW_SIGNUPS,
     )
     return HTMLResponse(content=html_content, media_type="text/html")
+
+
+@app.get("/changelog", response_class=HTMLResponse)
+def changelog_page():
+    changelog_path = project_root / "CHANGELOG.md"
+    if not changelog_path.exists():
+        raise HTTPException(status_code=404, detail="No changelog available")
+    changelog_html = markdown.markdown(changelog_path.read_text(), extensions=["extra"])
+    template = jinja_env.get_template("changelog.html")
+    return HTMLResponse(content=template.render(changelog_html=changelog_html, app_version=__version__))
 
 
 app.include_router(api_router)
