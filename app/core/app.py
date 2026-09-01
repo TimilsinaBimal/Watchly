@@ -2,7 +2,8 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+import markdown
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -132,6 +133,16 @@ async def configure_page(request: Request, _token: str | None = None):
         allow_signups=settings.ALLOW_SIGNUPS,
     )
     return HTMLResponse(content=html_content, media_type="text/html")
+
+
+@app.get("/changelog", response_class=HTMLResponse)
+def changelog_page():
+    changelog_path = project_root / "CHANGELOG.md"
+    if not changelog_path.exists():
+        raise HTTPException(status_code=404, detail="No changelog available")
+    changelog_html = markdown.markdown(changelog_path.read_text(), extensions=["extra"])
+    template = jinja_env.get_template("changelog.html")
+    return HTMLResponse(content=template.render(changelog_html=changelog_html, app_version=__version__))
 
 
 app.include_router(api_router)

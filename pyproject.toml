@@ -13,6 +13,7 @@ dependencies = [
     "fastapi>=0.104.1",
     "httpx[http2]>=0.25.2",
     "loguru>=0.7.2",
+    "markdown>=3.7",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "pydantic-core>=2.41.5",
