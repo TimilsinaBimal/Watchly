@@ -1,15 +1,11 @@
 # Changelog
 
-Release notes for each version. The release workflow publishes the matching
-section as the GitHub release body; if a version has no section here, it falls
-back to a summary generated from commit messages.
-
 ## 1.14.0 - 2026-09-01
 
 ### Added
 
 - `ALLOW_SIGNUPS` setting: set it to `False` to lock a public instance to existing accounts. New signups get a 403 and the configure page shows a notice; existing users keep full access (#146).
-- The version badge on the configure page now links to `/changelog`, which renders this file.
+- The version badge on the configure page opens a changelog popup, with a link to the GitHub releases page.
 
 ### Changed
 
