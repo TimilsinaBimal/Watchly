@@ -1,116 +1,111 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Watchly — a Stremio catalog addon: a FastAPI service speaking the Stremio addon protocol (manifest + catalog endpoints) that serves personalised movie/series rows built from a user's watch history. Per-user state is keyed on an opaque token in the manifest URL; credentials are encrypted at rest in Redis. App code in `app/`.
 
-## Project
+Read the code for anything structural. This file is rules, not documentation.
 
-Watchly is a Stremio catalog addon that generates personalized movie/series recommendations from a user's watch history. It is a FastAPI service that speaks the Stremio addon protocol (manifest + catalog endpoints). Recommendations come from a taste profile built off the user's history, then candidates are pulled from TMDB / Simkl, scored, capped for diversity, enriched, and returned as a Stremio catalog.
+## Principles
 
-A user installs Watchly through its `/configure` web page: they paste a Stremio email/password (or auth_key), optionally connect Trakt and/or Simkl via OAuth, optionally provide their own TMDB / Gemini / Simkl / RPDB API keys, pick which catalogs they want, and get an addon manifest URL to paste into Stremio. From then on, every catalog row in their Stremio home — "Top Picks for You", "Because you loved …", "Genre & Keyword Catalogs", etc. — is served by this app. State per user is keyed on a short opaque token embedded in the manifest URL; credentials are encrypted at rest in Redis. The app must work for users who store their library in Stremio, in Trakt, or in Simkl, and for users with mixed signals (rated, watched, loved, rewatched). That source flexibility is the central architectural constraint.
+- Do not preserve backward compatibility, except where an installed Stremio client depends on the old shape. Remove obsolete paths instead of adding fallbacks.
+- Choose the simplest implementation that fully meets the current requirements. Avoid speculative abstractions, configuration, and indirection.
+- Repeat yourself twice before extracting. A six-parameter helper with one caller is worse than the duplication. A readable 40 lines beats a clever 12.
+- Mistakes are cheap. Don't armour against what can't happen — no handling for impossible inputs, no shims unless an installed client depends on the old shape.
+- Prefer established libraries over reimplementing common functionality, and lean on the dependencies already here before adding one.
+- Make architectural decisions for the long term. Don't accept a stopgap meant to be replaced later.
 
-## Commands
+Changing what an installed client already requests — a manifest field, a catalog id, the semantics of a cached value — needs a compat shim carrying a comment naming the client that depends on it and what would make it removable.
 
-Dependencies are managed with [uv](https://github.com/astral-sh/uv); a `requirements.txt` is also kept in sync for non-uv environments. Python 3.12+.
+## Working rules
 
-```bash
-# Install
-uv sync
-
-# Run dev server (auto-reload when APP_ENV=development)
-uv run main.py --dev
-# or directly
-uvicorn app.core.app:app --reload
-
-# Tests (pytest is not in requirements-dev.txt — install once into the venv)
-pip install pytest pytest-asyncio
-pytest tests/                                       # all tests
-pytest tests/test_catalog_endpoint.py -v            # single file
-pytest tests/test_catalog_endpoint.py::test_name    # single test
-
-# Lint / format (also runs on commit via pre-commit)
-pre-commit run --all-files
-black .            # line length 120, py312
-isort .            # black profile
-flake8 .           # max-line-length 120, config in setup.cfg
-
-# Docker
-docker-compose up -d            # uses env_file .env
-```
-
-The configure UI is served at `/configure`. Required env vars: `TMDB_API_KEY`, `TOKEN_SALT`, `HOST_NAME`. Redis is required (`REDIS_URL`).
-
-## Architecture
-
-### Request flow
-
-Every catalog request resolves through one path:
-
-1. **`app/services/context.py:load_user_context`** is the entry point for every authenticated endpoint. It reads the encrypted token from Redis, decrypts credentials, parses `UserSettings`, resolves a Stremio `auth_key`, and builds the `LibraryCollection`. The library is sourced from `user_settings.watch_history_source` — `"stremio"`, `"trakt"`, or `"simkl"`. For external sources the WatchHistory is converted to a `LibraryCollection` (rating ≥ 9 → loved, 7–8.9 → liked, no-rating + rewatch → loved fallback, else watched) so downstream catalog code is source-agnostic. The `LibraryCollection.source` field drives cache invalidation when a user switches sources.
-2. **`app/services/recommendation/catalog_service.py`** routes the catalog ID to one of the recommendation engines:
-   - `watchly.rec` → `TopPicksService` (combines profile-driven Discover + library-seeded TMDB/Simkl recs)
-   - `watchly.theme.*` → `ThemeBasedService` (genre/keyword/era driven)
-   - `watchly.item.*` → `ItemBasedService` (seeded by a single library item — see "watchly.item" below)
-   - `watchly.creators` → `CreatorsService` (directors/cast)
-   - `watchly.all.loved`, `watchly.liked.all` → `AllBasedService`
-3. The engine returns a list of items that are passed through metadata enrichment (`app/services/recommendation/metadata.py`), poster ratings overlay (`app/services/poster_ratings/`), translation, and serialization.
-
-### Taste profile pipeline (`app/services/profile/`)
-
-The `TasteProfile` is a numerical fingerprint of the user — top genres, keywords, directors, cast, eras, countries, runtime preference. It is built from the same source as the library: `ProfileService.build_and_cache_profile` checks the configured `watch_history_source` and feeds `WatchHistoryItem`s through the same vectorizer pipeline regardless of origin. Profiles are cached in Redis per-token-per-content-type and invalidated when the source field doesn't match. `_build_from_external_source` reuses the already-built `LibraryCollection` when its `source` matches the configured source, avoiding a duplicate Trakt/Simkl fetch.
-
-### External API clients
-
-All HTTP calls go through **`app/core/base_client.py:BaseClient`**, which provides retries (with jitter on 429/5xx), timeouts, structured error logging, and safe JSON parsing. `TraktService`, `SimklService`, and `TMDBService` are singletons that wrap `BaseClient`. The token-refresh + 401-revoke flow for Trakt/Simkl lives in `ProfileService.fetch_external_watch_history` and is shared between context loading and profile building.
-
-### Caching (`app/services/user_cache.py`, `app/services/redis_service.py`)
-
-Redis is the source of truth for user state. Per-token cached: encrypted credentials (`token_store`), library collection, taste profile (per content type), watched-id sets, library hash for incremental rebuilds. Many caches are TTL-bound (90d default for user data) and refresh on read so active users stay warm. **Invalidate library + profile on source switch**, not just on settings change — `load_user_context` and `build_and_cache_profile` both check the cached `source` field.
-
-### Catalog config IDs
-
-User catalog config IDs (in `UserSettings.catalogs`) and the IDs Stremio actually requests are different. Configs use the bare ID (`watchly.theme`, `watchly.item`); served catalogs append the seed (`watchly.theme.action`, `watchly.item.tt0468569`). `get_config_id` in `app/services/catalog_definitions.py` strips the suffix to look up settings.
-
-**Legacy IDs**: the previously separate `watchly.loved` and `watchly.watched` were merged into a single `watchly.item` catalog. Routing in `catalog_service.py` and `get_config_id` still accept `watchly.loved.*` / `watchly.watched.*` prefixes because installed Stremio clients keep requesting them until the manifest refreshes; `_resolve_catalog_configs` synthesizes a `watchly.item` config from any legacy entries left in saved settings.
-
-### Settings + catalog defaults
-
-`app/core/settings.py:get_default_settings()` is the single source of truth for the default catalog list and shape. Frontend pulls these via `get_default_catalogs_for_frontend()` so the configure page and backend can't drift. When adding a new catalog: add the `CatalogConfig` to defaults, add a description to `CATALOG_DESCRIPTIONS`, register routing in `app/services/recommendation/catalog_service.py`, and emit it from `DynamicCatalogService.get_dynamic_catalogs` in `app/services/catalog_definitions.py`.
-
-### Background work
-
-`app/services/catalog_updater.py` runs on a schedule (`AUTO_UPDATE_CATALOGS=true` + `CATALOG_REFRESH_INTERVAL`) to refresh dynamic catalogs ahead of user requests. Background tasks created via `asyncio.create_task` must be retained (see `app/services/catalog_updater.py:125`) — bare creates are GC-eligible and silently swallow errors.
-
-## Coding mindset
-
-Your job here is almost always to change code, so this bar applies every turn — not only when asked.
-
-- **Think before coding.** State your assumptions. If the request has more than one reasonable reading, say so and ask rather than guessing. For non-trivial work, write the simplest plan in a line or two, then build that.
-- **Simplicity, then readability.** The right amount of code is the least that solves the task — no abstraction for single-use code, no configurability nobody asked for, no handling for inputs that can't occur. But fewer lines is not the goal; clarity is. A readable 40 lines beats a clever 12. The codebase aims for code that reads like prose: small functions, intention-revealing names, as little ceremony as possible. Code that is denser, more abstract, or more defensive than the files around it is a regression.
-- **DRY / YAGNI / KISS, with judgment.** Repeat yourself two or three times before extracting — a six-parameter helper with one caller is worse than the duplication. Refactor when a function grows past ~40 lines or two responsibilities. Don't build for needs that don't exist yet. (In-repo examples: `_build_from_external_source` was split out of `build_and_cache_profile` only once dispatch logic appeared; `fetch_external_watch_history` was extracted once two call sites needed the same Trakt/Simkl flow.)
-- **Mistakes are cheap, not catastrophic.** You don't need armor against every conceivable failure — humans don't write that. Lean on types, tests, and review; keep diffs small and reversible. Don't add error handling for cases that can't happen, don't validate input that's already typed, don't add backwards-compat shims unless an installed Stremio client depends on the old shape (manifest/catalog IDs are the main case — see legacy catalog ID handling). Defensive bloat is a worse outcome than the occasional honest bug.
-- **Surgical.** Change only what the task needs. Don't reformat, rename, or refactor adjacent code; match surrounding style. Delete dead code your own change creates rather than leaving it `# unused`; but if you spot pre-existing unrelated dead code, mention it — don't delete it as a drive-by.
-- **Verify.** For a bug fix, reproduce it first (a failing test for anything non-trivial), fix the root cause not the symptom, and check whether the same bug exists at other call sites. Caches are part of the contract: when you change the shape of something cached (`LibraryCollection`, `TasteProfile`, watched sets), think through invalidation or version the key — adding a field is safe (Pydantic defaults unknowns), changing semantics is not.
+- Open a feature or bug by reading the relevant files, then asking one batch of AskUserQuestion questions pinning down goals and acceptance criteria. Skip it only when the request is unambiguous and self-contained, like a rename or a one-line change. Plan non-trivial work in `*.local.md` at the repo root (git-ignored).
+- Reproduce a bug before fixing it. Fix the root cause, then check the other call sites for the same bug.
+- Change only what the task needs. Don't reformat or rename adjacent code. Delete dead code your change creates; mention unrelated dead code rather than removing it as a drive-by.
+- **No workflow runs the tests** — `ci.yml` only builds Docker, `linter.yml` only runs pre-commit. Run them yourself: `uv run --with pytest python -m pytest tests/ -q`.
+- Tests are plain `def` + `asyncio.run(...)`. There is no `conftest.py`, no pytest config and no `pytest-asyncio` — don't add `@pytest.mark.asyncio` without first adding the config. A fixture that accepts any credential proves nothing; make fakes reject what the real provider rejects.
 
 ## Write code like a human
 
-A reviewer should not be able to tell the diff was AI-written. Avoid the tells:
+A reviewer must not be able to tell the diff was AI-written.
 
-- **Follow the repo's idioms.** PEP 8 spacing/naming, type hints on every public function and dataclass field, `pydantic` for anything crossing an API boundary, `loguru` for logging (never import `logging`), `httpx` only through `app/core/base_client.py:BaseClient`, `async` end-to-end for I/O. No threads, no synchronous blocking calls inside async handlers.
-- **Error handling where you can act on it.** Add a `try/except` only when you can translate the failure, fall back, or roll back — otherwise let it propagate. The endpoint layer turns errors into responses (log the detail, return a generic message — see `catalogs.py`); `BaseClient` owns retry/timeout. Don't scatter defensive catches through services and helpers.
-- **Comments and docstrings: only when the WHY is non-obvious.** A name and signature should explain WHAT. Add a comment for a hidden constraint, a workaround, or a subtle invariant ("Trakt list endpoints decode to a `list` despite the dict type hint"; "drop the cached library on source switch or stale results are served"). Don't narrate happy-path code, don't write what-it-does docstrings, no `# added for X` rot, no section banners.
-- **Trust the types.** No `hasattr`/None-guards on values the types prove, no re-validating what a Pydantic model already validated, no calling the same fetch twice to avoid a local.
-- **Centralize, don't repeat.** TMDB / Trakt / Simkl calls go through their service classes, never raw `httpx`. Catalog defaults live in `get_default_settings`, not duplicated in templates. ID-prefix knowledge belongs in `get_config_id` and `_get_recommendations` routing, not scattered across modules.
-- **No decorative output.** No emojis, ASCII art, "Done!" prints, or marketing-style log messages.
-- **Line length 120** everywhere (black, isort, flake8 aligned in `setup.cfg` and `pyproject.toml`, enforced by pre-commit — don't hand-format or restate their rules).
+- try/except only where you can act on the failure. Endpoints don't wrap service calls — `register_exception_handlers` in `app/core/errors.py` logs the cause and builds the response. Log once, at the layer that can act; never `logger.exception(...)` then `raise`.
+- Comments only for a non-obvious WHY — a hidden constraint, a workaround, an invariant. No happy-path narration, no `# added for X`, no section banners.
+- Inline single-use logic. Extract on the second real caller. No base class with one subclass.
+- Trust the types. No `getattr`/`hasattr` on a pydantic field that declares a default; don't re-validate what a model validated. `LibraryCollection` is always truthy — use `.is_empty()`, never `if not library`.
+- Validate params with types (`Literal`, `Path(pattern=…)`, `Field(ge=…)`), not `if` statements in the handler. Never validate the same thing twice.
+- Don't declare a function `async` unless it awaits. Imports at module top — one real cycle exists (`recommendation.catalog_service` ↔ `warmup`); name it in a comment if you must import locally.
+- Before adding a helper, grep for the concept. ID normalisation, era bucketing, ISO date parsing and TMDB feature extraction each already exist somewhere.
+- No emojis, ASCII art, "Done!" prints, or marketing-style log messages.
 
-## Commit conventions
+## Conventions
 
-- **Never add a `Co-Authored-By` trailer.** Commits are authored by the human, not by the assistant. No `🤖 Generated with` lines either.
-- **Stage only the files relevant to the commit** — `git add <paths>`, never `git add -A`/`git add .`. Unrelated working-tree changes (e.g. local `.gitignore` tweaks, scratch files) stay unstaged.
-- **One fix per commit.** If a session produces two logically separate fixes, ship two commits so either can be reverted independently. Prefix with the area in the existing repo style: `fix(library): …`, `refactor(catalogs): …`, `feat(trakt): …`, `chore(profile): …`.
+### Data and caching — break these and the app serves wrong data, not just slower data
 
-## Domain conventions
+- The token is the tenant. Validate every `{token}` against `TOKEN_PATTERN` before touching Redis. Key templates live in `app/core/constants.py`, never as inline f-strings; wildcard patterns derive from the same template.
+- Never `SCAN` or `delete_by_pattern` on a request path — keep a per-token index. Read a key at most once per request and pass the value on. Refresh a TTL with `GETEX`, not `GET` then `EXPIRE`. Don't persist what's a pure function of another cached value. `resolve_alias` once, at the edge.
+- One source per `LibraryCollection` — never mix Stremio items with Trakt or Simkl items. On a source switch, drop library, profile, watched sets, buckets, catalogs and manifest together.
+- Never cache a degraded result, and never cache a fallback under the wrong source. Return `None` and let the caller skip the write.
+- The catalog cache is keyed on the slot id, not the definition. When a slot's definition changes, invalidate that slot's catalog in the same step.
+- `get_user_data()` returns a shared, decrypted, process-cached dict. Treat it as read-only: deep-copy before mutating, and never hand it to `store_user_data`.
+- Serialise every `get_user_data → mutate → update_user_data` with a Redis lock, and dedup across workers with `SET NX`, never an in-process set. Stremio requests every row concurrently, so these paths always race.
+- Values written through `user_cache` pass through `cache_codec`; values written through `redis_service` do not. Don't mix on one key. `redis_service.get`/`set` return `None`/`False` on a connection error — in an auth path that is a 503, not a 401.
+- Bump `PROFILE_SCORING_VERSION` when scoring maths or `TasteProfile` field semantics change. Adding a field is safe; changing what a number means is not.
 
-- **One source, one library**: never mix Stremio library items with Trakt/Simkl items in the same `LibraryCollection`. The whole collection is tagged with a single `source`.
-- **Item exclusion uses both ID kinds**: `watched_imdb` (set of `tt…`) and `watched_tmdb` (set of TMDB ints). External sources only populate `watched_imdb` reliably; don't assume `watched_tmdb` is populated for Trakt/Simkl users.
-- **`BaseClient.get/post` returns `dict` typed**, but JSON list responses (Trakt) decode to `list`. Defensive `_safe_list` guards in service layers handle this — preserve the pattern rather than tightening the type.
+### Secrets and logging
+
+- Never log a raw token. Use `redact_token()` from `app/core/security.py` as a leading `[{redact_token(token)}]` — not `token[:8]`, no trailing `...`. Redis keys embed the token, and so does `request.url.path` on every authenticated route.
+- Never interpolate an httpx exception into a log line — `str(HTTPStatusError)` carries the full URL, and TMDB and Simkl put the user's key in the query string. Log method, relative path and status code.
+- Never log a pydantic error payload — `errors()[*].input` echoes the rejected value, which can be a password. Log `loc` and `type`. Never re-enable loguru's `diagnose=True`; it prints frame locals.
+- Never put a secret in a URL path or query string. A saved secret leaving the server is the `STORED_SECRET_SENTINEL` marker, never the value.
+- A new user secret is declared once in `_SECRET_SETTINGS_FIELDS`/`_SECRET_NESTED_FIELDS` and added to **both** the encrypt and decrypt paths in `token_store` — encrypted on write but not decrypted on read sends ciphertext to an external API.
+- Derive the Fernet key once per process; `PBKDF2HMAC(iterations=200_000)` is ~55 ms of blocking CPU per call.
+- One INFO line per catalog row per request, maximum — per-stage counts are debug. Errors a counter can summarise get counted and logged once. `logger.exception` only where the traceback is actionable; a handled fallback is a warning, and `error` means work was lost. Every silent fallback needs a line, or the only symptom is a blank shelf.
+- f-strings, not loguru brace args. No `[MODULE]` banners — `LOG_FORMAT` already prints `{name}:{function}:{line}`.
+
+### HTTP
+
+- All outbound HTTP goes through `BaseClient` in `app/core/base_client.py` via the provider singletons. A raw `httpx.AsyncClient` silently opts out of retries, `Retry-After` handling and structured errors.
+- Close a short-lived client in a `finally` — the error path is where the leak happens. Anything owning an httpx client must be closed; inside an `lru_cache`, eviction leaks sockets.
+- Don't `@alru_cache` an instance method unless the instance is a process singleton: `self` is in the cache key, so a per-request instance means a 0% hit rate plus a retained reference.
+- `BaseClient.get/post` is annotated `dict`, but Trakt list endpoints decode to `list`. Keep the `_safe_list` guards; don't tighten the annotation.
+- Clear a stored Trakt/Simkl credential only on an explicit 401/403 or `invalid_grant` — never on a network error, a 5xx, or a lost refresh race. Single-flight the Trakt refresh per account token; Trakt rotates refresh tokens.
+- Never `await` a network call inside the loop that builds an `asyncio.gather` list. Resolve ids in their own gather first.
+
+### Recommendations
+
+- Scoring runs before enrichment. TMDB `/discover`, `/recommendations` and `/similar` return the compact shape, so any scoring term reading `credits`, `keywords` or `production_countries` is silently zero.
+- `watched_tmdb` is effectively empty for Trakt/Simkl users — exclusion must test `watched_imdb` too, before enrichment.
+- Truncate to the row limit **before** `fetch_batch`; it is two TMDB round trips per candidate with no internal cap.
+- Size diversity caps against the visible row length (`DEFAULT_CATALOG_LIMIT`), never the over-fetch target.
+- One Bayesian prior per media type, from a single helper — never a literal at a call site. Terms combined with blend weights must both be on `[0, 1]` first, and `normalize` needs the value's realistic band.
+- Never add a hard cap to an accumulating profile score — normalise by share of total mass. Write-side and read-side must agree on feature windows.
+- Apply user genre exclusions once, centrally, after sources merge; TMDB `without_genres` alone leaks excluded genres back in via Simkl and `/recommendations`.
+- Seed library-driven engines with `sample_items`, never a raw list slice. Use `simkl_service.get_recommendations_batch`, and filter Simkl candidates with `apply_quality_band=False`.
+- Never emit two theme axes with the same `(role, axis)` pair — pass a list to `build_row_id`. Give each row its own axis, and prefer signals already computed.
+- Re-raise `HTTPException` before any catch-all in the catalog path — `CreatorsService` uses a 404 to tell Stremio to hide a row. Don't wrap `calculate_final_score` in a per-item try/except; a raise there is a bug to surface.
+
+### Frontend
+
+- Never write a Stremio password or auth key to `localStorage`/`sessionStorage`. In-memory for the configure flow only.
+- Every `window` `message` listener starts with `if (event.origin !== window.location.origin) return;`.
+- Strip credentials from the URL with `history.replaceState` the moment they are read, before any `await` — not only on success.
+- A saved secret arrives as the opaque `window.STORED_SECRET` marker. Round-trip it verbatim, never send it to a validation endpoint, and never let it overwrite a live credential — it identifies nobody, so submitting it as one fails identity verification.
+- Untrusted or server-supplied text goes in with `textContent` or `escapeHtml()` from `ui.js`; `innerHTML` only for markup literals in the file. Don't override Jinja's `tojson`.
+- Self-host front-end dependencies. No third-party script may share an origin with credential-bearing state.
+- Catalog defaults live in `get_default_settings()` and reach the page via `get_default_catalogs_for_frontend()`. Never restate a default in a template or as a `|| {…}` fallback in JS.
+- The configure page must not call live `/{token}/catalog` endpoints for previews; they run the full pipeline.
+
+### Repo
+
+- Every env var is declared in `app/core/config.py` **and** `.env.example` — `Settings` uses `extra="allow"`, so an undeclared var fails silently. Every setting has a reader; delete unused ones rather than leaving tuning comments for behaviour that no longer exists.
+- `requirements.txt` is generated. After changing `pyproject.toml` deps: `uv lock`, then `uv pip compile pyproject.toml -o requirements.txt`, and commit both.
+- The project is virtual (`source = { virtual = "." }`). Read the version from `app/core/version.py`, never `importlib.metadata`.
+- Pin CI Python with `python-version-file: .python-version`, not a literal. Never interpolate `${{ }}` into a workflow `run:` when the value derives from commit messages or model output — pass it via `env:` and quote.
+- A version bump ships with a matching `## <version>` section in `CHANGELOG.md` (move the `Unreleased` items into it). The release workflow publishes that section as the GitHub release body; without one it falls back to grouped commit subjects via `scripts/generate_release_notes.py`.
+- Don't hand-format. Line length 120, black/isort/flake8 aligned and enforced by pre-commit.
+
+## Never
+
+- Never add a `Co-Authored-By` trailer or a "Generated with" line. Commits are authored by the human.
+- Never `git add -A` or `git add .` — stage only the files for that commit with explicit paths. One fix per commit, so either can be reverted independently. Prefix with the area: `fix(library): …`, `refactor(catalogs): …`, `feat(trakt): …`.
+- Never bump `app/core/version.py` or `pyproject.toml` as a drive-by. On `main` that triggers the release chain: GHCR push, tag, GitHub release.
+- Never commit or push unless asked. Read-only git is always fine.
