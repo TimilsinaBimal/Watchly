@@ -6,6 +6,7 @@
 
 - `ALLOW_SIGNUPS` setting: set it to `False` to lock a public instance to existing accounts. New signups get a 403 and the configure page shows a notice; existing users keep full access (#146).
 - The version badge on the configure page opens a changelog popup, with a link to the GitHub releases page.
+- Unraid template at `unraid/watchly.xml`, installable via the template URL or by adding the repo under Template Repositories (#154).
 
 ### Changed
 
@@ -16,6 +17,8 @@
 
 - Provider logos on the accounts page are proper brand marks inlined into the page; the hot-linked Stremio logo had gone 404.
 - Static assets are served with `no-cache` so deploys reach browsers that cached old bundles.
+- The Docker build no longer fails on `COPY CHANGELOG.md` — `.dockerignore`'s `*.md` rule was excluding the file the `/changelog` endpoint serves.
+- Dropped the stale `GEMINI_API_KEY`/`DEFAULT_GEMINI_MODEL` server env vars from `.env.example` and the README — LLM row naming is configured per user on the configure page.
 
 ## 1.13.1 - 2026-08-25 (Sagarmatha)
 

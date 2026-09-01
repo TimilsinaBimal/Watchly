@@ -23,6 +23,7 @@ Everything is configured through a web page; you paste the resulting manifest UR
 - [Personalization](#personalization)
 - [Screenshots](#screenshots)
 - [Installation (Docker)](#installation-docker)
+- [Unraid](#unraid)
 - [Configuration reference](#configuration-reference)
 - [Optional integrations](#optional-integrations)
 - [Development](#development)
@@ -134,12 +135,11 @@ Docker is the recommended way to self-host. Watchly requires a **Redis** instanc
    # Redis (matches the compose service name)
    REDIS_URL=redis://redis:6379/0
 
-   # Optional — enable Trakt / Simkl / AI naming (see "Optional integrations")
+   # Optional — enable Trakt / Simkl (see "Optional integrations")
    # TRAKT_CLIENT_ID=
    # TRAKT_CLIENT_SECRET=
    # SIMKL_CLIENT_ID=
    # SIMKL_CLIENT_SECRET=
-   # GEMINI_API_KEY=
    ```
 
    `HOST_NAME` must be the public URL where the addon is reachable. It is used to build OAuth callback URLs and the manifest URL, so it has to match what Stremio (and Trakt/Simkl) will see.
@@ -152,6 +152,18 @@ Docker is the recommended way to self-host. Watchly requires a **Redis** instanc
 
 4. **Configure and install:**
    Open `http://localhost:8000/configure` (or your `HOST_NAME`), connect a history source, pick your catalogs, and paste the generated manifest URL into Stremio.
+
+### Unraid
+
+A Community Applications-style template lives at [`unraid/watchly.xml`](unraid/watchly.xml).
+
+1. Install **Redis** from Community Applications (any Redis container works).
+2. On the **Docker** tab, click **Add Container**, switch to advanced view, and set the template URL to
+   `https://raw.githubusercontent.com/TimilsinaBimal/Watchly/main/unraid/watchly.xml` — or add
+   `https://github.com/TimilsinaBimal/Watchly` under *Template Repositories* and pick **Watchly** from the template list.
+3. Fill in the required fields: TMDB API key, a long random token salt, the Redis URL from step 1
+   (e.g. `redis://YOUR-UNRAID-IP:6379/0`), and the host name your Stremio clients will reach the addon on.
+4. Start the container and open the WebUI to configure your catalogs.
 
 ## Configuration reference
 
@@ -180,8 +192,6 @@ All settings are environment variables. Only the first three are strictly requir
 | --- | --- | --- |
 | `TRAKT_CLIENT_ID` / `TRAKT_CLIENT_SECRET` | — | Trakt OAuth app credentials; enable Trakt as a history source. |
 | `SIMKL_CLIENT_ID` / `SIMKL_CLIENT_SECRET` | — | Simkl OAuth app credentials; enable Simkl as a history source. |
-| `GEMINI_API_KEY` | — | Enables AI-generated, Netflix-style names for the dynamic genre/keyword rows. |
-| `DEFAULT_GEMINI_MODEL` | `gemma-4-26b-a4b-it` | Gemini model used for row naming. |
 
 ### Tuning & behavior
 
@@ -199,6 +209,7 @@ All settings are environment variables. Only the first three are strictly requir
 | `RECOMMENDATION_SOURCE_ITEMS_LIMIT` | `10` | Number of library items used to seed recommendations. |
 | `LIBRARY_ITEMS_LIMIT` | `20` | Library item cap used in parts of the pipeline. |
 | `ANNOUNCEMENT_HTML` | `""` | Optional HTML banner shown on the configure page. |
+| `ALLOW_SIGNUPS` | `true` | Set to `false` to lock the instance to existing accounts; new signups are rejected. |
 
 ## Optional integrations
 
@@ -206,7 +217,7 @@ These are only needed if you want the corresponding feature; Watchly runs fine w
 
 - **Trakt** — create an API app at [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications). Set the redirect URI to `HOST_NAME/auth/trakt/callback` and put the client ID/secret in `TRAKT_CLIENT_ID` / `TRAKT_CLIENT_SECRET`.
 - **Simkl** — create an app at [simkl.com/settings/developer](https://simkl.com/settings/developer). Set the redirect URI to `HOST_NAME/auth/simkl/callback` and put the credentials in `SIMKL_CLIENT_ID` / `SIMKL_CLIENT_SECRET`.
-- **Gemini** — get a key from [Google AI Studio](https://aistudio.google.com/) and set `GEMINI_API_KEY` to enable AI-named dynamic rows. Without it, rows fall back to deterministic names.
+- **AI-named rows** — users configure an LLM provider (Gemini, OpenAI, Anthropic, or OpenRouter) with their own API key on the configure page; no server config required. Without one, rows fall back to deterministic names.
 - **Poster ratings (RPDB)** — users enter their own [RatingPosterDB](https://ratingposterdb.com/) key on the configure page; no server config required.
 
 ## Development

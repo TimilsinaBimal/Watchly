@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Watchly</Name>
+  <Repository>ghcr.io/timilsinabimal/watchly:latest</Repository>
+  <Registry>https://ghcr.io/timilsinabimal/watchly</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Project>https://github.com/TimilsinaBimal/Watchly</Project>
+  <Support>https://github.com/TimilsinaBimal/Watchly/issues</Support>
+  <TemplateURL>https://raw.githubusercontent.com/TimilsinaBimal/Watchly/main/unraid/watchly.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/TimilsinaBimal/Watchly/main/app/static/logo.png</Icon>
+  <Category>MediaApp:Video Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8000]/configure</WebUI>
+  <DonateText>Support the developer</DonateText>
+  <DonateLink>https://buymemomo.com/timilsinabimal</DonateLink>
+  <Overview>
+    Watchly is a personalized recommendation engine for Stremio and Nuvio. It builds catalogs like "Top Picks for You" and "Because you loved ..." from your Stremio, Trakt, or Simkl watch history.
+
+    REQUIRES a separate Redis container: install Redis from Community Applications first, then point Redis URL at it (e.g. redis://YOUR-UNRAID-IP:6379/0).
+
+    You also need a free TMDB API key (https://www.themoviedb.org/settings/api) and a long random Token Salt (e.g. from: openssl rand -hex 32). Host Name must be the URL where the addon is reachable from your Stremio clients.
+
+    After starting the container, open the WebUI to connect an account, pick catalogs, and get your addon manifest URL.
+  </Overview>
+  <Config Name="WebUI Port" Target="8000" Default="8000" Mode="tcp" Description="Port for the configure page and the Stremio addon endpoints." Type="Port" Display="always" Required="true" Mask="false">8000</Config>
+  <Config Name="TMDB API Key" Target="TMDB_API_KEY" Default="" Description="TMDB API key, free at https://www.themoviedb.org/settings/api" Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Token Salt" Target="TOKEN_SALT" Default="" Description="Long random secret used to encrypt stored credentials. Generate once (e.g. openssl rand -hex 32) and never change it, or existing user tokens become unreadable." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Redis URL" Target="REDIS_URL" Default="redis://YOUR-UNRAID-IP:6379/0" Description="URL of your Redis container. Install Redis from Community Applications and use its IP/port here." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Host Name" Target="HOST_NAME" Default="http://YOUR-UNRAID-IP:8000" Description="URL where the addon is reachable from your Stremio clients (used in the manifest and OAuth callback URLs). Use your public HTTPS URL if you expose Watchly outside your LAN." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Allow Signups" Target="ALLOW_SIGNUPS" Default="True" Description="Set to False to lock this instance to existing accounts: no new users can sign up." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Trakt Client ID" Target="TRAKT_CLIENT_ID" Default="" Description="Optional. Trakt API app client id, to let users connect Trakt accounts." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Trakt Client Secret" Target="TRAKT_CLIENT_SECRET" Default="" Description="Optional. Trakt API app client secret." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+  <Config Name="Simkl Client ID" Target="SIMKL_CLIENT_ID" Default="" Description="Optional. Simkl API app client id, to let users connect Simkl accounts." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Simkl Client Secret" Target="SIMKL_CLIENT_SECRET" Default="" Description="Optional. Simkl API app client secret." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+</Container>
