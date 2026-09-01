@@ -27,11 +27,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install openai pydantic
+          python-version-file: .python-version
       - name: Get current tag
         id: get-tag
         run: |
@@ -60,27 +56,18 @@ jobs:
           TAG_NAME="${{ steps.get-tag.outputs.TAG_NAME }}"
           git checkout ${TAG_NAME} || git checkout -b temp-${TAG_NAME} ${TAG_NAME}
           echo "Checked out tag: ${TAG_NAME}"
-      - name: Run Python script to generate release notes
+      - name: Generate release notes
         id: generate_release_notes
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURRENT_TAG: ${{ steps.get-tag.outputs.TAG_NAME }}
-        run: |
-          echo "Running generate_release_notes.py"
-          python scripts/generate_release_notes.py
-          echo "Script completed"
-      - name: Debug Outputs
-        run: |
-          echo "Version: ${{ steps.generate_release_notes.outputs.version }}"
-          echo "Release Notes: ${{ steps.generate_release_notes.outputs.release_notes }}"
+        run: python scripts/generate_release_notes.py
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.get-tag.outputs.TAG_NAME }}
-          release_name: Release ${{ steps.get-tag.outputs.TAG_NAME }} - ${{ steps.generate_release_notes.outputs.version_name }}
+          release_name: Release ${{ steps.get-tag.outputs.TAG_NAME }}
           body: ${{ steps.generate_release_notes.outputs.release_notes }}
           draft: false
           prerelease: ${{ contains(steps.get-tag.outputs.TAG_NAME, 'beta') || contains(steps.get-tag.outputs.TAG_NAME, 'alpha') || contains(steps.get-tag.outputs.TAG_NAME, 'rc') || contains(steps.get-tag.outputs.TAG_NAME, 'pre') }}
