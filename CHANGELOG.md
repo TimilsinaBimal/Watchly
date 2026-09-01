@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Unraid template at `unraid/watchly.xml`, installable via the template URL or by adding the repo under Template Repositories (#154).
+
+### Fixed
+
+- Dropped the stale `GEMINI_API_KEY`/`DEFAULT_GEMINI_MODEL` server env vars from `.env.example` and the README — LLM row naming is configured per user on the configure page.
+
 ## 1.14.0 - 2026-09-01
 
 ### Added
