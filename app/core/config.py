@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     TOKEN_SALT: str = "change-me"
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire
     ANNOUNCEMENT_HTML: str = ""
+    ALLOW_SIGNUPS: bool = True
     AUTO_UPDATE_CATALOGS: bool = True
     CATALOG_REFRESH_INTERVAL_SECONDS: int = 86400  # 24 hours
     APP_ENV: Literal["development", "production", "vercel"] = "production"

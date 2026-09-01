@@ -129,6 +129,7 @@ async def configure_page(request: Request, _token: str | None = None):
         stored_secret_sentinel=STORED_SECRET_SENTINEL,
         movie_genres=movie_genres_list,
         series_genres=series_genres_list,
+        allow_signups=settings.ALLOW_SIGNUPS,
     )
     return HTMLResponse(content=html_content, media_type="text/html")
 

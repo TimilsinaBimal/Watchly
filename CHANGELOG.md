@@ -6,6 +6,10 @@ back to a summary generated from commit messages.
 
 ## Unreleased
 
+### Added
+
+- `ALLOW_SIGNUPS` setting: set it to `False` to lock a public instance to existing accounts. New signups get a 403 and the configure page shows a notice; existing users keep full access (#146).
+
 ### Fixed
 
 - Static assets are served with `no-cache` so deploys reach browsers that cached old bundles.

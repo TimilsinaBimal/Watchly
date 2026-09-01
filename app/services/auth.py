@@ -274,6 +274,9 @@ class AuthService:
         # 2. Resolve (and possibly merge) the account these identities belong to
         token, existing_data = await self._resolve_account(identities)
 
+        if existing_data is None and not settings.ALLOW_SIGNUPS:
+            raise HTTPException(status_code=403, detail="New signups are disabled on this instance.")
+
         # 3. Prepare payload. Identities from earlier configurations are kept:
         # a previously linked provider still identifies this account even when
         # this submit doesn't include it.
