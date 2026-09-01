@@ -10,9 +10,11 @@
 ### Changed
 
 - Release notes are generated from this changelog (with a commit-message fallback) instead of OpenAI.
+- The accounts page presents Stremio, Trakt, and Simkl as equal collapsible cards, without "Recommended"/"Optional" labels.
 
 ### Fixed
 
+- Provider logos on the accounts page are proper brand marks inlined into the page; the hot-linked Stremio logo had gone 404.
 - Static assets are served with `no-cache` so deploys reach browsers that cached old bundles.
 
 ## 1.13.1 - 2026-08-25 (Sagarmatha)

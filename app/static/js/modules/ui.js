@@ -215,6 +215,21 @@ export function initializeKofi() {
     });
 }
 
+// Collapsible provider cards on the accounts page
+export function initializeProviderCards() {
+    document.querySelectorAll('[data-provider-toggle]').forEach((btn) => {
+        const provider = btn.dataset.providerToggle;
+        const body = document.querySelector(`[data-provider-body="${provider}"]`);
+        const chevron = document.querySelector(`[data-provider-chevron="${provider}"]`);
+        if (!body) return;
+        btn.addEventListener('click', () => {
+            const open = !body.classList.toggle('hidden');
+            btn.setAttribute('aria-expanded', String(open));
+            if (chevron) chevron.classList.toggle('rotate-180', open);
+        });
+    });
+}
+
 // Changelog Modal Logic
 export function initializeChangelog() {
     const badge = document.getElementById('versionBadge');
