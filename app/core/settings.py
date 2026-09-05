@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.services.poster_ratings.factory import PosterProvider
 
+# The seed pool is the 3 most-recent loved + 3 most-recent watched items. Capped
+# below the pool so a home screen is never mostly "Because you watched" rows.
+MAX_ITEM_ROWS = 3
+
 
 class CatalogConfig(BaseModel):
     id: str  # "watchly.rec", "watchly.theme", "watchly.item"
@@ -15,6 +19,9 @@ class CatalogConfig(BaseModel):
     enabled_series: bool = Field(default=True, description="Enable series catalog for this configuration")
     display_at_home: bool = Field(default=True, description="Display this catalog on home page")
     shuffle: bool = Field(default=False, description="Randomize order of items in this catalog")
+    rows: int = Field(
+        default=1, ge=1, le=MAX_ITEM_ROWS, description="Rows per content type; only watchly.item emits more than one"
+    )
 
     @field_validator("name", mode="before")
     @classmethod
@@ -126,10 +133,10 @@ class UserSettings(BaseModel):
 CATALOG_DESCRIPTIONS = {
     "watchly.rec": "Personalized recommendations based on your watch history, library and your reactions.",
     "watchly.item": (
-        "Recommends items similar to one you recently watched or loved. The seed is picked uniformly at random"
-        " from a pool of your 3 most-recent loved items + your 3 most-recent watched items. The catalog title"
-        " becomes 'Because you loved <title>' or 'Because you watched <title>' depending on which bucket the"
-        " seed came from."
+        "Recommends items similar to one you recently watched or loved. Each row's seed is picked at random"
+        " from a pool of your 3 most-recent loved items + your 3 most-recent watched items, with no seed"
+        " repeated across rows. The catalog title becomes 'Because you loved <title>' or 'Because you watched"
+        " <title>' depending on which bucket the seed came from."
     ),
     "watchly.creators": (
         "Recommends items from your recurring directors and lead actors — those who appear across multiple"
@@ -222,6 +229,7 @@ def get_default_catalogs_for_frontend() -> list[dict]:
                 "enabledSeries": catalog.enabled_series,
                 "display_at_home": catalog.display_at_home,
                 "shuffle": catalog.shuffle,
+                "rows": catalog.rows,
                 "description": CATALOG_DESCRIPTIONS.get(catalog.id, ""),
             }
         )

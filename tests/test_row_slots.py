@@ -1,7 +1,11 @@
 import asyncio
 
 import pytest
+from pydantic import ValidationError
 
+from app.core.settings import MAX_ITEM_ROWS, CatalogConfig
+from app.models.library import LibraryCollection, StremioLibraryItem
+from app.services.catalog_definitions import DynamicCatalogService
 from app.services.recommendation.catalog_service import catalog_service
 from app.services.user_cache import user_cache
 
@@ -94,3 +98,54 @@ def test_unknown_slot_resolves_to_nothing(fake_redis):
 
     assert resolve("watchly.item.3") is None
     assert resolve("watchly.theme.7") is None
+
+
+def library_item(item_id: str, loved: bool, mtime: str) -> StremioLibraryItem:
+    return StremioLibraryItem(
+        _id=item_id, type="movie", name=item_id.upper(), temp=False, removed=False, _is_loved=loved, _mtime=mtime
+    )
+
+
+def item_rows(rows: int, loved: int, watched: int) -> tuple[list[dict], dict[str, dict[str, str]]]:
+    library = LibraryCollection(
+        loved=[library_item(f"tt{n}", True, f"2026-01-{n:02d}T00:00:00Z") for n in range(1, loved + 1)],
+        watched=[library_item(f"tt{n}", False, f"2026-02-{n:02d}T00:00:00Z") for n in range(11, 11 + watched)],
+    )
+    config = CatalogConfig(id="watchly.item", rows=rows)
+    catalogs: list[dict] = []
+    row_slots: dict[str, dict[str, str]] = {}
+    service = DynamicCatalogService()
+    asyncio.run(service._add_item_based_rows(catalogs, library, "movie", config, row_slots))
+    return catalogs, row_slots
+
+
+def test_one_row_by_default():
+    catalogs, row_slots = item_rows(rows=1, loved=3, watched=3)
+
+    assert [c["id"] for c in catalogs] == ["watchly.item.1"]
+    assert set(row_slots["movie"]) == {"item.1"}
+
+
+def test_each_row_gets_its_own_slot_and_a_distinct_seed():
+    catalogs, row_slots = item_rows(rows=3, loved=3, watched=3)
+
+    assert [c["id"] for c in catalogs] == ["watchly.item.1", "watchly.item.2", "watchly.item.3"]
+    seeds = list(row_slots["movie"].values())
+    assert len(set(seeds)) == 3
+    for catalog, seed in zip(catalogs, seeds):
+        expected = "Because you loved" if seed in {"tt1", "tt2", "tt3"} else "Because you watched"
+        assert catalog["name"] == f"{expected} {seed.upper()}"
+
+
+def test_rows_are_capped_by_the_candidate_pool():
+    catalogs, row_slots = item_rows(rows=3, loved=1, watched=1)
+
+    assert [c["id"] for c in catalogs] == ["watchly.item.1", "watchly.item.2"]
+    assert set(row_slots["movie"].values()) == {"tt1", "tt11"}
+
+
+def test_row_count_is_bounded():
+    with pytest.raises(ValidationError):
+        CatalogConfig(id="watchly.item", rows=0)
+    with pytest.raises(ValidationError):
+        CatalogConfig(id="watchly.item", rows=MAX_ITEM_ROWS + 1)

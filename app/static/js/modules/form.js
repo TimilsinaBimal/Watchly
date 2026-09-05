@@ -77,7 +77,8 @@ function getRequestPayload() {
             enabled_movie: catalog.enabledMovie !== false,
             enabled_series: catalog.enabledSeries !== false,
             display_at_home: catalog.display_at_home !== false,
-            shuffle: catalog.shuffle === true
+            shuffle: catalog.shuffle === true,
+            rows: catalog.rows
         })),
         language: languageSelect?.value || 'english',
         year_min: parseInt(document.getElementById('yearMin')?.value || String(YEAR_RANGE_DEFAULTS.min), 10),
