@@ -385,6 +385,7 @@ async function fetchIdentity(payload) {
                         if (typeof remote.enabled_series === 'boolean') local.enabledSeries = remote.enabled_series;
                         if (typeof remote.display_at_home === 'boolean') local.display_at_home = remote.display_at_home;
                         if (typeof remote.shuffle === 'boolean') local.shuffle = remote.shuffle;
+                        if (typeof remote.rows === 'number') local.rows = remote.rows;
                     }
                 });
                 if (renderCatalogList) renderCatalogList();
