@@ -86,7 +86,11 @@ def test_non_dynamic_ids_pass_through(fake_redis):
     assert resolve("watchly.creators") == "watchly.creators"
 
 
-def test_unknown_slot_is_left_alone(fake_redis):
-    """No stored definition means the row can't be built; returning the id unchanged
-    lets the normal routing produce an empty row rather than raising."""
-    assert resolve("watchly.theme.7") == "watchly.theme.7"
+def test_unknown_slot_resolves_to_nothing(fake_redis):
+    """A user who drops from 3 item rows to 1 still has a client asking for
+    watchly.item.3. Passing the id through would make the item engine read the
+    bare "3" as TMDB id 3, so an undefined slot must resolve to None instead."""
+    asyncio.run(user_cache.set_row_map(TOKEN, "movie", {"item.1": "tt0468569"}))
+
+    assert resolve("watchly.item.3") is None
+    assert resolve("watchly.theme.7") is None
