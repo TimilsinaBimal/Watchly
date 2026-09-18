@@ -61,6 +61,26 @@ class StremioAddonService:
             logger.exception(f"Failed to update addon collection: {e}")
             return False
 
+    async def install_addon(self, auth_key: str, manifest_url: str, manifest: dict[str, Any]) -> bool:
+        """Install or replace this Watchly instance without changing other addons."""
+        descriptor = {
+            "manifest": manifest,
+            "transportUrl": manifest_url,
+            "flags": {"official": False, "protected": False},
+        }
+
+        addons = await self.get_addons(auth_key)
+        addons = [
+            addon
+            for addon in addons
+            if not (
+                addon.get("manifest", {}).get("id") == settings.ADDON_ID
+                and match_hostname(addon.get("transportUrl", ""), settings.HOST_NAME)
+            )
+        ]
+        addons.append(descriptor)
+        return await self.update_addon_collection(auth_key, addons)
+
     async def update_description(self, auth_key: str, description: str) -> bool:
         """Update only the addon description."""
         addons = await self.get_addons(auth_key)
