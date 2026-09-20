@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- The "Because you watched/loved" catalog can emit up to 3 rows per content type, each seeded by a different recent title. A rows stepper on the configure page sets the count (#137).
+
+### Fixed
+
+- A dynamic row slot the manifest no longer defines serves an empty row instead of recommendations for whatever TMDB id the slot number happened to match.
+
 ## 1.14.0 - 2026-09-01
 
 ### Added

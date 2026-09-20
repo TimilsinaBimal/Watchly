@@ -292,6 +292,7 @@
     <script>
         // Default catalog configurations from backend
         window.DEFAULT_CATALOGS = {{ default_catalogs | tojson }};
+        window.MAX_ITEM_ROWS = {{ max_item_rows | tojson }};
         window.YEAR_RANGE_DEFAULTS = {{ year_range_defaults | tojson }};
 
         // Placeholder that stands in for a saved API key the server won't send back
