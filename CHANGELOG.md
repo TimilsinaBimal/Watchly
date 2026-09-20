@@ -1,19 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.14.0 - 2026-09-20
 
 ### Added
 
+- Stremio Supporter accounts with multiple profiles get one Watchly instance per profile, each built from that profile's own library and watch history. The addon name carries the profile name, the install step can install every instance into its matching Stremio profile, and the dashboard has a profile switcher. Single-profile and non-Supporter accounts are unchanged (#150).
 - The "Because you watched/loved" catalog can emit up to 3 rows per content type, each seeded by a different recent title. A rows stepper on the configure page sets the count (#137).
-
-### Fixed
-
-- A dynamic row slot the manifest no longer defines serves an empty row instead of recommendations for whatever TMDB id the slot number happened to match.
-
-## 1.14.0 - 2026-09-01
-
-### Added
-
 - `ALLOW_SIGNUPS` setting: set it to `False` to lock a public instance to existing accounts. New signups get a 403 and the configure page shows a notice; existing users keep full access (#146).
 - The version badge on the configure page opens a changelog popup, with a link to the GitHub releases page.
 - Unraid template at `unraid/watchly.xml`, installable via the template URL or by adding the repo under Template Repositories (#154).
@@ -29,6 +21,7 @@
 - Static assets are served with `no-cache` so deploys reach browsers that cached old bundles.
 - The Docker build no longer fails on `COPY CHANGELOG.md` — `.dockerignore`'s `*.md` rule was excluding the file the `/changelog` endpoint serves.
 - Dropped the stale `GEMINI_API_KEY`/`DEFAULT_GEMINI_MODEL` server env vars from `.env.example` and the README — LLM row naming is configured per user on the configure page.
+- A dynamic row slot the manifest no longer defines serves an empty row instead of recommendations for whatever TMDB id the slot number happened to match.
 
 ## 1.13.1 - 2026-08-25 (Sagarmatha)
 
