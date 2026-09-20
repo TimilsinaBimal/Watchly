@@ -296,7 +296,20 @@ class AuthService:
                 f"which is set as your watch history source. Reconnect it and try again.",
             )
 
-        user_settings = self._build_user_settings(payload, (existing_data or {}).get("settings"))
+        stored_settings = (existing_data or {}).get("settings")
+        if existing_data is None and ":" in identities.get("stremio", ""):
+            # A secondary profile's first save comes from a configure page loaded
+            # against the primary profile, so its API keys arrive masked and have to
+            # be restored from that account; parent_id proved the profile belongs to
+            # it. Trakt/Simkl tokens are identities and would merge the profiles back.
+            master_token = await self._find_account_token("stremio", identities["stremio"].split(":", 1)[0])
+            master_settings = ((await token_store.get_user_data(master_token)) or {}).get("settings") or {}
+            stored_settings = {
+                field: master_settings.get(field)
+                for field in ("tmdb_api_key", "llm", "gemini_api_key", "simkl_api_key", "poster_rating")
+            }
+
+        user_settings = self._build_user_settings(payload, stored_settings)
         payload_to_store = {
             "email": resolved_email or (existing_data or {}).get("email"),
             "settings": user_settings.model_dump(),
