@@ -100,6 +100,22 @@ def test_unknown_slot_resolves_to_nothing(fake_redis):
     assert resolve("watchly.theme.7") is None
 
 
+def test_rewriting_the_row_map_drops_catalogs_whose_slot_changed_or_vanished(fake_redis):
+    """The cache is keyed on the slot id, so a rebuild that reseeds item.1 and drops
+    item.2 must take both cached bodies with it; item.3 is untouched."""
+    asyncio.run(
+        user_cache.set_row_map(TOKEN, "movie", {"item.1": "tt0111161", "item.2": "tt0468569", "item.3": "tt1375666"})
+    )
+    for slot in ("1", "2", "3"):
+        asyncio.run(user_cache.set_catalog(TOKEN, "movie", f"watchly.item.{slot}", {"metas": [{"id": slot}]}))
+
+    asyncio.run(user_cache.set_row_map(TOKEN, "movie", {"item.1": "tt0068646", "item.3": "tt1375666"}))
+
+    assert asyncio.run(user_cache.get_catalog(TOKEN, "movie", "watchly.item.1")) is None
+    assert asyncio.run(user_cache.get_catalog(TOKEN, "movie", "watchly.item.2")) is None
+    assert asyncio.run(user_cache.get_catalog(TOKEN, "movie", "watchly.item.3")) is not None
+
+
 def library_item(item_id: str, loved: bool, mtime: str) -> StremioLibraryItem:
     return StremioLibraryItem(
         _id=item_id, type="movie", name=item_id.upper(), temp=False, removed=False, _is_loved=loved, _mtime=mtime
