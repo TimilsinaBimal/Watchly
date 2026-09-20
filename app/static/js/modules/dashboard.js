@@ -8,6 +8,10 @@ let appState = null;
 let switchSection = null;
 let dashboardData = null;
 let activeContentType = 'movie';
+let dashboardInstances = [];
+let activeInstance = null;
+let activeDashboardToken = '';
+let dashboardRequestId = 0;
 
 const $ = (id) => document.getElementById(id);
 const show = (el) => el && el.classList.remove('hidden');
@@ -33,6 +37,7 @@ export function initializeDashboard(actions, state) {
     wireRefresh();
     wireProfileTabs();
     wireCatalogFilter();
+    wireInstancePicker();
 }
 
 function setState(visibleId) {
@@ -41,28 +46,117 @@ function setState(visibleId) {
 }
 
 async function render() {
+    hide($('dashInstancePicker'));
     if (!appState || !appState.auth.loggedIn) {
         setState('dashLoggedOut');
         return;
     }
-    if (!appState.auth.hasInstall || !appState.auth.token) {
+
+    setState('dashLoading');
+    dashboardInstances = await loadProfileInstances();
+    const installedInstances = dashboardInstances.filter(instance => instance.token);
+    if (!installedInstances.length && appState.auth.token) {
+        installedInstances.push({
+            profile_id: '',
+            profile_name: appState.auth.userDisplay || 'Current profile',
+            token: appState.auth.token,
+        });
+        dashboardInstances = installedInstances;
+    }
+    if (!installedInstances.length) {
         setState('dashNoInstall');
         return;
     }
+
+    activeInstance = installedInstances.find(instance => instance.token === activeDashboardToken)
+        || installedInstances.find(instance => instance.token === appState.auth.token)
+        || installedInstances[0];
+    activeDashboardToken = activeInstance.token;
+    renderInstancePicker();
+    await loadDashboard(activeDashboardToken);
+}
+
+async function loadProfileInstances() {
+    if (!appState.auth.authKey) return [];
+    try {
+        const response = await fetch('/stremio/profiles/instances', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ authKey: appState.auth.authKey }),
+        });
+        if (!response.ok) return [];
+        const data = await response.json();
+        return data.instances || [];
+    } catch (error) {
+        return [];
+    }
+}
+
+async function loadDashboard(token) {
+    const requestId = ++dashboardRequestId;
+    const refreshMessage = $('dashRefreshMsg');
+    if (refreshMessage) {
+        refreshMessage.textContent = '';
+        refreshMessage.classList.add('hidden');
+    }
     setState('dashLoading');
     try {
-        const res = await fetch(`/${appState.auth.token}/dashboard/data`);
+        const res = await fetch(`/${token}/dashboard/data`);
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.detail || 'Could not load your dashboard.');
         }
+        if (requestId !== dashboardRequestId) return;
         dashboardData = await res.json();
         renderContent();
         setState('dashContent');
     } catch (e) {
+        if (requestId !== dashboardRequestId) return;
         $('dashError').textContent = e.message;
         setState('dashError');
     }
+}
+
+function renderInstancePicker() {
+    const picker = $('dashInstancePicker');
+    const select = $('dashProfileSelect');
+    if (!picker || !select) return;
+    if (dashboardInstances.length <= 1) {
+        hide(picker);
+        return;
+    }
+    select.replaceChildren();
+    dashboardInstances.forEach(instance => {
+        const option = document.createElement('option');
+        option.value = instance.token || '';
+        option.disabled = !instance.token;
+        option.textContent = instance.token
+            ? instance.profile_name
+            : `${instance.profile_name} — not configured`;
+        option.selected = instance.token === activeDashboardToken;
+        select.appendChild(option);
+    });
+    select.disabled = dashboardInstances.filter(instance => instance.token).length < 2;
+    show(picker);
+    updateProfileHint();
+}
+
+function updateProfileHint() {
+    const hint = $('dashProfileHint');
+    if (hint && activeInstance) hint.textContent = `Showing the private instance for ${activeInstance.profile_name}.`;
+}
+
+function wireInstancePicker() {
+    const select = $('dashProfileSelect');
+    if (!select) return;
+    select.addEventListener('change', async () => {
+        const instance = dashboardInstances.find(item => item.token === select.value);
+        if (!instance || !instance.token || instance.token === activeDashboardToken) return;
+        activeInstance = instance;
+        activeDashboardToken = instance.token;
+        updateProfileHint();
+        await loadDashboard(activeDashboardToken);
+    });
 }
 
 function chip(text) {
@@ -136,7 +230,7 @@ async function loadCatalogRows() {
 
     let manifest;
     try {
-        const res = await fetch(`/${appState.auth.token}/manifest.json`);
+        const res = await fetch(`/${activeDashboardToken}/manifest.json`);
         if (!res.ok) throw new Error('manifest');
         manifest = await res.json();
     } catch (e) {
@@ -206,7 +300,7 @@ async function fetchCatalogRow(row) {
     const countEl = row.querySelector('.dash-row-count');
     const { type, id } = row.dataset;
     try {
-        const res = await fetch(`/${appState.auth.token}/catalog/${type}/${encodeURIComponent(id)}.json`);
+        const res = await fetch(`/${activeDashboardToken}/catalog/${type}/${encodeURIComponent(id)}.json`);
         if (!res.ok) throw new Error('catalog');
         const data = await res.json();
         const all = data.metas || [];
@@ -338,15 +432,17 @@ function renderContent() {
 }
 
 function renderIdentity() {
-    const name = (appState && appState.auth.userDisplay) || '';
-    $('dashEmail').textContent = name || 'Your account';
+    const accountName = (appState && appState.auth.userDisplay) || '';
+    const hasProfileChoices = dashboardInstances.length > 1;
+    const name = hasProfileChoices ? activeInstance?.profile_name || accountName : accountName;
+    $('dashEmail').textContent = name || 'Your profile';
     $('dashAvatar').textContent = name ? name.replace(/@.*/, '').slice(0, 2).toUpperCase() : 'W';
 
     const greeting = $('dashGreeting');
     if (greeting) {
         const h = new Date().getHours();
         const part = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-        greeting.textContent = `${part}, welcome back`;
+        greeting.textContent = hasProfileChoices ? `${part}, previewing this profile` : `${part}, welcome back`;
     }
 }
 
@@ -420,14 +516,14 @@ function wireRefresh() {
     const btn = $('dashRefreshBtn');
     if (!btn) return;
     btn.addEventListener('click', async () => {
-        if (!appState || !appState.auth.token) return;
+        if (!activeDashboardToken) return;
         const msg = $('dashRefreshMsg');
         btn.disabled = true;
         btn.classList.add('opacity-50', 'cursor-not-allowed');
         const original = btn.textContent;
         btn.textContent = 'Refreshing…';
         try {
-            const res = await fetch(`/${appState.auth.token}/dashboard/refresh`, { method: 'POST' });
+            const res = await fetch(`/${activeDashboardToken}/dashboard/refresh`, { method: 'POST' });
             if (!res.ok) throw new Error('Refresh failed. Please try again.');
             msg.textContent = 'Refresh started — your catalogs will rebuild on the next open in Stremio.';
             msg.classList.remove('hidden', 'text-red-400');

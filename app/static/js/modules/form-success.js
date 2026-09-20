@@ -2,6 +2,8 @@ import { showConfirm, showToast } from './ui.js';
 import { switchSection } from './navigation.js';
 import { openNuvioInstall } from './nuvio.js';
 
+let preparedInstallations = [];
+
 export function initializeSuccessActions({ emailInput, passwordInput, resetApp, setLoading, showError }) {
     const copyBtn = document.getElementById('copyBtn');
     if (copyBtn) {
@@ -44,6 +46,46 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
             e.preventDefault();
             e.stopPropagation();
             openNuvioInstall(document.getElementById('addonUrl').textContent);
+        });
+    }
+
+    const installAllProfilesBtn = document.getElementById('installAllProfilesBtn');
+    if (installAllProfilesBtn) {
+        installAllProfilesBtn.addEventListener('click', async () => {
+            const pending = preparedInstallations.filter(installation => !installation.installed);
+            if (!pending.length) return;
+
+            installAllProfilesBtn.disabled = true;
+            try {
+                for (let index = 0; index < pending.length; index += 1) {
+                    const installation = pending[index];
+                    installAllProfilesBtn.textContent = `Installing ${index + 1} of ${pending.length}…`;
+                    const response = await fetch('/stremio/profiles/install-addon', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            authKey: installation.authKey,
+                            profile_id: installation.profileId,
+                            manifest_url: installation.url,
+                        }),
+                    });
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(`${installation.profileName}: ${error.detail || 'Installation failed'}`);
+                    }
+                    installation.installed = true;
+                    if (installation.statusElement) {
+                        installation.statusElement.textContent = 'Installed in this profile';
+                        installation.statusElement.className = 'text-xs text-green-400 mt-1';
+                    }
+                }
+                installAllProfilesBtn.textContent = 'Installed in all profiles';
+                showToast('Watchly was installed in every Stremio profile.', 'success', 5000);
+            } catch (error) {
+                installAllProfilesBtn.disabled = false;
+                installAllProfilesBtn.textContent = 'Retry remaining profiles';
+                showToast(error.message, 'error', 6000);
+            }
         });
     }
 
@@ -122,19 +164,27 @@ function revealInstall(message) {
     if (subheading && message) subheading.textContent = message;
 }
 
-function renderWarmState(status) {
+function renderWarmState(status, profileCount = 1, readyCount = 0) {
     const step = WARM_STEPS[status.state];
     if (!step) return;
 
     const label = document.getElementById('warmProgressLabel');
     const bar = document.getElementById('warmProgressBar');
     const detail = document.getElementById('warmProgressDetail');
+    if (profileCount > 1) {
+        if (label) label.textContent = `${readyCount}/${profileCount} profiles ready…`;
+        if (bar) bar.style.width = `${Math.max(step.pct, (readyCount / profileCount) * 100)}%`;
+        if (detail) detail.textContent = status.detail || 'Preparing profile-specific catalogs';
+        return;
+    }
+
     if (label) label.textContent = step.label;
     if (bar) bar.style.width = `${step.pct}%`;
     if (detail) detail.textContent = status.detail || '';
 }
 
-function pollWarmStatus(token, deadline) {
+function pollWarmStatus(tokens, deadline) {
+    const warmTokens = Array.isArray(tokens) ? tokens : [tokens];
     pollTimer = setTimeout(async () => {
         // Checked here rather than hooked into navigation, which would mean
         // navigation importing this module while this one already imports it.
@@ -151,28 +201,42 @@ function pollWarmStatus(token, deadline) {
         }
 
         try {
-            const res = await fetch(`/${token}/status`);
-            const status = res.ok ? await res.json() : { state: 'unknown' };
+            const statuses = await Promise.all(warmTokens.map(async token => {
+                try {
+                    const res = await fetch(`/${encodeURIComponent(token)}/status`);
+                    return res.ok ? await res.json() : { state: 'unknown' };
+                } catch (error) {
+                    console.warn('Warm-up status check failed:', error);
+                    return { state: 'unknown' };
+                }
+            }));
+            const readyCount = statuses.filter(status => status.state === 'ready' || status.state === 'error').length;
 
-            if (status.state === 'ready') {
-                revealInstall('Your personalized catalog is ready.');
+            if (readyCount === statuses.length) {
+                const hasError = statuses.some(status => status.state === 'error');
+                const message = warmTokens.length > 1
+                    ? (hasError
+                        ? 'Your profile URLs are ready. Some recommendations will finish in the background.'
+                        : 'Your profile catalogs are ready.')
+                    : (hasError
+                        ? 'Your URL is ready. We\'ll finish preparing your rows when you first open it.'
+                        : 'Your personalized catalog is ready.');
+                revealInstall(message);
                 return;
             }
-            if (status.state === 'error') {
-                // The account is saved either way; the rows just build on first use.
-                revealInstall('Your URL is ready. We\'ll finish preparing your rows when you first open it.');
-                return;
-            }
-            renderWarmState(status);
-        } catch (e) {
-            console.warn('Warm-up status check failed:', e);
+
+            const currentStatus = statuses.find(status => status.state !== 'ready' && status.state !== 'error')
+                || statuses[0];
+            renderWarmState(currentStatus, warmTokens.length, readyCount);
+        } catch (error) {
+            console.warn('Warm-up status check failed:', error);
         }
 
-        pollWarmStatus(token, deadline);
+        pollWarmStatus(warmTokens, deadline);
     }, POLL_INTERVAL_MS);
 }
 
-export function showSuccessSection(url, token) {
+export function showSuccessSection(result, legacyToken) {
     const sections = {
         welcome: document.getElementById('sect-welcome'),
         login: document.getElementById('sect-login'),
@@ -189,13 +253,46 @@ export function showSuccessSection(url, token) {
     if (!sections.success) return;
 
     sections.success.classList.remove('hidden');
-    document.getElementById('addonUrl').textContent = url;
+    const installations = Array.isArray(result)
+        ? result
+        : result
+            ? [{ url: typeof result === 'string' ? result : result.url, token: legacyToken || result.token }]
+            : [];
+    const isBatch = installations.length > 1;
+    const singleInstall = document.getElementById('singleAddonInstall');
+    const profileInstances = document.getElementById('profileAddonInstances');
+    const profileBatchInstall = document.getElementById('profileBatchInstall');
+    const subheading = document.getElementById('successSubheading');
+
+    singleInstall?.classList.toggle('hidden', isBatch);
+    profileInstances?.classList.toggle('hidden', !isBatch);
+    profileBatchInstall?.classList.toggle('hidden', !isBatch);
+    preparedInstallations = isBatch ? installations : [];
+
+    if (isBatch) {
+        if (subheading) subheading.textContent = `${installations.length} profile-specific instances are ready.`;
+        const installAllProfilesBtn = document.getElementById('installAllProfilesBtn');
+        if (installAllProfilesBtn) {
+            installAllProfilesBtn.disabled = false;
+            installAllProfilesBtn.textContent = 'Install all profiles in Stremio';
+        }
+        renderProfileInstallations(profileInstances, installations);
+    } else {
+        const url = installations[0]?.url || '';
+        if (subheading) subheading.textContent = 'Your personalized catalog is ready.';
+        const addonUrl = document.getElementById('addonUrl');
+        if (addonUrl) addonUrl.textContent = url;
+        profileInstances?.replaceChildren();
+    }
 
     stopWarmPolling();
 
-    // Without a token we can't track progress, so just show the URL — the rows
-    // build on first request as they always did.
-    if (!token) {
+    const warmTokens = installations.map(installation => installation?.token).filter(Boolean);
+    if (legacyToken && !warmTokens.length) warmTokens.push(legacyToken);
+
+    // Without a token we can't track progress, so just show the URL or profile
+    // instances — the rows build on first request as they always did.
+    if (!warmTokens.length) {
         revealInstall();
         return;
     }
@@ -203,12 +300,65 @@ export function showSuccessSection(url, token) {
     const progress = document.getElementById('warmProgress');
     const payload = document.getElementById('successPayload');
     const heading = document.getElementById('successHeading');
-    const subheading = document.getElementById('successSubheading');
     if (progress) progress.classList.remove('hidden');
     if (payload) payload.classList.add('hidden');
     if (heading) heading.textContent = 'Almost there';
     if (subheading) subheading.textContent = 'Getting your recommendations ready before you install.';
 
     renderWarmState({ state: 'pending' });
-    pollWarmStatus(token, Date.now() + POLL_TIMEOUT_MS);
+    pollWarmStatus(warmTokens, Date.now() + POLL_TIMEOUT_MS);
+}
+
+function renderProfileInstallations(container, installations) {
+    if (!container) return;
+    container.replaceChildren();
+
+    installations.forEach(installation => {
+        const row = document.createElement('div');
+        const details = document.createElement('div');
+        const name = document.createElement('div');
+        const metadata = document.createElement('div');
+        const actions = document.createElement('div');
+        const appButton = createInstallButton('App', true);
+        const webButton = createInstallButton('Web');
+        const copyButton = createInstallButton('Copy');
+
+        row.className = 'py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between';
+        details.className = 'min-w-0';
+        name.className = 'text-sm font-semibold text-white truncate';
+        metadata.className = 'text-xs text-slate-500 mt-1';
+        actions.className = 'flex gap-2 flex-shrink-0';
+        name.textContent = `Watchly - ${installation.profileName}`;
+        metadata.textContent = 'Private profile-specific manifest';
+        installation.statusElement = metadata;
+
+        appButton.addEventListener('click', () => {
+            window.location.href = `stremio://${installation.url.replace(/^https?:\/\//, '')}`;
+        });
+        webButton.addEventListener('click', () => {
+            window.open(`https://web.stremio.com/#/addons?addon=${encodeURIComponent(installation.url)}`, '_blank');
+        });
+        copyButton.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(installation.url);
+                copyButton.textContent = 'Copied';
+                setTimeout(() => { copyButton.textContent = 'Copy'; }, 2000);
+            } catch (error) { /* noop */ }
+        });
+
+        details.append(name, metadata);
+        actions.append(appButton, webButton, copyButton);
+        row.append(details, actions);
+        container.append(row);
+    });
+}
+
+function createInstallButton(label, primary = false) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.className = primary
+        ? 'bg-white text-black hover:bg-white/90 text-sm font-medium px-4 py-2 rounded-lg transition'
+        : 'bg-neutral-800 text-slate-200 hover:bg-neutral-700 text-sm font-medium px-4 py-2 rounded-lg transition';
+    return button;
 }

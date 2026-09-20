@@ -93,6 +93,8 @@ def get_default_year_range() -> dict[str, int]:
 
 class UserSettings(BaseModel):
     catalogs: list[CatalogConfig]
+    stremio_profile_id: str | None = None
+    stremio_profile_name: str | None = None
     language: str = "en-US"
     poster_rating: PosterRatingConfig | None = Field(default=None, description="Poster rating provider configuration")
     excluded_movie_genres: list[str] = Field(default_factory=list)
