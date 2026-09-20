@@ -67,23 +67,17 @@ class StremioAuthService:
             if not account_id:
                 raise ValueError("User ID missing in Stremio profile response")
 
-            profiles = self._profiles_from_user(result)
-            active_profile = next((profile for profile in profiles if profile.selected), None)
-            if active_profile is None:
-                active_profile = next((profile for profile in profiles if profile.is_master), None)
-
-            is_profile_account = len(profiles) > 1
-            profile_id = active_profile.id if active_profile and is_profile_account else None
-            profile_name = active_profile.name if active_profile and is_profile_account else None
-            user_id = (
-                f"{account_id}:{active_profile.id}" if active_profile and not active_profile.is_master else account_id
-            )
+            # Only a key Stremio scoped to a secondary profile carries parent_id. The
+            # root key stays the bare account id whichever profile the app has
+            # selected, so accounts indexed before profiles existed keep resolving.
+            profile_id = str(result["_id"]) if result.get("parent_id") else None
+            profile = next((p for p in self._profiles_from_user(result) if p.id == profile_id), None)
 
             return {
-                "user_id": user_id,
+                "user_id": f"{account_id}:{profile_id}" if profile_id else account_id,
                 "email": email,
                 "profile_id": profile_id,
-                "profile_name": profile_name,
+                "profile_name": profile.name if profile else None,
             }
         except Exception as e:
             logger.exception(f"Failed to fetch Stremio user info: {e}")
