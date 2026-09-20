@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+from app.core.security import TOKEN_PATTERN
 from app.models.stremio_profile import StremioProfile
 
 
@@ -27,7 +28,7 @@ class StremioProfileAuthResponse(BaseModel):
 class StremioProfileAddonInstallRequest(BaseModel):
     authKey: str
     profile_id: str
-    manifest_url: str
+    token: str = Field(pattern=TOKEN_PATTERN.pattern)
 
 
 class StremioProfileAddonInstallResponse(BaseModel):

@@ -66,7 +66,7 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
                         body: JSON.stringify({
                             authKey: installation.authKey,
                             profile_id: installation.profileId,
-                            manifest_url: installation.url,
+                            token: installation.token,
                         }),
                     });
                     if (!response.ok) {

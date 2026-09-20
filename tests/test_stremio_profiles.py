@@ -1,9 +1,15 @@
 import asyncio
 
 import pytest
+from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.api.endpoints import stremio_profiles as profile_endpoints
-from app.api.models.stremio_profiles import StremioCredentialsRequest, StremioProfileAuthRequest
+from app.api.models.stremio_profiles import (
+    StremioCredentialsRequest,
+    StremioProfileAddonInstallRequest,
+    StremioProfileAuthRequest,
+)
 from app.core.config import settings
 from app.models.stremio_profile import StremioProfile
 from app.services.stremio.addons import StremioAddonService
@@ -55,24 +61,36 @@ def test_profiles_support_map_response_and_include_primary_profile():
     assert profiles[1].selected is True
 
 
-def test_user_info_is_scoped_to_the_selected_secondary_profile():
-    client = FakeClient(
-        [
-            {
-                "result": {
-                    "_id": "account-1",
-                    "email": "owner@example.com",
-                    "premiumPrefs": {
-                        "userProfiles": [
-                            {"_id": "account-1", "name": "Owner", "isMaster": True},
-                            {"_id": "profile-2", "name": "Alice", "selected": True},
-                        ]
-                    },
-                }
-            }
+ACCOUNT_WITH_SELECTED_SECONDARY = {
+    "_id": "account-1",
+    "email": "owner@example.com",
+    "premiumPrefs": {
+        "userProfiles": [
+            {"_id": "account-1", "name": "Owner", "isMaster": True},
+            {"_id": "profile-2", "name": "Alice", "selected": True},
         ]
-    )
-    service = StremioAuthService(client)
+    },
+}
+
+
+def test_root_key_keeps_the_bare_account_id_whatever_profile_is_selected():
+    """Accounts indexed before profiles existed must keep resolving to the same
+    identity when the Stremio app happens to be parked on a secondary profile."""
+    service = StremioAuthService(FakeClient([{"result": ACCOUNT_WITH_SELECTED_SECONDARY}]))
+
+    user_info = asyncio.run(service.get_user_info("root-key"))
+
+    assert user_info == {
+        "user_id": "account-1",
+        "email": "owner@example.com",
+        "profile_id": None,
+        "profile_name": None,
+    }
+
+
+def test_profile_scoped_key_is_scoped_by_its_parent_id():
+    scoped = {**ACCOUNT_WITH_SELECTED_SECONDARY, "_id": "profile-2", "parent_id": "account-1"}
+    service = StremioAuthService(FakeClient([{"result": scoped}]))
 
     user_info = asyncio.run(service.get_user_info("profile-key"))
 
@@ -212,13 +230,12 @@ def test_install_addon_replaces_only_the_matching_watchly_instance():
     )
 
 
-def test_manifest_token_accepts_only_this_watchly_server():
-    manifest_url = f"{settings.HOST_NAME}/private-token/manifest.json"
+def test_install_request_rejects_a_token_that_is_not_a_bare_token():
+    StremioProfileAddonInstallRequest(authKey="profile-key", profile_id="profile-2", token="private-token_01")
 
-    assert profile_endpoints._manifest_token(manifest_url) == "private-token"
-
-    with pytest.raises(ValueError, match="does not belong"):
-        profile_endpoints._manifest_token("https://malicious.example/private-token/manifest.json")
+    for token in ("../other", "a/b", "", "x" * 65):
+        with pytest.raises(ValidationError):
+            StremioProfileAddonInstallRequest(authKey="profile-key", profile_id="profile-2", token=token)
 
 
 def test_authenticating_the_already_selected_profile_reuses_its_auth_key(monkeypatch):
@@ -233,8 +250,8 @@ def test_authenticating_the_already_selected_profile_reuses_its_auth_key(monkeyp
             return {
                 "user_id": "account-1",
                 "email": "owner@example.com",
-                "profile_id": "account-1",
-                "profile_name": "Téo",
+                "profile_id": None,
+                "profile_name": None,
             }
 
     class FakeBundle:
@@ -259,6 +276,98 @@ def test_authenticating_the_already_selected_profile_reuses_its_auth_key(monkeyp
     assert response.profile_name == "Téo"
 
 
+def test_root_key_is_not_reused_for_a_secondary_profile_stremio_marks_selected(monkeypatch):
+    class FakeAuth:
+        async def get_profiles(self, auth_key):
+            return [
+                StremioProfile(id="account-1", name="Owner", is_master=True),
+                StremioProfile(id="profile-2", name="Alice", selected=True),
+            ]
+
+        async def authenticate_profile(self, auth_key, profile_id, pin=None):
+            assert (auth_key, profile_id) == ("root-key", "profile-2")
+            return "alice-key"
+
+        async def get_user_info(self, auth_key):
+            return {
+                "root-key": {"user_id": "account-1", "profile_id": None, "profile_name": None},
+                "alice-key": {"user_id": "account-1:profile-2", "profile_id": "profile-2", "profile_name": "Alice"},
+            }[auth_key]
+
+    class FakeBundle:
+        def __init__(self):
+            self.auth = FakeAuth()
+
+        async def close(self):
+            return None
+
+    async def require_auth_key(bundle, credentials, token=None):
+        return "root-key"
+
+    monkeypatch.setattr(profile_endpoints, "StremioBundle", FakeBundle)
+    monkeypatch.setattr(profile_endpoints.auth_service, "require_auth_key", require_auth_key)
+
+    response = asyncio.run(
+        profile_endpoints.authenticate_profile(StremioProfileAuthRequest(authKey="root-key", profile_id="profile-2"))
+    )
+
+    assert response.authKey == "alice-key"
+    assert response.profile_id == "profile-2"
+    assert response.profile_name == "Alice"
+
+
+def test_root_key_installs_the_primary_instance_but_not_a_secondary_one(monkeypatch):
+    calls = []
+
+    class FakeAuth:
+        async def get_profiles(self, auth_key):
+            return [
+                StremioProfile(id="account-1", name="Owner", is_master=True),
+                StremioProfile(id="profile-2", name="Alice"),
+            ]
+
+        async def get_user_info(self, auth_key):
+            return {"user_id": "account-1", "profile_id": None, "profile_name": None}
+
+    class FakeAddons:
+        async def install_addon(self, auth_key, manifest_url, manifest):
+            calls.append((auth_key, manifest_url, manifest))
+            return True
+
+    class FakeBundle:
+        def __init__(self):
+            self.auth = FakeAuth()
+            self.addons = FakeAddons()
+
+        async def close(self):
+            return None
+
+    async def get_manifest_for_token(token):
+        return {"id": settings.ADDON_ID, "name": "Watchly"}
+
+    monkeypatch.setattr(profile_endpoints, "StremioBundle", FakeBundle)
+    monkeypatch.setattr(profile_endpoints.manifest_service, "get_manifest_for_token", get_manifest_for_token)
+
+    response = asyncio.run(
+        profile_endpoints.install_profile_addon(
+            StremioProfileAddonInstallRequest(authKey="root-key", profile_id="account-1", token="primary-token")
+        )
+    )
+    assert response.success is True
+    assert calls == [
+        ("root-key", f"{settings.HOST_NAME}/primary-token/manifest.json", {"id": settings.ADDON_ID, "name": "Watchly"})
+    ]
+
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(
+            profile_endpoints.install_profile_addon(
+                StremioProfileAddonInstallRequest(authKey="root-key", profile_id="profile-2", token="alice-token")
+            )
+        )
+    assert excinfo.value.status_code == 400
+    assert len(calls) == 1
+
+
 def test_primary_profile_can_list_every_profile_instance(monkeypatch):
     class FakeAuth:
         async def get_profiles(self, auth_key):
@@ -270,8 +379,8 @@ def test_primary_profile_can_list_every_profile_instance(monkeypatch):
         async def get_user_info(self, auth_key):
             return {
                 "user_id": "account-1",
-                "profile_id": "account-1",
-                "profile_name": "Téo",
+                "profile_id": None,
+                "profile_name": None,
             }
 
     class FakeBundle:
