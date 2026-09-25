@@ -44,6 +44,8 @@ function createCatalogItem(cat, index) {
     // builds them from the seed bucket ("Because you loved/watched"). Both
     // would discard a user-supplied name, so the rename button is hidden.
     const isRenamable = cat.id !== 'watchly.theme' && cat.id !== 'watchly.item';
+    // Only the item catalog can emit several rows; each gets its own seed.
+    const hasRowCount = cat.id === 'watchly.item';
 
     // Determine active mode for toggle buttons
     const enabledMovie = cat.enabledMovie !== false;
@@ -122,7 +124,7 @@ function createCatalogItem(cat, index) {
                 <div class="flex items-center gap-2 sm:gap-3 mt-2">
                     <div class="catalog-desc text-xs text-slate-400 flex-grow">${escapeHtml(cat.description || '')}</div>
                 </div>
-                <div class="mt-3">
+                <div class="mt-3 flex flex-wrap items-center gap-3">
             <div class="inline-flex items-center bg-neutral-900/60 border border-white/10 rounded-xl p-1 backdrop-blur-sm" role="group" aria-label="Content type selection">
                 <button type="button" class="catalog-type-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none ${activeMode === 'both' ? 'bg-white/10 text-white border border-white/20 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}" data-catalog-id="${cat.id}" data-mode="both">
                     Both
@@ -134,6 +136,12 @@ function createCatalogItem(cat, index) {
                     Series
                 </button>
             </div>
+            ${hasRowCount ? `<div class="inline-flex items-center bg-neutral-900/60 border border-white/10 rounded-xl p-1 backdrop-blur-sm" role="group" aria-label="Number of rows">
+                <span class="px-3 text-sm text-slate-400">Rows</span>
+                <button type="button" class="rows-btn px-3 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed" data-step="-1" aria-label="Fewer rows" ${cat.rows <= 1 ? 'disabled' : ''}>&minus;</button>
+                <span class="rows-value w-6 text-center text-sm font-medium text-white">${cat.rows}</span>
+                <button type="button" class="rows-btn px-3 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed" data-step="1" aria-label="More rows" ${cat.rows >= window.MAX_ITEM_ROWS ? 'disabled' : ''}>+</button>
+            </div>` : ''}
         </div>
     `;
 
@@ -223,6 +231,18 @@ function createCatalogItem(cat, index) {
             updateShuffleButton(shuffleBtn, cat.shuffle);
         });
     }
+
+    item.querySelectorAll('.rows-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const next = cat.rows + Number(btn.dataset.step);
+            if (next < 1 || next > window.MAX_ITEM_ROWS) return;
+            cat.rows = next;
+            item.querySelector('.rows-value').textContent = String(next);
+            item.querySelector('.rows-btn[data-step="-1"]').disabled = next <= 1;
+            item.querySelector('.rows-btn[data-step="1"]').disabled = next >= window.MAX_ITEM_ROWS;
+        });
+    });
 
     return item;
 }

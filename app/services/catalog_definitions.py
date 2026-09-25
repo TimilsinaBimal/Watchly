@@ -358,12 +358,12 @@ class DynamicCatalogService:
         item_config: Any,
         row_slots: dict[str, dict[str, str]],
     ) -> None:
-        """Emit one item-based row per content type.
+        """Emit `item_config.rows` item-based rows per content type.
 
         Seed selection: take the 3 most-recent loved items and the 3 most-recent
-        watched items, combine, and pick uniformly at random. The label
+        watched items, combine, and sample one distinct seed per row. The label
         ("Because you loved X" vs "Because you watched X") follows the bucket
-        the chosen seed came from. The configured `name` is for the FE display
+        each seed came from. The configured `name` is for the FE display
         only — the served catalog title is always one of the two dynamic
         labels — so the configure page disables renaming this catalog.
         """
@@ -390,13 +390,13 @@ class DynamicCatalogService:
         if not candidates:
             return
 
-        seed, seed_is_loved = random.choice(candidates)
-        label = "Because you loved" if seed_is_loved else "Because you watched"
-
         display_at_home = getattr(item_config, "display_at_home", True)
-        entry = self.build_catalog_entry(seed, label, "watchly.item", display_at_home)
-        # The seed is re-randomised on every rebuild, so keeping it in the id gave
-        # this row a new cache key each time. It lives in the slot map instead.
-        row_slots.setdefault(content_type, {})["item.1"] = entry["id"].replace("watchly.item.", "", 1)
-        entry["id"] = "watchly.item.1"
-        catalogs.append(entry)
+        seeds = random.sample(candidates, k=min(item_config.rows, len(candidates)))
+        for slot, (seed, seed_is_loved) in enumerate(seeds, start=1):
+            label = "Because you loved" if seed_is_loved else "Because you watched"
+            entry = self.build_catalog_entry(seed, label, "watchly.item", display_at_home)
+            # The seed is re-randomised on every rebuild, so keeping it in the id gave
+            # this row a new cache key each time. It lives in the slot map instead.
+            row_slots.setdefault(content_type, {})[f"item.{slot}"] = entry["id"].replace("watchly.item.", "", 1)
+            entry["id"] = f"watchly.item.{slot}"
+            catalogs.append(entry)

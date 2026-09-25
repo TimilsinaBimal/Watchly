@@ -15,7 +15,7 @@ from app.api.router import api_router
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, register_request_id_middleware
 from app.core.security import STORED_SECRET_SENTINEL
-from app.core.settings import get_current_year, get_default_catalogs_for_frontend, get_default_year_range
+from app.core.settings import MAX_ITEM_ROWS, get_current_year, get_default_catalogs_for_frontend, get_default_year_range
 from app.services.redis_service import redis_service
 from app.services.tmdb.genre import movie_genres, series_genres
 from app.services.token_store import token_store
@@ -125,6 +125,7 @@ async def configure_page(request: Request, _token: str | None = None):
         announcement_html=settings.ANNOUNCEMENT_HTML or "",
         languages=languages,
         default_catalogs=default_catalogs,
+        max_item_rows=MAX_ITEM_ROWS,
         current_year=get_current_year(),
         year_range_defaults=year_range_defaults,
         stored_secret_sentinel=STORED_SECRET_SENTINEL,

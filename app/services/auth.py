@@ -105,6 +105,8 @@ class AuthService:
             user_info = await bundle.auth.get_user_info(auth_key)
             user_id = user_info["user_id"]
             resolved_email = user_info.get("email", payload.email or "")
+            payload.stremio_profile_id = user_info.get("profile_id")
+            payload.stremio_profile_name = user_info.get("profile_name")
             return user_id, resolved_email, auth_key
         except Exception as e:
             logger.error(f"Stremio identity verification failed: {e}")
@@ -294,7 +296,20 @@ class AuthService:
                 f"which is set as your watch history source. Reconnect it and try again.",
             )
 
-        user_settings = self._build_user_settings(payload, (existing_data or {}).get("settings"))
+        stored_settings = (existing_data or {}).get("settings")
+        if existing_data is None and ":" in identities.get("stremio", ""):
+            # A secondary profile's first save comes from a configure page loaded
+            # against the primary profile, so its API keys arrive masked and have to
+            # be restored from that account; parent_id proved the profile belongs to
+            # it. Trakt/Simkl tokens are identities and would merge the profiles back.
+            master_token = await self._find_account_token("stremio", identities["stremio"].split(":", 1)[0])
+            master_settings = ((await token_store.get_user_data(master_token)) or {}).get("settings") or {}
+            stored_settings = {
+                field: master_settings.get(field)
+                for field in ("tmdb_api_key", "llm", "gemini_api_key", "simkl_api_key", "poster_rating")
+            }
+
+        user_settings = self._build_user_settings(payload, stored_settings)
         payload_to_store = {
             "email": resolved_email or (existing_data or {}).get("email"),
             "settings": user_settings.model_dump(),
@@ -371,6 +386,8 @@ class AuthService:
             return stored.get(field) if value == STORED_SECRET_SENTINEL else value
 
         return UserSettings(
+            stremio_profile_id=payload.stremio_profile_id,
+            stremio_profile_name=payload.stremio_profile_name,
             language=payload.language or default_settings.language,
             catalogs=payload.catalogs if payload.catalogs else default_settings.catalogs,
             poster_rating=self._unmask_nested_key(payload.poster_rating, stored.get("poster_rating")),
@@ -439,7 +456,13 @@ class AuthService:
         # Keep the Stremio id as user_id when present so existing frontend
         # display logic is unchanged; any verified identity works otherwise.
         user_id = identities.get("stremio") or next(iter(identities.values()))
-        response = {"user_id": user_id, "email": email, "exists": exists}
+        response = {
+            "user_id": user_id,
+            "email": email,
+            "exists": exists,
+            "stremio_profile_id": payload.stremio_profile_id,
+            "stremio_profile_name": payload.stremio_profile_name,
+        }
 
         if exists and existing_data:
             # Token is the user's manifest key; only returned once they've authenticated

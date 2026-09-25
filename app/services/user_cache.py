@@ -101,7 +101,14 @@ class UserCacheService:
         Deliberately absent from invalidate_all_user_data: dropping this would leave
         every slot unresolvable until Stremio next pulls the manifest, so it is only
         ever replaced by a manifest rebuild, never cleared.
+
+        The catalog cache is keyed on the slot id, so a slot whose definition changed
+        or vanished would keep serving the old row's body under the new row's title.
         """
+        previous = await self.get_row_map(token, content_type)
+        for slot in previous.keys() | mapping.keys():
+            if previous.get(slot) != mapping.get(slot):
+                await self.invalidate_catalog(token, content_type, f"watchly.{slot}")
         payload = cache_codec.encode(json.dumps(mapping))
         await redis_service.set(self._row_map_key(token, content_type), payload, USER_CACHE_TTL_SECONDS)
         logger.debug(f"[{redact_token(token)}...] Stored {len(mapping)} row slots for {content_type}")

@@ -349,6 +349,33 @@ def test_resubmitting_masked_secrets_keeps_the_stored_values(monkeypatch):
     assert user_settings.language == "de-DE"
 
 
+def test_new_secondary_profile_restores_masked_secrets_from_the_primary_account(monkeypatch):
+    """The configure page was loaded against the primary profile, so the batch save
+    for a secondary profile carries sentinels that only the primary account can unmask."""
+    fake = setup_fakes(monkeypatch, stremio_identity=("account-1:profile-2", "owner@example.com", "alice-key"))
+    seed_account(fake, "primary-token", "2024-01-01", identities={"stremio": "account-1"})
+    blob = json.loads(fake.data["watchly:token:primary-token"])
+    blob["settings"]["tmdb_api_key"] = "tmdb-secret"
+    fake.data["watchly:token:primary-token"] = json.dumps(blob)
+
+    payload = TokenRequest(authKey="alice-key", tmdb_api_key=STORED_SECRET_SENTINEL)
+    response, _, user_settings = asyncio.run(AuthService().create_user_token(payload))
+
+    assert response.token != "primary-token"
+    assert user_settings.tmdb_api_key == "tmdb-secret"
+    assert user_settings.stremio_profile_id is None  # set by the real verifier, stubbed here
+
+
+def test_new_account_with_a_masked_secret_and_no_primary_gets_nothing(monkeypatch):
+    setup_fakes(monkeypatch, stremio_identity=("account-9:profile-3", "x@example.com", "key"))
+
+    _, _, user_settings = asyncio.run(
+        AuthService().create_user_token(TokenRequest(authKey="key", tmdb_api_key=STORED_SECRET_SENTINEL))
+    )
+
+    assert user_settings.tmdb_api_key is None
+
+
 def test_masked_key_is_not_carried_across_providers(monkeypatch):
     setup_fakes(monkeypatch)
     service = AuthService()

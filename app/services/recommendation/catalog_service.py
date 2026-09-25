@@ -161,6 +161,12 @@ class CatalogService:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Build fresh catalog content using the loaded user context."""
         try:
+            # Resolved only for building. The cache key stays the slot id the client
+            # asked for, which is the whole point: it survives a definition change.
+            resolved_id = await self._resolve_slot(ctx.token, content_type, catalog_id)
+            if resolved_id is None:
+                return {"metas": []}, headers
+
             services = self._initialize_services(ctx.user_settings)
             profile_service: ProfileService = services["profile"]
 
@@ -193,10 +199,8 @@ class CatalogService:
                     user_settings=ctx.user_settings,
                 )
 
-            # Resolved only for building. The cache key stays the slot id the client
-            # asked for, which is the whole point: it survives a definition change.
             recommendations = await self._get_recommendations(
-                catalog_id=await self._resolve_slot(ctx.token, content_type, catalog_id),
+                catalog_id=resolved_id,
                 content_type=content_type,
                 services=services,
                 profile=profile,
@@ -301,7 +305,7 @@ class CatalogService:
             return []
 
     @staticmethod
-    async def _resolve_slot(token: str, content_type: str, catalog_id: str) -> str:
+    async def _resolve_slot(token: str, content_type: str, catalog_id: str) -> str | None:
         """Expand a slot id into the row definition it currently points at.
 
         Served ids are stable slots (`watchly.theme.2`) so the cache key never moves
@@ -311,6 +315,10 @@ class CatalogService:
 
         Ids that aren't slots are returned unchanged: manifests installed before this
         carry self-describing ids and Stremio keeps requesting them until it refreshes.
+
+        None means the slot has no definition — the user reduced their row count and
+        the installed client still asks for the dropped slot. Passing the id through
+        instead would hand the item engine a bare "3", which it reads as TMDB id 3.
         """
         match = re.match(r"^watchly\.(theme|item)\.(\d+)$", catalog_id)
         if not match:
@@ -320,7 +328,7 @@ class CatalogService:
         definition = (await user_cache.get_row_map(token, content_type)).get(f"{prefix}.{slot}")
         if not definition:
             logger.warning(f"[{redact_token(token)}] No row definition for {catalog_id} ({content_type})")
-            return catalog_id
+            return None
 
         return f"watchly.{prefix}.{definition}"
 
