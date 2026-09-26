@@ -140,6 +140,14 @@ class CatalogService:
             return
 
         try:
+            # A scheduled refresh running for this user may replace the library and
+            # profiles and drop this row. Rebuilding alongside it would use the old ones
+            # and could land afterwards as fresh, so wait, then rebuild only if the row
+            # is still stale.
+            await catalog_updater.wait_for(token)
+            cached = await user_cache.get_catalog(token, content_type, catalog_id)
+            if cached and int(time.time()) - cached[1] < settings.CATALOG_REFRESH_INTERVAL_SECONDS:
+                return
             ctx = await load_user_context(token)
             try:
                 # Called for the cache write it performs; the response is discarded.
