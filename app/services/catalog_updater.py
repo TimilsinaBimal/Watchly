@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from datetime import datetime, timezone
 from typing import Any
 
@@ -105,10 +106,17 @@ class CatalogUpdater:
 
             if success and update_timestamp:
                 try:
-                    now = datetime.now(timezone.utc)
-                    credentials["last_updated"] = now.replace(microsecond=0).isoformat()
-                    await token_store.update_user_data(token, credentials)
-                    logger.debug(f"[{redact_token(token)}] Updated last_updated timestamp")
+                    # Stamp what is stored now, not the credentials this refresh started
+                    # with: a settings save or a Trakt token rotation may have replaced
+                    # them since, and writing the old ones back would undo it.
+                    stored = await token_store.get_user_data(token)
+                    if stored is None:
+                        logger.info(f"[{redact_token(token)}] Token removed during the refresh; not stamping it")
+                    else:
+                        stored = copy.deepcopy(stored)
+                        stored["last_updated"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+                        await token_store.update_user_data(token, stored)
+                        logger.debug(f"[{redact_token(token)}] Updated last_updated timestamp")
                 except Exception as e:
                     logger.warning(f"[{redact_token(token)}] Failed to update timestamp: {e}")
 
