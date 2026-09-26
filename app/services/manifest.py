@@ -68,7 +68,10 @@ class ManifestService:
         logger.info(f"[{redact_token(token)}] Fetching library items from '{source}' for caching")
         library_items = await fetch_library_for_source(source, user_settings, token, bundle, auth_key)
         if library_items is None:
-            library_items = LibraryCollection()
+            # Caching an empty library here would replace the user's real one and
+            # empty every row until the next successful fetch.
+            logger.warning(f"[{redact_token(token)}] Library fetch from '{source}' failed; not caching it")
+            return LibraryCollection()
         await user_cache.set_library_items(token, library_items)
         logger.debug(f"[{redact_token(token)}] Cached library items (source={library_items.source})")
 
