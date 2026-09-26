@@ -58,7 +58,8 @@ class ManifestService:
     ) -> LibraryCollection:
         """Fetch and cache library items and profiles for a user.
 
-        Called during token creation to pre-cache data so manifest generation is fast.
+        Called during token creation to pre-cache data so manifest generation is fast,
+        and by the scheduled catalog refresh to pick up what the user has watched since.
         """
         # Cache the library from the user's configured source (Trakt/Simkl/Stremio),
         # not always Stremio. Tagging the bootstrap cache as "stremio" for a Trakt/

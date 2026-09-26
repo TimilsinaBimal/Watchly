@@ -9,6 +9,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.security import redact_token
 from app.services.auth import auth_service
+from app.services.context import extract_settings
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 
@@ -71,6 +72,10 @@ class CatalogUpdater:
                 detail="Invalid or expired token. Please reconfigure the addon.",
             )
 
+        # Read before resolving the auth key: a Stremio re-login stores this shared dict,
+        # and store_user_data encrypts its nested settings in place.
+        user_settings = extract_settings(credentials)
+
         bundle = StremioBundle()
         try:
             auth_key = await auth_service.resolve_auth_key_with_bundle(bundle, credentials, token)
@@ -86,9 +91,18 @@ class CatalogUpdater:
                     return False
 
             # Reuse ManifestService to build catalogs
-            # (handles library caching, profile building, catalog definitions,
-            #  translation, and sorting — no need to reimplement here)
+            # (handles catalog definitions, translation, and sorting — no need to
+            #  reimplement here)
             from app.services.manifest import manifest_service
+
+            # The manifest build only reads the cached library, and that cache is
+            # re-fetched only when it is missing — every read renews its TTL. For an
+            # active user this is the one place new watches reach the library and
+            # the profiles, so refetch before rebuilding. Stremio only for now: Trakt
+            # and Simkl report an outage or a rejected token as an empty history,
+            # which a daily refetch would cache over the user's library.
+            if user_settings.watch_history_source == "stremio":
+                await manifest_service.cache_library_and_profiles(bundle, auth_key, user_settings, token)
 
             # Force a rebuild: this job exists to push a *fresh* catalog list to
             # Stremio, so reading the manifest cache would make it a no-op.
