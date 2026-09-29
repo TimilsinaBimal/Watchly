@@ -1,9 +1,11 @@
 import asyncio
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from loguru import logger
 
+from app.core.constants import DEFAULT_CATALOG_LIMIT
 from app.core.settings import UserSettings
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
@@ -83,4 +85,13 @@ class RewatchService:
             scored.append((score * REACTION_BOOST[sampled_item.source_type], item))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        return [item for _, item in scored]
+        ranked = [item for _, item in scored]
+        # Rotation without dropping anything: a random DEFAULT_CATALOG_LIMIT of the top
+        # two rows' worth lead, the rest follow, each group in score order.
+        top = ranked[: DEFAULT_CATALOG_LIMIT * 2]
+        lead = set(random.sample(range(len(top)), k=min(DEFAULT_CATALOG_LIMIT, len(top))))
+        return (
+            [item for i, item in enumerate(top) if i in lead]
+            + [item for i, item in enumerate(top) if i not in lead]
+            + ranked[DEFAULT_CATALOG_LIMIT * 2 :]
+        )
