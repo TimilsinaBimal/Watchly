@@ -1,6 +1,5 @@
 // Navigation and Section Management
 
-// DOM Elements - will be initialized
 let navItems = {};
 let sections = {};
 let mainEl = null;
@@ -48,7 +47,6 @@ export function closeMobileNav() {
     sidebar.classList.add('-translate-x-full');
     backdrop.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
-    // Reset hamburger
     mobileToggle.classList.remove('is-active');
     mobileToggle.setAttribute('aria-expanded', 'false');
     mobileToggle.setAttribute('aria-label', 'Open navigation');
@@ -65,7 +63,6 @@ export function initializeMobileNav() {
         sidebar.classList.add('translate-x-0');
         backdrop.classList.remove('hidden');
         document.body.classList.add('overflow-hidden');
-        // Animate hamburger to X
         mobileToggle.classList.add('is-active');
         mobileToggle.setAttribute('aria-expanded', 'true');
         mobileToggle.setAttribute('aria-label', 'Close navigation');
@@ -89,25 +86,19 @@ export function initializeMobileNav() {
 }
 
 export function switchSection(sectionKey) {
-    if (appState) {
-        appState.ui.currentSection = sectionKey;
-    }
+    appState.ui.currentSection = sectionKey;
 
-    // Hide all sections
     Object.values(sections).forEach(el => {
         if (el) el.classList.add('hidden');
     });
 
-    // Show target section
     if (sections[sectionKey]) {
         sections[sectionKey].classList.remove('hidden');
     }
 
-    // Update Nav UI Logic
-    // Reset all nav items
     Object.values(navItems).forEach(el => {
         if (el) {
-            el.classList.remove('active', 'bg-blue-600/10', 'text-blue-400', 'border-l-2', 'border-blue-400');
+            el.classList.remove('active');
         }
     });
 
@@ -116,36 +107,26 @@ export function switchSection(sectionKey) {
         navItems[sectionKey].classList.add('active');
     }
 
-    // Ensure new section starts at top in the scroll container
-    try {
-        if (mainEl) {
-            // Using scrollTo with behavior auto to avoid jank on iOS toolbars
-            mainEl.scrollTo({ top: 0, behavior: 'auto' });
-        } else {
-            window.scrollTo({ top: 0, behavior: 'auto' });
-        }
-    } catch (e) { /* noop */ }
+    mainEl.scrollTo({ top: 0 });
 }
 
 export function updateMobileLayout() {
-    try {
-        const headerEl = document.getElementById('mobileHeader');
-        const isMobile = window.matchMedia('(max-width: 767.98px)').matches;
-        if (!headerEl || !mainEl) return;
-        const h = headerEl.offsetHeight || 0;
-        document.documentElement.style.setProperty('--mobile-header', `${h}px`);
+    const headerEl = document.getElementById('mobileHeader');
+    const isMobile = window.matchMedia('(max-width: 767.98px)').matches;
+    if (!headerEl || !mainEl) return;
+    const h = headerEl.offsetHeight || 0;
+    document.documentElement.style.setProperty('--mobile-header', `${h}px`);
 
-        const sidebarEl = document.getElementById('mainSidebar');
-        if (!sidebarEl) return;
+    const sidebarEl = document.getElementById('mainSidebar');
+    if (!sidebarEl) return;
 
-        if (isMobile) {
-            if (mainEl) mainEl.style.paddingTop = `${h}px`;
-            sidebarEl.style.top = `${h}px`;
-            sidebarEl.style.height = `calc(100dvh - ${h}px)`;
-        } else {
-            if (mainEl) mainEl.style.paddingTop = '';
-            sidebarEl.style.top = '0';
-            sidebarEl.style.height = '100dvh';
-        }
-    } catch (e) { /* noop */ }
+    if (isMobile) {
+        mainEl.style.paddingTop = `${h}px`;
+        sidebarEl.style.top = `${h}px`;
+        sidebarEl.style.height = `calc(100dvh - ${h}px)`;
+    } else {
+        mainEl.style.paddingTop = '';
+        sidebarEl.style.top = '0';
+        sidebarEl.style.height = '100dvh';
+    }
 }

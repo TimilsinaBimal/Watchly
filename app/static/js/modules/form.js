@@ -16,7 +16,6 @@ import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 import { setProviderConnected } from './accounts.js';
 import { getPreparedStremioProfiles, recallProviderAccount } from './auth.js';
 
-// DOM Elements - will be initialized
 let submitBtn = null;
 let emailInput = null;
 let passwordInput = null;
@@ -152,7 +151,6 @@ function validateFormData(formData) {
     return true;
 }
 
-// Form Submission
 function initializeFormSubmission() {
     if (!submitBtn) return;
 
@@ -246,7 +244,6 @@ function initializeFormSubmission() {
     });
 }
 
-// UI Helpers & Genre Lists
 function initializeGenreLists() {
     renderGenreList(movieGenreList, MOVIE_GENRES, 'movie-genre');
     renderGenreList(seriesGenreList, SERIES_GENRES, 'series-genre');
@@ -270,7 +267,6 @@ function renderGenreList(container, genres, namePrefix) {
     `).join('');
 }
 
-// Poster Rating Provider
 function initializePosterRatingProvider() {
     const providerSelect = document.getElementById('posterRatingProvider');
     const apiKeyContainer = document.getElementById('posterRatingApiKeyContainer');
@@ -453,7 +449,6 @@ function initializePosterRatingProvider() {
     };
 }
 
-// TMDB API Key (Required)
 function initializeTmdb() {
     initializeValidatedSecretField({
         input: document.getElementById('tmdbApiKey'),
@@ -469,7 +464,6 @@ function initializeTmdb() {
     });
 }
 
-// Simkl Integration
 function initializeSimkl() {
     initializeValidatedSecretField({
         input: document.getElementById('simklApiKey'),

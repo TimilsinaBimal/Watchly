@@ -35,7 +35,6 @@ function moveCatalogDown(index) {
 function createCatalogItem(cat, index) {
     const item = document.createElement('div');
     const disabledClass = !cat.enabled ? 'opacity-50' : '';
-    // Modern neutral glass card to match new theme
     item.className = `catalog-item group bg-neutral-900/60 border border-white/10 rounded-xl p-4 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-neutral-900/70 hover:shadow-lg hover:shadow-black/20 ${disabledClass}`;
     item.setAttribute('data-id', cat.id);
     item.setAttribute('data-index', index);

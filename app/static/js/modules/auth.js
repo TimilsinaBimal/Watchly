@@ -17,7 +17,6 @@ import { markFieldAsSaved } from './field-helpers.js';
 import { closeMobileNav, switchSection, unlockNavigation } from './navigation.js';
 import { renderCatalogList } from './catalog.js';
 
-// DOM Elements - will be initialized
 let stremioLoginBtn = null;
 let emailInput = null;
 let passwordInput = null;

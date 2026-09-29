@@ -1,7 +1,7 @@
 // Main entry point - initializes all modules
 
 import { createAppState, resetAppState } from './state.js';
-import { initializeChangelog, initializeFooter, initializeKofi, initializeProviderCards } from './modules/ui.js';
+import { initializeChangelog, initializeKofi, initializeProviderCards } from './modules/ui.js';
 import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initializeMobileNav, updateMobileLayout } from './modules/navigation.js';
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
 import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
@@ -11,7 +11,6 @@ import { initializeDashboard } from './modules/dashboard.js';
 
 const appState = createAppState();
 
-// DOM Elements
 const configForm = document.getElementById('configForm');
 const catalogList = document.getElementById('catalogList');
 const movieGenreList = document.getElementById('movieGenreList');
@@ -47,26 +46,20 @@ const sections = {
     dashboard: document.getElementById('sect-dashboard')
 };
 
-// Main scroll container
 const mainEl = document.querySelector('main');
 
-// Reset App Function
 function resetApp() {
     if (configForm) configForm.reset();
     resetAppState(appState);
     clearErrors();
 
-    // Reset Stremio State
     setStremioLoggedOutState();
 
-    // Reset catalogs
     renderCatalogList();
 
-    // Reset Navigation is now Back to Welcome
     switchSection(appState.ui.currentSection);
     lockNavigationForLoggedOut();
 
-    // Show Form
     if (configForm) configForm.classList.remove('hidden');
     if (sections.success) sections.success.classList.add('hidden');
 }
@@ -75,26 +68,15 @@ function resetApp() {
 function initializeWelcomeFlow() {
     if (!btnGetStarted) return;
 
-    // Support mobile taps reliably while avoiding double-fire (touch -> click)
-    let touched = false;
-    const handleGetStarted = (e) => {
-        if (e.type === 'click' && touched) return;
-        if (e.type === 'touchstart') touched = true;
+    btnGetStarted.addEventListener('click', () => {
         if (navItems.login) navItems.login.classList.remove('disabled');
         switchSection('login');
-    };
-
-    btnGetStarted.addEventListener('click', handleGetStarted);
-    btnGetStarted.addEventListener('touchstart', handleGetStarted, { passive: true });
+    });
 }
 
-// Initialize everything
 document.addEventListener('DOMContentLoaded', () => {
-    // Start at Welcome
-    switchSection(appState.ui.currentSection);
     initializeWelcomeFlow();
 
-    // Initialize all modules
     initializeNavigation({
         navItems,
         sections,
@@ -108,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initializeCatalogList({ catalogList }, appState);
 
-    // Initialize form handling
     const updateYearSlider = initializeForm(
         {
             submitBtn,
@@ -122,7 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
         { resetApp }
     );
 
-    // Initialize authentication
     initializeAuth(
         {
             stremioLoginBtn,
@@ -145,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeMobileNav();
 
     // Initialize UI components
-    initializeFooter();
     initializeKofi();
     initializeChangelog();
     initializeProviderCards();
@@ -155,14 +134,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('resize', updateMobileLayout);
     window.addEventListener('orientationchange', updateMobileLayout);
 
-    // Next Buttons
     if (accountsNextBtn) accountsNextBtn.addEventListener('click', () => {
         if (!accountsNextBtn.disabled) switchSection('config');
     });
     if (configNextBtn) configNextBtn.addEventListener('click', () => switchSection('catalogs'));
     if (catalogsNextBtn) catalogsNextBtn.addEventListener('click', () => switchSection('install'));
 
-    // Reset Buttons
     const resetBtn = document.getElementById('resetBtn');
     if (resetBtn) resetBtn.addEventListener('click', resetApp);
     if (successResetBtn) successResetBtn.addEventListener('click', resetApp);

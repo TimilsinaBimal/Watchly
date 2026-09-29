@@ -80,11 +80,9 @@ export function showToast(message, type = 'info', duration = 5000) {
         });
     });
 
-    // Close button
     const closeBtn = toast.querySelector('.toast-close');
     closeBtn.addEventListener('click', () => removeToast(toast));
 
-    // Auto remove
     if (duration > 0) {
         setTimeout(() => removeToast(toast), duration);
     }
@@ -108,12 +106,6 @@ export function showConfirm(title, message) {
         const messageEl = document.getElementById('confirmModalMessage');
         const confirmBtn = document.getElementById('confirmModalConfirm');
         const cancelBtn = document.getElementById('confirmModalCancel');
-
-        if (!modal || !modalContent) {
-            // Fallback to native confirm if modal not found
-            resolve(confirm(message));
-            return;
-        }
 
         // Set content
         titleEl.textContent = title;
@@ -163,11 +155,6 @@ export function showConfirm(title, message) {
     });
 }
 
-export function initializeFooter() {
-    const y = document.getElementById('currentYear');
-    if (y) y.textContent = new Date().getFullYear();
-}
-
 // Donation Modal Logic
 export function initializeKofi() {
     const kofiBtn = document.getElementById('kofiBtn');
@@ -178,14 +165,12 @@ export function initializeKofi() {
 
     if (!donationModal) return;
 
-    // Open modal function
     const openModal = (e) => {
         if (e) e.preventDefault();
         donationModal.classList.remove('hidden');
         document.body.classList.add('overflow-hidden');
     };
 
-    // Close modal function
     const closeModal = () => {
         donationModal.classList.add('hidden');
         document.body.classList.remove('overflow-hidden');
@@ -201,7 +186,6 @@ export function initializeKofi() {
         homepageDonateBtn.addEventListener('click', openModal);
     }
 
-    // Close button
     if (closeDonationBtn) {
         closeDonationBtn.addEventListener('click', closeModal);
     }

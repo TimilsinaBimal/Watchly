@@ -1,9 +1,5 @@
 import { defaultCatalogs } from './constants.js';
 
-export function cloneDefaultCatalogs() {
-    return JSON.parse(JSON.stringify(defaultCatalogs));
-}
-
 export function createAppState() {
     return {
         auth: {
@@ -16,16 +12,10 @@ export function createAppState() {
         ui: {
             currentSection: 'welcome'
         },
-        catalogs: cloneDefaultCatalogs()
+        catalogs: structuredClone(defaultCatalogs)
     };
 }
 
 export function resetAppState(state) {
-    state.auth.loggedIn = false;
-    state.auth.authKey = '';
-    state.auth.userDisplay = null;
-    state.auth.token = '';
-    state.auth.hasInstall = false;
-    state.ui.currentSection = 'welcome';
-    state.catalogs = cloneDefaultCatalogs();
+    Object.assign(state, createAppState());
 }

@@ -470,15 +470,15 @@ function renderInstallLink() {
 }
 
 function renderKpis(stats) {
-    const lib = stats && stats.library;
+    const lib = stats.library;
     animateCount($('dashKpiTotal'), lib ? lib.total : '—');
     animateCount($('dashKpiLoved'), lib ? lib.loved : '—');
     animateCount($('dashKpiLiked'), lib ? lib.liked : '—');
     animateCount($('dashKpiWatched'), lib ? lib.watched : '—');
-    animateCount($('dashKpiCatalogs'), stats && stats.active_catalogs != null ? stats.active_catalogs : '—');
+    animateCount($('dashKpiCatalogs'), stats.active_catalogs);
 
     const lastEl = $('dashLastRefresh');
-    if (stats && stats.last_refresh) {
+    if (stats.last_refresh) {
         const d = new Date(stats.last_refresh);
         lastEl.textContent = `Last refreshed ${isNaN(d.getTime()) ? stats.last_refresh : d.toLocaleString()}`;
         lastEl.classList.remove('hidden');
