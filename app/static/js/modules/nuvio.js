@@ -110,7 +110,7 @@ function ensureModal() {
                 <input id="nuvioPassword" type="password" autocomplete="off" placeholder="Nuvio password"
                     class="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all">
                 <button type="button" id="nuvioSubmitBtn"
-                    class="mt-1 w-full bg-white text-black hover:bg-white/90 font-medium py-3 rounded-xl transition border border-white/10">
+                    class="btn btn-nuvio btn-lg mt-1 w-full">
                     Sign in &amp; Install</button>
             </div>
 
@@ -119,7 +119,7 @@ function ensureModal() {
                 <select id="nuvioProfileSelect"
                     class="w-full appearance-none bg-neutral-950 border border-neutral-700 rounded-xl px-4 py-3 text-white outline-none"></select>
                 <button type="button" id="nuvioProfileInstallBtn"
-                    class="mt-1 w-full bg-white text-black hover:bg-white/90 font-medium py-3 rounded-xl transition border border-white/10">Install</button>
+                    class="btn btn-nuvio btn-lg mt-1 w-full">Install</button>
             </div>
 
             <div id="nuvioStatus" class="hidden mt-4 text-sm rounded-xl p-3"></div>

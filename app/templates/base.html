@@ -27,7 +27,10 @@
                             ink: 'rgb(var(--accent-ink) / <alpha-value>)',
                         },
                         surface: { DEFAULT: '#0f0f10', raised: '#161617', sunken: '#09090a' },
-                        stremio: { DEFAULT: '#3b2667', hover: '#4e3286', border: '#573b94' },
+                        // Brand colours: Stremio's button purple from stremio.com; Nuvio's violet sampled
+                        // from its logo (nuvio.tv has no flat brand colour). Nuvio needs dark text.
+                        stremio: { DEFAULT: '#7b5bf5', hover: '#6a48ec', border: '#8f75f7' },
+                        nuvio: { DEFAULT: '#b44ef4', hover: '#c26bf7', ink: '#14061f' },
                     },
                     animation: { 'fade-in': 'fadeIn 0.25s ease-out forwards' },
                     keyframes: {
@@ -67,6 +70,8 @@
             .btn-primary { @apply bg-accent font-semibold text-accent-ink shadow-lg shadow-accent/10 hover:bg-accent-hover; }
             .btn-secondary { @apply border border-white/10 bg-white/[0.05] text-neutral-100 hover:bg-white/[0.09]; }
             .btn-ghost { @apply text-neutral-300 hover:bg-white/5 hover:text-white; }
+            .btn-stremio { @apply bg-stremio font-semibold text-white shadow-lg shadow-stremio/10 hover:bg-stremio-hover; }
+            .btn-nuvio { @apply bg-nuvio font-semibold text-nuvio-ink shadow-lg shadow-nuvio/10 hover:bg-nuvio-hover; }
             .btn-danger { @apply border border-red-500/25 bg-red-500/10 text-red-300 hover:bg-red-500/15; }
             .icon-btn { @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-neutral-400 transition hover:bg-white/5 hover:text-white; }
 

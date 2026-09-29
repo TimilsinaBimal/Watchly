@@ -358,7 +358,7 @@ function createInstallButton(label, primary = false) {
     button.type = 'button';
     button.textContent = label;
     button.className = primary
-        ? 'btn btn-primary'
+        ? 'btn btn-stremio'
         : 'btn btn-secondary';
     return button;
 }
