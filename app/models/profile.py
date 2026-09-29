@@ -15,8 +15,6 @@ class ScoredItem(BaseModel):
     item: StremioLibraryItem
     score: float
     completion_rate: float
-    is_rewatched: bool
-    is_recent: bool
     source_type: str  # 'loved' | 'watched' | 'liked'
 
 
@@ -51,9 +49,6 @@ class TasteProfile(BaseModel):
     )
 
     # Metadata
-    average_episodes: float | None = Field(
-        default=None, description="Weighted average episodes per series (series only)"
-    )
     last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     content_type: str | None = Field(default=None, description="movie or series")
     processed_items: set[str] = Field(
@@ -94,11 +89,6 @@ class TasteProfile(BaseModel):
     def get_top_cast(self, limit: int = 5) -> list[tuple[int, float]]:
         """Get top N cast members by score."""
         return sorted(self.cast_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
-
-    def get_top_creators(self, limit: int = 5) -> list[tuple[int, float]]:
-        """Get top N creators (directors + cast merged) by score."""
-        all_creators = {**self.director_scores, **self.cast_scores}
-        return sorted(all_creators.items(), key=lambda x: x[1], reverse=True)[:limit]
 
     def normalize_for_ranking(self) -> dict[str, dict[Any, float]]:
         """Normalize scores for ranking (read-time only).

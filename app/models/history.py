@@ -14,7 +14,6 @@ class WatchHistoryItem(BaseModel):
     watch_count: int = 1
     completion: float = 1.0  # 0.0-1.0 (fraction of content watched)
     last_watched: datetime | None = None
-    source: Literal["stremio", "trakt", "simkl"] = "stremio"
 
 
 class WatchHistory(BaseModel):

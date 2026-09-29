@@ -186,12 +186,6 @@ class ItemVectorizer:
         if runtime_bucket:
             features["runtime_bucket"] = runtime_bucket
 
-        # Extract number of episodes (for series only)
-        if content_type == "series":
-            num_episodes = self._extract_episode_count(cinemeta_metadata)
-            if num_episodes:
-                features["episode_count"] = num_episodes
-
         return features
 
     def _extract_cast_with_positions(self, cast: list[Any]) -> list[dict[str, Any]]:
@@ -313,21 +307,6 @@ class ItemVectorizer:
             return "medium"
         else:
             return "long"
-
-    @staticmethod
-    def _extract_episode_count(cinemeta_metadata: dict[str, Any]) -> int | None:
-        """
-        Extract number of episodes for series.
-
-        Args:
-            metadata: Full metadata dict
-
-        Returns:
-            Number of episodes or None
-        """
-        episodes = [v for v in cinemeta_metadata.get("videos", []) if v.get("season") != 0]  # remove specials
-        num_episodes = len(episodes)
-        return num_episodes
 
     @staticmethod
     def _year_to_era(year: int) -> str:

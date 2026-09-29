@@ -177,7 +177,7 @@ class SimklService:
                     except (ValueError, TypeError):
                         pass
 
-                # watch_count is a rewatch signal downstream (is_rewatched, the
+                # watch_count is a rewatch signal downstream (the scorer's rewatch bonus, the
                 # >=2 "loved" proxy). Only movies expose a real replay count;
                 # for shows every Simkl count is episode-based, so a fully
                 # watched multi-episode series would look rewatched and get
@@ -199,7 +199,6 @@ class SimklService:
                         watch_count=watch_count,
                         completion=1.0,
                         last_watched=last_watched,
-                        source="simkl",
                     )
                 )
 

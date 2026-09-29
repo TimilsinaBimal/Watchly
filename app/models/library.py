@@ -8,14 +8,11 @@ class StremioState(BaseModel):
 
     lastWatched: datetime | None = None
     timeWatched: int = 0
-    timeOffset: int = 0
     overallTimeWatched: int = 0
     timesWatched: int = 0
     flaggedWatched: int = 0
     duration: int = 0
-    video_id: str | None = None
     watched: str | None = None
-    noNotif: bool = False
     season: int = 0
     episode: int = 0
 
@@ -45,7 +42,6 @@ class StremioLibraryItem(BaseModel):
     # Enriched fields (not in raw Stremio JSON, added by our service)
     is_loved: bool = Field(default=False, alias="_is_loved")
     is_liked: bool = Field(default=False, alias="_is_liked")
-    interest_score: float = Field(default=0.0, alias="_interest_score")
 
     class Config:
         populate_by_name = True
@@ -63,14 +59,10 @@ class LibraryCollection(BaseModel):
     liked: list[StremioLibraryItem] = []
     watched: list[StremioLibraryItem] = []
     added: list[StremioLibraryItem] = []
-    removed: list[StremioLibraryItem] = []
     source: str = "stremio"
 
     def all_items(self) -> list[StremioLibraryItem]:
         return self.loved + self.liked + self.watched + self.added
-
-    def all_items_with_removed(self) -> list[StremioLibraryItem]:
-        return self.loved + self.liked + self.watched + self.added + self.removed
 
     def for_type(self, content_type: str) -> "LibraryCollection":
         return LibraryCollection(
@@ -78,12 +70,11 @@ class LibraryCollection(BaseModel):
             liked=[i for i in self.liked if i.type == content_type],
             watched=[i for i in self.watched if i.type == content_type],
             added=[i for i in self.added if i.type == content_type],
-            removed=[i for i in self.removed if i.type == content_type],
             source=self.source,
         )
 
     def all_imdb_ids(self) -> set[str]:
-        return {i.id for i in self.all_items_with_removed() if i.id.startswith("tt")}
+        return {i.id for i in self.all_items() if i.id.startswith("tt")}
 
     def is_empty(self) -> bool:
         return not any([self.loved, self.liked, self.watched, self.added])

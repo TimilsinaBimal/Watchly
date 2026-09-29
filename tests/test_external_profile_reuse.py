@@ -227,8 +227,7 @@ def test_external_items_get_real_scores_not_a_flat_constant():
 
     # A completed rewatch must keep its rewatch credit: the scorer drops the
     # rewatch bonus when flaggedWatched is set, so the converter must not set it.
-    assert rewatched.is_rewatched
-    assert not watched_once.is_rewatched
+    assert rewatched.score > watched_once.score
 
 
 def test_ratings_still_map_to_buckets():

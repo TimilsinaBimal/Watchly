@@ -65,7 +65,6 @@ def stremio_library_to_watch_history(library: LibraryCollection) -> WatchHistory
                     watch_count=max(times_watched, 1) if completion > 0 else 0,
                     completion=completion,
                     last_watched=last_watched,
-                    source="stremio",
                 )
             )
 
@@ -154,7 +153,6 @@ def watch_history_to_library_collection(history: WatchHistory) -> LibraryCollect
         liked=liked,
         watched=watched,
         added=[],
-        removed=[],
         source=history.source or "stremio",
     )
 
@@ -271,7 +269,6 @@ class StremioLibraryService:
             watched: list[StremioLibraryItem] = []
             loved: list[StremioLibraryItem] = []
             added: list[StremioLibraryItem] = []
-            removed: list[StremioLibraryItem] = []
             liked: list[StremioLibraryItem] = []
 
             for item in all_raw_items:
@@ -329,12 +326,10 @@ class StremioLibraryService:
             loved.sort(key=sort_by_recency, reverse=True)
             liked.sort(key=sort_by_recency, reverse=True)
             added.sort(key=sort_by_recency, reverse=True)
-            removed.sort(key=sort_by_recency, reverse=True)
 
             logger.info(
                 f"Found {len(all_raw_items)} library items. Processed {len(watched)} watched items,"
-                f" {len(loved)} loved items,{len(liked)} liked items, {len(added)} added items,"
-                f" {len(removed)} removed items"
+                f" {len(loved)} loved items,{len(liked)} liked items, {len(added)} added items"
             )
 
             return LibraryCollection(
@@ -342,7 +337,6 @@ class StremioLibraryService:
                 loved=loved,
                 liked=liked,
                 added=added,
-                removed=removed,
                 source="stremio",
             )
         except httpx.HTTPError:

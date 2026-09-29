@@ -134,7 +134,6 @@ class TraktService:
                     watch_count=entry.get("plays", 1),
                     completion=1.0,
                     last_watched=self._parse_date(entry.get("last_watched_at")),
-                    source="trakt",
                 )
             )
 
@@ -153,7 +152,6 @@ class TraktService:
                     watch_count=entry.get("plays", 1),
                     completion=1.0,
                     last_watched=self._parse_date(entry.get("last_watched_at")),
-                    source="trakt",
                 )
             )
 
@@ -174,7 +172,6 @@ class TraktService:
                     watch_count=0,
                     completion=0.0,
                     last_watched=self._parse_date(item.get("rated_at")),
-                    source="trakt",
                 )
             )
 

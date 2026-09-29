@@ -35,8 +35,6 @@ class ScoringService:
             item=item,
             score=score_data["final_score"],
             completion_rate=score_data["completion_rate"],
-            is_rewatched=score_data["is_rewatched"],
-            is_recent=score_data["is_recent"],
             source_type="loved" if item.is_loved else ("liked" if item.is_liked else "watched"),
         )
 
@@ -73,10 +71,7 @@ class ScoringService:
         #  - ratio_based: overallTimeWatched / duration measures how many full-length equivalents
         # If duration is missing we fall back to conservative estimators to avoid false positives.
         rewatch_score = 0.0
-        is_rewatched = False
         if state.timesWatched > 1 and not state.flaggedWatched:
-            is_rewatched = True
-
             # times-based component (each extra watch gives a boost)
             times_component = (state.timesWatched - 1) * 50
 
@@ -110,7 +105,6 @@ class ScoringService:
 
         # 3. Recency Score (Exponential Decay)
         recency_score = 0.0
-        is_recent = False
         if state.lastWatched:
             now = datetime.now(timezone.utc)
             # Ensure timezone awareness
@@ -124,8 +118,6 @@ class ScoringService:
             HALF_LIFE_DAYS = 60.0  # Days for score to halve
 
             recency_score = MAX_RECENCY_SCORE * math.exp(-days_since / HALF_LIFE_DAYS)
-            # Mark as recent if watched within last 30 days
-            is_recent = days_since < 30
 
         # 4. Explicit Rating Score
         rating_score = 0.0
@@ -151,6 +143,4 @@ class ScoringService:
         return {
             "final_score": min(max(final_score, 0), 100),
             "completion_rate": completion_rate,
-            "is_rewatched": is_rewatched,
-            "is_recent": is_recent,
         }

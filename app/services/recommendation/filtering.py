@@ -53,7 +53,7 @@ class RecommendationFiltering:
         if library_data is None:
             return set(), set()
 
-        all_items = library_data.all_items_with_removed()
+        all_items = library_data.all_items()
 
         imdb_ids = set()
         tmdb_ids = set()

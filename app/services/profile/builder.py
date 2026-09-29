@@ -73,10 +73,6 @@ class ProfileBuilder:
             "runtime_buckets": defaultdict(int),
         }
 
-        # Track weighted average for episodes (series only)
-        total_weighted_episodes = 0.0
-        total_weight_for_episodes = 0.0
-
         # Track processed items
         processed_ids = set()
 
@@ -100,23 +96,12 @@ class ProfileBuilder:
             # Accumulate scores (pure addition)
             self._accumulate_features(profile, features, evidence_weight, feature_frequencies)
 
-            # Track weighted episodes for average calculation (series only)
-            if profile.content_type == "series" or profile.content_type is None:
-                episode_count = features.get("episode_count")
-                if episode_count and isinstance(episode_count, (int, float)):
-                    total_weighted_episodes += float(episode_count) * evidence_weight
-                    total_weight_for_episodes += evidence_weight
-
         # Second pass: apply frequency multipliers if enabled
         if FREQUENCY_ENABLED:
             self._apply_frequency_multipliers(profile, feature_frequencies)
 
         # Apply caps
         self._apply_caps(profile)
-
-        # Calculate average episodes (series only)
-        if total_weight_for_episodes > 0:
-            profile.average_episodes = total_weighted_episodes / total_weight_for_episodes
 
         profile.processed_items = processed_ids
         profile.scoring_version = PROFILE_SCORING_VERSION
