@@ -16,6 +16,7 @@
 - A failed Stremio library fetch (unreachable, a rejected session, an empty response, or the loved/liked lookup failing) is no longer cached as the user's library, which left rows empty or missing loved titles until the cache was dropped.
 - A scheduled catalog refresh no longer writes back the credentials it started with, which could undo a settings save or a Trakt token rotation made while it ran, or recreate a token deleted in the meantime.
 - A stale row requested while a scheduled refresh runs is rebuilt after the refresh instead of alongside it, where it could be built from the old library and cached as fresh.
+- A stored API key or OAuth token that fails to encrypt is no longer saved in plain text; the save fails instead. A secret that no longer decrypts is dropped rather than sent to the provider as ciphertext.
 
 
 ## 1.14.0 - 2026-09-20

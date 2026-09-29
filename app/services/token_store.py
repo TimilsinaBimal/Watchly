@@ -1,19 +1,23 @@
 import base64
+import copy
 import json
 import secrets
 from typing import Any
 
 import redis.asyncio as redis
 from async_lru import alru_cache
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
 from app.core.config import settings
-from app.core.security import redact_token
+from app.core.security import _SECRET_NESTED_FIELDS, _SECRET_SETTINGS_FIELDS, redact_token
 from app.services.redis_service import redis_service
 from app.services.user_cache import user_cache
+
+# Every Fernet token starts with this (version byte 0x80, base64).
+FERNET_PREFIX = "gAAAAA"
 
 
 class TokenStore:
@@ -55,6 +59,18 @@ class TokenStore:
     def decrypt_token(self, enc: str) -> str:
         cipher = self._get_cipher()
         return cipher.decrypt(enc.encode("utf-8")).decode("utf-8")
+
+    def _encrypt_once(self, value: str) -> str:
+        return value if value.startswith(FERNET_PREFIX) else self.encrypt_token(value)
+
+    def _decrypt_if_encrypted(self, token: str, field: str, value: str) -> str | None:
+        if not value.startswith(FERNET_PREFIX):
+            return value
+        try:
+            return self.decrypt_token(value)
+        except InvalidToken:
+            logger.warning(f"[{redact_token(token)}] {field} did not decrypt; dropping it")
+            return None
 
     def _format_key(self, token: str) -> str:
         """Format Redis key from token."""
@@ -111,96 +127,23 @@ class TokenStore:
         self._ensure_secure_salt()
         key = self._format_key(token)
 
-        # Prepare data for storage (Plain JSON, no encryption needed)
-        storage_data = payload.copy()
+        # Deep: the settings dict below is encrypted in place, and callers often pass
+        # the shared dict get_user_data returned.
+        storage_data = copy.deepcopy(payload)
 
         if storage_data.get("authKey"):
             storage_data["authKey"] = self.encrypt_token(storage_data["authKey"])
-
-        # Securely store password if provided (primary login mode)
         if storage_data.get("password"):
-            try:
-                storage_data["password"] = self.encrypt_token(storage_data["password"])
-            except Exception as exc:
-                logger.error(f"Password encryption failed for {redact_token(token)}: {exc}")
-                # Do not store plaintext passwords
-                raise RuntimeError("PASSWORD_ENCRYPT_FAILED")
+            storage_data["password"] = self.encrypt_token(storage_data["password"])
 
-        # Encrypt poster_rating API key if present
-        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
-            poster_rating = storage_data["settings"].get("poster_rating")
-            if poster_rating and isinstance(poster_rating, dict) and poster_rating.get("api_key"):
-                try:
-                    # Only encrypt if it's not already encrypted (check if it's a valid encrypted string)
-                    api_key = poster_rating["api_key"]
-                    # Simple check: encrypted tokens are base64-like and longer
-                    # If it looks like plaintext, encrypt it
-                    # Fernet encrypted tokens start with "gAAAAAB"
-                    if not api_key.startswith("gAAAAAB"):
-                        poster_rating["api_key"] = self.encrypt_token(api_key)
-                except Exception as exc:
-                    logger.warning(f"Failed to encrypt poster_rating api_key for {redact_token(token)}: {exc}")
-
-        # Encrypt llm api_key if present
-        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
-            llm_config = storage_data["settings"].get("llm")
-            if llm_config and isinstance(llm_config, dict) and llm_config.get("api_key"):
-                try:
-                    if not llm_config["api_key"].startswith("gAAAAAB"):
-                        llm_config["api_key"] = self.encrypt_token(llm_config["api_key"])
-                except Exception as exc:
-                    logger.warning(f"Failed to encrypt llm api_key for {redact_token(token)}: {exc}")
-
-        # Encrypt simkl_api_key if present
-        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
-            simkl_api_key = storage_data["settings"].get("simkl_api_key")
-            if simkl_api_key:
-                try:
-                    if not simkl_api_key.startswith("gAAAAAB"):
-                        storage_data["settings"]["simkl_api_key"] = self.encrypt_token(simkl_api_key)
-                except Exception as exc:
-                    logger.warning(f"Failed to encrypt simkl_api_key for {redact_token(token)}: {exc}")
-
-        # Encrypt gemini_api_key if present
-        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
-            gemini_api_key = storage_data["settings"].get("gemini_api_key")
-            if gemini_api_key:
-                try:
-                    if not gemini_api_key.startswith("gAAAAAB"):
-                        storage_data["settings"]["gemini_api_key"] = self.encrypt_token(gemini_api_key)
-                except Exception as exc:
-                    logger.warning(f"Failed to encrypt gemini_api_key for {redact_token(token)}: {exc}")
-
-        # Encrypt tmdb_api_key if present
-        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
-            tmdb_api_key = storage_data["settings"].get("tmdb_api_key")
-            if tmdb_api_key:
-                try:
-                    if not tmdb_api_key.startswith("gAAAAAB"):
-                        storage_data["settings"]["tmdb_api_key"] = self.encrypt_token(tmdb_api_key)
-                except Exception as exc:
-                    logger.warning(f"Failed to encrypt tmdb_api_key for {redact_token(token)}: {exc}")
-
-        # Encrypt trakt tokens if present
-        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
-            for trakt_field in ("trakt_access_token", "trakt_refresh_token"):
-                value = storage_data["settings"].get(trakt_field)
-                if value:
-                    try:
-                        if not value.startswith("gAAAAAB"):
-                            storage_data["settings"][trakt_field] = self.encrypt_token(value)
-                    except Exception as exc:
-                        logger.warning(f"Failed to encrypt {trakt_field} for {redact_token(token)}: {exc}")
-
-        # Encrypt simkl_access_token if present
-        if storage_data.get("settings") and isinstance(storage_data["settings"], dict):
-            simkl_access_token = storage_data["settings"].get("simkl_access_token")
-            if simkl_access_token:
-                try:
-                    if not simkl_access_token.startswith("gAAAAAB"):
-                        storage_data["settings"]["simkl_access_token"] = self.encrypt_token(simkl_access_token)
-                except Exception as exc:
-                    logger.warning(f"Failed to encrypt simkl_access_token for {redact_token(token)}: {exc}")
+        user_settings = storage_data.get("settings") or {}
+        for field in _SECRET_SETTINGS_FIELDS:
+            if user_settings.get(field):
+                user_settings[field] = self._encrypt_once(user_settings[field])
+        for field in _SECRET_NESTED_FIELDS:
+            block = user_settings.get(field)
+            if block and block.get("api_key"):
+                block["api_key"] = self._encrypt_once(block["api_key"])
 
         json_str = json.dumps(storage_data)
 
@@ -331,84 +274,28 @@ class TokenStore:
         if updated_data:
             data = updated_data
 
-        # Decrypt fields individually; do not fail entire record on decryption errors
+        # Decrypt fields individually; do not fail the entire record on one bad field.
         if data.get("authKey"):
             try:
                 data["authKey"] = self.decrypt_token(data["authKey"])
-            except Exception as e:
-                logger.warning(f"Decryption failed for authKey associated with {redact_token(token)}: {e}")
-                # Leave as-is (legacy plaintext or previous failure)
-                pass
+            except InvalidToken:
+                # Legacy plaintext authKey from before encryption.
+                logger.warning(f"[{redact_token(token)}] authKey did not decrypt; using it as stored")
         if data.get("password"):
             try:
                 data["password"] = self.decrypt_token(data["password"])
-            except Exception as e:
-                logger.warning(f"Decryption failed for password associated with {redact_token(token)}: {e}")
-                # require re-login path when needed
+            except InvalidToken:
+                logger.warning(f"[{redact_token(token)}] password did not decrypt; a re-login is needed")
                 data["password"] = None
 
-        # Decrypt poster_rating API key if present
-        if data.get("settings") and isinstance(data["settings"], dict):
-            poster_rating = data["settings"].get("poster_rating")
-            if poster_rating and isinstance(poster_rating, dict) and poster_rating.get("api_key"):
-                try:
-                    if poster_rating["api_key"].startswith("gAAAAA"):
-                        poster_rating["api_key"] = self.decrypt_token(poster_rating["api_key"])
-                except Exception as e:
-                    logger.debug(
-                        f"Decryption failed for poster_rating api_key associated with {redact_token(token)}: {e}"
-                    )
-
-            llm_config = data["settings"].get("llm")
-            if llm_config and isinstance(llm_config, dict) and llm_config.get("api_key"):
-                try:
-                    if llm_config["api_key"].startswith("gAAAAA"):
-                        llm_config["api_key"] = self.decrypt_token(llm_config["api_key"])
-                except Exception as e:
-                    logger.debug(f"Decryption failed for llm api_key associated with {redact_token(token)}: {e}")
-
-            simkl_api_key = data["settings"].get("simkl_api_key")
-            if simkl_api_key:
-                try:
-                    if simkl_api_key.startswith("gAAAAA"):
-                        data["settings"]["simkl_api_key"] = self.decrypt_token(simkl_api_key)
-                except Exception as e:
-                    logger.debug(f"Decryption failed for simkl_api_key associated with {redact_token(token)}: {e}")
-
-            gemini_api_key = data["settings"].get("gemini_api_key")
-            if gemini_api_key:
-                try:
-                    if gemini_api_key.startswith("gAAAAA"):
-                        data["settings"]["gemini_api_key"] = self.decrypt_token(gemini_api_key)
-                except Exception as e:
-                    logger.debug(f"Decryption failed for gemini_api_key associated with {redact_token(token)}: {e}")
-
-            tmdb_api_key = data["settings"].get("tmdb_api_key")
-            if tmdb_api_key:
-                try:
-                    if tmdb_api_key.startswith("gAAAAA"):
-                        data["settings"]["tmdb_api_key"] = self.decrypt_token(tmdb_api_key)
-                except Exception as e:
-                    logger.debug(f"Decryption failed for tmdb_api_key associated with {redact_token(token)}: {e}")
-
-            # Decrypt trakt tokens
-            for trakt_field in ("trakt_access_token", "trakt_refresh_token"):
-                value = data["settings"].get(trakt_field)
-                if value:
-                    try:
-                        if value.startswith("gAAAAA"):
-                            data["settings"][trakt_field] = self.decrypt_token(value)
-                    except Exception as e:
-                        logger.debug(f"Decryption failed for {trakt_field} associated with {redact_token(token)}: {e}")
-
-            # Decrypt simkl_access_token
-            simkl_access_token = data["settings"].get("simkl_access_token")
-            if simkl_access_token:
-                try:
-                    if simkl_access_token.startswith("gAAAAA"):
-                        data["settings"]["simkl_access_token"] = self.decrypt_token(simkl_access_token)
-                except Exception as e:
-                    logger.debug(f"Decryption failed for simkl_access_token associated with {redact_token(token)}: {e}")
+        user_settings = data.get("settings") or {}
+        for field in _SECRET_SETTINGS_FIELDS:
+            if user_settings.get(field):
+                user_settings[field] = self._decrypt_if_encrypted(token, field, user_settings[field])
+        for field in _SECRET_NESTED_FIELDS:
+            block = user_settings.get(field)
+            if block and block.get("api_key"):
+                block["api_key"] = self._decrypt_if_encrypted(token, f"{field}.api_key", block["api_key"])
 
         return data
 
