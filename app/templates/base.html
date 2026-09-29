@@ -107,7 +107,11 @@
         ::selection { background: rgb(var(--accent) / 0.35); color: #ffffff; }
         input, textarea { caret-color: #ffffff; }
 
-        #announcement-content a { color: #e5e7eb; text-decoration: underline; }
+        /* Operator-supplied HTML (ANNOUNCEMENT_HTML): give its paragraphs and links a house style. */
+        #announcement-content > * + * { margin-top: 0.5rem; }
+        #announcement-content :is(p:first-child, strong, b) { color: #ffffff; }
+        #announcement-content p:first-child { font-weight: 600; }
+        #announcement-content a { color: rgb(var(--accent-soft)); text-decoration: underline; text-underline-offset: 3px; }
         #announcement-content a:hover { color: #ffffff; }
 
         /* Number input: hide native spinners; we provide custom +/- */
