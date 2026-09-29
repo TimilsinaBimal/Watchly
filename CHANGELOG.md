@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- "Watch it again" catalog: titles you've already watched, loved or liked, ranked by how well they fit your taste profile, with loved titles boosted. Anything watched in the last 6 months is held back. Off by default; enable it on the configure page (#139).
+
 ## 1.14.0 - 2026-09-20
 
 ### Added

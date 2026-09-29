@@ -19,6 +19,7 @@ from app.services.recommendation.all_based import AllBasedService
 from app.services.recommendation.catalog_utils import clean_meta, shuffle_data_if_needed
 from app.services.recommendation.creators import CreatorsService
 from app.services.recommendation.item_based import ItemBasedService
+from app.services.recommendation.rewatch import RewatchService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
 from app.services.redis_service import redis_service
@@ -244,6 +245,7 @@ class CatalogService:
             "watchly.creators",
             "watchly.all.loved",
             "watchly.liked.all",
+            "watchly.rewatch",
         ]
         # watchly.loved.* / watchly.watched.* kept for legacy stored manifests
         # — installed Stremio clients may still request these IDs after the
@@ -261,7 +263,7 @@ class CatalogService:
                 detail=(
                     "Invalid id. Supported: 'watchly.rec', 'watchly.creators', "
                     "'watchly.theme.<params>', 'watchly.item.<imdb>', "
-                    "'watchly.all.loved', 'watchly.liked.all'"
+                    "'watchly.all.loved', 'watchly.liked.all', 'watchly.rewatch'"
                 ),
             )
 
@@ -277,6 +279,7 @@ class CatalogService:
             "top_picks": TopPicksService(tmdb_service, user_settings),
             "creators": CreatorsService(tmdb_service, user_settings),
             "all_based": AllBasedService(tmdb_service, user_settings),
+            "rewatch": RewatchService(tmdb_service, user_settings),
         }
 
     async def _get_trending_fallback(
@@ -417,6 +420,17 @@ class CatalogService:
                 profile=profile,
             )
             logger.info(f"Found {len(recommendations)} recommendations based on all {item_type} items")
+
+        elif catalog_id == "watchly.rewatch":
+            # Already-watched titles are the whole point, so no watched exclusion here.
+            rewatch_service: RewatchService = services["rewatch"]
+            recommendations = await rewatch_service.get_rewatch_picks(
+                library_items=library_items,
+                content_type=content_type,
+                profile=profile,
+                limit=limit,
+            )
+            logger.debug(f"Found {len(recommendations)} rewatch picks for {content_type}")
 
         else:
             logger.warning(f"Unknown catalog ID: {catalog_id}")
