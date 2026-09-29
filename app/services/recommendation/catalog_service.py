@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from loguru import logger
 
 from app.core.config import settings
-from app.core.constants import DEFAULT_CATALOG_LIMIT
+from app.core.constants import CATALOG_REFRESH_LOCK_KEY, DEFAULT_CATALOG_LIMIT
 from app.core.security import redact_token
 from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.models.library import LibraryCollection
@@ -28,7 +28,6 @@ from app.services.token_store import token_store
 from app.services.user_cache import user_cache
 from app.services.warmup import warmup_service
 
-REFRESH_LOCK_PREFIX = "watchly:refreshlock:"
 # Long enough to cover a slow rebuild, short enough that a worker killed mid-refresh
 # doesn't keep a row stale for long.
 REFRESH_LOCK_TTL_SECONDS = 600
@@ -135,7 +134,7 @@ class CatalogService:
         enabled row at once: without it, one home screen open would kick off a full
         rebuild per row.
         """
-        lock_key = f"{REFRESH_LOCK_PREFIX}{token}:{content_type}:{catalog_id}"
+        lock_key = CATALOG_REFRESH_LOCK_KEY.format(token=token, type=content_type, id=catalog_id)
         if not await redis_service.set_nx(lock_key, "1", REFRESH_LOCK_TTL_SECONDS):
             logger.debug(f"[{redact_token(token)}] Refresh already running for {content_type}/{catalog_id}")
             return

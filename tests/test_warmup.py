@@ -71,7 +71,7 @@ def stub_work(monkeypatch):
         async def close(self):
             pass
 
-    monkeypatch.setattr("app.services.manifest.manifest_service", FakeManifest())
+    monkeypatch.setattr("app.services.warmup.manifest_service", FakeManifest())
     monkeypatch.setattr("app.services.recommendation.catalog_service.catalog_service", FakeCatalogs())
     monkeypatch.setattr(warmup_module, "StremioBundle", FakeBundle)
     return steps
@@ -131,7 +131,7 @@ def test_failure_reports_error_and_frees_the_lock(fake_redis, stub_work, monkeyp
         async def cache_library_and_profiles(self, *args, **kwargs):
             raise RuntimeError("trakt is down")
 
-    monkeypatch.setattr("app.services.manifest.manifest_service", Boom())
+    monkeypatch.setattr("app.services.warmup.manifest_service", Boom())
 
     asyncio.run(warmup_service.prime(TOKEN, "authkey", settings()))
 
@@ -158,14 +158,12 @@ def test_is_warming_tracks_the_lock(fake_redis, stub_work):
             async def get_manifest_for_token(self, token, force_rebuild=False):
                 return {}
 
-        import app.services.manifest as manifest_mod
-
-        original = manifest_mod.manifest_service
-        manifest_mod.manifest_service = Watcher()
+        original = warmup_module.manifest_service
+        warmup_module.manifest_service = Watcher()
         try:
             await warmup_service.prime(TOKEN, None, settings())
         finally:
-            manifest_mod.manifest_service = original
+            warmup_module.manifest_service = original
         return state["warming"]
 
     assert asyncio.run(check_during_warm()) is True

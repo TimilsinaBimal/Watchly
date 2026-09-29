@@ -5,13 +5,12 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.constants import WARM_LOCK_KEY, WARM_STATUS_KEY
 from app.core.security import redact_token
 from app.core.settings import UserSettings
+from app.services.manifest import manifest_service
 from app.services.redis_service import redis_service
 from app.services.stremio.service import StremioBundle
-
-WARM_STATUS_KEY = "watchly:warm:{token}"
-WARM_LOCK_KEY = "watchly:warmlock:{token}"
 
 # Long enough for a big library, short enough that a process killed mid-warm
 # doesn't leave the account looking busy for long.
@@ -20,13 +19,8 @@ STATUS_TTL_SECONDS = 3600
 
 
 class WarmupService:
-    """Builds a new account's caches off the request path.
-
-    Saving a configuration used to await the whole thing — an external library
-    fetch plus both profile builds — before the browser saw a manifest URL. The
-    endpoint now enqueues prime() and returns, and the configure page follows
-    along via get_status().
-    """
+    """Builds a new account's caches off the request path; the configure page follows
+    along via get_status()."""
 
     def __init__(self) -> None:
         # Retained so the task isn't garbage collected mid-flight, and so crashes
@@ -64,8 +58,6 @@ class WarmupService:
 
         started = time.monotonic()
         try:
-            from app.services.manifest import manifest_service
-
             await self._set_status(token, "building_profile")
             bundle = StremioBundle()
             try:
@@ -88,8 +80,8 @@ class WarmupService:
 
             await self._set_status(token, "ready")
             logger.info(f"[{redact_token(token)}] Warm-up finished in {time.monotonic() - started:.1f}s")
-        except Exception as e:
-            logger.exception(f"[{redact_token(token)}] Warm-up failed after {time.monotonic() - started:.1f}s: {e}")
+        except Exception:
+            logger.exception(f"[{redact_token(token)}] Warm-up failed after {time.monotonic() - started:.1f}s")
             await self._set_status(token, "error", "We'll finish this when you first open the addon")
         finally:
             await redis_service.delete(lock_key)
@@ -100,28 +92,23 @@ class WarmupService:
         Only these two: every other row still builds on first request, but with the
         library and profile already cached it is a much cheaper build.
         """
+        # Local: catalog_service imports warmup_service at module top.
         from app.services.recommendation.catalog_service import catalog_service
 
         async def warm(content_type: str) -> None:
             try:
                 await catalog_service.get_catalog(token, content_type, "watchly.rec")
             except Exception as e:
-                logger.warning(f"[{redact_token(token)}] Failed to warm {content_type} top picks: {e}")
+                logger.warning(f"[{redact_token(token)}] Failed to warm {content_type} top picks: {type(e).__name__}")
 
         await asyncio.gather(warm("movie"), warm("series"))
 
     async def is_warming(self, token: str) -> bool:
-        """Whether a warm-up currently holds the lock for this account."""
         return await redis_service.exists(WARM_LOCK_KEY.format(token=token))
 
     async def get_status(self, token: str) -> dict[str, Any]:
         raw = await redis_service.get(WARM_STATUS_KEY.format(token=token))
-        if not raw:
-            return {"state": "unknown"}
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            return {"state": "unknown"}
+        return json.loads(raw) if raw else {"state": "unknown"}
 
     async def _set_status(self, token: str, state: str, detail: str | None = None) -> None:
         payload = {"state": state, "updated_at": int(time.time())}

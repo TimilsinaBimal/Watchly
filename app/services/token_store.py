@@ -2,6 +2,7 @@ import base64
 import copy
 import json
 import secrets
+from functools import lru_cache
 from typing import Any
 
 import redis.asyncio as redis
@@ -12,6 +13,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
 from app.core.config import settings
+from app.core.constants import IDENTITY_KEY, TOKEN_ALIAS_KEY
 from app.core.security import _SECRET_NESTED_FIELDS, _SECRET_SETTINGS_FIELDS, redact_token
 from app.services.redis_service import redis_service
 from app.services.user_cache import user_cache
@@ -20,14 +22,23 @@ from app.services.user_cache import user_cache
 FERNET_PREFIX = "gAAAAA"
 
 
+# Keyed on the salt so a changed TOKEN_SALT (tests patch it) derives a new key; the
+# 200k-iteration PBKDF2 is ~55 ms of blocking CPU, so it runs once per salt.
+@lru_cache(maxsize=1)
+def _cipher_for(token_salt: str) -> Fernet:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"x7FDf9kypzQ1LmR32b8hWv49sKq2Pd8T",
+        iterations=200_000,
+    )
+    return Fernet(base64.urlsafe_b64encode(kdf.derive(token_salt.encode("utf-8"))))
+
+
 class TokenStore:
     """Redis-backed store for user credentials and auth tokens."""
 
     KEY_PREFIX = settings.REDIS_TOKEN_KEY
-    # provider identity (stremio user id / trakt slug / simkl account id) -> account token
-    IDENTITY_KEY_PREFIX = "watchly:identity:"
-    # absorbed account token -> surviving account token (written on account merge)
-    ALIAS_KEY_PREFIX = "watchly:token_alias:"
 
     def __init__(self) -> None:
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
@@ -40,25 +51,11 @@ class TokenStore:
             logger.error("TOKEN_SALT is unset or using the insecure default.")
             raise RuntimeError("TOKEN_SALT must be set to a non-default value before storing credentials.")
 
-    def _get_cipher(self) -> Fernet:
-        salt = b"x7FDf9kypzQ1LmR32b8hWv49sKq2Pd8T"
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=200_000,
-        )
-
-        key = base64.urlsafe_b64encode(kdf.derive(settings.TOKEN_SALT.encode("utf-8")))
-        return Fernet(key)
-
     def encrypt_token(self, token: str) -> str:
-        cipher = self._get_cipher()
-        return cipher.encrypt(token.encode("utf-8")).decode("utf-8")
+        return _cipher_for(settings.TOKEN_SALT).encrypt(token.encode("utf-8")).decode("utf-8")
 
     def decrypt_token(self, enc: str) -> str:
-        cipher = self._get_cipher()
-        return cipher.decrypt(enc.encode("utf-8")).decode("utf-8")
+        return _cipher_for(settings.TOKEN_SALT).decrypt(enc.encode("utf-8")).decode("utf-8")
 
     def _encrypt_once(self, value: str) -> str:
         return value if value.startswith(FERNET_PREFIX) else self.encrypt_token(value)
@@ -73,7 +70,6 @@ class TokenStore:
             return None
 
     def _format_key(self, token: str) -> str:
-        """Format Redis key from token."""
         return f"{self.KEY_PREFIX}{token}"
 
     @staticmethod
@@ -82,7 +78,7 @@ class TokenStore:
         return secrets.token_urlsafe(16)
 
     def _identity_key(self, provider: str, provider_user_id: str) -> str:
-        return f"{self.IDENTITY_KEY_PREFIX}{provider}:{provider_user_id}"
+        return IDENTITY_KEY.format(provider=provider, provider_user_id=provider_user_id)
 
     async def _set_with_token_ttl(self, key: str, value: str) -> None:
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
@@ -107,7 +103,7 @@ class TokenStore:
         again, so they stay short.
         """
         for _ in range(5):
-            target = await redis_service.get(f"{self.ALIAS_KEY_PREFIX}{token}")
+            target = await redis_service.get(TOKEN_ALIAS_KEY.format(token=token))
             if not target:
                 break
             token = target
@@ -120,7 +116,7 @@ class TokenStore:
         requests never hit a window where neither resolves. Identity index
         entries still pointing at the absorbed token resolve through the alias.
         """
-        await self._set_with_token_ttl(f"{self.ALIAS_KEY_PREFIX}{absorbed_token}", surviving_token)
+        await self._set_with_token_ttl(TOKEN_ALIAS_KEY.format(token=absorbed_token), surviving_token)
         await self.delete_token(absorbed_token)
 
     async def store_user_data(self, token: str, payload: dict[str, Any]) -> str:
@@ -154,22 +150,8 @@ class TokenStore:
 
         # Settings changes alter the catalog list, so a cached manifest built from
         # the old settings must not survive the write.
-        try:
-            await user_cache.invalidate_manifest(token)
-        except Exception as e:
-            logger.warning(f"Failed to invalidate manifest for {redact_token(token)}: {e}")
-
-        # Invalidate async LRU cache for fresh reads on subsequent requests
-        try:
-            self._get_user_data_cached.cache_invalidate(token)
-        except KeyError:
-            pass
-        except Exception as e:
-            logger.warning(f"Targeted cache invalidation failed: {e}. Falling back to clearing cache.")
-            try:
-                self._get_user_data_cached.cache_clear()
-            except Exception as e_clear:
-                logger.error(f"Error while clearing cache: {e_clear}")
+        await user_cache.invalidate_manifest(token)
+        self._get_user_data_cached.cache_invalidate(token)
 
         return token
 
@@ -226,11 +208,7 @@ class TokenStore:
                 else:
                     await redis_service.set(redis_key, json.dumps(data))
 
-                # Invalidate cache so next read gets the migrated data
-                try:
-                    self._get_user_data_cached.cache_invalidate(token)
-                except Exception:
-                    pass
+                self._get_user_data_cached.cache_invalidate(token)
 
                 logger.info(
                     "[MIGRATION] Successfully migrated and encrypted poster_rating " f"format for {redact_token(token)}"
@@ -247,10 +225,7 @@ class TokenStore:
         if data is None:
             # Don't let a missing-token result get pinned in the per-process cache;
             # otherwise a token created on another worker would 401 here for hours.
-            try:
-                self._get_user_data_cached.cache_invalidate(token)
-            except Exception:
-                pass
+            self._get_user_data_cached.cache_invalidate(token)
         return data
 
     # 5-minute TTL: keeps reads cheap under bursty traffic but bounds the window
@@ -258,7 +233,7 @@ class TokenStore:
     # observe the local cache invalidation (e.g. multi-worker deployments).
     @alru_cache(maxsize=2000, ttl=300)
     async def _get_user_data_cached(self, token: str) -> dict[str, Any] | None:
-        logger.debug(f"[REDIS] Cache miss. Fetching data from redis for {token}")
+        logger.debug(f"[{redact_token(token)}] User data cache miss")
         key = self._format_key(token)
         data_raw = await redis_service.get(key)
 
@@ -301,19 +276,8 @@ class TokenStore:
 
     async def delete_token(self, token: str) -> None:
         await redis_service.delete(self._format_key(token))
-        # we also need to delete the cached library items, profiles and watched sets
-        try:
-            await user_cache.invalidate_all_user_data(token)
-        except Exception as e:
-            logger.warning(f"Failed to invalidate all user data for {redact_token(token)}: {e}")
-
-        # Invalidate async LRU cache so future reads reflect deletion
-        try:
-            self._get_user_data_cached.cache_invalidate(token)
-        except KeyError:
-            pass
-        except Exception as e:
-            logger.warning(f"Failed to invalidate user data cache during token deletion: {e}")
+        await user_cache.invalidate_all_user_data(token)
+        self._get_user_data_cached.cache_invalidate(token)
 
     # The configure page shows this on every load, and a SCAN walks the whole
     # keyspace. Per process is fine: it's a display number. token_store is a

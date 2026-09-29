@@ -20,6 +20,14 @@ LIBRARY_ITEMS_KEY: str = "watchly:library_items:{token}"
 PROFILE_KEY: str = "watchly:profile:{token}:{content_type}"
 WATCHED_SETS_KEY: str = "watchly:watched_sets:{token}:{content_type}"
 CATALOG_KEY: str = "watchly:catalog:{token}:{type}:{id}"
+CATALOG_REFRESH_LOCK_KEY: str = "watchly:refreshlock:{token}:{type}:{id}"
+ROW_MAP_KEY: str = "watchly:rowmap:v1:{token}:{content_type}"
+LIBRARY_BUCKETS_KEY: str = "watchly:library_buckets:v1:{token}:{content_type}"
+IDENTITY_KEY: str = "watchly:identity:{provider}:{provider_user_id}"
+# Absorbed account token -> surviving account token, written on account merge.
+TOKEN_ALIAS_KEY: str = "watchly:token_alias:{token}"
+WARM_STATUS_KEY: str = "watchly:warm:{token}"
+WARM_LOCK_KEY: str = "watchly:warmlock:{token}"
 # Versioned because the manifest embeds the addon version: a deploy orphans the old
 # entries rather than serving a stale version string until the TTL runs out.
 MANIFEST_KEY: str = "watchly:manifest:{version}:{token}"

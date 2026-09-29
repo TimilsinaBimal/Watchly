@@ -9,8 +9,6 @@ from app.core.config import settings
 class RedisService:
     def __init__(self) -> None:
         self._client: redis.Redis | None = None
-        if not settings.REDIS_URL:
-            logger.warning("REDIS_URL is not set. Redis operations will fail until configured.")
 
     async def get_client(self) -> redis.Redis:
         if self._client is None:
@@ -21,23 +19,13 @@ class RedisService:
                 encoding="utf-8",
                 socket_connect_timeout=5,
                 socket_timeout=5,
-                max_connections=getattr(settings, "REDIS_MAX_CONNECTIONS", 100),
+                max_connections=settings.REDIS_MAX_CONNECTIONS,
                 health_check_interval=30,
                 socket_keepalive=True,
             )
         return self._client
 
     async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
-        """Store a value in Redis with optional TTL.
-
-        Args:
-            key: The key to store the value under
-            value: The value to store (will be converted to string)
-            ttl: Optional time-to-live in seconds. If None, key never expires.
-
-        Returns:
-            True if successful, False otherwise
-        """
         try:
             client = await self.get_client()
             str_value = str(value)
@@ -47,41 +35,25 @@ class RedisService:
                 result = await client.set(key, str_value)
             return bool(result)
         except (redis.RedisError, OSError) as exc:
-            logger.error(f"Failed to set key '{key}' in Redis: {exc}")
+            logger.error(f"Redis set failed: {exc}")
             return False
 
     async def get(self, key: str) -> str | None:
-        """Get a value from Redis by key.
-
-        Args:
-            key: The key to retrieve
-
-        Returns:
-            The value as a string, or None if key doesn't exist or error occurred
-        """
         try:
             client = await self.get_client()
             value = await client.get(key)
             return value
         except (redis.RedisError, OSError) as exc:
-            logger.error(f"Failed to get key '{key}' from Redis: {exc}")
+            logger.error(f"Redis get failed: {exc}")
             return None
 
     async def delete(self, key: str) -> bool:
-        """Delete a key from Redis.
-
-        Args:
-            key: The key to delete
-
-        Returns:
-            True if key was deleted, False otherwise
-        """
         try:
             client = await self.get_client()
             result = await client.delete(key)
             return bool(result)
         except (redis.RedisError, OSError) as exc:
-            logger.error(f"Failed to delete key '{key}' from Redis: {exc}")
+            logger.error(f"Redis delete failed: {exc}")
             return False
 
     async def getex(self, key: str, ttl: int) -> str | None:
@@ -90,35 +62,19 @@ class RedisService:
             client = await self.get_client()
             return await client.getex(key, ex=ttl)
         except (redis.RedisError, OSError) as exc:
-            logger.error(f"Failed to getex key '{key}' from Redis: {exc}")
+            logger.error(f"Redis getex failed: {exc}")
             return None
 
     async def exists(self, key: str) -> bool:
-        """Check if a key exists in Redis.
-
-        Args:
-            key: The key to check
-
-        Returns:
-            True if key exists, False otherwise
-        """
         try:
             client = await self.get_client()
             result = await client.exists(key)
             return bool(result)
         except (redis.RedisError, OSError) as exc:
-            logger.error(f"Failed to check existence of key '{key}' in Redis: {exc}")
+            logger.error(f"Redis exists failed: {exc}")
             return False
 
     async def delete_by_pattern(self, pattern: str) -> int:
-        """Delete all keys matching a pattern.
-
-        Args:
-            pattern: Redis key pattern (e.g., "watchly:catalog:token123:*")
-
-        Returns:
-            Number of keys deleted
-        """
         try:
             client = await self.get_client()
             deleted_count = 0
@@ -132,33 +88,20 @@ class RedisService:
                 deleted_count += await client.delete(*keys_to_delete)
             return deleted_count
         except (redis.RedisError, OSError) as exc:
-            logger.error(f"Failed to delete keys matching pattern '{pattern}' in Redis: {exc}")
+            logger.error(f"Redis delete_by_pattern failed: {exc}")
             return 0
 
     async def set_nx(self, key: str, value: Any, ttl: int | None = None) -> bool:
-        """
-        Set key only if it doesn't exist (Distributed Lock).
-
-        Args:
-            key: The key to set
-            value: The value to store
-            ttl: Optional time-to-live in seconds
-
-        Returns:
-            True if key was set, False if it already existed
-        """
         try:
             client = await self.get_client()
             str_value = str(value)
-            # nx=True ensures we only set if not exists
             result = await client.set(key, str_value, ex=ttl, nx=True)
             return bool(result)
         except (redis.RedisError, OSError) as exc:
-            logger.error(f"Failed to set_nx key '{key}' in Redis: {exc}")
+            logger.error(f"Redis set_nx failed: {exc}")
             return False
 
     async def close(self) -> None:
-        """Close and disconnect the Redis client"""
         if self._client is not None:
             try:
                 await self._client.close()
