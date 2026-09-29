@@ -85,15 +85,13 @@ class UserCacheService:
         manifest rebuild rewrites the map.
         """
         key = self._row_map_key(token, content_type)
-        cached = await redis_service.get(key)
+        cached = await redis_service.getex(key, USER_CACHE_TTL_SECONDS)
         if not cached:
             return {}
         try:
-            mapping = json.loads(cache_codec.decode(cached))
+            return json.loads(cache_codec.decode(cached))
         except json.JSONDecodeError:
             return {}
-        await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
-        return mapping
 
     async def set_row_map(self, token: str, content_type: str, mapping: dict[str, str]) -> None:
         """Record what each slot currently points at.
@@ -118,13 +116,11 @@ class UserCacheService:
     async def get_library_items(self, token: str) -> LibraryCollection | None:
         """Get cached library items for a user."""
         key = self._library_items_key(token)
-        cached = await redis_service.get(key)
+        cached = await redis_service.getex(key, USER_CACHE_TTL_SECONDS)
 
         if cached:
             try:
                 data = json.loads(cache_codec.decode(cached))
-                # Refresh TTL on read so active users' caches stay warm.
-                await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
                 return LibraryCollection.model_validate(data)
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"Failed to decode cached library items for {redact_token(token)}...: {e}")
@@ -167,7 +163,7 @@ class UserCacheService:
             TasteProfile instance, or None if not cached or built by older scoring
         """
         key = self._profile_key(token, content_type)
-        cached = await redis_service.get(key)
+        cached = await redis_service.getex(key, USER_CACHE_TTL_SECONDS)
 
         if cached:
             try:
@@ -187,7 +183,6 @@ class UserCacheService:
                 await redis_service.delete(key)
                 return None
 
-            await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
             return profile
 
         return None
@@ -231,14 +226,13 @@ class UserCacheService:
             Tuple of (watched_tmdb set, watched_imdb set), or None if not cached
         """
         key = self._watched_sets_key(token, content_type)
-        cached = await redis_service.get(key)
+        cached = await redis_service.getex(key, USER_CACHE_TTL_SECONDS)
 
         if cached:
             try:
                 data = json.loads(cache_codec.decode(cached))
                 watched_tmdb = set(data.get("watched_tmdb", []))
                 watched_imdb = set(data.get("watched_imdb", []))
-                await redis_service.expire(key, USER_CACHE_TTL_SECONDS)
                 return (watched_tmdb, watched_imdb)
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 logger.warning(f"Failed to decode cached watched sets for {redact_token(token)}.../{content_type}: {e}")

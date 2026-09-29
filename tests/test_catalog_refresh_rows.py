@@ -46,8 +46,8 @@ class FakeRedis:
     async def exists(self, key: str):
         return key in self.data
 
-    async def expire(self, key: str, ttl: int):
-        return True
+    async def getex(self, key: str, ttl: int):
+        return self.data.get(key)
 
     async def delete_by_pattern(self, pattern: str):
         doomed = [key for key in self.data if fnmatch.fnmatchcase(key, pattern)]
@@ -78,7 +78,7 @@ def due_refresh(monkeypatch):
     library fetch, the profile build, the manifest assembly and each row's
     recommendations are stubbed; the cache, get_catalog and the updater are real."""
     fake = FakeRedis()
-    for name in ("get", "set", "set_nx", "delete", "exists", "expire", "delete_by_pattern"):
+    for name in ("get", "set", "set_nx", "delete", "exists", "getex", "delete_by_pattern"):
         monkeypatch.setattr(f"app.services.user_cache.redis_service.{name}", getattr(fake, name))
     monkeypatch.setattr("app.services.token_store.settings.TOKEN_SALT", "unit-test-salt")
     token_store._get_user_data_cached.cache_clear()

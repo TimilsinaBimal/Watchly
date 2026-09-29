@@ -27,8 +27,8 @@ class FakeRedis:
     async def delete(self, key: str):
         self.data.pop(key, None)
 
-    async def expire(self, key: str, ttl: int):
-        return True
+    async def getex(self, key: str, ttl: int):
+        return self.data.get(key)
 
     async def delete_by_pattern(self, pattern: str):
         return 0
@@ -37,7 +37,7 @@ class FakeRedis:
 @pytest.fixture
 def fake_redis(monkeypatch):
     fake = FakeRedis()
-    for name in ("get", "set", "delete", "expire", "delete_by_pattern"):
+    for name in ("get", "set", "delete", "getex", "delete_by_pattern"):
         monkeypatch.setattr(f"app.services.user_cache.redis_service.{name}", getattr(fake, name))
     return fake
 

@@ -84,19 +84,14 @@ class RedisService:
             logger.error(f"Failed to delete key '{key}' from Redis: {exc}")
             return False
 
-    async def expire(self, key: str, ttl: int) -> bool:
-        """Refresh the TTL on an existing key. Used to keep active users'
-        caches alive without rewriting the value on every read.
-
-        Returns True if the key existed and the TTL was set, False otherwise.
-        """
+    async def getex(self, key: str, ttl: int) -> str | None:
+        """Get a value and refresh its TTL in one round trip."""
         try:
             client = await self.get_client()
-            result = await client.expire(key, ttl)
-            return bool(result)
+            return await client.getex(key, ex=ttl)
         except (redis.RedisError, OSError) as exc:
-            logger.error(f"Failed to set TTL on key '{key}' in Redis: {exc}")
-            return False
+            logger.error(f"Failed to getex key '{key}' from Redis: {exc}")
+            return None
 
     async def exists(self, key: str) -> bool:
         """Check if a key exists in Redis.
