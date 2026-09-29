@@ -170,10 +170,6 @@ class TraktService:
         # BaseClient returns dict for JSON objects; Trakt list endpoints return
         # arrays which BaseClient parses to list — but its type is annotated as
         # dict. Accept either shape defensively.
-        if isinstance(result, list):
-            return result
-        if isinstance(result, dict) and not result:
-            return []
         return result if isinstance(result, list) else []
 
     @staticmethod
