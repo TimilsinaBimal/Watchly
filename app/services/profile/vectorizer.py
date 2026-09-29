@@ -13,7 +13,7 @@ from app.services.profile.constants import (
     RUNTIME_BUCKET_SHORT_MAX_MOVIE,
     RUNTIME_BUCKET_SHORT_MAX_SERIES,
 )
-from app.services.recommendation.utils import resolve_tmdb_id, year_to_era
+from app.services.recommendation.utils import extract_country_codes, resolve_tmdb_id, year_to_era
 from app.services.tmdb.service import TMDBService
 
 
@@ -49,13 +49,6 @@ class ProfileVectorizer:
             if actor_id:
                 cast.append(actor_id)
 
-        countries = []
-        production_countries = metadata.get("production_countries", []) or []
-        for country in production_countries:
-            country_code = country.get("iso_3166_1") if isinstance(country, dict) else country
-            if country_code:
-                countries.append(country_code)
-
         release_date = metadata.get("release_date") or metadata.get("first_air_date")
         year = None
         if release_date:
@@ -68,7 +61,7 @@ class ProfileVectorizer:
             "genres": genres,
             "keywords": keywords,
             "cast": cast,
-            "countries": countries,
+            "countries": extract_country_codes(metadata),
             "year": year,
         }
 

@@ -8,7 +8,7 @@ from app.services.profile.constants import (
     FEATURE_WEIGHT_GENRE,
     FEATURE_WEIGHT_KEYWORD,
 )
-from app.services.recommendation.utils import year_to_era
+from app.services.recommendation.utils import extract_country_codes, year_to_era
 
 
 class ProfileScorer:
@@ -81,7 +81,7 @@ class ProfileScorer:
                 pass
 
         # Country score (weighted average of matching countries)
-        item_countries = ProfileScorer._extract_country_codes(item_metadata)
+        item_countries = extract_country_codes(item_metadata)
         if item_countries:
             country_matches = [normalized["countries"].get(cc, 0.0) for cc in item_countries]
             country_score = sum(country_matches) / len(country_matches) if country_matches else 0.0
@@ -118,17 +118,3 @@ class ProfileScorer:
                 if director_id:
                     director_ids.append(director_id)
         return director_ids
-
-    @staticmethod
-    def _extract_country_codes(item_metadata: dict[str, Any]) -> list[str]:
-        """Extract country codes from item metadata."""
-        countries = []
-        production_countries = item_metadata.get("production_countries", []) or []
-        for country in production_countries:
-            if isinstance(country, dict):
-                country_code = country.get("iso_3166_1")
-            else:
-                country_code = country
-            if country_code:
-                countries.append(country_code)
-        return countries

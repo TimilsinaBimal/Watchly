@@ -22,6 +22,15 @@ def year_to_era(year: int) -> str:
         return "2020s"
 
 
+def extract_country_codes(metadata: dict[str, Any]) -> list[str]:
+    countries = []
+    for country in metadata.get("production_countries", []) or []:
+        country_code = country.get("iso_3166_1") if isinstance(country, dict) else country
+        if country_code:
+            countries.append(country_code)
+    return countries
+
+
 async def resolve_tmdb_id(item_id: str, tmdb_service: Any) -> int | None:
     """Resolve item ID to TMDB ID.
 
