@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- "Watch it again" catalog: titles you've already watched, loved or liked, ranked by how well they fit your taste profile, with loved titles boosted. Anything watched in the last 6 months is held back. Off by default; enable it on the configure page (#139).
+
 ### Changed
 
 - After the scheduled catalog refresh, the home-screen rows are rebuilt straight away, so the next home screen doesn't wait on rows the refresh dropped.
@@ -12,6 +16,7 @@
 - A failed Stremio library fetch (unreachable, a rejected session, an empty response, or the loved/liked lookup failing) is no longer cached as the user's library, which left rows empty or missing loved titles until the cache was dropped.
 - A scheduled catalog refresh no longer writes back the credentials it started with, which could undo a settings save or a Trakt token rotation made while it ran, or recreate a token deleted in the meantime.
 - A stale row requested while a scheduled refresh runs is rebuilt after the refresh instead of alongside it, where it could be built from the old library and cached as fresh.
+
 
 ## 1.14.0 - 2026-09-20
 
