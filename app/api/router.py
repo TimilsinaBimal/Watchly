@@ -1,10 +1,8 @@
 from fastapi import APIRouter
 
-from .endpoints.announcement import router as announcement_router
 from .endpoints.catalogs import router as catalogs_router
 from .endpoints.dashboard import router as dashboard_router
 from .endpoints.health import router as health_router
-from .endpoints.languages import router as language_router
 from .endpoints.manifest import router as manifest_router
 from .endpoints.oauth import router as oauth_router
 from .endpoints.stats import router as stats_router
@@ -15,18 +13,10 @@ from .endpoints.validation import router as validation_router
 
 api_router = APIRouter()
 
-
-@api_router.get("/")
-async def root():
-    return {"message": "Watchly API is running"}
-
-
 api_router.include_router(manifest_router)
 api_router.include_router(catalogs_router)
 api_router.include_router(tokens_router)
 api_router.include_router(health_router)
-api_router.include_router(language_router)
-api_router.include_router(announcement_router)
 api_router.include_router(stats_router)
 api_router.include_router(stremio_profiles_router)
 api_router.include_router(validation_router)

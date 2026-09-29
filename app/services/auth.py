@@ -399,7 +399,6 @@ class AuthService:
             sorting_order=payload.sorting_order,
             simkl_api_key=unmasked("simkl_api_key", payload.simkl_api_key),
             llm=self._unmask_nested_key(payload.llm, self._stored_llm(stored)),
-            gemini_api_key=unmasked("gemini_api_key", payload.gemini_api_key),
             tmdb_api_key=unmasked("tmdb_api_key", payload.tmdb_api_key),
             trakt_access_token=unmasked("trakt_access_token", payload.trakt_access_token),
             trakt_refresh_token=unmasked("trakt_refresh_token", payload.trakt_refresh_token),

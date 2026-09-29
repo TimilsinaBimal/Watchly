@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import json
 
 import httpx
@@ -403,11 +404,13 @@ def test_masked_legacy_gemini_key_migrates_into_llm(monkeypatch):
     """The page shows a legacy gemini_api_key in the LLM fields, so it comes back masked."""
     setup_fakes(monkeypatch)
     service = AuthService()
-    asyncio.run(
-        service.create_user_token(
-            TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt", gemini_api_key="legacy-gemini")
-        )
+    response, _, _ = asyncio.run(
+        service.create_user_token(TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt"))
     )
+    record = copy.deepcopy(asyncio.run(token_store.get_user_data(response.token)))
+    record["settings"]["gemini_api_key"] = "legacy-gemini"
+    asyncio.run(token_store.store_user_data(response.token, record))
+    token_store._get_user_data_cached.cache_clear()
 
     masked = TokenRequest(
         trakt_access_token="t-abc",
