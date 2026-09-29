@@ -4,17 +4,21 @@ from typing import Any
 from loguru import logger
 
 from app.core.constants import DEFAULT_CONCURRENCY_LIMIT
+from app.core.settings import UserSettings
 from app.services.poster_ratings.factory import PosterProvider, poster_ratings_factory
+from app.services.tmdb.service import TMDBService
 
 
 class RecommendationMetadata:
-    """
-    Handles fetching and formatting metadata for Stremio.
-    """
+    """Handles fetching and formatting metadata for Stremio."""
 
     @classmethod
-    async def format_for_stremio(
-        cls, details: dict[str, Any], media_type: str, user_settings: Any = None, logo_url: str | None = None
+    def format_for_stremio(
+        cls,
+        details: dict[str, Any],
+        media_type: str,
+        user_settings: UserSettings | None = None,
+        logo_url: str | None = None,
     ) -> dict[str, Any] | None:
         """Format TMDB details into Stremio metadata object."""
         external_ids = details.get("external_ids", {})
@@ -32,7 +36,6 @@ class RecommendationMetadata:
         if not title:
             return None
 
-        # Base Fields
         genres_full = details.get("genres", []) or []
         release_date = details.get("release_date") or details.get("first_air_date") or ""
 
@@ -58,7 +61,6 @@ class RecommendationMetadata:
         if logo_url:
             meta_data["logo"] = logo_url
 
-        # Extensions
         runtime_str = cls._extract_runtime_string(details)
         if runtime_str:
             meta_data["runtime"] = runtime_str
@@ -72,12 +74,12 @@ class RecommendationMetadata:
         return meta_data
 
     @staticmethod
-    def _get_poster_url(details: dict, item_id: str, user_settings: Any, media_type: str) -> str | None:
+    def _get_poster_url(details: dict, item_id: str, user_settings: UserSettings | None, media_type: str) -> str | None:
         """Resolve poster URL using poster rating provider if configured, otherwise TMDB."""
         path = details.get("poster_path")
         poster_url = f"https://image.tmdb.org/t/p/w500{path}"
 
-        poster_rating = getattr(user_settings, "poster_rating", None)
+        poster_rating = user_settings.poster_rating if user_settings else None
         if poster_rating and (poster_rating.api_key or poster_rating.url_template):
             try:
                 provider_enum = PosterProvider(poster_rating.provider)
@@ -116,13 +118,12 @@ class RecommendationMetadata:
     @classmethod
     async def fetch_batch(
         cls,
-        tmdb_service: Any,
+        tmdb_service: TMDBService,
         items: list[dict[str, Any]],
         media_type: str,
-        user_settings: Any = None,
+        user_settings: UserSettings | None = None,
     ) -> list[dict[str, Any]]:
-        """Fetch details for a batch of items in parallel with target-based short-circuiting."""
-        final_results = []
+        """Fetch details and images for a batch of items in parallel and format them for Stremio."""
         valid_items = [it for it in items if it.get("id")]
         query_type = "movie" if media_type == "movie" else "tv"
         sem = asyncio.Semaphore(DEFAULT_CONCURRENCY_LIMIT)
@@ -136,11 +137,10 @@ class RecommendationMetadata:
                 except Exception:
                     return None
 
-        tasks = [_fetch_one(it.get("id")) for it in valid_items]
-        details_list = await asyncio.gather(*tasks, return_exceptions=True)
-        details_list = [d for d in details_list if d and not isinstance(d, Exception)]
+        details_list = await asyncio.gather(*(_fetch_one(it.get("id")) for it in valid_items))
+        details_list = [d for d in details_list if d]
 
-        language = getattr(user_settings, "language", None) or "en-US"
+        language = (user_settings.language if user_settings else None) or "en-US"
         mt = "movie" if media_type == "movie" else "tv"
 
         async def _images_one(d: dict[str, Any]) -> dict[str, str]:
@@ -150,24 +150,11 @@ class RecommendationMetadata:
                 except Exception:
                     return {}
 
-        successful_details = [d for d in details_list if d]
-        image_tasks = [_images_one(d) for d in successful_details]
-        images_list = await asyncio.gather(*image_tasks, return_exceptions=True)
+        images_list = await asyncio.gather(*(_images_one(d) for d in details_list))
 
-        format_task = []
-        for details, imgs in zip(successful_details, images_list):
-            logo_url = None
-            if isinstance(imgs, dict):
-                logo_url = imgs.get("logo") or None
-            format_task.append(cls.format_for_stremio(details, media_type, user_settings, logo_url=logo_url))
-
-        formatted_list = await asyncio.gather(*format_task, return_exceptions=True)
-
-        for formatted in formatted_list:
-            if isinstance(formatted, Exception):
-                logger.warning(f"Error formatting metadata: {formatted}")
-                continue
-            if formatted:
-                final_results.append(formatted)
-
+        final_results = []
+        for details, imgs in zip(details_list, images_list):
+            meta = cls.format_for_stremio(details, media_type, user_settings, logo_url=imgs.get("logo") or None)
+            if meta:
+                final_results.append(meta)
         return final_results

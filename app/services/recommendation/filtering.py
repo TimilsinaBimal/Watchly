@@ -3,7 +3,7 @@ from typing import Any
 from urllib.parse import unquote
 
 from app.core.constants import DISCOVERY_SETTINGS
-from app.core.settings import DEFAULT_YEAR_MIN, get_current_year
+from app.core.settings import UserSettings, get_current_year
 from app.models.library import LibraryCollection
 
 
@@ -34,9 +34,7 @@ def parse_identifier(identifier: str) -> tuple[str | None, int | None]:
 
 
 class RecommendationFiltering:
-    """
-    Handles exclusion sets, genre whitelists, and item filtering.
-    """
+    """Handles exclusion sets, genre whitelists, and item filtering."""
 
     @staticmethod
     def get_exclusion_sets(library_data: LibraryCollection) -> tuple[set[str], set[int]]:
@@ -71,25 +69,14 @@ class RecommendationFiltering:
         return imdb_ids, tmdb_ids
 
     @staticmethod
-    def get_quality_thresholds(user_settings: Any) -> tuple[float, int]:
-        """
-        Get dynamic quality thresholds (min_rating, min_votes) based on popularity preference.
-        """
-        pop_pref = getattr(user_settings, "popularity", "balanced") if user_settings else "balanced"
-        settings = DISCOVERY_SETTINGS.get(pop_pref) or DISCOVERY_SETTINGS["balanced"]
-        return settings.get("vote_average.gte", 6.7), settings.get("vote_count.gte", 250)
+    def get_quality_thresholds(user_settings: UserSettings) -> tuple[float, int]:
+        """(min_rating, min_votes) for the user's popularity preference."""
+        band = DISCOVERY_SETTINGS[user_settings.popularity]
+        return band["vote_average.gte"], band["vote_count.gte"]
 
     @staticmethod
-    def get_sort_by_preference(user_settings: Any) -> str:
-        """
-        Get optimal sort order based on popularity preference.
-        """
-        if not user_settings:
-            return "popularity.desc"
-
-        pop_pref = getattr(user_settings, "popularity", "balanced")
-
-        if pop_pref == "gems":
+    def get_sort_by_preference(user_settings: UserSettings) -> str:
+        if user_settings.popularity == "gems":
             # For hidden gems, we want high quality first, not high popularity
             return "vote_average.desc"
 
@@ -97,18 +84,12 @@ class RecommendationFiltering:
         return "popularity.desc"
 
     @staticmethod
-    def get_excluded_genre_ids(user_settings: Any, content_type: str) -> list[int]:
-        """Get genre IDs to exclude based on user settings."""
-        if not user_settings:
-            return []
+    def get_excluded_genre_ids(user_settings: UserSettings, content_type: str) -> list[int]:
         if content_type == "movie":
             return [int(g) for g in user_settings.excluded_movie_genres]
         elif content_type in ["series", "tv"]:
             return [int(g) for g in user_settings.excluded_series_genres]
         return []
-
-
-# --- Standalone filtering functions (moved from utils.py) ---
 
 
 def filter_watched_by_imdb(enriched: list[dict[str, Any]], watched_imdb: set[str]) -> list[dict[str, Any]]:
@@ -144,17 +125,13 @@ def filter_by_genres(
     return filtered
 
 
-def build_discover_params(user_settings: Any) -> dict[str, Any]:
+def build_discover_params(user_settings: UserSettings) -> dict[str, Any]:
     """Build TMDB discover API parameters based on user settings."""
     params: dict[str, Any] = {}
-    if not user_settings:
-        return params
-
     current_date = datetime.now()
     current_year = get_current_year()
-
-    year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
-    year_max = getattr(user_settings, "year_max", current_year)
+    year_min = user_settings.year_min
+    year_max = user_settings.year_max
 
     for prefix in ["primary_release_date", "first_air_date"]:
         params[f"{prefix}.gte"] = f"{year_min}-01-01"
@@ -172,15 +149,10 @@ def build_discover_params(user_settings: Any) -> dict[str, Any]:
 TMDB_DISCOVER_FILTER_KEYS = {"vote_count.gte", "vote_count.lte", "vote_average.gte", "vote_average.lte"}
 
 
-def apply_discover_filters(params: dict[str, Any], user_settings: Any) -> dict[str, Any]:
+def apply_discover_filters(params: dict[str, Any], user_settings: UserSettings) -> dict[str, Any]:
     """Merge discover params with global user settings (years, quality band)."""
-    if not user_settings:
-        return params
-
     params = {**build_discover_params(user_settings), **params}
-
-    pop_pref = getattr(user_settings, "popularity", "balanced")
-    for key, value in (DISCOVERY_SETTINGS.get(pop_pref) or {}).items():
+    for key, value in DISCOVERY_SETTINGS[user_settings.popularity].items():
         if key in TMDB_DISCOVER_FILTER_KEYS:
             params.setdefault(key, value)
 
@@ -188,7 +160,7 @@ def apply_discover_filters(params: dict[str, Any], user_settings: Any) -> dict[s
 
 
 def filter_items_by_settings(
-    items: list[dict[str, Any]], user_settings: Any, apply_quality_band: bool = True
+    items: list[dict[str, Any]], user_settings: UserSettings, apply_quality_band: bool = True
 ) -> list[dict[str, Any]]:
     """Filter items post-fetch: year window always, plus the DISCOVERY_SETTINGS
     quality/reach band when apply_quality_band.
@@ -198,16 +170,9 @@ def filter_items_by_settings(
     would drop them on noise. They arrive already year-filtered by Simkl, and their
     popularity/quality still feed scoring downstream.
     """
-    if not user_settings:
-        return items
-
-    year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
-    year_max = getattr(user_settings, "year_max", get_current_year())
-
-    # If pop_pref has no mapping, fall back to no band filtering rather than
-    # dropping every item. Hoisted out of the per-item loop.
-    pop_pref = getattr(user_settings, "popularity", "balanced")
-    params = DISCOVERY_SETTINGS.get(pop_pref, {}) if apply_quality_band else {}
+    year_min = user_settings.year_min
+    year_max = user_settings.year_max
+    params = DISCOVERY_SETTINGS[user_settings.popularity] if apply_quality_band else {}
 
     ops = {
         "gte": lambda x, y: x >= y,

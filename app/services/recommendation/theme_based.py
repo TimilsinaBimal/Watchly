@@ -3,6 +3,7 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.settings import UserSettings
 from app.models.profile import TasteProfile
 from app.services.profile.constants import (
     RUNTIME_BUCKET_MEDIUM_MAX_MOVIE,
@@ -23,19 +24,11 @@ from app.services.tmdb.service import TMDBService
 
 
 class ThemeBasedService:
-    """
-    Handles theme-based recommendations using role-based axis recipes.
+    """Theme rows from role-based axis recipes: anchors (a), flavors (f) and fallbacks (b),
+    weighted 1.0 / 0.7 / 0.3 when scoring a candidate against the theme."""
 
-    Strategy:
-    1. Parse role-based theme ID (a: anchor, f: flavor, b: fallback)
-    2. Primary discovery using Anchors
-    3. Weighted scoring: anchor (1.0) + flavor (0.7) + fallback (0.3)
-    4. Profile-aware ranking
-    5. Expansion logic if results are sparse
-    """
-
-    def __init__(self, tmdb_service: Any, user_settings: Any = None):
-        self.tmdb_service: TMDBService = tmdb_service
+    def __init__(self, tmdb_service: TMDBService, user_settings: UserSettings):
+        self.tmdb_service = tmdb_service
         self.user_settings = user_settings
         self.scorer = ProfileScorer()
 
@@ -43,22 +36,15 @@ class ThemeBasedService:
         self,
         theme_id: str,
         content_type: str,
-        profile: TasteProfile | None = None,
-        watched_tmdb: set[int] | None = None,
-        watched_imdb: set[str] | None = None,
+        profile: TasteProfile | None,
+        watched_tmdb: set[int],
+        watched_imdb: set[str],
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """Get recommendations for a role-based theme."""
-        watched_tmdb = watched_tmdb or set()
-        watched_imdb = watched_imdb or set()
-
-        # 1. Parse roles and values
         anchors, flavors, fallbacks = self._parse_theme_id(theme_id)
-
-        # 2. Prepare common excluded genres
         excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
 
-        # 3. Extract mandatory filters (country/era from ANY role)
+        # Country and era constrain every query, whichever role they came in as.
         all_constraints = {**anchors, **flavors, **fallbacks}
         mandatory_filters = {}
         if "country" in all_constraints:
@@ -66,11 +52,8 @@ class ThemeBasedService:
         if "era" in all_constraints:
             mandatory_filters["era"] = all_constraints["era"]
 
-        logger.info(f"Theme discovery for {theme_id}: anchors={anchors}, flavors={flavors}, fallbacks={fallbacks}")
+        logger.debug(f"Theme discovery for {theme_id}: anchors={anchors}, flavors={flavors}, fallbacks={fallbacks}")
 
-        # ====================
-        # PHASE 1: Combined Fetch (ALL constraints)
-        # ====================
         fetch_tasks = []
         if all_constraints:
             combined_params = self._axes_to_params(all_constraints, content_type)
@@ -81,38 +64,28 @@ class ThemeBasedService:
                     combined_params["without_genres"] = "|".join(str(g) for g in without)
             fetch_tasks.append(self._fetch_discover_candidates(content_type, combined_params, pages=[1, 2, 3]))
 
-        # Execute Phase 1
         results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
         candidates = []
         for res in results:
             if isinstance(res, Exception):
-                logger.debug(f"Error fetching combined: {res}")
+                logger.debug(f"Error fetching combined: {type(res).__name__}")
                 continue
             if isinstance(res, list):
                 for item in res:
                     item["_discovery_tier"] = "combined"
                 candidates.extend(res)
 
-        logger.info(f"Phase 1 (combined): {len(candidates)} candidates")
+        logger.debug(f"Phase 1 (combined): {len(candidates)} candidates")
 
-        # ====================
-        # PHASE 2: Individual Axes (if sparse)
-        # ====================
+        # Sparse: query each axis on its own, still under the country/era constraints.
         if len(candidates) < limit * 2:
             fetch_tasks = []
-
-            # For EACH axis in anchors, flavors, AND fallbacks
             for axis_name, axis_value in all_constraints.items():
-                # Build params for this single axis
                 params = self._axes_to_params({axis_name: axis_value}, content_type)
-
-                # ALWAYS add mandatory filters (country/era) if they exist and are not the current axis
                 for filter_name, filter_value in mandatory_filters.items():
-                    if filter_name != axis_name:  # Don't duplicate
-                        filter_params = self._axes_to_params({filter_name: filter_value}, content_type)
-                        params.update(filter_params)
+                    if filter_name != axis_name:
+                        params.update(self._axes_to_params({filter_name: filter_value}, content_type))
 
-                # Apply excluded genres
                 if excluded_ids:
                     with_ids = {int(g) for g in params.get("with_genres", "").split("|") if g}
                     without = [g for g in excluded_ids if g not in with_ids]
@@ -121,38 +94,35 @@ class ThemeBasedService:
 
                 fetch_tasks.append(self._fetch_discover_candidates(content_type, params, pages=[1, 2]))
 
-            # Execute Phase 2
             results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
             for res in results:
                 if isinstance(res, Exception):
-                    logger.debug(f"Error fetching individual: {res}")
+                    logger.debug(f"Error fetching individual: {type(res).__name__}")
                     continue
                 if isinstance(res, list):
                     for item in res:
                         item["_discovery_tier"] = "individual"
                     candidates.extend(res)
 
-            logger.info(f"Phase 2 (individual): Total {len(candidates)} candidates")
+            logger.debug(f"Phase 2 (individual): Total {len(candidates)} candidates")
 
-        # 4. Expansion Logic if still sparse
+        # Still sparse: drop the keyword constraint from the primary anchor.
         if len(candidates) < limit and anchors:
-            # Expansion strategy: Relax constraints on the primary anchor
             primary_axis = dict([next(iter(anchors.items()))])
             base_p = self._axes_to_params(primary_axis, content_type)
-            expanded = await self._expand_search(content_type, base_p, anchors, flavors)
-            for item in expanded:
-                item["_discovery_tier"] = "expanded"
-            candidates.extend(expanded)
+            if "with_keywords" in base_p:
+                del base_p["with_keywords"]
+                expanded = await self._fetch_discover_candidates(content_type, base_p, pages=[1, 2])
+                for item in expanded:
+                    item["_discovery_tier"] = "expanded"
+                candidates.extend(expanded)
 
-        # 5. Weighted Scoring
         scored = []
         mtype = content_type_to_mtype(content_type)
 
         for item in candidates:
-            # Theme Match Score
             theme_match = self._calculate_theme_score(item, anchors, flavors, fallbacks)
 
-            # Profile & Quality Score
             if profile:
                 base_score = RecommendationScoring.calculate_final_score(
                     item=item,
@@ -173,7 +143,6 @@ class ThemeBasedService:
 
             scored.append((final_score, item))
 
-        # 6. Rank and Enrich
         scored.sort(key=lambda x: x[0], reverse=True)
         unique_results = []
         seen = set()
@@ -254,8 +223,7 @@ class ThemeBasedService:
                 params[f"{prefix}.gte"] = f"{start_year}-01-01"
                 params[f"{prefix}.lte"] = f"{end_year}-12-31"
             except Exception:
-                logger.error("Failed to parse era axis: {}", axes["era"])
-                pass
+                logger.warning(f"Failed to parse era axis: {axes['era']}")
         if "runtime" in axes:
             bucket = axes["runtime"]
             is_movie = content_type == "movie"
@@ -296,8 +264,7 @@ class ThemeBasedService:
                             end = start + 9
                         return start <= y <= end
                     except Exception:
-                        logger.error("Failed to parse era axis: {}", value)
-                        pass
+                        logger.warning(f"Failed to parse era axis: {value}")
             if axis_name == "runtime":
                 # Runtimes are hard to match exactly from discover results without metadata enrichment
                 return True
@@ -326,33 +293,10 @@ class ThemeBasedService:
 
         return score
 
-    async def _expand_search(self, content_type: str, params: dict, anchors: dict, flavors: dict) -> list[dict]:
-        """Expansion logic if results are sparse."""
-        # 1. Relax Keyword: Remove keyword constraint
-        if "with_keywords" in params:
-            new_params = params.copy()
-            del new_params["with_keywords"]
-            return await self._fetch_discover_candidates(content_type, new_params, pages=[1, 2])
-
-        return []
-
     async def _fetch_discover_candidates(
         self, content_type: str, params: dict[str, Any], pages: list[int]
     ) -> list[dict[str, Any]]:
-        """
-        Fetch candidates from TMDB discover API.
-
-        Args:
-            content_type: Content type
-            params: Discover API parameters
-            pages: List of page numbers to fetch
-
-        Returns:
-            List of candidate items
-        """
         candidates = []
-
-        # Apply global user filters (year range, popularity)
         params = apply_discover_filters(params, self.user_settings)
 
         tasks = [self.tmdb_service.get_discover(content_type, page=p, **params) for p in pages]
@@ -361,7 +305,7 @@ class ThemeBasedService:
 
         for res in results:
             if isinstance(res, Exception):
-                logger.debug(f"Error fetching discover: {res}")
+                logger.debug(f"Error fetching discover: {type(res).__name__}")
                 continue
             candidates.extend(res.get("results", []))
 

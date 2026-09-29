@@ -19,11 +19,13 @@ from app.services.recommendation.all_based import AllBasedService
 from app.services.recommendation.catalog_utils import clean_meta, shuffle_data_if_needed
 from app.services.recommendation.creators import CreatorsService
 from app.services.recommendation.item_based import ItemBasedService
+from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.rewatch import RewatchService
 from app.services.recommendation.theme_based import ThemeBasedService
 from app.services.recommendation.top_picks import TopPicksService
+from app.services.recommendation.utils import content_type_to_mtype
 from app.services.redis_service import redis_service
-from app.services.tmdb.service import get_tmdb_service
+from app.services.tmdb.service import TMDBService, get_tmdb_service
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
 from app.services.warmup import warmup_service
@@ -42,7 +44,7 @@ class CatalogService:
         self, token: str, content_type: str, catalog_id: str
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Get catalog recommendations."""
-        self._validate_inputs(token, content_type, catalog_id)
+        self._validate_catalog_id(catalog_id)
 
         # Resolve merge aliases up front so credential reads and cache keys all
         # use the surviving account token.
@@ -52,7 +54,6 @@ class CatalogService:
 
         logger.debug(f"[{redact_token(token)}] Fetching catalog for {content_type} with id {catalog_id}")
 
-        # Load credentials (needed for cache check + shuffle settings)
         credentials = await token_store.get_user_data(token)
         if not credentials:
             logger.error("No credentials found for token")
@@ -69,7 +70,7 @@ class CatalogService:
             try:
                 await catalog_updater.trigger_update(token, credentials)
             except Exception as e:
-                logger.error(f"[{redact_token(token)}] Failed to trigger auto update: {e}")
+                logger.error(f"[{redact_token(token)}] Failed to trigger auto update: {type(e).__name__}")
 
         # Check cache first — avoids auth/library/profile loading on cache hit
         cached_result = await user_cache.get_catalog(token, content_type, catalog_id)
@@ -156,7 +157,10 @@ class CatalogService:
                 await ctx.close()
             logger.info(f"[{redact_token(token)}] Background refresh done for {content_type}/{catalog_id}")
         except Exception as e:
-            logger.warning(f"[{redact_token(token)}] Background refresh failed for {content_type}/{catalog_id}: {e}")
+            logger.warning(
+                f"[{redact_token(token)}] Background refresh failed for {content_type}/{catalog_id}: "
+                f"{type(e).__name__}"
+            )
         finally:
             await redis_service.delete(lock_key)
 
@@ -175,18 +179,16 @@ class CatalogService:
             if resolved_id is None:
                 return {"metas": []}, headers
 
-            services = self._initialize_services(ctx.user_settings)
-            profile_service: ProfileService = services["profile"]
+            user_settings = ctx.user_settings
+            tmdb_key = resolve_tmdb_api_key(user_settings)
+            tmdb_service = get_tmdb_service(language=user_settings.language, api_key=tmdb_key)
 
-            # Load profile (cached or build fresh)
             cached_data = await user_cache.get_profile_and_watched_sets(ctx.token, content_type)
-
-            requested_source = ctx.user_settings.watch_history_source if ctx.user_settings else "stremio"
-            cached_source = getattr(cached_data[0], "source", "stremio") if cached_data and cached_data[0] else None
-            if cached_data and cached_source is not None and cached_source != requested_source:
+            source = user_settings.watch_history_source
+            if cached_data and cached_data[0].source != source:
                 logger.info(
-                    f"[{redact_token(ctx.token)}] Cached profile source '{cached_source}' "
-                    f"!= requested '{requested_source}'; rebuilding."
+                    f"[{redact_token(ctx.token)}] Cached profile source '{cached_data[0].source}' "
+                    f"!= requested '{source}'; rebuilding."
                 )
                 cached_data = None
 
@@ -194,30 +196,30 @@ class CatalogService:
                 profile, watched_tmdb, watched_imdb = cached_data
                 logger.debug(f"[{redact_token(ctx.token)}] Using cached profile for {content_type}")
             else:
-                source = ctx.user_settings.watch_history_source if ctx.user_settings else "stremio"
                 logger.info(
                     f"[{redact_token(ctx.token)}] Profile not cached for {content_type}, building from {source}"
                 )
+                profile_service = ProfileService(language=user_settings.language, tmdb_api_key=tmdb_key)
                 profile, watched_tmdb, watched_imdb = await profile_service.build_and_cache_profile(
-                    ctx.token, content_type, ctx.library, user_settings=ctx.user_settings
+                    ctx.token, content_type, ctx.library, user_settings=user_settings
                 )
 
             recommendations = await self._get_recommendations(
                 catalog_id=resolved_id,
                 content_type=content_type,
-                services=services,
+                tmdb_service=tmdb_service,
                 profile=profile,
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
                 library_items=ctx.library,
                 limit=DEFAULT_CATALOG_LIMIT,
-                user_settings=ctx.user_settings,
+                user_settings=user_settings,
             )
 
             logger.debug(f"Returning {len(recommendations)} items for {content_type}")
 
             cleaned = [m for m in (clean_meta(m) for m in recommendations) if m is not None]
-            cleaned = shuffle_data_if_needed(ctx.user_settings, catalog_id, cleaned)
+            cleaned = shuffle_data_if_needed(user_settings, catalog_id, cleaned)
 
             data = {"metas": cleaned}
             if cleaned:
@@ -226,22 +228,13 @@ class CatalogService:
             return data, headers
 
         except Exception as e:
-            logger.error(f"[{redact_token(ctx.token)}] Failed to generate catalog: {e}")
+            logger.error(f"[{redact_token(ctx.token)}] Failed to generate catalog: {type(e).__name__}")
 
             # A stale copy, when one exists, is served before this is ever reached.
             return {"metas": []}, headers
 
-    def _validate_inputs(self, token: str, content_type: str, catalog_id: str) -> None:
-        if not token:
-            raise HTTPException(
-                status_code=400,
-                detail="Missing credentials token. Please open Watchly from a configured manifest URL.",
-            )
-
-        if content_type not in ["movie", "series"]:
-            logger.warning(f"Invalid type: {content_type}")
-            raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
-
+    @staticmethod
+    def _validate_catalog_id(catalog_id: str) -> None:
         supported_base = [
             "watchly.rec",
             "watchly.creators",
@@ -269,44 +262,15 @@ class CatalogService:
                 ),
             )
 
-    def _initialize_services(self, user_settings: UserSettings) -> dict[str, Any]:
-        tmdb_key = resolve_tmdb_api_key(user_settings)
-        language = user_settings.language
-        tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
-        return {
-            "tmdb": tmdb_service,
-            "profile": ProfileService(language=language, tmdb_api_key=tmdb_key),
-            "item": ItemBasedService(tmdb_service, user_settings),
-            "theme": ThemeBasedService(tmdb_service, user_settings),
-            "top_picks": TopPicksService(tmdb_service, user_settings),
-            "creators": CreatorsService(tmdb_service, user_settings),
-            "all_based": AllBasedService(tmdb_service, user_settings),
-            "rewatch": RewatchService(tmdb_service, user_settings),
-        }
-
-    async def _get_trending_fallback(
-        self,
-        content_type: str,
-        limit: int = 20,
-        user_settings: UserSettings | None = None,
-    ) -> list[dict[str, Any]]:
+    @staticmethod
+    async def _get_trending_fallback(tmdb_service: TMDBService, content_type: str) -> list[dict[str, Any]]:
         """Get trending items for new users without profiles."""
-        from app.services.recommendation.utils import content_type_to_mtype
-
-        mtype = content_type_to_mtype(content_type)
-        tmdb_key = resolve_tmdb_api_key(user_settings)
-        language = user_settings.language if user_settings else "en-US"
-        tmdb_service = get_tmdb_service(language=language, api_key=tmdb_key)
-
         try:
-            trending = await tmdb_service.get_trending(mtype, "week")
+            trending = await tmdb_service.get_trending(content_type_to_mtype(content_type), "week")
             items = trending.get("results", [])
-
-            from app.services.recommendation.metadata import RecommendationMetadata
-
             return await RecommendationMetadata.fetch_batch(tmdb_service, items, content_type, user_settings=None)
         except Exception as e:
-            logger.warning(f"Failed to fetch trending items: {e}")
+            logger.warning(f"Failed to fetch trending items: {type(e).__name__}")
             return []
 
     @staticmethod
@@ -341,32 +305,27 @@ class CatalogService:
         self,
         catalog_id: str,
         content_type: str,
-        services: dict[str, Any],
+        tmdb_service: TMDBService,
         profile: TasteProfile | None,
         watched_tmdb: set[int],
         watched_imdb: set[str],
         library_items: LibraryCollection,
         limit: int,
-        user_settings: UserSettings | None = None,
+        user_settings: UserSettings,
     ) -> list[dict[str, Any]]:
         """Route to appropriate recommendation service based on catalog ID."""
         if any(catalog_id.startswith(p) for p in ("watchly.item.", "watchly.loved.", "watchly.watched.")):
             item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", catalog_id)
-            item_service: ItemBasedService = services["item"]
-
-            recommendations = await item_service.get_recommendations_for_item(
+            recommendations = await ItemBasedService(tmdb_service, user_settings).get_recommendations_for_item(
                 item_id=item_id,
                 content_type=content_type,
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
                 limit=limit,
             )
-            logger.debug(f"Found {len(recommendations)} recommendations for item {item_id}")
 
         elif catalog_id.startswith("watchly.theme."):
-            theme_service: ThemeBasedService = services["theme"]
-
-            recommendations = await theme_service.get_recommendations_for_theme(
+            recommendations = await ThemeBasedService(tmdb_service, user_settings).get_recommendations_for_theme(
                 theme_id=catalog_id,
                 content_type=content_type,
                 profile=profile,
@@ -374,13 +333,10 @@ class CatalogService:
                 watched_imdb=watched_imdb,
                 limit=limit,
             )
-            logger.debug(f"Found {len(recommendations)} recommendations for theme {catalog_id}")
 
         elif catalog_id == "watchly.creators":
-            creators_service: CreatorsService = services["creators"]
-
             if profile:
-                recommendations = await creators_service.get_recommendations_from_creators(
+                recommendations = await CreatorsService(tmdb_service, user_settings).get_recommendations_from_creators(
                     profile=profile,
                     content_type=content_type,
                     watched_tmdb=watched_tmdb,
@@ -389,14 +345,11 @@ class CatalogService:
                 )
             else:
                 logger.info(f"No profile for creators, showing trending {content_type}")
-                recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
-            logger.debug(f"Found {len(recommendations)} recommendations from creators")
+                recommendations = await self._get_trending_fallback(tmdb_service, content_type)
 
         elif catalog_id == "watchly.rec":
             if profile:
-                top_picks_service: TopPicksService = services["top_picks"]
-
-                recommendations = await top_picks_service.get_top_picks(
+                recommendations = await TopPicksService(tmdb_service, user_settings).get_top_picks(
                     profile=profile,
                     content_type=content_type,
                     library_items=library_items,
@@ -406,13 +359,11 @@ class CatalogService:
                 )
             else:
                 logger.info(f"No profile for top picks, showing trending {content_type}")
-                recommendations = await self._get_trending_fallback(content_type, limit, user_settings)
-            logger.debug(f"Found {len(recommendations)} top picks for {content_type}")
+                recommendations = await self._get_trending_fallback(tmdb_service, content_type)
 
         elif catalog_id in ("watchly.all.loved", "watchly.liked.all"):
             item_type = "loved" if catalog_id == "watchly.all.loved" else "liked"
-            all_based_service: AllBasedService = services["all_based"]
-            recommendations = await all_based_service.get_recommendations_from_all_items(
+            recommendations = await AllBasedService(tmdb_service, user_settings).get_recommendations_from_all_items(
                 library_items=library_items,
                 content_type=content_type,
                 watched_tmdb=watched_tmdb,
@@ -421,18 +372,15 @@ class CatalogService:
                 item_type=item_type,
                 profile=profile,
             )
-            logger.info(f"Found {len(recommendations)} recommendations based on all {item_type} items")
 
         elif catalog_id == "watchly.rewatch":
             # Already-watched titles are the whole point, so no watched exclusion here.
-            rewatch_service: RewatchService = services["rewatch"]
-            recommendations = await rewatch_service.get_rewatch_picks(
+            recommendations = await RewatchService(tmdb_service, user_settings).get_rewatch_picks(
                 library_items=library_items,
                 content_type=content_type,
                 profile=profile,
                 limit=limit,
             )
-            logger.debug(f"Found {len(recommendations)} rewatch picks for {content_type}")
 
         else:
             logger.warning(f"Unknown catalog ID: {catalog_id}")

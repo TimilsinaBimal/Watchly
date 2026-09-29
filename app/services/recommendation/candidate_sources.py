@@ -39,7 +39,7 @@ class CandidateFetcher:
     def __init__(
         self,
         tmdb_service: TMDBService,
-        user_settings: UserSettings | None = None,
+        user_settings: UserSettings,
         scoring_service: ScoringService | None = None,
     ):
         self.tmdb_service = tmdb_service
@@ -54,35 +54,23 @@ class CandidateFetcher:
     ) -> list[dict[str, Any]]:
         """Fetch recommendations from top items (loved/watched/liked/added)."""
         top_items = sample_items(library_items, content_type, self.scoring_service, max_items=15)
+        tmdb_ids = await asyncio.gather(*(resolve_tmdb_id(s.item.id, self.tmdb_service) for s in top_items))
+        tasks = [self.tmdb_service.get_recommendations(t, mtype, page=1) for t in tmdb_ids if t]
 
-        candidates = []
-        tasks = []
-
-        for item in top_items:
-            item = item.item
-            item_id = item.id
-            if not item_id:
-                continue
-
-            tmdb_id = await resolve_tmdb_id(item_id, self.tmdb_service)
-            if not tmdb_id:
-                continue
-
-            tasks.append(self.tmdb_service.get_recommendations(tmdb_id, mtype, page=1))
-
-        logger.info(f"Fetching recommendations from {len(tasks)} top library items")
+        logger.debug(f"Fetching recommendations from {len(tasks)} top library items")
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        candidates = []
         failed_count = 0
         for res in results:
             if isinstance(res, Exception):
                 failed_count += 1
-                logger.debug(f"Recommendation fetch failed: {res}")
+                logger.debug(f"Recommendation fetch failed: {type(res).__name__}")
                 continue
             candidates.extend(res.get("results", []))
 
         if failed_count > 0:
-            logger.info(f"{failed_count}/{len(tasks)} recommendation fetches failed (expected for items with no recs)")
+            logger.debug(f"{failed_count}/{len(tasks)} recommendation fetches failed (expected for items with no recs)")
         logger.debug(f"Fetched {len(candidates)} candidates from top items")
 
         return candidates
@@ -94,9 +82,9 @@ class CandidateFetcher:
         mtype: str,
     ) -> list[dict[str, Any]]:
         """Fetch recommendations from Simkl for top library items."""
-        simkl_api_key = self.user_settings.simkl_api_key if self.user_settings else None
+        simkl_api_key = self.user_settings.simkl_api_key
         if not simkl_api_key:
-            logger.warning("Simkl API key not found, skipping Simkl recommendations")
+            logger.debug("Simkl API key not found, skipping Simkl recommendations")
             return []
 
         top_items = sample_items(library_items, content_type, self.scoring_service, max_items=15)
@@ -111,10 +99,7 @@ class CandidateFetcher:
             logger.warning("No valid IMDB IDs found for Simkl recommendations")
             return []
 
-        logger.info(f"Fetching Simkl recommendations for {len(imdb_ids)} items")
-
-        year_min = getattr(self.user_settings, "year_min", None)
-        year_max = getattr(self.user_settings, "year_max", None)
+        logger.debug(f"Fetching Simkl recommendations for {len(imdb_ids)} items")
 
         try:
             candidates = await simkl_service.get_recommendations_batch(
@@ -122,18 +107,17 @@ class CandidateFetcher:
                 mtype,
                 simkl_api_key,
                 max_per_item=8,
-                year_min=year_min,
-                year_max=year_max,
+                year_min=self.user_settings.year_min,
+                year_max=self.user_settings.year_max,
             )
         except Exception as e:
-            logger.error(f"Error fetching Simkl recommendations: {e}")
+            logger.error(f"Error fetching Simkl recommendations: {type(e).__name__}")
             return []
 
-        logger.info(f"Fetched {len(candidates)} candidates from Simkl")
+        logger.debug(f"Fetched {len(candidates)} candidates from Simkl")
         return candidates
 
     def _add_discover_task(self, tasks: list, mtype: str, without_genres: str | None, **kwargs: Any) -> None:
-        """Add a discover task to the list of tasks with default parameters."""
         sort_by = RecommendationFiltering.get_sort_by_preference(self.user_settings)
         params = {
             "sort_by": sort_by,
@@ -235,7 +219,7 @@ class CandidateFetcher:
         for res in results:
             if isinstance(res, Exception):
                 failed_count += 1
-                logger.warning(f"Discover query failed: {res}")
+                logger.warning(f"Discover query failed: {type(res).__name__}")
                 continue
             candidates.extend(res.get("results", []))
 
@@ -255,12 +239,10 @@ class CandidateFetcher:
         """Fetch and merge candidates from all sources, deduped by TMDB ID."""
         all_candidates: dict[int, dict[str, Any]] = {}
 
-        # 1. Fetch recommendations from top items
-        simkl_api_key = self.user_settings.simkl_api_key if self.user_settings else None
-        if simkl_api_key:
+        if self.user_settings.simkl_api_key:
             rec_candidates = await self.fetch_simkl_recommendations(library_items, content_type, mtype)
             if not rec_candidates:
-                logger.info("Simkl returned no results, falling back to TMDB")
+                logger.debug("Simkl returned no results, falling back to TMDB")
                 rec_candidates = await self.fetch_recommendations_from_top_items(library_items, content_type, mtype)
                 rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings)
         else:
@@ -271,7 +253,6 @@ class CandidateFetcher:
             if item.get("id"):
                 all_candidates[item["id"]] = item
 
-        # 2. Fetch discover with profile features
         discover_candidates = await self.fetch_discover_with_profile(profile, content_type, mtype)
         discover_candidates = filter_items_by_settings(discover_candidates, self.user_settings)
         for item in discover_candidates:

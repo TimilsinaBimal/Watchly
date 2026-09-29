@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Any
 
+from app.core.settings import UserSettings
 from app.services.profile.constants import TOP_PICKS_GENRE_CAP
 from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.scoring import RecommendationScoring
@@ -10,7 +11,7 @@ def apply_diversity_caps(
     scored_candidates: list[tuple[float, dict[str, Any]]],
     limit: int,
     mtype: str,
-    user_settings: Any = None,
+    user_settings: UserSettings,
 ) -> list[dict[str, Any]]:
     """
     Apply diversity caps to ensure balanced results.
@@ -23,6 +24,7 @@ def apply_diversity_caps(
     genre_counts: dict[int, int] = defaultdict(int)
 
     max_per_genre = int(limit * TOP_PICKS_GENRE_CAP)
+    min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(user_settings)
 
     for score, item in scored_candidates:
         if len(result) >= limit:
@@ -32,11 +34,8 @@ def apply_diversity_caps(
         if not item_id:
             continue
 
-        # Quality threshold
         vote_count = item.get("vote_count", 0)
         vote_avg = item.get("vote_average", 0)
-
-        min_rating, min_votes = RecommendationFiltering.get_quality_thresholds(user_settings)
 
         if vote_count < min_votes:
             continue

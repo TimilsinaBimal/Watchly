@@ -41,9 +41,9 @@ class CreatorsService:
     If neither half qualifies, raise 404 (Stremio will hide the row).
     """
 
-    def __init__(self, tmdb_service: TMDBService, user_settings: UserSettings | None = None):
-        self.tmdb_service: TMDBService = tmdb_service
-        self.user_settings: UserSettings | None = user_settings
+    def __init__(self, tmdb_service: TMDBService, user_settings: UserSettings):
+        self.tmdb_service = tmdb_service
+        self.user_settings = user_settings
 
     @staticmethod
     def _select_recurring(
@@ -169,5 +169,5 @@ class CreatorsService:
             results = await self.tmdb_service.get_discover(mtype, **discover_params)
             return results.get("results", [])
         except Exception as e:
-            logger.debug(f"Error fetching recommendations for {creator_type} {creator_id}: {e}")
+            logger.debug(f"Error fetching recommendations for {creator_type} {creator_id}: {type(e).__name__}")
             return []

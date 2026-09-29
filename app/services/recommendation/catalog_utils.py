@@ -4,15 +4,11 @@ from typing import Any
 from app.core.settings import UserSettings
 
 
-def should_shuffle(user_settings: UserSettings, catalog_id: str) -> bool:
-    config = next((c for c in user_settings.catalogs if c.id == catalog_id), None)
-    return getattr(config, "shuffle", False) if config else False
-
-
 def shuffle_data_if_needed(
     user_settings: UserSettings, catalog_id: str, data: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    if should_shuffle(user_settings, catalog_id):
+    config = next((c for c in user_settings.catalogs if c.id == catalog_id), None)
+    if config and config.shuffle:
         random.shuffle(data)
     return data
 
