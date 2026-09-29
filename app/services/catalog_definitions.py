@@ -1,39 +1,31 @@
 import asyncio
 import random
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any
 
 from loguru import logger
 
 from app.core.constants import DISCOVER_ONLY_EXTRA
+from app.core.security import redact_token
 from app.core.settings import CatalogConfig, LLMConfig, UserSettings, resolve_llm_config
-from app.models.library import LibraryCollection
+from app.models.library import LibraryCollection, StremioLibraryItem
 from app.services.profile.service import ProfileService
 from app.services.row_generator import RowGeneratorService
 from app.services.tmdb.service import get_tmdb_service
 from app.services.user_cache import user_cache
 
 
-def get_catalogs_from_config(
-    user_settings: UserSettings,
-    cat_id: str,
-    default_name: str,
-    default_movie: bool,
-    default_series: bool,
-) -> list[dict[str, Any]]:
+def get_catalogs_from_config(user_settings: UserSettings, cat_id: str, default_name: str) -> list[dict[str, Any]]:
     catalogs = []
     config = next((c for c in user_settings.catalogs if c.id == cat_id), None)
 
     if config and config.enabled:
         name = config.name if config.name else default_name
-        enabled_movie = getattr(config, "enabled_movie", default_movie)
-        enabled_series = getattr(config, "enabled_series", default_series)
-        display_at_home = getattr(config, "display_at_home", True)
-        extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
+        extra = DISCOVER_ONLY_EXTRA if not config.display_at_home else []
 
-        if enabled_movie:
+        if config.enabled_movie:
             catalogs.append({"type": "movie", "id": cat_id, "name": name, "extra": extra})
-        if enabled_series:
+        if config.enabled_series:
             catalogs.append({"type": "series", "id": cat_id, "name": name, "extra": extra})
 
     return catalogs
@@ -54,9 +46,6 @@ def get_config_id(catalog: dict[str, Any]) -> str | None:
 
 def sort_catalogs(catalogs: list[dict[str, Any]], user_settings: UserSettings) -> list[dict[str, Any]]:
     """Sort catalogs according to user settings and content-type order."""
-    if not user_settings:
-        return catalogs
-
     order_map = {c.id: i for i, c in enumerate(user_settings.catalogs)}
 
     def get_setting_index(catalog: dict[str, Any]) -> int:
@@ -65,7 +54,7 @@ def sort_catalogs(catalogs: list[dict[str, Any]], user_settings: UserSettings) -
             return 999
         return order_map.get(config_id, 999)
 
-    sorting_order = getattr(user_settings, "sorting_order", "default")
+    sorting_order = user_settings.sorting_order
 
     if sorting_order == "movies_first":
         return sorted(
@@ -102,36 +91,24 @@ class DynamicCatalogService:
 
     def build_catalog_entry(
         self,
-        item,
+        item: StremioLibraryItem,
         label: str,
         config_id: str,
         display_at_home: bool = True,
     ) -> dict[str, Any]:
-        from app.models.library import StremioLibraryItem
-
-        # Support both typed items and raw dicts
-        if isinstance(item, StremioLibraryItem):
-            item_id = item.id
-            item_type = item.type
-            item_name = item.name
-        else:
-            item_id = item.get("_id", "")
-            item_type = item.get("type", "")
-            item_name = item.get("name", "")
-
         if config_id == "watchly.item":
-            catalog_id = f"{config_id}.{item_id}"
+            catalog_id = f"{config_id}.{item.id}"
         else:
-            catalog_id = item_id
+            catalog_id = item.id
 
         # External-source items (Trakt/Simkl) and partial Stremio entries
         # occasionally lack a title; without this guard the row renders as
         # "Because you loved " with a trailing space, which Stremio shows as
         # an empty catalog name.
-        suffix = (item_name or "").strip() or "this title"
+        suffix = (item.name or "").strip() or "this title"
         extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
         return {
-            "type": self.normalize_type(item_type),
+            "type": self.normalize_type(item.type),
             "id": catalog_id,
             "name": f"{label} {suffix}",
             "_catalog_name_prefix": label,
@@ -142,13 +119,11 @@ class DynamicCatalogService:
     async def get_dynamic_catalogs(
         self,
         library_items: LibraryCollection,
-        user_settings: UserSettings | None = None,
+        user_settings: UserSettings,
         token: str | None = None,
     ) -> list[dict[str, Any]]:
         """Generate all dynamic catalog rows based on enabled configurations."""
         catalogs: list[dict[str, Any]] = []
-        if not user_settings:
-            return catalogs
 
         # Slot id -> row definition, collected as the rows are built and stored so
         # the served ids can stay stable while their definitions change.
@@ -157,15 +132,12 @@ class DynamicCatalogService:
         theme_cfg, item_cfg = self._resolve_catalog_configs(user_settings)
 
         if theme_cfg and theme_cfg.enabled:
-            enabled_movie = getattr(theme_cfg, "enabled_movie", True)
-            enabled_series = getattr(theme_cfg, "enabled_series", True)
-            display_at_home = getattr(theme_cfg, "display_at_home", True)
             theme_catalogs = await self._build_theme_catalogs(
                 library_items,
                 user_settings,
-                enabled_movie,
-                enabled_series,
-                display_at_home,
+                theme_cfg.enabled_movie,
+                theme_cfg.enabled_series,
+                theme_cfg.display_at_home,
                 token,
                 row_slots,
             )
@@ -174,35 +146,11 @@ class DynamicCatalogService:
         for mtype in ["movie", "series"]:
             await self._add_item_based_rows(catalogs, library_items, mtype, item_cfg, row_slots)
 
-        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rec", "Top Picks for You", True, True))
-        catalogs.extend(
-            get_catalogs_from_config(
-                user_settings,
-                "watchly.creators",
-                "From your favourite Creators",
-                False,
-                False,
-            )
-        )
-        catalogs.extend(
-            get_catalogs_from_config(
-                user_settings,
-                "watchly.all.loved",
-                "Based on what you loved",
-                True,
-                True,
-            )
-        )
-        catalogs.extend(
-            get_catalogs_from_config(
-                user_settings,
-                "watchly.liked.all",
-                "Based on what you liked",
-                True,
-                True,
-            )
-        )
-        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rewatch", "Watch it again", True, True))
+        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rec", "Top Picks for You"))
+        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.creators", "From your favourite Creators"))
+        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.all.loved", "Based on what you loved"))
+        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.liked.all", "Based on what you liked"))
+        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rewatch", "Watch it again"))
 
         if token:
             for content_type in ("movie", "series"):
@@ -210,12 +158,10 @@ class DynamicCatalogService:
 
         return catalogs
 
-    # --- Theme catalog building (was ThemeCatalogService) ---
-
     async def _build_theme_catalogs(
         self,
         library_items: LibraryCollection,
-        user_settings: UserSettings | None,
+        user_settings: UserSettings,
         enabled_movie: bool,
         enabled_series: bool,
         display_at_home: bool,
@@ -224,20 +170,18 @@ class DynamicCatalogService:
     ) -> list[dict[str, Any]]:
         llm_config = resolve_llm_config(user_settings)
 
-        tasks = []
-        if enabled_movie:
-            tasks.append(self._build_theme_rows_for_type(library_items, "movie", llm_config, token, user_settings))
-        if enabled_series:
-            tasks.append(self._build_theme_rows_for_type(library_items, "series", llm_config, token, user_settings))
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        types = [t for t, on in (("movie", enabled_movie), ("series", enabled_series)) if on]
+        results = await asyncio.gather(
+            *(self._build_theme_rows_for_type(library_items, t, llm_config, token, user_settings) for t in types),
+            return_exceptions=True,
+        )
         catalogs: list[dict[str, Any]] = []
         extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
 
-        for result in results:
-            if not isinstance(result, tuple):
+        for media_type, rows in zip(types, results):
+            if isinstance(rows, BaseException):
+                logger.warning(f"[{redact_token(token)}] Theme rows failed for {media_type}: {type(rows).__name__}")
                 continue
-            media_type, rows = cast(tuple[str, list[Any]], result)
             for slot, row in enumerate(rows, start=1):
                 # The row's axes go in the slot map, not in the id. Encoding them in
                 # the id meant a new id whenever the definition changed — every LLM
@@ -261,9 +205,9 @@ class DynamicCatalogService:
         media_type: str,
         llm_config: LLMConfig | None,
         token: str | None,
-        user_settings: UserSettings | None = None,
-    ) -> tuple[str, list[Any]]:
-        logger.info(f"[Theme Catalogs] Building rows for {media_type}")
+        user_settings: UserSettings,
+    ) -> list[Any]:
+        logger.info(f"Building theme rows for {media_type}")
 
         # Try cached profile first, build fresh if missing (honors watch_history_source).
         profile = None
@@ -282,12 +226,9 @@ class DynamicCatalogService:
 
         if not profile:
             logger.warning(f"Failed to build profile for {media_type}")
-            return media_type, []
+            return []
 
-        rows = await self.row_generator.generate_rows(profile, media_type, llm_config=llm_config)
-        return media_type, rows
-
-    # --- Item-based rows ---
+        return await self.row_generator.generate_rows(profile, media_type, llm_config=llm_config)
 
     def _resolve_catalog_configs(self, user_settings: UserSettings) -> tuple[Any, Any]:
         cfg_map = {c.id: c for c in user_settings.catalogs}
@@ -318,34 +259,13 @@ class DynamicCatalogService:
 
         return theme, item
 
-    def _parse_item_last_watched(self, item) -> datetime:
-        from app.models.library import StremioLibraryItem
-
-        if isinstance(item, StremioLibraryItem):
-            if item.state.lastWatched:
-                return item.state.lastWatched
-            if item.mtime:
-                try:
-                    return datetime.fromisoformat(str(item.mtime).replace("Z", "+00:00"))
-                except (ValueError, TypeError):
-                    pass
-            return datetime.min.replace(tzinfo=timezone.utc)
-
-        # Fallback for raw dicts
-        val = item.get("state", {}).get("lastWatched")
-        if val:
+    def _parse_item_last_watched(self, item: StremioLibraryItem) -> datetime:
+        if item.state.lastWatched:
+            return item.state.lastWatched
+        if item.mtime:
             try:
-                if isinstance(val, str):
-                    return datetime.fromisoformat(val.replace("Z", "+00:00"))
-                return val
-            except (ValueError, TypeError):
-                pass
-
-        val = item.get("_mtime")
-        if val:
-            try:
-                return datetime.fromisoformat(str(val).replace("Z", "+00:00"))
-            except (ValueError, TypeError):
+                return datetime.fromisoformat(item.mtime)
+            except ValueError:
                 pass
         return datetime.min.replace(tzinfo=timezone.utc)
 
@@ -369,9 +289,9 @@ class DynamicCatalogService:
         if not item_config or not item_config.enabled:
             return
 
-        if content_type == "movie" and not getattr(item_config, "enabled_movie", True):
+        if content_type == "movie" and not item_config.enabled_movie:
             return
-        if content_type == "series" and not getattr(item_config, "enabled_series", True):
+        if content_type == "series" and not item_config.enabled_series:
             return
 
         loved = [i for i in library_items.loved if i.type == content_type]
@@ -389,7 +309,7 @@ class DynamicCatalogService:
         if not candidates:
             return
 
-        display_at_home = getattr(item_config, "display_at_home", True)
+        display_at_home = item_config.display_at_home
         seeds = random.sample(candidates, k=min(item_config.rows, len(candidates)))
         for slot, (seed, seed_is_loved) in enumerate(seeds, start=1):
             label = "Because you loved" if seed_is_loved else "Because you watched"

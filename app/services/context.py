@@ -8,6 +8,7 @@ from app.core.security import redact_token
 from app.core.settings import UserSettings, get_default_settings
 from app.models.library import LibraryCollection
 from app.services.auth import auth_service
+from app.services.profile.service import ProfileService
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.user_cache import user_cache
@@ -82,7 +83,7 @@ async def load_user_context(
         # the one currently configured — otherwise switching sources in the
         # configure page would silently keep serving the old (wrong) library.
         cached = await user_cache.get_library_items(token)
-        if cached and getattr(cached, "source", "stremio") != configured_source:
+        if cached and cached.source != configured_source:
             logger.info(
                 f"[{redact_token(token)}] Cached library source "
                 f"'{cached.source}' != configured '{configured_source}'; invalidating."
@@ -91,12 +92,12 @@ async def load_user_context(
             cached = None
 
         library = cached
-        if not library:
+        if library is None:
             library = await fetch_library_for_source(configured_source, user_settings, token, bundle, auth_key)
             if library is not None:
                 await user_cache.set_library_items(token, library)
 
-        if not library:
+        if library is None:
             library = LibraryCollection()
 
         return UserContext(
@@ -127,10 +128,7 @@ async def fetch_library_for_source(
     Stremio: pull directly from the bundle's library service.
     """
     if source in ("trakt", "simkl"):
-        from app.services.profile.service import ProfileService
-
-        profile_service = ProfileService()
-        external = await profile_service.fetch_external_library(source, user_settings, token)
+        external = await ProfileService().fetch_external_library(source, user_settings, token)
         if external is not None:
             logger.info(
                 f"[{redact_token(token)}] Built library from {source}: "
@@ -140,7 +138,7 @@ async def fetch_library_for_source(
             return external
 
         logger.warning(
-            f"[{redact_token(token)}] External {source} fetch returned no history; " "falling back to Stremio library."
+            f"[{redact_token(token)}] External {source} fetch returned no history; falling back to Stremio library."
         )
 
     if auth_key:

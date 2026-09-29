@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.security import redact_token
 from app.services.auth import auth_service
 from app.services.context import extract_settings
+from app.services.manifest import manifest_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 
@@ -79,28 +80,20 @@ class CatalogUpdater:
                 detail="Invalid or expired token. Please reconfigure the addon.",
             )
 
-        # Read before resolving the auth key: a Stremio re-login stores this shared dict,
-        # and store_user_data encrypts its nested settings in place.
         user_settings = extract_settings(credentials)
 
         bundle = StremioBundle()
         try:
             auth_key = await auth_service.resolve_auth_key_with_bundle(bundle, credentials, token)
 
-            # Check if addon is still installed
             if auth_key:
                 try:
                     if not await bundle.addons.is_addon_installed(auth_key):
                         logger.info(f"[{redact_token(token)}] Addon not installed, skipping update")
                         return True
-                except Exception as e:
-                    logger.exception(f"[{redact_token(token)}] Failed to check addon install status: {e}")
+                except Exception:
+                    logger.exception(f"[{redact_token(token)}] Failed to check addon install status")
                     return False
-
-            # Reuse ManifestService to build catalogs
-            # (handles catalog definitions, translation, and sorting — no need to
-            #  reimplement here)
-            from app.services.manifest import manifest_service
 
             # The manifest build only reads the cached library, and that cache is
             # re-fetched only when it is missing — every read renews its TTL. For an
@@ -164,7 +157,7 @@ class CatalogUpdater:
             return success
 
         except Exception as e:
-            logger.exception(f"[{redact_token(token)}] Failed to update catalogs in background: {e}")
+            logger.exception(f"[{redact_token(token)}] Failed to update catalogs in background")
             try:
                 error_auth_key = credentials.get("authKey")
                 if isinstance(error_auth_key, str) and error_auth_key:
@@ -174,7 +167,9 @@ class CatalogUpdater:
                     )
                     await bundle.addons.update_description(error_auth_key, description)
             except Exception as update_err:
-                logger.warning(f"[{redact_token(token)}] Failed to update addon description: {update_err}")
+                logger.warning(
+                    f"[{redact_token(token)}] Failed to update addon description: {type(update_err).__name__}"
+                )
             return False
         finally:
             await bundle.close()
@@ -204,8 +199,8 @@ class CatalogUpdater:
                 logger.info(f"[{redact_token(token)}] Catalog update completed successfully")
             else:
                 logger.warning(f"[{redact_token(token)}] Catalog update completed with failure")
-        except Exception as e:
-            logger.exception(f"[{redact_token(token)}] Catalog update task failed: {e}")
+        except Exception:
+            logger.exception(f"[{redact_token(token)}] Catalog update task failed")
         finally:
             self._updating_tokens.discard(token)
             self._running.pop(token, None)

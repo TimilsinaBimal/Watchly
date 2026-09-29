@@ -88,7 +88,9 @@ class ManifestService:
                 )
                 logger.debug(f"[{redact_token(token)}] Cached profile and watched sets for {content_type}")
             except Exception as e:
-                logger.warning(f"[{redact_token(token)}] Failed to build/cache profile for {content_type}: {e}")
+                logger.warning(
+                    f"[{redact_token(token)}] Failed to build/cache profile for {content_type}: {type(e).__name__}"
+                )
 
         # Movie and series profiles are independent and write to separate cache
         # keys, so there is no reason to pay for them one after the other.
@@ -126,8 +128,8 @@ class ManifestService:
                 fetched_catalogs = await catalog_def_service.get_dynamic_catalogs(
                     ctx.library, ctx.user_settings, token=token
                 )
-        except Exception as e:
-            logger.exception(f"[{redact_token(token)}] Dynamic catalog build failed: {e}")
+        except Exception:
+            logger.exception(f"[{redact_token(token)}] Dynamic catalog build failed")
             fetched_catalogs = []
         finally:
             await ctx.close()
