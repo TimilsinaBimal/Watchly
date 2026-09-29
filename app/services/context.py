@@ -17,7 +17,7 @@ from app.services.user_cache import user_cache
 class UserContext:
     """Everything a request handler needs about a user.
 
-    The caller MUST call close() when done (or use as async context manager).
+    The caller MUST call close() when done.
     """
 
     token: str
@@ -29,12 +29,6 @@ class UserContext:
 
     async def close(self):
         await self.bundle.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        await self.close()
 
 
 def extract_settings(credentials: dict[str, Any]) -> UserSettings:

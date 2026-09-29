@@ -118,12 +118,6 @@ class TMDBService:
         params = {"page": page}
         return await self.client.get(f"/trending/{mt}/{time_window}", params=params)
 
-    async def get_top_rated(self, media_type: str, page: int = 1) -> dict[str, Any]:
-        """Get top-rated content list."""
-        mt = "movie" if media_type == "movie" else "tv"
-        params = {"page": page}
-        return await self.client.get(f"/{mt}/top_rated", params=params)
-
     @alru_cache(maxsize=1, ttl=86400)
     async def get_languages(self) -> list[dict[str, Any]]:
         """Fetch supported languages from TMDB."""

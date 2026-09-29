@@ -299,27 +299,17 @@ class TokenStore:
 
         return data
 
-    async def delete_token(self, token: str = None, key: str = None) -> None:
-        if not token and not key:
-            raise ValueError("Either token or key must be provided")
-        if token:
-            key = self._format_key(token)
-
-        await redis_service.delete(key)
+    async def delete_token(self, token: str) -> None:
+        await redis_service.delete(self._format_key(token))
         # we also need to delete the cached library items, profiles and watched sets
-        if token:
-            try:
-                await user_cache.invalidate_all_user_data(token)
-            except Exception as e:
-                logger.warning(f"Failed to invalidate all user data for {redact_token(token)}: {e}")
+        try:
+            await user_cache.invalidate_all_user_data(token)
+        except Exception as e:
+            logger.warning(f"Failed to invalidate all user data for {redact_token(token)}: {e}")
 
         # Invalidate async LRU cache so future reads reflect deletion
         try:
-            if token:
-                self._get_user_data_cached.cache_invalidate(token)
-            else:
-                # If only key is provided, clear cache entirely to be safe
-                self._get_user_data_cached.cache_clear()
+            self._get_user_data_cached.cache_invalidate(token)
         except KeyError:
             pass
         except Exception as e:

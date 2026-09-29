@@ -8,9 +8,6 @@ DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV: float = 6.8
 
 # Bumped whenever the scoring maths changes, so cached profiles built by older
 # code get dropped on read instead of being served with stale numbers until TTL.
-# Lives here rather than in profile/constants.py because user_cache reads it, and
-# importing anything under app.services.profile pulls in ProfileService via that
-# package's __init__ — a cycle.
 # v2: Trakt/Simkl items are scored by ScoringService instead of a flat 50.0.
 # v3: the sampler sorts by score, so a capped sample is the strongest items
 #     rather than an arbitrary slice of the library, and its quota split favours

@@ -38,10 +38,10 @@ class BaseClient:
             await self._client.aclose()
             self._client = None
 
-    async def _request(self, method: str, url: str, max_tries: int | None = None, **kwargs) -> httpx.Response:
+    async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
         """Internal request handler with retry logic."""
         client = await self.get_client()
-        tries = max_tries or self.max_retries
+        tries = self.max_retries
 
         for attempt in range(1, tries + 1):
             try:
