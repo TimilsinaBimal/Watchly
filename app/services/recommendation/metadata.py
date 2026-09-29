@@ -154,7 +154,12 @@ class RecommendationMetadata:
 
         final_results = []
         for details, imgs in zip(details_list, images_list):
-            meta = cls.format_for_stremio(details, media_type, user_settings, logo_url=imgs.get("logo") or None)
+            # TMDB data is outside input: one malformed record costs one item, not the row.
+            try:
+                meta = cls.format_for_stremio(details, media_type, user_settings, logo_url=imgs.get("logo") or None)
+            except Exception as e:
+                logger.warning(f"Skipping TMDB {media_type} {details.get('id')}: {type(e).__name__}")
+                continue
             if meta:
                 final_results.append(meta)
         return final_results
