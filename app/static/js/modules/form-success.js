@@ -358,7 +358,7 @@ function createInstallButton(label, primary = false) {
     button.type = 'button';
     button.textContent = label;
     button.className = primary
-        ? 'bg-white text-black hover:bg-white/90 text-sm font-medium px-4 py-2 rounded-lg transition'
-        : 'bg-neutral-800 text-slate-200 hover:bg-neutral-700 text-sm font-medium px-4 py-2 rounded-lg transition';
+        ? 'btn btn-primary'
+        : 'btn btn-secondary';
     return button;
 }

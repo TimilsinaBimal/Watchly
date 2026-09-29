@@ -154,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (configNextBtn) configNextBtn.addEventListener('click', () => switchSection('catalogs'));
     document.getElementById('configBackBtn')?.addEventListener('click', () => switchSection('login'));
     if (catalogsNextBtn) catalogsNextBtn.addEventListener('click', () => switchSection('install'));
+    document.getElementById('installBackBtn')?.addEventListener('click', () => switchSection('catalogs'));
 
     // Reset Buttons
     const resetBtn = document.getElementById('resetBtn');

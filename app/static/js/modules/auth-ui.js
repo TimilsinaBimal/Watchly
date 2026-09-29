@@ -16,15 +16,15 @@ export function updateInstallMode(existingUser) {
     const btnText = document.querySelector('#submitBtn .btn-text');
 
     if (existingUser) {
-        if (installHeader) installHeader.textContent = 'Update Settings';
-        if (installDesc) installDesc.textContent = 'Update your preferences and re-install.';
-        if (btnText) btnText.textContent = 'Update & Re-Install';
+        if (installHeader) installHeader.textContent = 'Update settings';
+        if (installDesc) installDesc.textContent = 'Save your changes and reinstall to pick them up.';
+        if (btnText) btnText.textContent = 'Update & reinstall';
         return;
     }
 
-    if (installHeader) installHeader.textContent = 'Save & Install';
-    if (installDesc) installDesc.textContent = 'Save your settings and install the addon.';
-    if (btnText) btnText.textContent = 'Save & Install';
+    if (installHeader) installHeader.textContent = 'Save & install';
+    if (installDesc) installDesc.textContent = 'One click saves your settings and gives you a private addon link.';
+    if (btnText) btnText.textContent = 'Save & install';
 }
 
 export function showUserProfile(email) {
