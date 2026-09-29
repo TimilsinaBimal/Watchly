@@ -3,9 +3,10 @@
     <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="donation-backdrop"></div>
 
     <!-- Modal Content -->
-    <div class="absolute inset-0 flex items-center justify-center p-4">
+    <!-- Clicks outside the dialog fall through to the backdrop, which closes it. -->
+    <div class="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
         <div
-            class="relative w-full max-w-md animate-fade-in rounded-2xl border border-white/10 bg-surface-raised shadow-2xl shadow-black/50">
+            class="pointer-events-auto relative w-full max-w-md animate-fade-in rounded-2xl border border-white/10 bg-surface-raised shadow-2xl shadow-black/50">
             <button type="button" id="close-donation" class="icon-btn absolute right-3 top-3 z-10" aria-label="Close">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

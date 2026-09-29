@@ -2,9 +2,10 @@
 <div id="changelog-modal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="changelog-backdrop"></div>
 
-    <div class="absolute inset-0 flex items-center justify-center p-4">
+    <!-- Clicks outside the dialog fall through to the backdrop, which closes it. -->
+    <div class="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
         <div
-            class="relative flex max-h-[85vh] w-full max-w-2xl animate-fade-in flex-col rounded-2xl border border-white/10 bg-surface-raised shadow-2xl shadow-black/50">
+            class="pointer-events-auto relative flex max-h-[85vh] w-full max-w-2xl animate-fade-in flex-col rounded-2xl border border-white/10 bg-surface-raised shadow-2xl shadow-black/50">
             <div class="flex items-center justify-between gap-4 border-b border-white/[0.07] px-5 py-4 md:px-6">
                 <h3 class="text-lg font-semibold text-white">What's new</h3>
                 <button type="button" id="close-changelog" class="icon-btn -mr-2" aria-label="Close">
