@@ -102,6 +102,12 @@ async def preview_custom_poster_template(payload: PosterPreviewInput) -> list[Po
         stored = (user_data.get("settings") or {}).get("poster_rating") or {}
         if stored.get("provider") != PosterProvider.CUSTOM.value or not stored.get("api_key"):
             raise HTTPException(status_code=400, detail="No saved API key for the custom provider. Paste it again.")
+        # A saved key only fills the saved template. Accepting any template here would
+        # let whoever holds the token read the key back out of a URL they wrote.
+        if payload.url_template != stored.get("url_template"):
+            raise HTTPException(
+                status_code=400, detail="You changed the template. Paste your API key again to preview it."
+            )
         api_key = stored["api_key"]
 
     return [

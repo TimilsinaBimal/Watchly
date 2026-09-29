@@ -98,3 +98,21 @@ def test_non_http_template_is_a_clear_400():
 
     assert response.status_code == 400
     assert response.json() == {"detail": "custom poster provider needs an http(s) url_template"}
+
+
+def test_saved_key_only_fills_the_saved_template(monkeypatch):
+    """Otherwise anyone holding the token could send https://x/{api_key}/{imdb_id}
+    and read the saved key back out of the preview URL."""
+    _fake_store(monkeypatch, {"provider": "custom", "api_key": "saved-key", "url_template": TEMPLATE})
+
+    response = client.post(
+        "/poster-rating/preview",
+        json={
+            "url_template": "https://evil.example/{api_key}/{imdb_id}.jpg",
+            "api_key": STORED_SECRET_SENTINEL,
+            "token": KNOWN_TOKEN,
+        },
+    )
+
+    assert response.status_code == 400
+    assert "saved-key" not in response.text
