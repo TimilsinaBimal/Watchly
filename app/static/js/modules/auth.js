@@ -15,6 +15,7 @@ import {
     setWatchHistorySource,
 } from './accounts.js';
 import { markFieldAsSaved } from './field-helpers.js';
+import { resumeSection } from './navigation.js';
 
 // DOM Elements - will be initialized
 let stremioLoginBtn = null;
@@ -138,7 +139,7 @@ async function attemptAutoLogin() {
             await fetchStremioIdentity(storedAuth.authKey);
             await loadStremioProfiles(stremioProfileCredentials, storedAuth.profileId);
             unlockNavigation();
-            switchSection('config');
+            switchSection(resumeSection('config'));
             return;
         }
 
@@ -153,7 +154,7 @@ async function attemptAutoLogin() {
             setStremioLoggedInState('');
             await loadStremioProfiles(stremioProfileCredentials, storedAuth.profileId);
             unlockNavigation();
-            switchSection('config');
+            switchSection(resumeSection('config'));
             return;
         }
     } catch (error) {
@@ -189,7 +190,8 @@ async function initializeStremioLogin() {
         }
 
         // Remove query param
-        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        // Keep the step hash; only the query string carried the key.
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.hash;
         window.history.replaceState({ path: newUrl }, '', newUrl);
     }
 

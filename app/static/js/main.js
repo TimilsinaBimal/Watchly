@@ -2,7 +2,7 @@
 
 import { createAppState, resetAppState } from './state.js';
 import { initializeChangelog, initializeFooter, initializeKofi, initializeProviderCards } from './modules/ui.js';
-import { initializeNavigation, switchSection, lockNavigationForLoggedOut, unlockNavigation } from './modules/navigation.js';
+import { initializeNavigation, switchSection, lockNavigationForLoggedOut, unlockNavigation, initialSection } from './modules/navigation.js';
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
 import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
 import { initializeForm, clearErrors, refreshYearSlider } from './modules/form.js';
@@ -88,12 +88,11 @@ function initializeWelcomeFlow() {
 
 // Initialize everything
 document.addEventListener('DOMContentLoaded', () => {
-    // Start at Welcome
-    switchSection(appState.ui.currentSection);
     initializeWelcomeFlow();
 
     // Initialize all modules
     initializeNavigation({ navItems, sections }, appState);
+    switchSection(initialSection(appState.ui.currentSection));
 
     // By default, ensure logged-out users see only Welcome/Login
     lockNavigationForLoggedOut();
