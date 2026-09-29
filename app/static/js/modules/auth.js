@@ -1,7 +1,6 @@
 // Authentication Logic
 
 import { showToast } from './ui.js';
-import { clearAuthFromStorage, getAuthFromStorage, saveAuthToStorage } from './auth-storage.js';
 import {
     hideUserProfile,
     renderLoggedInControls,
@@ -52,8 +51,10 @@ export function initializeAuth(domElements, state, actions) {
     initializeUserProfileDropdown();
     initializeStremioProfileSelection();
 
-    // Try to auto-login from localStorage
-    attemptAutoLogin();
+    // Older builds kept the Stremio password here for auto-login. Drop it from
+    // browsers that still have it; remove this after the next release. Reading
+    // localStorage throws when the browser blocks site storage.
+    try { localStorage.removeItem('watchly_auth'); } catch { /* nothing was stored */ }
 
     initializeStremioLogin();
     initializeEmailPasswordLogin();
@@ -132,59 +133,13 @@ function initializeLoginStatusLogoutButton() {
     });
 }
 
-// Attempt to auto-login from stored credentials
-async function attemptAutoLogin() {
-    // Don't auto-login if there's an auth key in URL (let URL-based login handle it)
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlAuthKey = urlParams.get('key') || urlParams.get('authKey');
-    if (urlAuthKey) return;
-
-    const storedAuth = getAuthFromStorage();
-    if (!storedAuth) return;
-
-    stremioProfileCredentials = storedAuth.email && storedAuth.password
-        ? { email: storedAuth.email, password: storedAuth.password }
-        : { authKey: storedAuth.rootAuthKey || storedAuth.authKey };
-
-    try {
-        // If we have an auth key, use it
-        if (storedAuth.authKey) {
-            setStremioLoggedInState(storedAuth.authKey);
-            await fetchStremioIdentity(storedAuth.authKey);
-            await loadStremioProfiles(stremioProfileCredentials, storedAuth.profileId);
-            unlockNavigation();
-            switchSection('config');
-            return;
-        }
-
-        // If we have email/password, use them
-        if (storedAuth.email && storedAuth.password) {
-            // Pre-fill inputs
-            if (emailInput) emailInput.value = storedAuth.email;
-            if (passwordInput) passwordInput.value = storedAuth.password;
-
-            // Try to login
-            await fetchStremioIdentity(null);
-            setStremioLoggedInState('');
-            await loadStremioProfiles(stremioProfileCredentials, storedAuth.profileId);
-            unlockNavigation();
-            switchSection('config');
-            return;
-        }
-    } catch (error) {
-        // Auto-login failed, clear stored auth
-        console.warn('Auto-login failed:', error);
-        clearAuthFromStorage();
-        if (resetApp) resetApp();
-    }
-}
-
 // Stremio Login Logic
 async function initializeStremioLogin() {
     const urlParams = new URLSearchParams(window.location.search);
     const authKey = urlParams.get('key') || urlParams.get('authKey');
 
     if (authKey) {
+        window.history.replaceState(null, '', window.location.pathname);
         // Logged In -> Unlock; stay on Accounts so the user can connect optional providers
         setStremioLoggedInState(authKey);
 
@@ -192,20 +147,13 @@ async function initializeStremioLogin() {
             await fetchStremioIdentity(authKey);
             stremioProfileCredentials = { authKey };
             await loadStremioProfiles(stremioProfileCredentials);
-            // Save auth key to localStorage for persistent login
-            saveAuthToStorage({ authKey, rootAuthKey: authKey });
             unlockNavigation();
             switchSection('login');
         } catch (error) {
             showToast(error.message, "error");
-            clearAuthFromStorage();
             if (resetApp) resetApp();
             return;
         }
-
-        // Remove query param
-        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-        window.history.replaceState({ path: newUrl }, '', newUrl);
     }
 
     if (stremioLoginBtn) {
@@ -255,7 +203,7 @@ function initializeStremioProfileSelection() {
     });
 }
 
-async function loadStremioProfiles(credentials, preferredProfileId = null) {
+async function loadStremioProfiles(credentials) {
     const section = document.getElementById('stremioProfileSection');
     const select = document.getElementById('stremioProfileSelect');
     if (!section || !select || !credentials) return;
@@ -282,9 +230,7 @@ async function loadStremioProfiles(credentials, preferredProfileId = null) {
             profile.is_master ? `${profile.name} (primary)` : profile.name,
             profile.id,
         )));
-        const preferredProfile = stremioProfiles.find(profile => profile.id === preferredProfileId);
-        const activeProfile = preferredProfile
-            || stremioProfiles.find(profile => profile.selected)
+        const activeProfile = stremioProfiles.find(profile => profile.selected)
             || stremioProfiles.find(profile => profile.is_master)
             || stremioProfiles[0];
         select.value = activeProfile.id;
@@ -293,10 +239,7 @@ async function loadStremioProfiles(credentials, preferredProfileId = null) {
         updateStremioProfileMode();
 
         const allProfilesEnabled = document.getElementById('stremioAllProfiles')?.checked;
-        if (preferredProfile && !allProfilesEnabled) {
-            setSelectedStremioProfile(preferredProfile.id, preferredProfile.name);
-            setStremioProfileStatus(`Using ${preferredProfile.name} for this Watchly instance.`, 'success');
-        } else if (!allProfilesEnabled) {
+        if (!allProfilesEnabled) {
             setSelectedStremioProfile('', '');
             setStremioProfileStatus('Select the profile that should power this Watchly instance.');
         }
@@ -416,19 +359,6 @@ async function prepareStremioProfiles() {
         setStremioLoggedInState(firstProfile.authKey);
         setSelectedStremioProfile(firstProfile.id, firstProfile.name);
         await fetchStremioIdentity(firstProfile.authKey);
-
-        const storedAuth = {
-            authKey: firstProfile.authKey,
-            profileId: firstProfile.id,
-            profileName: firstProfile.name,
-        };
-        if (stremioProfileCredentials.email && stremioProfileCredentials.password) {
-            storedAuth.email = stremioProfileCredentials.email;
-            storedAuth.password = stremioProfileCredentials.password;
-        } else if (stremioProfileCredentials.authKey) {
-            storedAuth.rootAuthKey = stremioProfileCredentials.authKey;
-        }
-        saveAuthToStorage(storedAuth);
         if (pinInput) pinInput.value = '';
         document.querySelectorAll('[data-stremio-profile-pin]').forEach(input => { input.value = ''; });
         const message = preparedStremioProfiles.length > 1
@@ -665,8 +595,6 @@ function initializeEmailPasswordLogin() {
             // Reuse the shared identity handler to populate settings if account exists
             await fetchStremioIdentity(null);
             stremioProfileCredentials = { email, password: pwd };
-            // Save email/password to localStorage for persistent login
-            saveAuthToStorage({ email, password: pwd });
             // Mark as logged-in (disables inputs and flips button to Logout)
             setStremioLoggedInState('');
             await loadStremioProfiles(stremioProfileCredentials);
@@ -674,7 +602,6 @@ function initializeEmailPasswordLogin() {
             unlockNavigation();
         } catch (e) {
             showEmailPwdError(e.message || 'Login failed');
-            clearAuthFromStorage();
             // Preserve email, clear only password
             if (passwordInput) passwordInput.value = '';
         } finally {
@@ -730,8 +657,6 @@ export function setStremioLoggedOutState() {
         appState.auth.userDisplay = null;
     }
 
-    // Clear stored auth credentials
-    clearAuthFromStorage();
     stremioProfileCredentials = null;
     stremioProfiles = [];
     preparedStremioProfiles = [];
