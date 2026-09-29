@@ -1,10 +1,15 @@
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+import pytest
+from fastapi import HTTPException
+
 from app.core.constants import DEFAULT_CATALOG_LIMIT
-from app.core.settings import get_default_settings
+from app.core.settings import UserSettings, get_default_settings
 from app.models.library import LibraryCollection, StremioLibraryItem, StremioState
 from app.models.profile import TasteProfile
+from app.services.recommendation import catalog_service as cs_module
 from app.services.recommendation.catalog_service import catalog_service
 
 DRAMA, HORROR = 18, 27
@@ -144,3 +149,33 @@ def test_rows_keep_everything_the_engine_ranked():
 
     for catalog_id in ("watchly.theme.a:g18", "watchly.rewatch"):
         assert len(row(catalog_id, tmdb, library, PROFILE)) == count, catalog_id
+
+
+@dataclass
+class Context:
+    token: str
+    user_settings: UserSettings
+    library: LibraryCollection
+
+
+def test_creators_404_reaches_the_client_and_is_not_cached(monkeypatch):
+    writes = []
+
+    async def cached_profile(token, content_type):
+        # Nobody recurs and the library is past the small-library fallback.
+        profile = TasteProfile(director_scores={5: 1.0}, processed_items={f"tt{i}" for i in range(10)})
+        return profile, set(), set()
+
+    async def set_catalog(*args):
+        writes.append(args)
+
+    monkeypatch.setattr(cs_module.user_cache, "get_profile_and_watched_sets", cached_profile)
+    monkeypatch.setattr(cs_module.user_cache, "set_catalog", set_catalog)
+    monkeypatch.setattr(cs_module, "get_tmdb_service", lambda **kwargs: FakeTMDB({}))
+    ctx = Context("t" * 32, get_default_settings(), LibraryCollection())
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(catalog_service._build_catalog(ctx, "movie", "watchly.creators", {}))
+
+    assert raised.value.status_code == 404
+    assert writes == []

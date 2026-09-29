@@ -228,6 +228,9 @@ class CatalogService:
 
             return data, headers
 
+        except HTTPException:
+            # A deliberate answer, not a failure: CreatorsService's 404 tells Stremio to hide the row.
+            raise
         except Exception as e:
             logger.error(f"[{redact_token(ctx.token)}] Failed to generate catalog: {type(e).__name__}")
 
