@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% set deploy_url = "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&amp;project-name=watchly&amp;repository-name=watchly&amp;env=TMDB_API_KEY,TOKEN_SALT,HOST_NAME&amp;envDescription=Your%20TMDB%20API%20key%2C%20a%20long%20random%20TOKEN_SALT%2C%20and%20HOST_NAME%20set%20to%20https%3A%2F%2F%3Cproject-name%3E.vercel.app&amp;envLink=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly%23deploy-on-vercel&amp;stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22redis%22%2C%22productSlug%22%3A%22redis%22%7D%5D" %}
+{% set deploy_url = "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&amp;project-name=watchly&amp;repository-name=watchly&amp;env=TOKEN_SALT,HOST_NAME&amp;envDescription=A%20long%20random%20TOKEN_SALT%20and%20HOST_NAME%20set%20to%20https%3A%2F%2F%3Cproject-name%3E.vercel.app.%20TMDB_API_KEY%20is%20optional%20but%20recommended%3B%20add%20it%20later%20under%20Settings%20%3E%20Environment%20Variables.&amp;envLink=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly%23deploy-on-vercel&amp;stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22redis%22%2C%22productSlug%22%3A%22redis%22%7D%5D" %}
 {% set readme = "https://github.com/TimilsinaBimal/Watchly#" %}
 {% set code = "rounded bg-white/[0.07] px-1.5 py-0.5 font-mono text-[13px] text-neutral-100" %}
 
@@ -12,8 +12,8 @@
         <div>
             <h1 class="page-title">Self-host Watchly</h1>
             <p class="page-lead">
-                Run your own instance with your own TMDB key and Redis. Every method needs the same four settings;
-                pick the one that fits where you want it to live.
+                Run your own instance with your own Redis. Every method needs the same few settings; pick the one
+                that fits where you want it to live.
             </p>
         </div>
         <a href="/configure" class="btn btn-secondary">&larr; Back to Watchly v{{ app_version }}</a>
@@ -58,8 +58,9 @@
             <li>Accept the <span class="text-white">Redis</span> store when prompted. It adds
                 <code class="{{ code }}">REDIS_URL</code> to the project. To use a Redis you already have, skip it and
                 add <code class="{{ code }}">REDIS_URL</code> yourself afterwards.</li>
-            <li>Fill in <code class="{{ code }}">TMDB_API_KEY</code>, <code class="{{ code }}">TOKEN_SALT</code> and
-                <code class="{{ code }}">HOST_NAME</code> (see the table below), then deploy.</li>
+            <li>Fill in <code class="{{ code }}">TOKEN_SALT</code> and <code class="{{ code }}">HOST_NAME</code> (see
+                the table below), then deploy. Add <code class="{{ code }}">TMDB_API_KEY</code> under Settings &rarr;
+                Environment Variables too; it is optional but recommended.</li>
             <li>Check the production domain Vercel gave you. If it differs from what you entered, update
                 <code class="{{ code }}">HOST_NAME</code> under Settings &rarr; Environment Variables.</li>
             <li>Redeploy from the Deployments tab. Environment variable changes only apply to new deployments.</li>
@@ -111,7 +112,7 @@
 
     <section class="card space-y-4">
         <div>
-            <h2 class="card-title">Required environment variables</h2>
+            <h2 class="card-title">Environment variables</h2>
             <p class="card-desc">Everything else has a working default. The
                 <a href="{{ readme }}configuration-reference" target="_blank" rel="noopener"
                     class="text-accent-soft underline underline-offset-2 hover:text-white">configuration reference</a>
@@ -127,10 +128,14 @@
                 </thead>
                 <tbody class="divide-y divide-white/[0.06] text-neutral-200">
                     <tr>
-                        <td class="py-3 pr-4 align-top"><code class="{{ code }}">TMDB_API_KEY</code></td>
-                        <td class="py-3">A free API key from
+                        <td class="py-3 pr-4 align-top"><code class="{{ code }}">TMDB_API_KEY</code>
+                            <span class="badge mt-1 block w-fit border border-white/10 bg-white/5 text-neutral-200">Optional</span></td>
+                        <td class="py-3">Recommended. A free API key from
                             <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener"
-                                class="text-accent-soft underline underline-offset-2 hover:text-white">TMDB</a>.</td>
+                                class="text-accent-soft underline underline-offset-2 hover:text-white">TMDB</a>. Each
+                            user enters their own key on the configure page and this one is the fallback. Without it
+                            the language list shows English only, and accounts saved before the page asked for a key
+                            have none to use.</td>
                     </tr>
                     <tr>
                         <td class="py-3 pr-4 align-top"><code class="{{ code }}">TOKEN_SALT</code></td>

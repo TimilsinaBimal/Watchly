@@ -97,7 +97,7 @@ Find more screenshots [here](./app/static/screenshots/).
 
 ## Installation (Docker)
 
-Docker is the recommended way to self-host. Watchly requires a **Redis** instance and a **TMDB API key**.
+Docker is the recommended way to self-host. Watchly requires a **Redis** instance; a server **TMDB API key** is optional but recommended.
 
 1. **Create a `docker-compose.yml`:**
 
@@ -129,9 +129,11 @@ Docker is the recommended way to self-host. Watchly requires a **Redis** instanc
 
    ```env
    # Required
-   TMDB_API_KEY=your_tmdb_api_key_here
    TOKEN_SALT=generate_a_long_random_secret
    HOST_NAME=https://your-public-addon-url
+
+   # Optional, recommended
+   TMDB_API_KEY=your_tmdb_api_key_here
 
    # Redis (matches the compose service name)
    REDIS_URL=redis://redis:6379/0
@@ -168,13 +170,13 @@ A Community Applications-style template lives at [`unraid/watchly.xml`](unraid/w
 
 ## Deploy on Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&project-name=watchly&repository-name=watchly&env=TMDB_API_KEY,TOKEN_SALT,HOST_NAME&envDescription=Your%20TMDB%20API%20key%2C%20a%20long%20random%20TOKEN_SALT%2C%20and%20HOST_NAME%20set%20to%20https%3A%2F%2F%3Cproject-name%3E.vercel.app&envLink=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly%23deploy-on-vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22redis%22%2C%22productSlug%22%3A%22redis%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&project-name=watchly&repository-name=watchly&env=TOKEN_SALT,HOST_NAME&envDescription=A%20long%20random%20TOKEN_SALT%20and%20HOST_NAME%20set%20to%20https%3A%2F%2F%3Cproject-name%3E.vercel.app.%20TMDB_API_KEY%20is%20optional%20but%20recommended%3B%20add%20it%20later%20under%20Settings%20%3E%20Environment%20Variables.&envLink=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly%23deploy-on-vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22redis%22%2C%22productSlug%22%3A%22redis%22%7D%5D)
 
 Vercel detects the FastAPI app with no extra config and runs it on Python 3.12, the version `pyproject.toml` and `.python-version` pin. A running instance also serves this guide at `/self-host`.
 
 1. Click the button and pick a project name.
 2. Accept the **Redis** store when prompted; it adds `REDIS_URL` to the project. To use your own Redis, skip it and add `REDIS_URL` yourself. With Upstash, don't rely on its REST variables (`KV_REST_API_URL`, `KV_REST_API_TOKEN`), which Watchly can't use — copy the `rediss://` connection string from the Upstash console into `REDIS_URL` instead.
-3. Fill in `TMDB_API_KEY`, `TOKEN_SALT` (for example `openssl rand -hex 32`) and `HOST_NAME` (`https://<project-name>.vercel.app`), then deploy.
+3. Fill in `TOKEN_SALT` (for example `openssl rand -hex 32`) and `HOST_NAME` (`https://<project-name>.vercel.app`), then deploy. `TMDB_API_KEY` is optional but recommended: add it under **Settings → Environment Variables** (see [Configuration reference](#configuration-reference)).
 4. If the production domain Vercel assigned differs from your `HOST_NAME`, fix it under **Settings → Environment Variables**.
 5. Redeploy from the **Deployments** tab; environment variable changes only apply to new deployments.
 6. Open `https://<your-domain>/configure` and set up your catalogs.
@@ -192,13 +194,13 @@ If you want background refreshes to run reliably, use Docker.
 
 ## Configuration reference
 
-All settings are environment variables. Only the first three are strictly required.
+All settings are environment variables. Only `TOKEN_SALT` and `HOST_NAME` are strictly required, plus a reachable Redis.
 
 ### Required
 
 | Variable | Description |
 | --- | --- |
-| `TMDB_API_KEY` | TMDB API key used for metadata and discovery. Users may also supply their own key on the configure page. |
+| `TMDB_API_KEY` | Optional, recommended. Each user enters their own TMDB key on the configure page; this server key is the fallback. Without it the configure page offers English only, and accounts saved before the page asked for a key have none to use. |
 | `TOKEN_SALT` | Secret used to derive the encryption key for stored credentials. **Set a long random value** — the default `change-me` is insecure. |
 | `HOST_NAME` | Public base URL of the addon (used for manifest and OAuth callback URLs). |
 

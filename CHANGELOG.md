@@ -10,6 +10,7 @@
 
 ### Changed
 
+- The Deploy to Vercel button no longer asks for `TMDB_API_KEY`, and the docs list it as optional but recommended: users enter their own key on the configure page, and the server key only backs the language list and accounts saved without one.
 - The configure page and dashboard are redesigned. A top stepper (Accounts, Preferences, Catalogs, Install) replaces the sidebar, content uses the full width, preferences are grouped into cards with every genre visible, the catalog list has real on/off switches and labelled controls, and the install step keeps Delete account apart from the primary action. The dashboard gains a status summary, stat tiles and a taste profile overview.
 - After the scheduled catalog refresh, the home-screen rows are rebuilt straight away, so the next home screen doesn't wait on rows the refresh dropped.
 
