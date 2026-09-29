@@ -13,41 +13,66 @@
 
         body {
             margin: 0;
-            background-color: #0c0d10;
-            background-image: radial-gradient(1200px 600px at 50% -10%, rgba(255, 255, 255, 0.05), transparent 60%);
+            background-color: #0b0c0f;
+            background-image: radial-gradient(900px 480px at 50% -120px, rgba(139, 92, 246, 0.10), transparent 70%);
+            background-repeat: no-repeat;
             color: #cbd5e1;
-            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            font-size: 15px;
             line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::selection {
+            background: rgba(139, 92, 246, 0.4);
+            color: #ffffff;
         }
 
         main {
             max-width: 46rem;
             margin: 0 auto;
-            padding: 3rem 1.25rem 5rem;
+            padding: 2.5rem 1rem 5rem;
         }
 
         header {
             display: flex;
-            align-items: baseline;
+            flex-wrap: wrap;
+            align-items: center;
             justify-content: space-between;
-            gap: 1rem;
+            gap: 0.75rem 1rem;
             margin-bottom: 2rem;
         }
 
         header h1 {
-            color: #f1f5f9;
-            font-size: 1.5rem;
+            color: #ffffff;
+            font-size: 1.75rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
             margin: 0;
         }
 
         header a {
-            color: #94a3b8;
-            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 0.875rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            color: #f1f5f9;
+            font-size: 0.875rem;
+            font-weight: 500;
             text-decoration: none;
         }
 
         header a:hover {
-            color: #e2e8f0;
+            background: rgba(255, 255, 255, 0.09);
+        }
+
+        article {
+            padding: 0.5rem 1.25rem 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 1rem;
+            background: #121318;
         }
 
         article h1 {
@@ -55,40 +80,61 @@
         }
 
         article h2 {
-            color: #f1f5f9;
-            font-size: 1.15rem;
-            margin: 2.5rem 0 0.75rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin: 2rem 0 0.25rem;
+            padding-top: 1.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        article h2:first-of-type {
+            margin-top: 1.25rem;
+            padding-top: 0;
+            border-top: none;
         }
 
         article h3 {
-            color: #93c5fd;
-            font-size: 0.8rem;
+            color: #c4b5fd;
+            font-size: 0.875rem;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin: 1.5rem 0 0.5rem;
+            margin: 1.25rem 0 0.25rem;
         }
 
         article ul {
             padding-left: 1.25rem;
-            margin: 0.5rem 0;
+            margin: 0.25rem 0;
         }
 
         article li {
-            margin: 0.35rem 0;
+            margin: 0.45rem 0;
+        }
+
+        article li::marker {
+            color: #64748b;
         }
 
         article a {
-            color: #93c5fd;
+            color: #c4b5fd;
+            text-underline-offset: 2px;
         }
 
         article code {
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.07);
             border-radius: 4px;
             padding: 0.1em 0.35em;
             font-size: 0.9em;
+            color: #e2e8f0;
+        }
+
+        @media (min-width: 768px) {
+            main {
+                padding: 3.5rem 1.5rem 6rem;
+            }
+
+            article {
+                padding: 0.75rem 2rem 2rem;
+            }
         }
     </style>
 </head>

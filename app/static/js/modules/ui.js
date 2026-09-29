@@ -163,7 +163,6 @@ export function initializeFooter() {
 // Donation Modal Logic
 export function initializeKofi() {
     const kofiBtn = document.getElementById('kofiBtn');
-    const homepageDonateBtn = document.getElementById('homepageDonateBtn');
     const donationModal = document.getElementById('donation-modal');
     const donationBackdrop = document.getElementById('donation-backdrop');
     const closeDonationBtn = document.getElementById('close-donation');
@@ -186,11 +185,6 @@ export function initializeKofi() {
     // Open modal when navbar button is clicked
     if (kofiBtn) {
         kofiBtn.addEventListener('click', openModal);
-    }
-
-    // Open modal when homepage donate button is clicked
-    if (homepageDonateBtn) {
-        homepageDonateBtn.addEventListener('click', openModal);
     }
 
     // Close button
