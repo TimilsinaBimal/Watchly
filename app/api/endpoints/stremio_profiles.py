@@ -14,6 +14,7 @@ from app.api.models.stremio_profiles import (
 from app.core.config import settings
 from app.services.auth import auth_service
 from app.services.manifest import manifest_service
+from app.services.stremio.auth import stremio_identity
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 
@@ -55,7 +56,7 @@ async def list_profile_instances(payload: StremioCredentialsRequest) -> StremioP
         )
         instances = []
         for profile in visible_profiles:
-            identity_id = master.id if profile.id == master.id else f"{master.id}:{profile.id}"
+            identity_id = stremio_identity(master.id, None if profile.id == master.id else profile.id)
             token = await token_store.get_token_for_identity("stremio", identity_id)
             instances.append(StremioProfileInstance(profile_id=profile.id, profile_name=profile.name, token=token))
         return StremioProfileInstancesResponse(instances=instances)

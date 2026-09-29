@@ -4,6 +4,11 @@ from app.core.base_client import BaseClient
 from app.models.stremio_profile import StremioProfile
 
 
+def stremio_identity(account_id: str, profile_id: str | None) -> str:
+    """The identity-index id: the bare account id for the root profile, else account:profile."""
+    return f"{account_id}:{profile_id}" if profile_id else account_id
+
+
 class StremioAuthService:
     def __init__(self, client: BaseClient):
         self.client = client
@@ -58,7 +63,7 @@ class StremioAuthService:
         profile = next((p for p in self._profiles_from_user(result) if p.id == profile_id), None)
 
         return {
-            "user_id": f"{account_id}:{profile_id}" if profile_id else account_id,
+            "user_id": stremio_identity(account_id, profile_id),
             "email": email,
             "profile_id": profile_id,
             "profile_name": profile.name if profile else None,
