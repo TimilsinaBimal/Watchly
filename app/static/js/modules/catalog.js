@@ -32,13 +32,17 @@ function moveCatalogDown(index) {
     renderCatalogList();
 }
 
+const MOVE_BTN_CLASS = 'action-btn inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-white/5 hover:text-white disabled:pointer-events-none disabled:opacity-25';
+const CHIP_CLASS = 'catalog-action-btn inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-white aria-pressed:border-accent/40 aria-pressed:bg-accent/15 aria-pressed:text-accent-soft';
+const TYPE_BTN_CLASS = 'catalog-type-btn h-8 rounded-md px-3 text-sm font-medium text-slate-400 transition hover:text-white aria-pressed:bg-white/10 aria-pressed:text-white';
+const ROWS_BTN_CLASS = 'rows-btn inline-flex h-8 w-8 items-center justify-center rounded-md text-base text-slate-400 transition hover:bg-white/5 hover:text-white disabled:pointer-events-none disabled:opacity-30';
+
 function createCatalogItem(cat, index) {
     const item = document.createElement('div');
-    const disabledClass = !cat.enabled ? 'opacity-50' : '';
-    // Modern neutral glass card to match new theme
-    item.className = `catalog-item group bg-neutral-900/60 border border-white/10 rounded-xl p-4 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-neutral-900/70 hover:shadow-lg hover:shadow-black/20 ${disabledClass}`;
+    item.className = 'catalog-item group/row flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-surface p-3 sm:p-4 lg:flex-row lg:items-center lg:gap-6 data-[enabled=false]:border-dashed data-[enabled=false]:border-white/10 data-[enabled=false]:bg-transparent';
     item.setAttribute('data-id', cat.id);
     item.setAttribute('data-index', index);
+    item.dataset.enabled = String(cat.enabled);
 
     // watchly.theme builds names from genres/keywords at runtime; watchly.item
     // builds them from the seed bucket ("Because you loved/watched"). Both
@@ -57,91 +61,70 @@ function createCatalogItem(cat, index) {
     if (cat.display_at_home === undefined) cat.display_at_home = true;
     if (cat.shuffle === undefined) cat.shuffle = false;
 
+    const description = escapeHtml(cat.description || '');
+
     item.innerHTML = `
-        <div class="flex gap-2 sm:gap-3">
-            <div class="sort-buttons flex flex-col gap-1.5 flex-shrink-0">
-                <button type="button" class="action-btn move-up p-2 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 hover:border-blue-400/60 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-blue-500/20 disabled:cursor-not-allowed shadow-sm hover:shadow-md hover:shadow-blue-500/20" title="Move up" ${index === 0 ? 'disabled' : ''}>
+        <div class="flex min-w-0 items-start gap-2 sm:gap-3 lg:max-w-2xl lg:flex-1">
+            <div class="sort-buttons -my-0.5 flex flex-shrink-0 flex-col">
+                <button type="button" class="${MOVE_BTN_CLASS} move-up" title="Move up" aria-label="Move up" ${index === 0 ? 'disabled' : ''}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
                 </button>
-                <div class="h-9 flex items-center">
-                    <button type="button" class="action-btn move-down p-2 text-blue-400 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 hover:border-blue-400/60 rounded-lg transition-all disabled:opacity-30 disabled:hover:bg-blue-500/20 disabled:cursor-not-allowed shadow-sm hover:shadow-md hover:shadow-blue-500/20" title="Move down" ${index === appState.catalogs.length - 1 ? 'disabled' : ''}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                    </button>
-                </div>
-            </div>
-            <div class="flex-grow min-w-0">
-                <div class="flex items-center gap-2 sm:gap-3">
-                    <div class="name-container relative flex items-center min-w-0 h-9 flex-grow">
-                        <span class="catalog-name-text font-medium text-white break-words leading-snug sm:truncate cursor-default w-full">${escapeHtml(cat.name)}</span>
-                        <div class="catalog-name-input-wrapper hidden absolute inset-0 w-full bg-neutral-950 border border-white/20 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-white/20 focus-within:border-white/30">
-                            <input type="text" class="catalog-name-input w-full h-full bg-transparent pl-3 pr-20 text-white outline-none text-sm font-medium font-mono" value="${escapeHtml(cat.name)}">
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        ${isRenamable ? `<button type="button" class="catalog-action-btn rename-btn p-2 rounded-lg transition-all text-amber-400 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 hover:border-amber-400/60 shadow-sm hover:shadow-md hover:shadow-amber-500/10" title="Rename" data-catalog-id="${cat.id}" data-action="rename">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                        </button>` : ''}
-                        <div class="tooltip-wrapper">
-                            <button type="button" class="catalog-action-btn home-btn p-2 rounded-lg transition-all ${cat.display_at_home ? 'text-emerald-400 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 hover:border-emerald-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-emerald-500/10" data-catalog-id="${cat.id}" data-action="home">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                                </svg>
-                            </button>
-                            <span class="custom-tooltip" data-tooltip-text="${cat.display_at_home ? 'Hide from Home Page - This catalog will not appear on your Stremio home screen' : 'Show on Home Page - Display this catalog on your Stremio home screen'}">${cat.display_at_home ? 'Hide from Home Page- Only display this catalog in discover section.' : 'Show on Home Page as well as Discover section.'}</span>
-                        </div>
-                        <div class="tooltip-wrapper">
-                            <button type="button" class="catalog-action-btn shuffle-btn p-2 rounded-lg transition-all ${cat.shuffle ? 'text-purple-400 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 hover:border-purple-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-purple-500/10" data-catalog-id="${cat.id}" data-action="shuffle">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
-                                </svg>
-                            </button>
-                            <span class="custom-tooltip" data-tooltip-text="${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}">${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}</span>
-                        </div>
-                        <div class="tooltip-wrapper">
-                            <button type="button" class="catalog-action-btn visibility-btn p-2 rounded-lg transition-all ${cat.enabled ? 'text-cyan-400 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 hover:border-cyan-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-cyan-500/10" data-catalog-id="${cat.id}" data-action="visibility">
-                                ${cat.enabled ? `
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                ` : `
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
-                                        <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
-                                        <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
-                                        <line x1="2" x2="22" y1="2" y2="22"></line>
-                                    </svg>
-                                `}
-                            </button>
-                            <span class="custom-tooltip" data-tooltip-text="${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}">${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 sm:gap-3 mt-2">
-                    <div class="catalog-desc text-xs text-slate-400 flex-grow">${escapeHtml(cat.description || '')}</div>
-                </div>
-                <div class="mt-3 flex flex-wrap items-center gap-3">
-            <div class="inline-flex items-center bg-neutral-900/60 border border-white/10 rounded-xl p-1 backdrop-blur-sm" role="group" aria-label="Content type selection">
-                <button type="button" class="catalog-type-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none ${activeMode === 'both' ? 'bg-white/10 text-white border border-white/20 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}" data-catalog-id="${cat.id}" data-mode="both">
-                    Both
-                </button>
-                <button type="button" class="catalog-type-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none ${activeMode === 'movie' ? 'bg-white/10 text-white border border-white/20 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}" data-catalog-id="${cat.id}" data-mode="movie">
-                    Movie
-                </button>
-                <button type="button" class="catalog-type-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none ${activeMode === 'series' ? 'bg-white/10 text-white border border-white/20 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}" data-catalog-id="${cat.id}" data-mode="series">
-                    Series
+                <button type="button" class="${MOVE_BTN_CLASS} move-down" title="Move down" aria-label="Move down" ${index === appState.catalogs.length - 1 ? 'disabled' : ''}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
             </div>
-            ${hasRowCount ? `<div class="inline-flex items-center bg-neutral-900/60 border border-white/10 rounded-xl p-1 backdrop-blur-sm" role="group" aria-label="Number of rows">
-                <span class="px-3 text-sm text-slate-400">Rows</span>
-                <button type="button" class="rows-btn px-3 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed" data-step="-1" aria-label="Fewer rows" ${cat.rows <= 1 ? 'disabled' : ''}>&minus;</button>
-                <span class="rows-value w-6 text-center text-sm font-medium text-white">${cat.rows}</span>
-                <button type="button" class="rows-btn px-3 py-2 text-sm font-medium rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed" data-step="1" aria-label="More rows" ${cat.rows >= window.MAX_ITEM_ROWS ? 'disabled' : ''}>+</button>
+            <button type="button" role="switch" aria-checked="${cat.enabled}" aria-label="Enable ${escapeHtml(cat.name)}" title="Show this catalog in Stremio" class="catalog-action-btn visibility-btn group/switch mt-1.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full bg-white/15 transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 aria-checked:bg-accent aria-checked:hover:bg-accent-hover" data-catalog-id="${cat.id}" data-action="visibility">
+                <span class="pointer-events-none ml-0.5 h-5 w-5 rounded-full bg-slate-400 shadow transition group-aria-checked/switch:translate-x-5 group-aria-checked/switch:bg-white"></span>
+            </button>
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1">
+                    <div class="name-container relative flex h-9 min-w-0 flex-1 items-center">
+                        <span class="catalog-name-text w-full cursor-default truncate font-medium text-white group-data-[enabled=false]/row:text-slate-400">${escapeHtml(cat.name)}</span>
+                        <div class="catalog-name-input-wrapper absolute inset-0 hidden w-full overflow-hidden rounded-lg border border-white/15 bg-surface-sunken focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30">
+                            <input type="text" class="catalog-name-input h-full w-full bg-transparent pl-3 pr-20 text-sm font-medium text-white outline-none" value="${escapeHtml(cat.name)}">
+                        </div>
+                    </div>
+                    ${isRenamable ? `<button type="button" class="catalog-action-btn rename-btn icon-btn flex-shrink-0" title="Rename" aria-label="Rename" data-catalog-id="${cat.id}" data-action="rename">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>` : ''}
+                </div>
+                <details class="catalog-desc group/desc">
+                    <summary class="line-clamp-1 cursor-pointer list-none text-sm leading-relaxed text-slate-400 hover:text-slate-300 group-open/desc:line-clamp-none group-data-[enabled=false]/row:text-slate-500 [&::-webkit-details-marker]:hidden" title="${description}">${description}</summary>
+                </details>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 pl-10 sm:pl-[5.75rem] lg:ml-auto lg:flex-shrink-0 lg:justify-end lg:pl-0">
+            ${hasRowCount ? `<div class="inline-flex h-9 items-center rounded-lg border border-white/10 bg-surface-sunken pl-3 pr-0.5" role="group" aria-label="Number of rows">
+                <span class="mr-1 text-sm text-slate-400">Rows</span>
+                <button type="button" class="${ROWS_BTN_CLASS}" data-step="-1" aria-label="Fewer rows" ${cat.rows <= 1 ? 'disabled' : ''}>&minus;</button>
+                <span class="rows-value w-5 text-center text-sm font-medium text-white">${cat.rows}</span>
+                <button type="button" class="${ROWS_BTN_CLASS}" data-step="1" aria-label="More rows" ${cat.rows >= window.MAX_ITEM_ROWS ? 'disabled' : ''}>+</button>
             </div>` : ''}
+            <div class="inline-flex h-9 items-center rounded-lg border border-white/10 bg-surface-sunken p-0.5" role="group" aria-label="Content type">
+                <button type="button" class="${TYPE_BTN_CLASS}" aria-pressed="${activeMode === 'both'}" data-catalog-id="${cat.id}" data-mode="both">Both</button>
+                <button type="button" class="${TYPE_BTN_CLASS}" aria-pressed="${activeMode === 'movie'}" data-catalog-id="${cat.id}" data-mode="movie">Movie</button>
+                <button type="button" class="${TYPE_BTN_CLASS}" aria-pressed="${activeMode === 'series'}" data-catalog-id="${cat.id}" data-mode="series">Series</button>
+            </div>
+            <button type="button" class="${CHIP_CLASS} home-btn" aria-pressed="${cat.display_at_home}" title="Also show this row on the Stremio home screen, not only in Discover" data-catalog-id="${cat.id}" data-action="home">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                Home
+            </button>
+            <button type="button" class="${CHIP_CLASS} shuffle-btn" aria-pressed="${cat.shuffle}" title="Shuffle this row instead of showing it in recommended order" data-catalog-id="${cat.id}" data-action="shuffle">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"></path>
+                    <path d="m18 2 4 4-4 4"></path>
+                    <path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"></path>
+                    <path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"></path>
+                    <path d="m18 14 4 4-4 4"></path>
+                </svg>
+                Shuffle
+            </button>
         </div>
     `;
 
@@ -168,17 +151,13 @@ function createCatalogItem(cat, index) {
         });
     }
 
-    // Handle visibility button toggle (replaces old switch)
     const visibilityBtn = item.querySelector('.visibility-btn');
-    if (visibilityBtn) {
-        visibilityBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            cat.enabled = !cat.enabled;
-            updateVisibilityButton(visibilityBtn, cat.enabled);
-            if (cat.enabled) item.classList.remove('opacity-50');
-            else item.classList.add('opacity-50');
-        });
-    }
+    visibilityBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        cat.enabled = !cat.enabled;
+        visibilityBtn.setAttribute('aria-checked', String(cat.enabled));
+        item.dataset.enabled = String(cat.enabled);
+    });
 
     // Handle movie/series toggle button changes
     const allTypeButtons = item.querySelectorAll(`.catalog-type-btn[data-catalog-id="${cat.id}"]`);
@@ -199,38 +178,26 @@ function createCatalogItem(cat, index) {
                 cat.enabledSeries = true;
             }
 
-            // Update UI
-            allTypeButtons.forEach(b => {
-                b.classList.remove('bg-white/10', 'text-white', 'border-white/20', 'shadow-sm');
-                b.classList.add('text-slate-400', 'hover:text-white', 'hover:bg-white/5', 'border-transparent');
-            });
-            e.target.classList.remove('text-slate-400', 'hover:text-white', 'hover:bg-white/5', 'border-transparent');
-            e.target.classList.add('bg-white/10', 'text-white', 'border-white/20', 'shadow-sm');
+            allTypeButtons.forEach(b => b.setAttribute('aria-pressed', String(b === e.target)));
         });
     });
 
     item.querySelector('.move-up').addEventListener('click', (e) => { e.preventDefault(); moveCatalogUp(index); });
     item.querySelector('.move-down').addEventListener('click', (e) => { e.preventDefault(); moveCatalogDown(index); });
 
-    // Handle home button toggle
     const homeBtn = item.querySelector('.home-btn');
-    if (homeBtn) {
-        homeBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            cat.display_at_home = !cat.display_at_home;
-            updateHomeButton(homeBtn, cat.display_at_home);
-        });
-    }
+    homeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        cat.display_at_home = !cat.display_at_home;
+        homeBtn.setAttribute('aria-pressed', String(cat.display_at_home));
+    });
 
-    // Handle shuffle button toggle
     const shuffleBtn = item.querySelector('.shuffle-btn');
-    if (shuffleBtn) {
-        shuffleBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            cat.shuffle = !cat.shuffle;
-            updateShuffleButton(shuffleBtn, cat.shuffle);
-        });
-    }
+    shuffleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        cat.shuffle = !cat.shuffle;
+        shuffleBtn.setAttribute('aria-pressed', String(cat.shuffle));
+    });
 
     item.querySelectorAll('.rows-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -247,86 +214,6 @@ function createCatalogItem(cat, index) {
     return item;
 }
 
-// Helper function to update button state with active/inactive classes and tooltips
-function updateButtonState(btn, isActive, activeClasses, inactiveTooltip, activeTooltip, activeHTML = null, inactiveHTML = null) {
-    const inactiveClasses = ['text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60'];
-
-    // Find the tooltip element (it's a sibling in the tooltip-wrapper)
-    const tooltipWrapper = btn.closest('.tooltip-wrapper');
-    const tooltip = tooltipWrapper ? tooltipWrapper.querySelector('.custom-tooltip') : null;
-
-    if (isActive) {
-        btn.classList.remove(...inactiveClasses);
-        btn.classList.add(...activeClasses);
-        if (tooltip) {
-            tooltip.textContent = activeTooltip;
-            tooltip.setAttribute('data-tooltip-text', activeTooltip);
-        }
-        if (activeHTML !== null) {
-            btn.innerHTML = activeHTML;
-        }
-    } else {
-        btn.classList.remove(...activeClasses);
-        btn.classList.add(...inactiveClasses);
-        if (tooltip) {
-            tooltip.textContent = inactiveTooltip;
-            tooltip.setAttribute('data-tooltip-text', inactiveTooltip);
-        }
-        if (inactiveHTML !== null) {
-            btn.innerHTML = inactiveHTML;
-        }
-    }
-}
-
-function updateHomeButton(btn, isActive) {
-    const activeClasses = ['text-emerald-400', 'bg-emerald-500/20', 'border-emerald-500/40', 'hover:bg-emerald-500/30', 'hover:border-emerald-400/60'];
-    updateButtonState(
-        btn,
-        isActive,
-        activeClasses,
-        'Show on Home Page - Display this catalog on your Stremio home screen',
-        'Hide from Home Page - This catalog will not appear on your Stremio home screen'
-    );
-}
-
-function updateShuffleButton(btn, isActive) {
-    const activeClasses = ['text-purple-400', 'bg-purple-500/20', 'border-purple-500/40', 'hover:bg-purple-500/30', 'hover:border-purple-400/60'];
-    updateButtonState(
-        btn,
-        isActive,
-        activeClasses,
-        'Enable Random Order - Shuffle items in this catalog randomly',
-        'Disable Random Order - Show items in recommended order'
-    );
-}
-
-function updateVisibilityButton(btn, isActive) {
-    const activeClasses = ['text-cyan-400', 'bg-cyan-500/20', 'border-cyan-500/40', 'hover:bg-cyan-500/30', 'hover:border-cyan-400/60'];
-    const activeHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-        </svg>
-    `;
-    const inactiveHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
-            <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
-            <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
-            <line x1="2" x2="22" y1="2" y2="22"></line>
-        </svg>
-    `;
-    updateButtonState(
-        btn,
-        isActive,
-        activeClasses,
-        'Enable Catalog - Show this catalog in Stremio',
-        'Disable Catalog - Hide this catalog from Stremio',
-        activeHTML,
-        inactiveHTML
-    );
-}
-
 function setupRenameLogic(item, cat) {
     const nameContainer = item.querySelector('.name-container');
     const nameText = item.querySelector('.catalog-name-text');
@@ -335,10 +222,10 @@ function setupRenameLogic(item, cat) {
     const renameBtn = item.querySelector('.rename-btn');
 
     const editActions = document.createElement('div');
-    editActions.className = 'edit-actions hidden absolute right-1 top-0 bottom-0 flex items-center gap-1.5 pr-1 z-10';
+    editActions.className = 'edit-actions hidden absolute right-1 top-0 bottom-0 flex items-center gap-1 pr-0.5 z-10';
     editActions.innerHTML = `
-        <button type="button" class="edit-btn save p-1.5 h-full flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded transition" title="Save"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
-        <button type="button" class="edit-btn cancel p-1.5 h-full flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition" title="Cancel"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+        <button type="button" class="edit-btn save p-1.5 h-full flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 rounded-md transition" title="Save" aria-label="Save"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+        <button type="button" class="edit-btn cancel p-1.5 h-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-md transition" title="Cancel" aria-label="Cancel"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     `;
     nameInputWrapper.appendChild(editActions);
 
