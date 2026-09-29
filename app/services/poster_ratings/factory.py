@@ -4,7 +4,6 @@ from typing import Literal
 from app.services.poster_ratings.custom import CustomPosterService
 from app.services.poster_ratings.rpdb import RPDBService
 from app.services.poster_ratings.top_posters import TopPostersService
-from app.services.token_store import token_store
 
 
 class PosterProvider(Enum):
@@ -27,13 +26,6 @@ class PosterRatingsFactory:
         item_id: str,
         **kwargs,
     ) -> str | None:
-
-        if api_key and api_key.startswith("gAAAAA"):
-            api_key = token_store.decrypt_token(api_key)
-            # if still gAAA, decryption failed — keep the original url
-            if api_key.startswith("gAAAAA"):
-                return kwargs.get("fallback")
-
         if poster_provider == PosterProvider.CUSTOM:
             # Custom-only kwargs must not flow into the key-based services, which
             # urlencode their kwargs straight into the query string.

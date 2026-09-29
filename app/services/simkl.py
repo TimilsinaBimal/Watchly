@@ -91,7 +91,6 @@ class SimklService:
         return await self.client.get("/users/settings", headers=headers)
 
     async def _fetch_with_semaphore(self, coro):
-        """Execute a coroutine with semaphore for rate limiting."""
         async with self._semaphore:
             return await coro
 
@@ -103,10 +102,10 @@ class SimklService:
             # propagate so callers can clear the token and prompt re-auth.
             if e.response.status_code in (401, 403):
                 raise
-            logger.warning(f"Simkl trending returned {e.response.status_code}: {e}")
+            logger.warning(f"Simkl trending returned {e.response.status_code}")
             return []
         except httpx.RequestError as e:
-            logger.warning(f"Simkl trending request failed: {e}")
+            logger.warning(f"Simkl trending request failed: {type(e).__name__}")
             return []
 
     async def get_item_details(self, simkl_id, mtype: str, api_key: str) -> dict[str, Any]:
@@ -128,10 +127,10 @@ class SimklService:
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
                 raise
-            logger.warning(f"Simkl item details {simkl_id} returned {e.response.status_code}: {e}")
+            logger.warning(f"Simkl item details {simkl_id} returned {e.response.status_code}")
             return {}
         except httpx.RequestError as e:
-            logger.warning(f"Simkl item details {simkl_id} request failed: {e}")
+            logger.warning(f"Simkl item details {simkl_id} request failed: {type(e).__name__}")
             return {}
 
     async def get_history(self, access_token: str, client_id: str) -> WatchHistory:
@@ -153,7 +152,7 @@ class SimklService:
 
         for idx, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.warning(f"Simkl sync request failed: {result}")
+                logger.warning(f"Simkl sync request failed: {type(result).__name__}")
                 continue
             data = result if isinstance(result, dict) else {}
             mtype = "movie" if idx == 0 else "series"
@@ -212,7 +211,7 @@ class SimklService:
             return []
 
         recommendations = item_details.get("users_recommendations", [])
-        logger.info(f"Extending simkl recommendations for {imdb_id}")
+        logger.debug(f"Extending simkl recommendations for {imdb_id}")
 
         tasks = [self.get_item_details(rec.get("ids", {}).get("simkl"), mtype, api_key) for rec in recommendations]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -220,7 +219,7 @@ class SimklService:
         final_results = []
         for result in results:
             if isinstance(result, Exception):
-                logger.error(f"Error fetching details from Simkl: {result}")
+                logger.error(f"Error fetching details from Simkl: {type(result).__name__}")
                 continue
             if not result:
                 continue
@@ -240,37 +239,17 @@ class SimklService:
         year_min: int | None = None,
         year_max: int | None = None,
     ) -> list[dict[str, Any]]:
+        """Recommendations for several seeds, deduplicated and normalized to the TMDB shape.
+
+        Details are fetched only for recommendations that arrive without a TMDB id.
         """
-        Fetch recommendations for multiple items efficiently.
+        logger.debug(f"Fetching Simkl recommendations batch for {len(imdb_ids)} items")
 
-        Optimizations:
-        1. Parallel fetch with semaphore (max 10 concurrent)
-        2. Limit recommendations per source item
-        3. Skip detail fetch if TMDB ID already present
-        4. Deduplicate across all source items
-        5. Early year filtering to reduce API calls
-        6. In-memory cache for item details
-
-        Args:
-            imdb_ids: List of IMDB IDs to get recommendations for
-            mtype: Media type (movie/tv)
-            api_key: Simkl API key
-            max_per_item: Max recommendations per source item
-            year_min: Minimum year for filtering (optional)
-            year_max: Maximum year for filtering (optional)
-
-        Returns:
-            List of normalized TMDB-compatible items
-        """
-        logger.info(f"Fetching Simkl recommendations batch for {len(imdb_ids)} items")
-
-        # Step 1: Fetch item details for all source items (to get users_recommendations)
         detail_tasks = [
             self._fetch_with_semaphore(self.get_item_details(imdb_id, mtype, api_key)) for imdb_id in imdb_ids
         ]
         source_details = await asyncio.gather(*detail_tasks, return_exceptions=True)
 
-        # Step 2: Collect all recommendations, deduplicate by simkl_id
         all_recs: dict[int, dict] = {}  # simkl_id -> rec data
         needs_detail_fetch: list[int] = []  # simkl_ids that need full details
 
@@ -280,7 +259,6 @@ class SimklService:
 
             recs = detail.get("users_recommendations", [])[:max_per_item]
             for rec in recs:
-                # Early year filtering
                 year = rec.get("year")
                 if year_min and year and year < year_min:
                     continue
@@ -294,15 +272,11 @@ class SimklService:
 
                 all_recs[simkl_id] = rec
 
-                # Check if we need to fetch details (missing TMDB ID)
                 if not ids.get("tmdb"):
                     needs_detail_fetch.append(simkl_id)
 
-        logger.info(
-            f"Collected {len(all_recs)} unique recommendations, " f"{len(needs_detail_fetch)} need detail fetch"
-        )
+        logger.debug(f"Collected {len(all_recs)} unique recommendations, {len(needs_detail_fetch)} need detail fetch")
 
-        # Step 3: Fetch missing details (only for items without TMDB ID)
         if needs_detail_fetch:
             detail_tasks = [
                 self._fetch_with_semaphore(self.get_item_details(simkl_id, mtype, api_key))
@@ -313,21 +287,18 @@ class SimklService:
             for simkl_id, detail in zip(needs_detail_fetch, fetched_details):
                 if isinstance(detail, Exception) or not detail:
                     continue
-                # Update the rec with full details
                 all_recs[simkl_id] = detail
 
-        # Step 4: Normalize all items to TMDB format
         normalized = []
         for simkl_id, rec in all_recs.items():
             tmdb_id = rec.get("ids", {}).get("tmdb")
             if not tmdb_id:
-                # Skip items we couldn't resolve to TMDB
                 continue
 
             normalized_item = normalize_simkl_to_tmdb(rec, mtype)
             normalized.append(normalized_item)
 
-        logger.info(f"Returning {len(normalized)} normalized Simkl recommendations")
+        logger.debug(f"Returning {len(normalized)} normalized Simkl recommendations")
         return normalized
 
 

@@ -5,20 +5,15 @@ import httpx
 from async_lru import alru_cache
 from loguru import logger
 
+from app.core.config import settings
 from app.services.tmdb.client import TMDBClient
 
 
 class TMDBService:
-    """
-    Service for interacting with The Movie Database (TMDB) API.
-    Refactored to use TMDBClient for better resilience and maintainability.
-    """
-
     def __init__(self, api_key: str, language: str = "en-US"):
         self.client = TMDBClient(api_key=api_key, language=language)
 
     async def close(self):
-        """Close the underlying HTTP client."""
         await self.client.close()
 
     @alru_cache(maxsize=1000)
@@ -31,14 +26,12 @@ class TMDBService:
             if not data or not isinstance(data, dict):
                 return None, None
 
-            # Check movie results
             movie_results = data.get("movie_results", [])
             if movie_results:
                 tmdb_id = movie_results[0].get("id")
                 if tmdb_id:
                     return tmdb_id, "movie"
 
-            # Check TV results
             tv_results = data.get("tv_results", [])
             if tv_results:
                 tmdb_id = tv_results[0].get("id")
@@ -49,10 +42,10 @@ class TMDBService:
         except httpx.HTTPStatusError as e:
             # Log 404 as warning (item just not in TMDB), 5xx as error.
             level = "warning" if e.response.status_code == 404 else "error"
-            getattr(logger, level)(f"TMDB find_by_imdb_id({imdb_id}) HTTP {e.response.status_code}: {e}")
+            getattr(logger, level)(f"TMDB find_by_imdb_id({imdb_id}) HTTP {e.response.status_code}")
             return None, None
-        except Exception as e:
-            logger.exception(f"Unexpected error finding TMDB ID for IMDB {imdb_id}: {e}")
+        except Exception:
+            logger.exception(f"Unexpected error finding TMDB ID for IMDB {imdb_id}")
             return None, None
 
     @alru_cache(maxsize=500, ttl=86400)
@@ -103,9 +96,7 @@ class TMDBService:
     @alru_cache(maxsize=500, ttl=86400)
     async def search_keywords(self, query: str, page: int = 1) -> dict[str, Any]:
         """Search keywords by name. Returns { results: [ { id, name } ], ... }."""
-        if not (query or str(query).strip()):
-            return {"results": []}
-        return await self.client.get("/search/keyword", params={"query": str(query).strip(), "page": page})
+        return await self.client.get("/search/keyword", params={"query": query, "page": page})
 
     @alru_cache(maxsize=500, ttl=86400)
     async def get_person_details(self, person_id: int) -> dict[str, Any]:
@@ -150,17 +141,7 @@ class TMDBService:
     @staticmethod
     def _score_image(img: dict[str, Any]) -> tuple[float, int]:
         """Higher is better (TMDB vote fields)."""
-        va = img.get("vote_average")
-        vc = img.get("vote_count")
-        try:
-            va_f = float(va) if va is not None else 0.0
-        except (TypeError, ValueError):
-            va_f = 0.0
-        try:
-            vc_i = int(vc) if vc is not None else 0
-        except (TypeError, ValueError):
-            vc_i = 0
-        return (va_f, vc_i)
+        return (img.get("vote_average") or 0.0, img.get("vote_count") or 0)
 
     @classmethod
     def _pick_best_in_language_bucket(
@@ -176,9 +157,7 @@ class TMDBService:
             candidates = [img for img in images_list if (img.get("iso_639_1") or "").lower() == iso_l]
         if not candidates:
             return None
-        best = max(candidates, key=cls._score_image)
-        path = best.get("file_path")
-        return path if path else None
+        return max(candidates, key=cls._score_image).get("file_path") or None
 
     @classmethod
     def _pick_logo_by_language(
@@ -224,7 +203,7 @@ class TMDBService:
         Build preferred lang order and include_image_language param from language (e.g. en-US, fr-FR).
         Returns (preferred_lang_codes, include_image_language).
         """
-        primary = (language or "en-US").split("-")[0].lower() if language else "en"
+        primary = (language.split("-")[0] or "en").lower()
         fallbacks = [c for c in ("en", "fr", "null") if c != primary]
         preferred = [primary, None, *[c for c in fallbacks if c != "null"]]
         include = ",".join([primary] + fallbacks)
@@ -264,7 +243,7 @@ class TMDBService:
         backdrops = data.get("backdrops") or []
 
         poster_path = self._pick_image_by_language(posters, preferred)
-        primary_iso = (lang or "en-US").split("-")[0].lower() if lang else "en"
+        primary_iso = (lang.split("-")[0] or "en").lower()
         logo_path = self._pick_logo_by_language(logos, primary_iso)
         backdrop_path = self._pick_image_by_language(backdrops, preferred)
 
@@ -280,8 +259,6 @@ class TMDBService:
 
 @functools.lru_cache(maxsize=128)
 def get_tmdb_service(language: str = "en-US", api_key: str | None = None) -> TMDBService:
-    from app.core.config import settings
-
     key = api_key or settings.TMDB_API_KEY
     if not key:
         raise ValueError("TMDB API key is required (set in settings or TMDB_API_KEY env).")

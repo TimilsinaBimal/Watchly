@@ -122,12 +122,9 @@ async def apply_catalog_translation(cat: dict[str, Any], target_lang: str | None
     if "_catalog_name_prefix" in cat and "_catalog_name_suffix" in cat:
         prefix = cat.pop("_catalog_name_prefix")
         suffix = cat.pop("_catalog_name_suffix")
-        label = await translation_service.translate(prefix, target_lang) if target_lang else prefix
+        label = await translation_service.translate(prefix, target_lang)
         cat["name"] = f"{label} {suffix}".strip()
         return
 
-    if cat.get("name") and target_lang:
-        try:
-            cat["name"] = await translation_service.translate(cat["name"], target_lang)
-        except Exception as e:
-            logger.warning(f"Failed to translate catalog name '{cat.get('name')}': {e}")
+    if cat.get("name"):
+        cat["name"] = await translation_service.translate(cat["name"], target_lang)

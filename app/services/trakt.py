@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Any
 
 from loguru import logger
@@ -181,7 +182,7 @@ class TraktService:
     @staticmethod
     def _safe_list(result, label: str) -> list:
         if isinstance(result, Exception):
-            logger.warning(f"Trakt {label} request failed: {result}")
+            logger.warning(f"Trakt {label} request failed: {type(result).__name__}")
             return []
         # BaseClient returns dict for JSON objects; Trakt list endpoints return
         # arrays which BaseClient parses to list — but its type is annotated as
@@ -197,8 +198,6 @@ class TraktService:
         if not date_str:
             return None
         try:
-            from datetime import datetime
-
             return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
         except (ValueError, TypeError):
             return None
