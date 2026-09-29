@@ -1,5 +1,6 @@
 // Catalog Management
 
+import { defaultCatalogs } from '../constants.js';
 import { escapeHtml } from './ui.js';
 
 let catalogList = null;
@@ -77,19 +78,25 @@ function createCatalogItem(cat, index) {
                 <span class="pointer-events-none ml-0.5 h-5 w-5 rounded-full bg-neutral-400 shadow transition group-aria-checked/switch:translate-x-5 group-aria-checked/switch:bg-white"></span>
             </button>
             <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-1">
-                    <div class="name-container relative flex h-9 min-w-0 flex-1 items-center">
-                        <span class="catalog-name-text w-full cursor-default truncate font-medium text-white group-data-[enabled=false]/row:text-neutral-300">${escapeHtml(cat.name)}</span>
-                        <div class="catalog-name-input-wrapper absolute inset-0 hidden w-full overflow-hidden rounded-lg border border-white/15 bg-surface-sunken focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30">
-                            <input type="text" class="catalog-name-input h-full w-full bg-transparent pl-3 pr-20 text-sm font-medium text-white outline-none" value="${escapeHtml(cat.name)}">
+                <div class="name-container flex h-9 min-w-0 items-center gap-1">
+                    <span class="catalog-name-text min-w-0 truncate font-medium text-white group-data-[enabled=false]/row:text-neutral-300 ${isRenamable ? 'cursor-text' : 'cursor-default'}">${escapeHtml(cat.name)}</span>
+                    ${isRenamable ? `<button type="button" class="catalog-action-btn rename-btn icon-btn h-8 w-8 flex-shrink-0" title="Rename" aria-label="Rename" data-catalog-id="${cat.id}" data-action="rename">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    </button>
+                    <button type="button" class="reset-name-btn icon-btn hidden h-8 w-8 flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    </button>
+                    <div class="catalog-name-input-wrapper hidden min-w-0 flex-1 items-center gap-1">
+                        <input type="text" class="catalog-name-input -ml-1.5 h-8 min-w-0 flex-1 rounded-md bg-surface-sunken px-1.5font-medium text-white outline-none ring-1 ring-white/10 transition focus:ring-2 focus:ring-accent/40" aria-label="Catalog name" autocomplete="off" spellcheck="false">
+                        <div class="edit-actions flex flex-shrink-0 items-center">
+                            <button type="button" class="edit-btn save icon-btn h-8 w-8 text-accent hover:bg-accent/10 hover:text-accent-soft" title="Save (Enter)" aria-label="Save name">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            </button>
+                            <button type="button" class="edit-btn cancel icon-btn h-8 w-8" title="Cancel (Esc)" aria-label="Cancel rename">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
                         </div>
-                    </div>
-                    ${isRenamable ? `<button type="button" class="catalog-action-btn rename-btn icon-btn flex-shrink-0" title="Rename" aria-label="Rename" data-catalog-id="${cat.id}" data-action="rename">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </button>` : ''}
+                    </div>` : ''}
                 </div>
                 <details class="catalog-desc group/desc">
                     <summary class="line-clamp-1 cursor-pointer list-none text-sm leading-relaxed text-neutral-300 hover:text-neutral-200 group-open/desc:line-clamp-none group-data-[enabled=false]/row:text-neutral-400 [&::-webkit-details-marker]:hidden" title="${description}">${description}</summary>
@@ -129,27 +136,6 @@ function createCatalogItem(cat, index) {
     `;
 
     if (isRenamable) setupRenameLogic(item, cat);
-
-    // Handle rename button (now always visible, triggers edit mode)
-    const renameBtn = item.querySelector('.rename-btn');
-    if (renameBtn) {
-        renameBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const nameContainer = item.querySelector('.name-container');
-            const nameText = item.querySelector('.catalog-name-text');
-            const nameInputWrapper = item.querySelector('.catalog-name-input-wrapper');
-            const nameInput = item.querySelector('.catalog-name-input');
-            const editActions = item.querySelector('.edit-actions');
-            if (nameContainer && nameText && nameInputWrapper && nameInput && editActions) {
-                nameContainer.classList.add('editing');
-                nameText.classList.add('hidden');
-                nameInputWrapper.classList.remove('hidden');
-                editActions.classList.remove('hidden');
-                editActions.classList.add('flex');
-                nameInput.focus();
-            }
-        });
-    }
 
     const visibilityBtn = item.querySelector('.visibility-btn');
     visibilityBtn.addEventListener('click', (e) => {
@@ -220,36 +206,52 @@ function setupRenameLogic(item, cat) {
     const nameInputWrapper = item.querySelector('.catalog-name-input-wrapper');
     const nameInput = item.querySelector('.catalog-name-input');
     const renameBtn = item.querySelector('.rename-btn');
+    const resetBtn = item.querySelector('.reset-name-btn');
+    const visibilityBtn = item.querySelector('.visibility-btn');
+    const defaultName = defaultCatalogs.find(d => d.id === cat.id).name;
+    resetBtn.title = `Renamed. Reset to "${defaultName}"`;
+    resetBtn.setAttribute('aria-label', resetBtn.title);
 
-    const editActions = document.createElement('div');
-    editActions.className = 'edit-actions hidden absolute right-1 top-0 bottom-0 flex items-center gap-1 pr-0.5 z-10';
-    editActions.innerHTML = `
-        <button type="button" class="edit-btn save p-1.5 h-full flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 rounded-md transition" title="Save" aria-label="Save"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
-        <button type="button" class="edit-btn cancel p-1.5 h-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 rounded-md transition" title="Cancel" aria-label="Cancel"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-    `;
-    nameInputWrapper.appendChild(editActions);
-
-    const saveBtn = editActions.querySelector('.save');
-    const cancelBtn = editActions.querySelector('.cancel');
-
-    function saveEdit() {
-        const newName = nameInput.value.trim();
-        if (newName) { cat.name = newName; nameText.textContent = newName; nameInput.value = newName; }
-        else { nameInput.value = cat.name; }
-        closeEdit();
+    function setName(name) {
+        cat.name = name;
+        nameText.textContent = name;
+        visibilityBtn.setAttribute('aria-label', `Enable ${name}`);
+        resetBtn.classList.toggle('hidden', name === defaultName);
     }
-    function cancelEdit() { nameInput.value = cat.name; closeEdit(); }
-    function closeEdit() {
+    function openEdit() {
+        nameInput.value = cat.name;
+        nameContainer.classList.add('editing');
+        nameText.classList.add('hidden');
+        renameBtn.classList.add('hidden');
+        resetBtn.classList.add('hidden');
+        nameInputWrapper.classList.replace('hidden', 'flex');
+        nameInput.focus();
+        nameInput.select();
+    }
+    function closeEdit(save, returnFocus) {
+        // Hiding or moving focus off the input fires focusout, which calls back in here.
+        if (!nameContainer.classList.contains('editing')) return;
         nameContainer.classList.remove('editing');
-        nameInputWrapper.classList.add('hidden');
-        editActions.classList.add('hidden'); editActions.classList.remove('flex');
+        nameInputWrapper.classList.replace('flex', 'hidden');
         nameText.classList.remove('hidden');
+        renameBtn.classList.remove('hidden');
+        setName(save ? nameInput.value.trim() || defaultName : cat.name);
+        if (returnFocus) renameBtn.focus();
     }
 
-    saveBtn.addEventListener('click', (e) => { e.preventDefault(); saveEdit(); });
-    cancelBtn.addEventListener('click', (e) => { e.preventDefault(); cancelEdit(); });
+    setName(cat.name);
+    renameBtn.addEventListener('click', openEdit);
+    nameText.addEventListener('click', openEdit);
+    resetBtn.addEventListener('click', () => { setName(defaultName); renameBtn.focus(); });
+    item.querySelector('.edit-btn.save').addEventListener('click', () => closeEdit(true, true));
+    item.querySelector('.edit-btn.cancel').addEventListener('click', () => closeEdit(false, true));
+    // Keep focus in the input on mouse press, so clicking Cancel doesn't blur-save first.
+    item.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('mousedown', (e) => e.preventDefault()));
     nameInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); saveEdit(); }
-        else if (e.key === 'Escape') { cancelEdit(); }
+        if (e.key === 'Enter') { e.preventDefault(); closeEdit(true, true); }
+        else if (e.key === 'Escape') { e.preventDefault(); closeEdit(false, true); }
+    });
+    nameInputWrapper.addEventListener('focusout', (e) => {
+        if (!nameInputWrapper.contains(e.relatedTarget)) closeEdit(true, false);
     });
 }
