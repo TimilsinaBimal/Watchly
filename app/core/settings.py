@@ -273,9 +273,3 @@ def resolve_tmdb_api_key(user_settings: UserSettings | None) -> str | None:
     if user_settings and user_settings.tmdb_api_key:
         return user_settings.tmdb_api_key
     return settings.TMDB_API_KEY
-
-
-class Credentials(BaseModel):
-    authKey: str
-    email: str
-    settings: UserSettings

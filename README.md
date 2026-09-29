@@ -183,7 +183,6 @@ All settings are environment variables. Only the first three are strictly requir
 | --- | --- | --- |
 | `REDIS_URL` | `redis://redis:6379/0` | Redis connection URL. Redis is required. |
 | `REDIS_MAX_CONNECTIONS` | `20` | Max Redis connections per process. |
-| `REDIS_CONNECTIONS_THRESHOLD` | `100` | Background Redis-heavy jobs back off above this many total clients. |
 | `REDIS_TOKEN_KEY` | `watchly:token:` | Key prefix for stored user tokens. |
 
 ### Optional integrations
@@ -206,8 +205,6 @@ All settings are environment variables. Only the first three are strictly requir
 | `CATALOG_REFRESH_INTERVAL_SECONDS` | `86400` | Background refresh interval (24 h). |
 | `CATALOG_CACHE_TTL` | `43200` | Rendered-catalog cache TTL (12 h). |
 | `CATALOG_STALE_TTL` | `604800` | Soft-expiration fallback for cached catalogs (7 d). |
-| `RECOMMENDATION_SOURCE_ITEMS_LIMIT` | `10` | Number of library items used to seed recommendations. |
-| `LIBRARY_ITEMS_LIMIT` | `20` | Library item cap used in parts of the pipeline. |
 | `ANNOUNCEMENT_HTML` | `""` | Optional HTML banner shown on the configure page. |
 | `ALLOW_SIGNUPS` | `true` | Set to `false` to lock the instance to existing accounts; new signups are rejected. |
 

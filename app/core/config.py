@@ -2,8 +2,6 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.core.version import __version__
-
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -27,9 +25,6 @@ class Settings(BaseSettings):
     # Maximum number of connections Redis client will open per process
     # Set conservatively to avoid unbounded connection growth under high concurrency
     REDIS_MAX_CONNECTIONS: int = 20
-    # If total connected clients reported by Redis exceeds this, background
-    # Redis-heavy jobs will back off. Tune according to your Redis capacity.
-    REDIS_CONNECTIONS_THRESHOLD: int = 100
     REDIS_TOKEN_KEY: str = "watchly:token:"
     TOKEN_SALT: str = "change-me"
     TOKEN_TTL_SECONDS: int = 0  # 0 = never expire
@@ -39,9 +34,6 @@ class Settings(BaseSettings):
     CATALOG_REFRESH_INTERVAL_SECONDS: int = 86400  # 24 hours
     APP_ENV: Literal["development", "production", "vercel"] = "production"
     HOST_NAME: str = "https://1ccea4301587-watchly.baby-beamup.club"
-
-    RECOMMENDATION_SOURCE_ITEMS_LIMIT: int = 10
-    LIBRARY_ITEMS_LIMIT: int = 20
 
     # How long a client may reuse a catalog response. Short on purpose: served ids
     # are stable slots now, so this header is the only thing telling Stremio a row's
@@ -57,5 +49,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-APP_VERSION = __version__

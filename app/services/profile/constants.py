@@ -24,7 +24,6 @@ FEATURE_WEIGHT_COUNTRY: Final[float] = 0.3  # Less important
 
 # Position Weights for Cast (lead actors matter more)
 CAST_POSITION_LEAD: Final[float] = 1.0
-CAST_POSITION_SUPPORTING: Final[float] = 0.5
 CAST_POSITION_MINOR: Final[float] = 0.2
 
 # Genre Position Weights (primary genre matters most)
@@ -42,7 +41,6 @@ CAP_COUNTRY: Final[float] = 20.0
 
 # Recency Decay (exponential decay parameters)
 RECENCY_HALF_LIFE_DAYS: Final[float] = 30.0
-RECENCY_DECAY_RATE: Final[float] = 0.98  # Daily decay multiplier (soft decay)
 
 # Smart Sampling
 # Was 30, which starved the parts of the profile that need volume: the creators
@@ -61,14 +59,8 @@ FREQUENCY_MULTIPLIER_BASE: Final[float] = 1.0
 FREQUENCY_MULTIPLIER_LOG_FACTOR: Final[float] = 0.1  # Subtle boost
 
 # Top Picks Caps (diversity constraints)
-TOP_PICKS_RECENCY_CAP: Final[float] = 0.15  # Max 15% recent items (from trending/popular)
 TOP_PICKS_GENRE_CAP: Final[float] = 0.50  # Max 50% per genre
 TOP_PICKS_CREATOR_CAP: Final[int] = 3  # Max 3 items per creator (director/actor)
-TOP_PICKS_ERA_CAP: Final[float] = 0.50  # Max 50% per era
-TOP_PICKS_MIN_VOTE_COUNT: Final[int] = 100  # Default base (dynamic based on settings)
-TOP_PICKS_MIN_RATING: Final[float] = 6.0  # Default base (dynamic based on settings)
-
-MAXIMUM_POPULARITY_SCORE: Final[float] = 100.0  # Increased from 15.0 to allow popular items
 
 # Runtime Bucket Boundaries (in minutes)
 RUNTIME_BUCKET_SHORT_MAX_SERIES: Final[int] = 30  # < 30 min
@@ -79,37 +71,3 @@ RUNTIME_BUCKET_MEDIUM_MAX_MOVIE: Final[int] = 180  # 120-180 min, > 180 is long
 # Profile Decay Settings
 PROFILE_DECAY_ENABLED: Final[bool] = True
 PROFILE_DECAY_FACTOR: Final[float] = 0.98  # 2% decay per update
-PROFILE_DECAY_DAYS_THRESHOLD: Final[int] = 30  # Apply decay after 7 days
-
-# TMDB Genre ID to Name mapping
-GENRE_MAP = {
-    # Movie Genres
-    28: "Action",
-    12: "Adventure",
-    16: "Animation",
-    35: "Comedy",
-    80: "Crime",
-    99: "Documentary",
-    18: "Drama",
-    10751: "Family",
-    14: "Fantasy",
-    36: "History",
-    27: "Horror",
-    10402: "Music",
-    9648: "Mystery",
-    10749: "Romance",
-    878: "Science Fiction",
-    10770: "TV Movie",
-    53: "Thriller",
-    10752: "War",
-    37: "Western",
-    # TV Genres
-    10759: "Action & Adventure",
-    10762: "Kids",
-    10763: "News",
-    10764: "Reality",
-    10765: "Sci-Fi & Fantasy",
-    10766: "Soap",
-    10767: "Talk",
-    10768: "War & Politics",
-}

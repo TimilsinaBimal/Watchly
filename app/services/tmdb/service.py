@@ -7,8 +7,6 @@ from loguru import logger
 
 from app.services.tmdb.client import TMDBClient
 
-# from app.services.profile.constants import TOP_PICKS_MIN_VOTE_COUNT, TOP_PICKS_MIN_RATING
-
 
 class TMDBService:
     """
@@ -94,9 +92,6 @@ class TMDBService:
         params = {"page": page, "sort_by": sort_by}
         if with_genres:
             params["with_genres"] = with_genres
-        # # always filter by vote count
-        # params["vote_count.gte"] = TOP_PICKS_MIN_VOTE_COUNT
-        # params["vote_average.gte"] = TOP_PICKS_MIN_RATING
         params.update(kwargs)
         return await self.client.get(f"/discover/{mt}", params=params)
 

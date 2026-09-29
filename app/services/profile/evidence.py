@@ -14,7 +14,6 @@ from app.services.profile.constants import (
 
 # Abandonment thresholds (in minutes of watch time)
 _ABANDON_IGNORE_MINUTES = 15  # < 15 min: too short, ignore
-_ABANDON_NEGATIVE_THRESHOLD = 0.30  # 15 min – 30%: mild negative
 
 
 class EvidenceCalculator:
