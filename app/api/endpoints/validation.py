@@ -2,14 +2,22 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
-from app.api.models.validation import BaseValidationInput, BaseValidationResponse, PosterRatingValidationInput
-from app.core.settings import LLMConfig
+from app.api.models.validation import (
+    BaseValidationInput,
+    BaseValidationResponse,
+    PosterPreview,
+    PosterPreviewInput,
+    PosterRatingValidationInput,
+)
+from app.core.security import STORED_SECRET_SENTINEL
+from app.core.settings import LLMConfig, PosterRatingConfig
 from app.services.llm import llm_service
 from app.services.poster_ratings.factory import PosterProvider, poster_ratings_factory
 from app.services.simkl import simkl_service
 from app.services.tmdb.client import TMDBClient
+from app.services.token_store import token_store
 from app.services.trakt import trakt_service
 
 router = APIRouter(tags=["Validation"])
@@ -69,6 +77,49 @@ async def validate_poster_rating_api_key(payload: PosterRatingValidationInput) -
     except Exception as e:
         logger.error(f"Poster rating validation failed: {str(e)}")
         return BaseValidationResponse(valid=False, message="Could not validate API key. Please try again.")
+
+
+PREVIEW_TITLES = [("Interstellar", "movie", "tt0816692"), ("Breaking Bad", "series", "tt0903747")]
+
+
+@router.post("/poster-rating/preview")
+async def preview_custom_poster_template(payload: PosterPreviewInput) -> list[PosterPreview]:
+    """Fill a custom poster template for two sample titles; the browser loads the images."""
+    try:
+        PosterRatingConfig(provider=PosterProvider.CUSTOM.value, url_template=payload.url_template)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=e.errors()[0]["msg"].removeprefix("Value error, "))
+
+    api_key = payload.api_key
+    if api_key == STORED_SECRET_SENTINEL:
+        # The page only holds the marker for a saved key, so resolve it the way a
+        # settings save would: same account, and only if it was saved for 'custom'.
+        if not payload.token:
+            raise HTTPException(status_code=400, detail="Log in again to preview with your saved API key.")
+        user_data = await token_store.get_user_data(await token_store.resolve_alias(payload.token))
+        if not user_data:
+            raise HTTPException(status_code=404, detail="Account not found. Log in again.")
+        stored = (user_data.get("settings") or {}).get("poster_rating") or {}
+        if stored.get("provider") != PosterProvider.CUSTOM.value or not stored.get("api_key"):
+            raise HTTPException(status_code=400, detail="No saved API key for the custom provider. Paste it again.")
+        api_key = stored["api_key"]
+
+    return [
+        PosterPreview(
+            title=title,
+            type=media_type,
+            url=poster_ratings_factory.get_poster_url(
+                PosterProvider.CUSTOM,
+                api_key,
+                "imdb",
+                imdb_id,
+                url_template=payload.url_template,
+                language=payload.language,
+                media_type=media_type,
+            ),
+        )
+        for title, media_type, imdb_id in PREVIEW_TITLES
+    ]
 
 
 @router.post("/simkl/validation")

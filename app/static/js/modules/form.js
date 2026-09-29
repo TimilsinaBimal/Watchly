@@ -311,6 +311,10 @@ function initializePosterRatingProvider() {
     const templateContainer = document.getElementById('posterRatingTemplateContainer');
     const templateInput = document.getElementById('posterRatingUrlTemplate');
     const templateMessage = document.getElementById('posterRatingTemplateMessage');
+    const previewContainer = document.getElementById('posterPreviewContainer');
+    const previewBtn = document.getElementById('posterPreviewBtn');
+    const previewMessage = document.getElementById('posterPreviewMessage');
+    const previewGrid = document.getElementById('posterPreviewGrid');
 
     if (!providerSelect || !apiKeyContainer || !apiKeyInput || !helpContainer || !helpText) {
         return null;
@@ -349,6 +353,73 @@ function initializePosterRatingProvider() {
         isValidated = false;
         clearValidationMessage(validationMessage);
         if (templateMessage) clearValidationMessage(templateMessage);
+        clearPreview();
+    }
+
+    function clearPreview() {
+        if (!previewGrid) return;
+        previewGrid.replaceChildren();
+        previewGrid.classList.add('hidden');
+        clearValidationMessage(previewMessage);
+    }
+
+    function posterTile(title, url) {
+        const tile = document.createElement('figure');
+        const frame = document.createElement('div');
+        frame.className = 'aspect-[2/3] overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] animate-pulse';
+        const img = document.createElement('img');
+        img.className = 'h-full w-full object-cover';
+        img.alt = `${title} poster`;
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('load', () => frame.classList.remove('animate-pulse'));
+        img.addEventListener('error', () => {
+            const note = document.createElement('div');
+            note.className = 'flex h-full items-center justify-center p-3 text-center text-xs text-neutral-400';
+            note.textContent = 'Couldn\u2019t load this poster \u2014 check the template';
+            frame.classList.remove('animate-pulse');
+            frame.replaceChildren(note);
+        });
+        img.src = url;
+        frame.appendChild(img);
+        const caption = document.createElement('figcaption');
+        caption.className = 'mt-2 truncate text-xs text-neutral-300';
+        caption.textContent = title;
+        tile.append(frame, caption);
+        return tile;
+    }
+
+    async function showPreview() {
+        const apiKey = apiKeyInput.value.trim();
+        const payload = {
+            url_template: templateInput?.value.trim() || '',
+            api_key: apiKey || null,
+            language: languageSelect?.value || undefined,
+            // The marker stands for the saved key, which only the server can look up.
+            token: apiKey === window.STORED_SECRET ? appState?.auth.token || undefined : undefined
+        };
+
+        clearPreview();
+        previewBtn.disabled = true;
+        previewBtn.textContent = 'Loading\u2026';
+        try {
+            const response = await fetch('/poster-rating/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setValidationMessage(previewMessage, data.detail || 'Preview failed. Please try again.', 'error');
+                return;
+            }
+            previewGrid.replaceChildren(...data.map(poster => posterTile(poster.title, poster.url)));
+            previewGrid.classList.remove('hidden');
+        } catch {
+            setValidationMessage(previewMessage, 'Preview failed. Please try again.', 'error');
+        } finally {
+            previewBtn.disabled = false;
+            previewBtn.textContent = 'Preview';
+        }
     }
 
     function updateUI() {
@@ -356,6 +427,7 @@ function initializePosterRatingProvider() {
 
         if (selectedProvider === 'custom') {
             if (templateContainer) templateContainer.style.display = 'block';
+            if (previewContainer) previewContainer.style.display = 'block';
             apiKeyContainer.style.display = 'block';
             helpContainer.style.display = 'block';
             helpText.innerHTML = CUSTOM_HELP;
@@ -364,6 +436,7 @@ function initializePosterRatingProvider() {
         }
 
         if (templateContainer) templateContainer.style.display = 'none';
+        if (previewContainer) previewContainer.style.display = 'none';
 
         const info = providerInfo[selectedProvider];
         if (info) {
@@ -464,6 +537,7 @@ function initializePosterRatingProvider() {
     if (validateBtn) {
         validateBtn.addEventListener('click', validateApiKey);
     }
+    if (previewBtn) previewBtn.addEventListener('click', showPreview);
 
     apiKeyInput.addEventListener('input', resetValidation);
     if (templateInput) templateInput.addEventListener('input', resetValidation);
