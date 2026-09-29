@@ -1,19 +1,15 @@
 import asyncio
-import random
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from loguru import logger
 
-from app.core.constants import DEFAULT_CATALOG_LIMIT
 from app.core.settings import UserSettings
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
 from app.services.profile.sampling import sample_items
 from app.services.profile.scorer import ProfileScorer
 from app.services.profile.scoring import ScoringService
-from app.services.recommendation.filtering import RecommendationFiltering
-from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.scoring import RecommendationScoring
 from app.services.recommendation.utils import content_type_to_mtype, resolve_tmdb_id
 from app.services.tmdb.service import TMDBService
@@ -38,7 +34,6 @@ class RewatchService:
         library_items: LibraryCollection,
         content_type: str,
         profile: TasteProfile | None,
-        limit: int = DEFAULT_CATALOG_LIMIT,
     ) -> list[dict[str, Any]]:
         typed = library_items.for_type(content_type)
         cutoff = datetime.now(timezone.utc) - COOLDOWN
@@ -74,7 +69,6 @@ class RewatchService:
         if failed:
             logger.warning(f"Rewatch: {failed}/{len(resolved)} {content_type} detail fetches failed, skipping them")
 
-        excluded = set(RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type))
         scored: list[tuple[float, dict[str, Any]]] = []
         for (sampled_item, _), details in zip(resolved, details_list):
             if isinstance(details, Exception) or not details:
@@ -82,8 +76,6 @@ class RewatchService:
             # A copy: the details dict is the alru_cache entry. Full details carry
             # `genres`, the scorer reads `genre_ids`.
             item = {**details, "genre_ids": [g["id"] for g in details.get("genres", [])]}
-            if excluded.intersection(item["genre_ids"]):
-                continue
             if profile:
                 score = RecommendationScoring.calculate_final_score(item, profile, self.scorer, mtype)
             else:
@@ -91,9 +83,4 @@ class RewatchService:
             scored.append((score * REACTION_BOOST[sampled_item.source_type], item))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        top = scored[: limit * 2]
-        picked = sorted(random.sample(top, k=min(limit, len(top))), key=lambda x: x[0], reverse=True)
-
-        return await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, [item for _, item in picked], content_type, user_settings=self.user_settings
-        )
+        return [item for _, item in scored]

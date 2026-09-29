@@ -18,6 +18,7 @@ from app.services.profile.service import ProfileService
 from app.services.recommendation.all_based import AllBasedService
 from app.services.recommendation.catalog_utils import clean_meta, shuffle_data_if_needed
 from app.services.recommendation.creators import CreatorsService
+from app.services.recommendation.filtering import RecommendationFiltering, filter_by_genres, filter_watched_by_imdb
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.metadata import RecommendationMetadata
 from app.services.recommendation.rewatch import RewatchService
@@ -267,8 +268,7 @@ class CatalogService:
         """Get trending items for new users without profiles."""
         try:
             trending = await tmdb_service.get_trending(content_type_to_mtype(content_type), "week")
-            items = trending.get("results", [])
-            return await RecommendationMetadata.fetch_batch(tmdb_service, items, content_type, user_settings=None)
+            return trending.get("results", [])
         except Exception as e:
             logger.warning(f"Failed to fetch trending items: {type(e).__name__}")
             return []
@@ -313,15 +313,12 @@ class CatalogService:
         limit: int,
         user_settings: UserSettings,
     ) -> list[dict[str, Any]]:
-        """Route to appropriate recommendation service based on catalog ID."""
+        """Route to the engine for this catalog, then filter and enrich its ranked candidates."""
         if any(catalog_id.startswith(p) for p in ("watchly.item.", "watchly.loved.", "watchly.watched.")):
             item_id = re.sub(r"^watchly\.(item|loved|watched)\.", "", catalog_id)
             recommendations = await ItemBasedService(tmdb_service, user_settings).get_recommendations_for_item(
                 item_id=item_id,
                 content_type=content_type,
-                watched_tmdb=watched_tmdb,
-                watched_imdb=watched_imdb,
-                limit=limit,
             )
 
         elif catalog_id.startswith("watchly.theme."):
@@ -329,8 +326,6 @@ class CatalogService:
                 theme_id=catalog_id,
                 content_type=content_type,
                 profile=profile,
-                watched_tmdb=watched_tmdb,
-                watched_imdb=watched_imdb,
                 limit=limit,
             )
 
@@ -339,9 +334,6 @@ class CatalogService:
                 recommendations = await CreatorsService(tmdb_service, user_settings).get_recommendations_from_creators(
                     profile=profile,
                     content_type=content_type,
-                    watched_tmdb=watched_tmdb,
-                    watched_imdb=watched_imdb,
-                    limit=limit,
                 )
             else:
                 logger.info(f"No profile for creators, showing trending {content_type}")
@@ -353,8 +345,6 @@ class CatalogService:
                     profile=profile,
                     content_type=content_type,
                     library_items=library_items,
-                    watched_tmdb=watched_tmdb,
-                    watched_imdb=watched_imdb,
                     limit=limit,
                 )
             else:
@@ -366,27 +356,29 @@ class CatalogService:
             recommendations = await AllBasedService(tmdb_service, user_settings).get_recommendations_from_all_items(
                 library_items=library_items,
                 content_type=content_type,
-                watched_tmdb=watched_tmdb,
-                watched_imdb=watched_imdb,
-                limit=limit,
                 item_type=item_type,
                 profile=profile,
             )
 
         elif catalog_id == "watchly.rewatch":
-            # Already-watched titles are the whole point, so no watched exclusion here.
             recommendations = await RewatchService(tmdb_service, user_settings).get_rewatch_picks(
                 library_items=library_items,
                 content_type=content_type,
                 profile=profile,
-                limit=limit,
             )
 
         else:
             logger.warning(f"Unknown catalog ID: {catalog_id}")
-            recommendations = []
+            return []
 
-        return recommendations
+        # Already-watched titles are the whole point of the rewatch row.
+        keep_watched = catalog_id == "watchly.rewatch"
+        excluded_ids = RecommendationFiltering.get_excluded_genre_ids(user_settings, content_type)
+        recommendations = filter_by_genres(recommendations, set() if keep_watched else watched_tmdb, excluded_ids)
+        enriched = await RecommendationMetadata.fetch_batch(
+            tmdb_service, recommendations, content_type, user_settings=user_settings
+        )
+        return enriched if keep_watched else filter_watched_by_imdb(enriched, watched_imdb)
 
 
 catalog_service = CatalogService()

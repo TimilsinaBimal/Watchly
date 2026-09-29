@@ -9,9 +9,12 @@
 ### Changed
 
 - After the scheduled catalog refresh, the home-screen rows are rebuilt straight away, so the next home screen doesn't wait on rows the refresh dropped.
+- Theme rows are no longer cut at 20 titles; a row keeps everything it ranked.
 
 ### Fixed
 
+- Top Picks honours excluded genres. Titles from Simkl and TMDB recommendations used to slip through.
+- The trending row shown before a taste profile exists honours excluded genres and leaves out titles already watched.
 - For Stremio-sourced users, the scheduled catalog refresh re-fetches the library and updates the taste profiles before rebuilding. It used to reuse the library cached at setup, and since every read renewed that cache, recommendations for an active user never reflected anything watched after the first fetch. Trakt and Simkl users keep the library from setup for now.
 - A failed Stremio library fetch (unreachable, a rejected session, an empty response, or the loved/liked lookup failing) is no longer cached as the user's library, which left rows empty or missing loved titles until the cache was dropped.
 - A scheduled catalog refresh no longer writes back the credentials it started with, which could undo a settings save or a Trakt token rotation made while it ran, or recreate a token deleted in the meantime.

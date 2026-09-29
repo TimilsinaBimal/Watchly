@@ -12,12 +12,7 @@ from app.services.profile.constants import (
     RUNTIME_BUCKET_SHORT_MAX_SERIES,
 )
 from app.services.profile.scorer import ProfileScorer
-from app.services.recommendation.filtering import (
-    RecommendationFiltering,
-    apply_discover_filters,
-    filter_watched_by_imdb,
-)
-from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.filtering import RecommendationFiltering, apply_discover_filters
 from app.services.recommendation.scoring import RecommendationScoring
 from app.services.recommendation.utils import content_type_to_mtype
 from app.services.tmdb.service import TMDBService
@@ -37,8 +32,6 @@ class ThemeBasedService:
         theme_id: str,
         content_type: str,
         profile: TasteProfile | None,
-        watched_tmdb: set[int],
-        watched_imdb: set[str],
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         anchors, flavors, fallbacks = self._parse_theme_id(theme_id)
@@ -147,16 +140,12 @@ class ThemeBasedService:
         unique_results = []
         seen = set()
         for _, item in scored:
-            if item["id"] not in seen and item["id"] not in watched_tmdb:
+            if item["id"] not in seen:
                 unique_results.append(item)
                 seen.add(item["id"])
             if len(unique_results) >= limit * 2:
                 break
-
-        enriched = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, unique_results, content_type, user_settings=self.user_settings
-        )
-        return filter_watched_by_imdb(enriched, watched_imdb)[:limit]
+        return unique_results
 
     def _parse_theme_id(self, theme_id: str) -> tuple[dict, dict, dict]:
         """Parse role-based ID: watchly.theme.a:g123.f:k456.b:y1990"""

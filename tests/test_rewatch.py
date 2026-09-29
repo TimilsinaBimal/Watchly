@@ -6,7 +6,7 @@ from app.models.library import LibraryCollection, StremioLibraryItem, StremioSta
 from app.models.profile import TasteProfile
 from app.services.recommendation.rewatch import RewatchService
 
-DRAMA, HORROR = 18, 27
+DRAMA = 18
 
 
 class FakeTMDB:
@@ -35,9 +35,6 @@ class FakeTMDB:
             raise LookupError(tmdb_id)
         return self.details[tmdb_id]
 
-    async def get_images_for_title(self, media_type: str, tmdb_id: int, language: str):
-        return {}
-
 
 def item(imdb: str, days_ago: int, loved: bool = False) -> StremioLibraryItem:
     return StremioLibraryItem(
@@ -56,10 +53,10 @@ def item(imdb: str, days_ago: int, loved: bool = False) -> StremioLibraryItem:
     )
 
 
-def picks(library: LibraryCollection, tmdb: FakeTMDB, settings=None, profile=None) -> list[str]:
-    service = RewatchService(tmdb, settings or get_default_settings())
+def picks(library: LibraryCollection, tmdb: FakeTMDB, profile=None) -> list[str]:
+    service = RewatchService(tmdb, get_default_settings())
     result = asyncio.run(service.get_rewatch_picks(library, "movie", profile))
-    return [m["id"] for m in result]
+    return [m["external_ids"]["imdb_id"] for m in result]
 
 
 def test_watched_titles_are_served_and_recent_ones_held_back():
@@ -76,13 +73,11 @@ def test_cooldown_is_ignored_when_everything_is_recent():
     assert picks(library, FakeTMDB(titles)) == ["tt1"]
 
 
-def test_excluded_genres_and_unknown_titles_are_dropped():
-    titles = {"tt1": (1, [DRAMA]), "tt2": (2, [HORROR])}
-    library = LibraryCollection(watched=[item("tt1", 400), item("tt2", 400), item("tt3", 400)])
-    settings = get_default_settings()
-    settings.excluded_movie_genres = [str(HORROR)]
+def test_unknown_titles_are_dropped():
+    titles = {"tt1": (1, [DRAMA])}
+    library = LibraryCollection(watched=[item("tt1", 400), item("tt3", 400)])
 
-    assert picks(library, FakeTMDB(titles), settings) == ["tt1"]
+    assert picks(library, FakeTMDB(titles)) == ["tt1"]
 
 
 def test_loved_outranks_a_slightly_better_watched_title():

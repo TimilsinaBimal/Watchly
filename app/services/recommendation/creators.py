@@ -6,8 +6,7 @@ from loguru import logger
 
 from app.core.settings import UserSettings
 from app.models.profile import TasteProfile
-from app.services.recommendation.filtering import RecommendationFiltering, filter_watched_by_imdb
-from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.filtering import RecommendationFiltering
 from app.services.recommendation.utils import content_type_to_mtype
 from app.services.tmdb.service import TMDBService
 
@@ -75,9 +74,6 @@ class CreatorsService:
         self,
         profile: TasteProfile,
         content_type: str,
-        watched_tmdb: set[int],
-        watched_imdb: set[str],
-        limit: int = 20,
     ) -> list[dict[str, Any]]:
         mtype = content_type_to_mtype(content_type)
 
@@ -130,33 +126,7 @@ class CreatorsService:
                 if item_id:
                     all_candidates[item_id] = item
 
-        # Filter candidates
-        excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
-        filtered = []
-
-        for item in all_candidates.values():
-            item_id = item.get("id")
-            if not item_id or item_id in watched_tmdb:
-                continue
-
-            # Genre whitelist check
-            genre_ids = item.get("genre_ids", [])
-
-            # Excluded genres check
-            if excluded_ids and any(gid in excluded_ids for gid in genre_ids):
-                continue
-
-            filtered.append(item)
-
-        # Enrich metadata
-        enriched = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, filtered, content_type, user_settings=self.user_settings
-        )
-
-        # Final filter (remove watched by IMDB ID)
-        final = filter_watched_by_imdb(enriched, watched_imdb)
-
-        return final
+        return list(all_candidates.values())
 
     async def _fetch_discover_page(
         self,

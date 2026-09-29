@@ -4,13 +4,7 @@ from typing import Any
 from loguru import logger
 
 from app.core.settings import UserSettings
-from app.services.recommendation.filtering import (
-    RecommendationFiltering,
-    filter_by_genres,
-    filter_items_by_settings,
-    filter_watched_by_imdb,
-)
-from app.services.recommendation.metadata import RecommendationMetadata
+from app.services.recommendation.filtering import filter_items_by_settings
 from app.services.recommendation.utils import content_type_to_mtype, resolve_tmdb_id
 from app.services.simkl import simkl_service
 from app.services.tmdb.service import TMDBService
@@ -27,16 +21,10 @@ class ItemBasedService:
         self,
         item_id: str,
         content_type: str,
-        watched_tmdb: set[int],
-        watched_imdb: set[str],
-        limit: int = 20,
     ) -> list[dict[str, Any]]:
         tmdb_id = await resolve_tmdb_id(item_id, self.tmdb_service)
         if not tmdb_id:
             return []
-
-        # The seed itself must not come back as its own recommendation.
-        watched_tmdb = watched_tmdb | {tmdb_id}
 
         mtype = content_type_to_mtype(content_type)
 
@@ -53,16 +41,10 @@ class ItemBasedService:
         else:
             candidates = tmdb_result
 
-        candidates = filter_items_by_settings(candidates, self.user_settings)
-        candidates = simkl_candidates + candidates
-
-        excluded_ids = RecommendationFiltering.get_excluded_genre_ids(self.user_settings, content_type)
-        filtered = filter_by_genres(candidates, watched_tmdb, excluded_ids)
-
-        enriched = await RecommendationMetadata.fetch_batch(
-            self.tmdb_service, filtered, content_type, user_settings=self.user_settings
-        )
-        return filter_watched_by_imdb(enriched, watched_imdb)
+        candidates = simkl_candidates + filter_items_by_settings(candidates, self.user_settings)
+        # The seed itself must not come back as its own recommendation, and for
+        # Trakt/Simkl users watched_tmdb won't contain it.
+        return [c for c in candidates if c.get("id") != tmdb_id]
 
     async def _fetch_candidates_from_simkl(self, imdb_id: str, mtype: str):
         simkl_api_key = self.user_settings.simkl_api_key
