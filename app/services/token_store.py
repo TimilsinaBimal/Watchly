@@ -75,10 +75,7 @@ class TokenStore:
         return IDENTITY_KEY.format(provider=provider, provider_user_id=provider_user_id)
 
     async def _set_with_token_ttl(self, key: str, value: str) -> None:
-        if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
-            await redis_service.set(key, value, settings.TOKEN_TTL_SECONDS)
-        else:
-            await redis_service.set(key, value)
+        await redis_service.set(key, value, settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None)
 
     async def get_token_for_identity(self, provider: str, provider_user_id: str) -> str | None:
         token = await redis_service.get(self._identity_key(provider, provider_user_id))
@@ -135,12 +132,7 @@ class TokenStore:
             if block and block.get("api_key"):
                 block["api_key"] = self._encrypt_once(block["api_key"])
 
-        json_str = json.dumps(storage_data)
-
-        if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
-            await redis_service.set(key, json_str, settings.TOKEN_TTL_SECONDS)
-        else:
-            await redis_service.set(key, json_str)
+        await self._set_with_token_ttl(key, json.dumps(storage_data))
 
         # Settings changes alter the catalog list, so a cached manifest built from
         # the old settings must not survive the write.
@@ -197,10 +189,7 @@ class TokenStore:
         # Save back to redis if any changes were made
         if needs_save:
             try:
-                if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
-                    await redis_service.set(redis_key, json.dumps(data), settings.TOKEN_TTL_SECONDS)
-                else:
-                    await redis_service.set(redis_key, json.dumps(data))
+                await self._set_with_token_ttl(redis_key, json.dumps(data))
 
                 self._get_user_data_cached.cache_invalidate(token)
 
