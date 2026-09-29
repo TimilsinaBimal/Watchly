@@ -17,6 +17,7 @@
 - A scheduled catalog refresh no longer writes back the credentials it started with, which could undo a settings save or a Trakt token rotation made while it ran, or recreate a token deleted in the meantime.
 - A stale row requested while a scheduled refresh runs is rebuilt after the refresh instead of alongside it, where it could be built from the old library and cached as fresh.
 - A stored API key or OAuth token that fails to encrypt is no longer saved in plain text; the save fails instead. A secret that no longer decrypts is dropped rather than sent to the provider as ciphertext.
+- A failed TMDB or Simkl request no longer writes the user's API key to the logs; the log line names the path and status code instead of the full URL.
 
 
 ## 1.14.0 - 2026-09-20

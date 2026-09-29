@@ -69,19 +69,27 @@ class BaseClient:
                         if retry_after is not None:
                             wait_time = min(max(retry_after, wait_time), _RETRY_AFTER_CEILING_SECONDS)
                     logger.warning(
-                        f"Request failed ({method} {url}): {str(e)}. "
-                        f"Retrying in {wait_time}s... (Attempt {attempt}/{tries})"
+                        f"Request failed ({method} {url}): {self._describe(e)}. "
+                        f"Retrying in {wait_time:.2f}s (attempt {attempt}/{tries})"
                     )
                     await asyncio.sleep(wait_time)
                 else:
                     # If not retryable or no more attempts left, log and raise
                     if not is_retryable:
-                        logger.error(f"Non-retryable request failure ({method} {url}): {str(e)}")
+                        logger.error(f"Non-retryable request failure ({method} {url}): {self._describe(e)}")
                     else:
-                        logger.error(f"Request failed after {tries} attempts ({method} {url}): {str(e)}")
+                        logger.error(f"Request failed after {tries} attempts ({method} {url}): {self._describe(e)}")
                     raise e
 
         raise httpx.RequestError(f"Request failed for {method} {url} with 0 attempts configured")
+
+    @staticmethod
+    def _describe(e: httpx.HTTPError) -> str:
+        # str() of an httpx error carries the full URL, and TMDB and Simkl put the
+        # user's key in the query string.
+        if isinstance(e, httpx.HTTPStatusError):
+            return f"HTTP {e.response.status_code}"
+        return type(e).__name__
 
     @staticmethod
     def _parse_retry_after(value: str | None) -> float | None:
