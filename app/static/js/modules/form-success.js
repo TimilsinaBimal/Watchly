@@ -164,9 +164,35 @@ function revealInstall(message) {
     if (subheading && message) subheading.textContent = message;
 }
 
+const STEP_KEYS = Object.keys(WARM_STEPS);
+
+// One row per warm-up step: done (tick), current (spinner dot) or still to come.
+function renderWarmSteps(currentKey) {
+    const list = document.getElementById('warmProgressSteps');
+    if (!list) return;
+    const current = STEP_KEYS.indexOf(currentKey);
+    list.replaceChildren(...STEP_KEYS.map((key, i) => {
+        const state = i < current ? 'done' : i === current ? 'current' : 'todo';
+        const item = document.createElement('li');
+        item.className = 'flex items-center gap-3 ' + (state === 'todo' ? 'text-neutral-500' : 'text-neutral-100');
+        const mark = document.createElement('span');
+        mark.className = 'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold '
+            + (state === 'done' ? 'bg-accent text-accent-ink'
+                : state === 'current' ? 'border border-accent text-accent animate-pulse' : 'border border-white/15');
+        mark.textContent = state === 'done' ? '\u2713' : String(i + 1);
+        const text = document.createElement('span');
+        text.textContent = WARM_STEPS[key].label.replace(/…$/, '');
+        item.append(mark, text);
+        return item;
+    }));
+    const stepLabel = document.getElementById('warmProgressStep');
+    if (stepLabel) stepLabel.textContent = `Step ${current + 1} of ${STEP_KEYS.length}`;
+}
+
 function renderWarmState(status, profileCount = 1, readyCount = 0) {
     const step = WARM_STEPS[status.state];
     if (!step) return;
+    renderWarmSteps(status.state);
 
     const label = document.getElementById('warmProgressLabel');
     const bar = document.getElementById('warmProgressBar');
