@@ -32,10 +32,10 @@ function moveCatalogDown(index) {
     renderCatalogList();
 }
 
-const MOVE_BTN_CLASS = 'action-btn inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition hover:bg-white/5 hover:text-white disabled:pointer-events-none disabled:opacity-25';
-const CHIP_CLASS = 'catalog-action-btn inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-white aria-pressed:border-accent/40 aria-pressed:bg-accent/15 aria-pressed:text-accent-soft';
-const TYPE_BTN_CLASS = 'catalog-type-btn h-8 rounded-md px-3 text-sm font-medium text-slate-400 transition hover:text-white aria-pressed:bg-white/10 aria-pressed:text-white';
-const ROWS_BTN_CLASS = 'rows-btn inline-flex h-8 w-8 items-center justify-center rounded-md text-base text-slate-400 transition hover:bg-white/5 hover:text-white disabled:pointer-events-none disabled:opacity-30';
+const MOVE_BTN_CLASS = 'action-btn inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-400 transition hover:bg-white/5 hover:text-white disabled:pointer-events-none disabled:opacity-25';
+const CHIP_CLASS = 'catalog-action-btn inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/10 px-3 text-sm font-medium text-neutral-300 transition hover:bg-white/5 hover:text-white aria-pressed:border-accent/40 aria-pressed:bg-accent/15 aria-pressed:text-accent-soft';
+const TYPE_BTN_CLASS = 'catalog-type-btn h-8 rounded-md px-3 text-sm font-medium text-neutral-300 transition hover:text-white aria-pressed:bg-white/10 aria-pressed:text-white';
+const ROWS_BTN_CLASS = 'rows-btn inline-flex h-8 w-8 items-center justify-center rounded-md text-base text-neutral-300 transition hover:bg-white/5 hover:text-white disabled:pointer-events-none disabled:opacity-30';
 
 function createCatalogItem(cat, index) {
     const item = document.createElement('div');
@@ -74,12 +74,12 @@ function createCatalogItem(cat, index) {
                 </button>
             </div>
             <button type="button" role="switch" aria-checked="${cat.enabled}" aria-label="Enable ${escapeHtml(cat.name)}" title="Show this catalog in Stremio" class="catalog-action-btn visibility-btn group/switch mt-1.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full bg-white/15 transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 aria-checked:bg-accent aria-checked:hover:bg-accent-hover" data-catalog-id="${cat.id}" data-action="visibility">
-                <span class="pointer-events-none ml-0.5 h-5 w-5 rounded-full bg-slate-400 shadow transition group-aria-checked/switch:translate-x-5 group-aria-checked/switch:bg-white"></span>
+                <span class="pointer-events-none ml-0.5 h-5 w-5 rounded-full bg-neutral-400 shadow transition group-aria-checked/switch:translate-x-5 group-aria-checked/switch:bg-white"></span>
             </button>
             <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1">
                     <div class="name-container relative flex h-9 min-w-0 flex-1 items-center">
-                        <span class="catalog-name-text w-full cursor-default truncate font-medium text-white group-data-[enabled=false]/row:text-slate-400">${escapeHtml(cat.name)}</span>
+                        <span class="catalog-name-text w-full cursor-default truncate font-medium text-white group-data-[enabled=false]/row:text-neutral-300">${escapeHtml(cat.name)}</span>
                         <div class="catalog-name-input-wrapper absolute inset-0 hidden w-full overflow-hidden rounded-lg border border-white/15 bg-surface-sunken focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30">
                             <input type="text" class="catalog-name-input h-full w-full bg-transparent pl-3 pr-20 text-sm font-medium text-white outline-none" value="${escapeHtml(cat.name)}">
                         </div>
@@ -92,13 +92,13 @@ function createCatalogItem(cat, index) {
                     </button>` : ''}
                 </div>
                 <details class="catalog-desc group/desc">
-                    <summary class="line-clamp-1 cursor-pointer list-none text-sm leading-relaxed text-slate-400 hover:text-slate-300 group-open/desc:line-clamp-none group-data-[enabled=false]/row:text-slate-500 [&::-webkit-details-marker]:hidden" title="${description}">${description}</summary>
+                    <summary class="line-clamp-1 cursor-pointer list-none text-sm leading-relaxed text-neutral-300 hover:text-neutral-200 group-open/desc:line-clamp-none group-data-[enabled=false]/row:text-neutral-400 [&::-webkit-details-marker]:hidden" title="${description}">${description}</summary>
                 </details>
             </div>
         </div>
         <div class="flex flex-wrap items-center gap-2 pl-10 sm:pl-[5.75rem] lg:ml-auto lg:flex-shrink-0 lg:justify-end lg:pl-0">
             ${hasRowCount ? `<div class="inline-flex h-9 items-center rounded-lg border border-white/10 bg-surface-sunken pl-3 pr-0.5" role="group" aria-label="Number of rows">
-                <span class="mr-1 text-sm text-slate-400">Rows</span>
+                <span class="mr-1 text-sm text-neutral-300">Rows</span>
                 <button type="button" class="${ROWS_BTN_CLASS}" data-step="-1" aria-label="Fewer rows" ${cat.rows <= 1 ? 'disabled' : ''}>&minus;</button>
                 <span class="rows-value w-5 text-center text-sm font-medium text-white">${cat.rows}</span>
                 <button type="button" class="${ROWS_BTN_CLASS}" data-step="1" aria-label="More rows" ${cat.rows >= window.MAX_ITEM_ROWS ? 'disabled' : ''}>+</button>
@@ -225,7 +225,7 @@ function setupRenameLogic(item, cat) {
     editActions.className = 'edit-actions hidden absolute right-1 top-0 bottom-0 flex items-center gap-1 pr-0.5 z-10';
     editActions.innerHTML = `
         <button type="button" class="edit-btn save p-1.5 h-full flex items-center justify-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 rounded-md transition" title="Save" aria-label="Save"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
-        <button type="button" class="edit-btn cancel p-1.5 h-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 rounded-md transition" title="Cancel" aria-label="Cancel"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+        <button type="button" class="edit-btn cancel p-1.5 h-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 rounded-md transition" title="Cancel" aria-label="Cancel"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
     `;
     nameInputWrapper.appendChild(editActions);
 

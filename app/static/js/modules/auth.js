@@ -445,8 +445,8 @@ function setStremioProfileStatus(message, kind = 'neutral') {
     const status = document.getElementById('stremioProfileStatus');
     if (!status) return;
     status.textContent = message;
-    status.classList.remove('text-slate-400', 'text-green-400', 'text-red-300');
-    status.classList.add(kind === 'success' ? 'text-green-400' : kind === 'error' ? 'text-red-300' : 'text-slate-400');
+    status.classList.remove('text-neutral-300', 'text-green-400', 'text-red-300');
+    status.classList.add(kind === 'success' ? 'text-green-400' : kind === 'error' ? 'text-red-300' : 'text-neutral-300');
 }
 
 // Look up an existing account by a freshly connected Trakt/Simkl token, so
@@ -778,7 +778,7 @@ function restoreWatchHistoryState(settings) {
         const traktStatus = document.getElementById('traktStatus');
         if (traktStatus) {
             traktStatus.textContent = 'Connected';
-            traktStatus.classList.remove('text-slate-500');
+            traktStatus.classList.remove('text-neutral-400');
             traktStatus.classList.add('text-green-400');
         }
         const traktLogoutBtn = document.getElementById('traktLogoutBtn');
@@ -796,7 +796,7 @@ function restoreWatchHistoryState(settings) {
         const simklSyncStatus = document.getElementById('simklSyncStatus');
         if (simklSyncStatus) {
             simklSyncStatus.textContent = 'Connected';
-            simklSyncStatus.classList.remove('text-slate-500');
+            simklSyncStatus.classList.remove('text-neutral-400');
             simklSyncStatus.classList.add('text-green-400');
         }
         const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');

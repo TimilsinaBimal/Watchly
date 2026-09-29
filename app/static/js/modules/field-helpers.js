@@ -43,7 +43,7 @@ export function markFieldAsSaved({ input, toggleBtn, hintEl, hint }) {
         hintEl.textContent = hint
             ? `Saved key ending …${hint}. Type to replace it, or clear the field to remove it.`
             : 'A saved key is in use. Type to replace it, or clear the field to remove it.';
-        hintEl.className = 'mt-2 text-xs text-slate-500';
+        hintEl.className = 'mt-2 text-xs text-neutral-400';
     }
 
     const onEdit = () => {

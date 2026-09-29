@@ -326,7 +326,7 @@ function renderProfileInstallations(container, installations) {
         row.className = 'py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between';
         details.className = 'min-w-0';
         name.className = 'text-sm font-semibold text-white truncate';
-        metadata.className = 'text-xs text-slate-500 mt-1';
+        metadata.className = 'text-xs text-neutral-400 mt-1';
         actions.className = 'flex gap-2 flex-shrink-0';
         name.textContent = `Watchly - ${installation.profileName}`;
         metadata.textContent = 'Private profile-specific manifest';

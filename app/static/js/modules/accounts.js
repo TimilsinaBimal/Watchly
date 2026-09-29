@@ -11,7 +11,7 @@ import { unlockNavigation } from './navigation.js';
 
 const ACTIVE_CLASSES = ['bg-accent/15', 'text-white'];
 const ACTIVE_BORDER_CLASS = 'border-accent/40';
-const INACTIVE_CLASSES = ['text-slate-400', 'hover:text-white', 'hover:bg-white/5'];
+const INACTIVE_CLASSES = ['text-neutral-300', 'hover:text-white', 'hover:bg-white/5'];
 const INACTIVE_BORDER_CLASS = 'border-transparent';
 
 const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl' };
@@ -150,7 +150,7 @@ function setProviderDot(provider, connected) {
         badge.classList.toggle('text-green-300', connected);
         badge.classList.toggle('border-green-400/20', connected);
         badge.classList.toggle('bg-white/5', !connected);
-        badge.classList.toggle('text-slate-400', !connected);
+        badge.classList.toggle('text-neutral-300', !connected);
         badge.classList.toggle('border-white/10', !connected);
     }
 
@@ -160,6 +160,6 @@ function setProviderDot(provider, connected) {
     const pip = document.querySelector(`[data-source-pip="${provider}"]`);
     if (pip) {
         pip.classList.toggle('bg-green-400', connected);
-        pip.classList.toggle('bg-slate-600', !connected);
+        pip.classList.toggle('bg-neutral-600', !connected);
     }
 }

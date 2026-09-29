@@ -30,7 +30,7 @@ const WARMING_LABELS = {
 };
 const BADGE_OK = 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20';
 const BADGE_WARN = 'bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/20';
-const BADGE_MUTED = 'bg-white/[0.04] text-slate-400 ring-1 ring-white/10';
+const BADGE_MUTED = 'bg-white/[0.04] text-neutral-300 ring-1 ring-white/10';
 const SEGMENT_ACTIVE = ['bg-accent', 'text-white'];
 
 const STATE_BLOCKS = ['dashLoggedOut', 'dashNoInstall', 'dashLoading', 'dashError', 'dashContent'];
@@ -183,7 +183,7 @@ function chipRow(label, values) {
     if (!values || !values.length) return null;
     const wrap = document.createElement('div');
     const heading = document.createElement('p');
-    heading.className = 'mb-2 text-sm font-medium text-slate-300';
+    heading.className = 'mb-2 text-sm font-medium text-neutral-200';
     heading.textContent = label;
     wrap.appendChild(heading);
     const row = document.createElement('div');
@@ -192,7 +192,7 @@ function chipRow(label, values) {
         const span = document.createElement('span');
         span.className = idx === 0
             ? 'rounded-lg bg-accent/15 px-2.5 py-1 text-[13px] font-medium text-accent-soft ring-1 ring-accent/30'
-            : 'rounded-lg bg-white/[0.04] px-2.5 py-1 text-[13px] text-slate-200 ring-1 ring-white/10';
+            : 'rounded-lg bg-white/[0.04] px-2.5 py-1 text-[13px] text-neutral-100 ring-1 ring-white/10';
         span.textContent = v;
         row.appendChild(span);
     });
@@ -254,7 +254,7 @@ function renderSettings(s) {
     fields.forEach(([label, value]) => {
         const cell = document.createElement('div');
         cell.className = 'flex items-baseline justify-between gap-4 py-2.5';
-        cell.innerHTML = `<dt class="text-slate-400">${label}</dt><dd class="text-right text-slate-100">${escapeHtml(value)}</dd>`;
+        cell.innerHTML = `<dt class="text-neutral-300">${label}</dt><dd class="text-right text-neutral-100">${escapeHtml(value)}</dd>`;
         grid.appendChild(cell);
     });
 }
@@ -265,7 +265,7 @@ const PREVIEW_ITEM_LIMIT = 14;
 // scrolls into view so opening the dashboard doesn't fan out every catalog at once.
 async function loadCatalogRows() {
     const container = $('dashCatalogRows');
-    container.innerHTML = '<p class="text-sm text-slate-400">Loading catalogs…</p>';
+    container.innerHTML = '<p class="text-sm text-neutral-300">Loading catalogs…</p>';
 
     let manifest;
     try {
@@ -280,7 +280,7 @@ async function loadCatalogRows() {
     const catalogs = manifest.catalogs || [];
     container.innerHTML = '';
     if (!catalogs.length) {
-        container.innerHTML = '<p class="text-sm text-slate-400">No catalogs enabled.</p>';
+        container.innerHTML = '<p class="text-sm text-neutral-300">No catalogs enabled.</p>';
         return;
     }
 
@@ -313,8 +313,8 @@ function buildCatalogRow(cat) {
     const header = document.createElement('div');
     header.className = 'mb-2.5 flex items-baseline justify-between';
     header.innerHTML =
-        `<h4 class="truncate text-sm font-medium text-slate-100">${escapeHtml(cat.name || cat.id)}</h4>` +
-        `<span class="ml-3 flex-shrink-0 text-[13px] text-slate-500"><span class="dash-row-count"></span>${cat.type === 'series' ? 'Series' : 'Movies'}</span>`;
+        `<h4 class="truncate text-sm font-medium text-neutral-100">${escapeHtml(cat.name || cat.id)}</h4>` +
+        `<span class="ml-3 flex-shrink-0 text-[13px] text-neutral-400"><span class="dash-row-count"></span>${cat.type === 'series' ? 'Series' : 'Movies'}</span>`;
     row.appendChild(header);
 
     const strip = document.createElement('div');
@@ -346,7 +346,7 @@ async function fetchCatalogRow(row) {
         const metas = all.slice(0, PREVIEW_ITEM_LIMIT);
         strip.innerHTML = '';
         if (!metas.length) {
-            strip.innerHTML = '<p class="text-[13px] text-slate-500">No items yet. Open it in Stremio to build it.</p>';
+            strip.innerHTML = '<p class="text-[13px] text-neutral-400">No items yet. Open it in Stremio to build it.</p>';
             return;
         }
         if (countEl) countEl.textContent = `${all.length} · `;
@@ -387,14 +387,14 @@ function posterCard(meta, type) {
     }
 
     const title = document.createElement('p');
-    title.className = 'mt-1.5 text-xs text-slate-300 truncate group-hover:text-white transition-colors';
+    title.className = 'mt-1.5 text-xs text-neutral-200 truncate group-hover:text-white transition-colors';
     title.title = meta.name || '';
     title.textContent = meta.name || '';
     card.appendChild(title);
 
     if (rating || year) {
         const sub = document.createElement('p');
-        sub.className = 'text-xs text-slate-500 truncate';
+        sub.className = 'text-xs text-neutral-400 truncate';
         sub.textContent = `${rating}${year}`.trim();
         card.appendChild(sub);
     }
@@ -406,7 +406,7 @@ function setCatalogFilter(filter) {
     document.querySelectorAll('.dashCatFilter').forEach((b) => {
         const active = b.dataset.filter === filter;
         SEGMENT_ACTIVE.forEach((c) => b.classList.toggle(c, active));
-        b.classList.toggle('text-slate-300', !active);
+        b.classList.toggle('text-neutral-200', !active);
     });
     document.querySelectorAll('#dashCatalogRows [data-type]').forEach((row) => {
         row.classList.toggle('hidden', filter !== 'all' && row.dataset.type !== filter);
@@ -426,17 +426,17 @@ function renderProfile() {
     document.querySelectorAll('.dashProfileTab').forEach((tab) => {
         const isActive = tab.dataset.ct === activeContentType;
         SEGMENT_ACTIVE.forEach((c) => tab.classList.toggle(c, isActive));
-        tab.classList.toggle('text-slate-300', !isActive);
+        tab.classList.toggle('text-neutral-200', !isActive);
     });
 
     const p = dashboardData.profiles[activeContentType];
     if (!p) {
-        body.innerHTML = `<p class="text-sm text-slate-400">No ${activeContentType} profile yet. It builds after your first catalog request.</p>`;
+        body.innerHTML = `<p class="text-sm text-neutral-300">No ${activeContentType} profile yet. It builds after your first catalog request.</p>`;
         return;
     }
 
     const meta = document.createElement('p');
-    meta.className = 'mb-5 text-sm text-slate-400';
+    meta.className = 'mb-5 text-sm text-neutral-300';
     const when = p.last_updated ? new Date(p.last_updated).toLocaleDateString() : '—';
     meta.textContent = `Built from ${p.items} item(s) · updated ${when}`;
     body.appendChild(meta);
@@ -454,7 +454,7 @@ function renderProfile() {
     ].filter(Boolean);
 
     if (!rows.length) {
-        body.innerHTML += `<p class="text-sm text-slate-400">Not enough signal yet.</p>`;
+        body.innerHTML += `<p class="text-sm text-neutral-300">Not enough signal yet.</p>`;
         return;
     }
     rows.forEach((r) => grid.appendChild(r));

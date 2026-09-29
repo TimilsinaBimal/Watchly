@@ -287,7 +287,7 @@ function renderGenreList(container, genres, namePrefix) {
     container.innerHTML = genres.map(genre => `
         <label class="cursor-pointer select-none">
             <input type="checkbox" name="${namePrefix}" value="${genre.id}" class="peer sr-only">
-            <span class="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 text-sm text-slate-300 transition hover:border-white/20 hover:text-white peer-checked:border-red-400/40 peer-checked:bg-red-500/10 peer-checked:text-red-200 peer-checked:line-through peer-checked:decoration-red-300/60 peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60">${genre.name}</span>
+            <span class="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 text-sm text-neutral-200 transition hover:border-white/20 hover:text-white peer-checked:border-red-400/40 peer-checked:bg-red-500/10 peer-checked:text-red-200 peer-checked:line-through peer-checked:decoration-red-300/60 peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60">${genre.name}</span>
         </label>
     `).join('');
 }
@@ -369,7 +369,7 @@ function initializePosterRatingProvider() {
         if (info) {
             apiKeyContainer.style.display = 'block';
             helpContainer.style.display = 'block';
-            helpText.innerHTML = `${info.description}. Get your API key from <a href="${info.url}" target="_blank" class="text-slate-300 hover:text-white underline">${info.name}</a>.`;
+            helpText.innerHTML = `${info.description}. Get your API key from <a href="${info.url}" target="_blank" class="text-neutral-200 hover:text-white underline">${info.name}</a>.`;
             resetValidation();
             return;
         }
@@ -652,7 +652,7 @@ function initializeWatchHistorySource() {
             window._watchlyOAuth.trakt = data.tokens;
             if (traktStatus) {
                 traktStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
-                traktStatus.classList.remove('text-slate-500');
+                traktStatus.classList.remove('text-neutral-400');
                 traktStatus.classList.add('text-green-400');
             }
             if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
@@ -661,7 +661,7 @@ function initializeWatchHistorySource() {
             window._watchlyOAuth.simkl = data.tokens;
             if (simklSyncStatus) {
                 simklSyncStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
-                simklSyncStatus.classList.remove('text-slate-500');
+                simklSyncStatus.classList.remove('text-neutral-400');
                 simklSyncStatus.classList.add('text-green-400');
             }
             if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
@@ -694,7 +694,7 @@ function initializeWatchHistorySource() {
             if (traktStatus) {
                 traktStatus.textContent = 'Not connected';
                 traktStatus.classList.remove('text-green-400');
-                traktStatus.classList.add('text-slate-500');
+                traktStatus.classList.add('text-neutral-400');
             }
             traktLogoutBtn.classList.add('hidden');
             setProviderConnected('trakt', false);
@@ -707,7 +707,7 @@ function initializeWatchHistorySource() {
             if (simklSyncStatus) {
                 simklSyncStatus.textContent = 'Not connected';
                 simklSyncStatus.classList.remove('text-green-400');
-                simklSyncStatus.classList.add('text-slate-500');
+                simklSyncStatus.classList.add('text-neutral-400');
             }
             simklSyncLogoutBtn.classList.add('hidden');
             setProviderConnected('simkl', false);

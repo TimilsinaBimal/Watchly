@@ -14,7 +14,7 @@
 
         <div id="dashInstancePicker" class="hidden w-full lg:w-auto">
             <div class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-                <label for="dashProfileSelect" class="text-sm font-medium text-slate-300 sm:whitespace-nowrap">Profile</label>
+                <label for="dashProfileSelect" class="text-sm font-medium text-neutral-200 sm:whitespace-nowrap">Profile</label>
                 <select id="dashProfileSelect" class="input sm:w-64 disabled:opacity-50"></select>
             </div>
             <p id="dashProfileHint" class="field-hint lg:text-right">Choose which Watchly instance to inspect.</p>
@@ -22,7 +22,7 @@
     </div>
 
     <div id="dashLoggedOut" class="hidden card flex flex-col items-center gap-4 py-12 text-center">
-        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.05] text-slate-400">
+        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.05] text-neutral-300">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
         </div>
         <div>
@@ -33,7 +33,7 @@
     </div>
 
     <div id="dashNoInstall" class="hidden card flex flex-col items-center gap-4 py-12 text-center">
-        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.05] text-slate-400">
+        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.05] text-neutral-300">
             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
         </div>
         <div>
@@ -78,7 +78,7 @@
                     <div id="dashAvatar"
                         class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-base font-semibold text-accent-soft ring-1 ring-accent/30"></div>
                     <div class="min-w-0">
-                        <p id="dashGreeting" class="text-sm text-slate-400"></p>
+                        <p id="dashGreeting" class="text-sm text-neutral-300"></p>
                         <p id="dashEmail" class="truncate text-lg font-semibold text-white"></p>
                     </div>
                 </div>
@@ -102,14 +102,14 @@
                 <span id="dashStatus" class="badge px-2.5 py-1 text-xs"></span>
                 <div id="dashSources" class="contents"></div>
             </div>
-            <p id="dashLastRefresh" class="mt-3 hidden text-sm text-slate-400"></p>
+            <p id="dashLastRefresh" class="mt-3 hidden text-sm text-neutral-300"></p>
             <p id="dashRefreshMsg" class="mt-2 hidden text-sm"></p>
 
             <div class="mt-5 border-t border-white/[0.06] pt-5">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
                     <div class="flex min-w-0 flex-1 items-center gap-2">
                         <code id="dashManifestUrl"
-                            class="min-w-0 flex-1 truncate rounded-xl border border-white/10 bg-surface-sunken px-3.5 py-2.5 font-mono text-[13px] text-slate-300"></code>
+                            class="min-w-0 flex-1 truncate rounded-xl border border-white/10 bg-surface-sunken px-3.5 py-2.5 font-mono text-[13px] text-neutral-200"></code>
                         <button type="button" id="dashCopyBtn" class="btn btn-secondary flex-shrink-0">Copy</button>
                     </div>
                     <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex">
@@ -123,23 +123,23 @@
 
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             <div class="card !p-4">
-                <p class="text-sm text-slate-400">Library</p>
+                <p class="text-sm text-neutral-300">Library</p>
                 <p id="dashKpiTotal" class="mt-1 text-2xl font-semibold tabular-nums text-white">—</p>
             </div>
             <div class="card !p-4">
-                <p class="text-sm text-slate-400">Watched</p>
+                <p class="text-sm text-neutral-300">Watched</p>
                 <p id="dashKpiWatched" class="mt-1 text-2xl font-semibold tabular-nums text-white">—</p>
             </div>
             <div class="card !p-4">
-                <p class="text-sm text-slate-400">Loved</p>
+                <p class="text-sm text-neutral-300">Loved</p>
                 <p id="dashKpiLoved" class="mt-1 text-2xl font-semibold tabular-nums text-white">—</p>
             </div>
             <div class="card !p-4">
-                <p class="text-sm text-slate-400">Liked</p>
+                <p class="text-sm text-neutral-300">Liked</p>
                 <p id="dashKpiLiked" class="mt-1 text-2xl font-semibold tabular-nums text-white">—</p>
             </div>
             <div class="card !p-4 col-span-2 sm:col-span-1">
-                <p class="text-sm text-slate-400">Active catalogs</p>
+                <p class="text-sm text-neutral-300">Active catalogs</p>
                 <p id="dashKpiCatalogs" class="mt-1 text-2xl font-semibold tabular-nums text-white">—</p>
             </div>
         </div>
@@ -153,9 +153,9 @@
                     </div>
                     <div class="flex rounded-xl border border-white/10 bg-surface-sunken p-1 text-sm">
                         <button type="button" data-ct="movie"
-                            class="dashProfileTab rounded-lg px-3 py-1.5 font-medium text-slate-300 transition-colors">Movies</button>
+                            class="dashProfileTab rounded-lg px-3 py-1.5 font-medium text-neutral-200 transition-colors">Movies</button>
                         <button type="button" data-ct="series"
-                            class="dashProfileTab rounded-lg px-3 py-1.5 font-medium text-slate-300 transition-colors">Series</button>
+                            class="dashProfileTab rounded-lg px-3 py-1.5 font-medium text-neutral-200 transition-colors">Series</button>
                     </div>
                 </div>
                 <div id="dashProfileBody"></div>
@@ -176,11 +176,11 @@
                 </div>
                 <div class="flex rounded-xl border border-white/10 bg-surface-sunken p-1 text-sm">
                     <button type="button" data-filter="all"
-                        class="dashCatFilter rounded-lg px-3 py-1.5 font-medium text-slate-300 transition-colors">All</button>
+                        class="dashCatFilter rounded-lg px-3 py-1.5 font-medium text-neutral-200 transition-colors">All</button>
                     <button type="button" data-filter="movie"
-                        class="dashCatFilter rounded-lg px-3 py-1.5 font-medium text-slate-300 transition-colors">Movies</button>
+                        class="dashCatFilter rounded-lg px-3 py-1.5 font-medium text-neutral-200 transition-colors">Movies</button>
                     <button type="button" data-filter="series"
-                        class="dashCatFilter rounded-lg px-3 py-1.5 font-medium text-slate-300 transition-colors">Series</button>
+                        class="dashCatFilter rounded-lg px-3 py-1.5 font-medium text-neutral-200 transition-colors">Series</button>
                 </div>
             </div>
             <div id="dashCatalogRows" class="space-y-6"></div>

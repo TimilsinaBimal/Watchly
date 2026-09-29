@@ -16,7 +16,7 @@
 </style>
 
 {% macro select_chevron() %}
-<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-neutral-300">
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
     </svg>
@@ -26,7 +26,7 @@
 {# The JS finds each part by suffix: {id}Toggle, {id}Eye, {id}EyeOff, {id}Validate. #}
 {% macro secret_input(id, placeholder, tooltip, required=false) %}
 <div class="relative">
-    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
+    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-neutral-400">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
@@ -37,7 +37,7 @@
         class="input pl-10 pr-24 font-mono placeholder:font-sans" placeholder="{{ placeholder }}">
     <div class="absolute inset-y-0 right-11 flex items-center">
         <button type="button" id="{{ id }}Toggle" aria-label="Show or hide key"
-            class="flex h-full w-11 items-center justify-center text-slate-400 transition-colors hover:text-white">
+            class="flex h-full w-11 items-center justify-center text-neutral-300 transition-colors hover:text-white">
             <svg id="{{ id }}Eye" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
@@ -55,7 +55,7 @@
     </div>
     <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
         <button type="button" id="{{ id }}Validate" aria-label="Validate key"
-            class="flex h-full w-11 items-center justify-center rounded-r-xl border-l border-white/10 text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
+            class="flex h-full w-11 items-center justify-center rounded-r-xl border-l border-white/10 text-neutral-300 transition-colors hover:bg-white/5 hover:text-white">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -79,7 +79,7 @@
                 <div>
                     <h3 class="card-title">Watch history</h3>
                     <p class="card-desc">Where Watchly reads what you've watched. Connect Trakt or Simkl in
-                        <button type="button" class="account-link text-slate-200 underline decoration-slate-600 underline-offset-2 hover:text-white">Accounts</button>
+                        <button type="button" class="account-link text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-white">Accounts</button>
                         to use them.</p>
                 </div>
                 <div class="inline-flex flex-shrink-0 items-center self-start rounded-xl border border-white/10 bg-surface-sunken p-1 sm:self-auto"
@@ -88,15 +88,15 @@
                         class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none bg-accent/15 text-white border-accent/40"
                         data-source-btn="stremio">Stremio</button>
                     <button type="button"
-                        class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none text-slate-400 hover:text-white hover:bg-white/5 border-transparent"
+                        class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none text-neutral-300 hover:text-white hover:bg-white/5 border-transparent"
                         data-source-btn="trakt">
-                        <span class="h-1.5 w-1.5 rounded-full bg-slate-600" data-source-pip="trakt"></span>
+                        <span class="h-1.5 w-1.5 rounded-full bg-neutral-600" data-source-pip="trakt"></span>
                         Trakt
                     </button>
                     <button type="button"
-                        class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none text-slate-400 hover:text-white hover:bg-white/5 border-transparent"
+                        class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none text-neutral-300 hover:text-white hover:bg-white/5 border-transparent"
                         data-source-btn="simkl">
-                        <span class="h-1.5 w-1.5 rounded-full bg-slate-600" data-source-pip="simkl"></span>
+                        <span class="h-1.5 w-1.5 rounded-full bg-neutral-600" data-source-pip="simkl"></span>
                         Simkl
                     </button>
                 </div>
@@ -192,7 +192,7 @@
             <div class="mt-5 space-y-5">
                 <div>
                     <div class="mb-1.5 flex items-center gap-2">
-                        <label for="tmdbApiKey" class="text-sm font-medium text-slate-200">TMDB</label>
+                        <label for="tmdbApiKey" class="text-sm font-medium text-neutral-100">TMDB</label>
                         <span class="badge border border-amber-400/25 bg-amber-400/10 text-amber-300">Required</span>
                     </div>
                     {{ secret_input('tmdbApiKey', 'Paste your TMDB API key', 'Validate key - Click to verify your TMDB key is valid', required=true) }}
@@ -203,8 +203,8 @@
 
                 <div>
                     <div class="mb-1.5 flex items-center gap-2">
-                        <label for="simklApiKey" class="text-sm font-medium text-slate-200">Simkl</label>
-                        <span class="badge border border-white/10 bg-white/[0.04] text-slate-400">Optional</span>
+                        <label for="simklApiKey" class="text-sm font-medium text-neutral-100">Simkl</label>
+                        <span class="badge border border-white/10 bg-white/[0.04] text-neutral-300">Optional</span>
                     </div>
                     {{ secret_input('simklApiKey', 'Paste your Simkl API key', 'Validate key - Click to verify your Simkl key is valid') }}
                     <div id="simklValidationMessage" class="mt-2 text-xs hidden"></div>
@@ -254,7 +254,7 @@
             <div class="card">
                 <div class="flex items-center gap-2">
                     <h3 class="card-title">AI features</h3>
-                    <span class="badge border border-white/10 bg-white/[0.04] text-slate-400">Optional</span>
+                    <span class="badge border border-white/10 bg-white/[0.04] text-neutral-300">Optional</span>
                 </div>
                 <p id="llmHelpText" class="card-desc">Bring your own LLM key for interest profiles and smarter themed
                     rows. Without one, rows use standard titles.</p>
