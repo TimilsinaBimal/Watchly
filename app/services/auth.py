@@ -1,3 +1,4 @@
+import copy
 import time
 from datetime import datetime, timezone
 from typing import TypeVar
@@ -13,26 +14,19 @@ from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.trakt import trakt_service
+from app.services.user_cache import user_cache
 
 KeyedConfigT = TypeVar("KeyedConfigT", LLMConfig, PosterRatingConfig)
 
 
 class AuthService:
-    async def resolve_auth_key(self, credentials: dict, token: str | None = None) -> str | None:
-        """Validate auth key. If expired, try email+password login. Update store on refresh."""
-        bundle = StremioBundle()
-        try:
-            return await self.resolve_auth_key_with_bundle(bundle, credentials, token)
-        finally:
-            await bundle.close()
-
     async def resolve_auth_key_with_bundle(
         self,
         bundle: StremioBundle,
         credentials: dict,
         token: str | None = None,
     ) -> str | None:
-        """Validate auth key with an existing Stremio bundle."""
+        """Validate auth key. If expired, try email+password login. Update store on refresh."""
         auth_key = (credentials.get("authKey") or "").strip() or None
         email = (credentials.get("email") or "").strip() or None
         password = (credentials.get("password") or "").strip() or None
@@ -40,7 +34,6 @@ class AuthService:
         if auth_key and auth_key.startswith('"') and auth_key.endswith('"'):
             auth_key = auth_key[1:-1].strip()
 
-        # 1. Try existing auth key
         if auth_key:
             try:
                 await bundle.auth.get_user_info(auth_key)
@@ -48,38 +41,31 @@ class AuthService:
             except Exception:
                 logger.info("Stremio auth key expired or invalid, attempting refresh with credentials")
 
-        # 2. Try login if auth key failed or wasn't provided
         if email and password:
             try:
                 new_key = await bundle.auth.login(email, password)
                 if token and new_key != auth_key:
-                    existing_data = await self.get_credentials(token)
+                    existing_data = await token_store.get_user_data(token)
                     if existing_data:
-                        existing_data["authKey"] = new_key
-                        await token_store.update_user_data(token, existing_data)
+                        stored = copy.deepcopy(existing_data)
+                        stored["authKey"] = new_key
+                        await token_store.update_user_data(token, stored)
                 return new_key
             except Exception as e:
-                logger.error(f"Stremio login failed: {e}")
+                logger.error(f"Stremio login failed: {type(e).__name__}")
                 return None
 
         return None
 
     async def require_auth_key(self, bundle: StremioBundle, credentials: dict, token: str | None = None) -> str:
-        """Resolve auth key or raise a user-facing error."""
         auth_key = await self.resolve_auth_key_with_bundle(bundle, credentials, token)
         if not auth_key:
             raise HTTPException(status_code=401, detail="Stremio session expired. Please reconfigure.")
         return auth_key
 
-    async def get_credentials(self, token: str) -> dict | None:
-        """Get user credentials from token store."""
-        return await token_store.get_user_data(token)
-
     async def store_credentials(self, token: str, payload: dict) -> str:
-        """Store credentials, return token."""
-        # Ensure last_updated is present if it's a new user
         if "last_updated" not in payload:
-            existing = await self.get_credentials(token)
+            existing = await token_store.get_user_data(token)
             if existing:
                 payload["last_updated"] = existing.get("last_updated")
             else:
@@ -88,28 +74,25 @@ class AuthService:
         return await token_store.store_user_data(token, payload)
 
     async def get_stremio_user_data(self, payload: TokenRequest) -> tuple[str, str, str]:
-        """
-        Authenticates with Stremio and returns (user_id, email, auth_key).
-        """
-        creds = payload.model_dump()
-        auth_key = await self.resolve_auth_key(creds)
-
-        if not auth_key:
-            raise HTTPException(
-                status_code=400,
-                detail="Failed to verify Stremio identity. Provide valid credentials.",
-            )
-
+        """Authenticates with Stremio and returns (user_id, email, auth_key)."""
         bundle = StremioBundle()
         try:
+            auth_key = await self.resolve_auth_key_with_bundle(bundle, payload.model_dump())
+            if not auth_key:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Failed to verify Stremio identity. Provide valid credentials.",
+                )
             user_info = await bundle.auth.get_user_info(auth_key)
             user_id = user_info["user_id"]
             resolved_email = user_info.get("email", payload.email or "")
             payload.stremio_profile_id = user_info.get("profile_id")
             payload.stremio_profile_name = user_info.get("profile_name")
             return user_id, resolved_email, auth_key
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Stremio identity verification failed: {e}")
+            logger.error(f"Stremio identity verification failed: {type(e).__name__}")
             raise HTTPException(status_code=400, detail="Failed to verify Stremio identity.")
         finally:
             await bundle.close()
@@ -175,7 +158,7 @@ class AuthService:
         try:
             info = await trakt_service.get_user_info(access_token)
         except Exception as e:
-            logger.info(f"Trakt identity lookup failed: {e}")
+            logger.info(f"Trakt identity lookup failed: {type(e).__name__}")
             return None
 
         user = info.get("user", info) if isinstance(info, dict) else {}
@@ -195,7 +178,7 @@ class AuthService:
         try:
             data = await trakt_service.refresh_token(payload.trakt_refresh_token, redirect_uri)
         except Exception as e:
-            logger.warning(f"Trakt token refresh during identity verification failed: {e}")
+            logger.warning(f"Trakt token refresh during identity verification failed: {type(e).__name__}")
             return False
 
         access_token = data.get("access_token")
@@ -216,7 +199,7 @@ class AuthService:
         try:
             info = await simkl_service.get_user_settings(access_token, settings.SIMKL_CLIENT_ID)
         except Exception as e:
-            logger.info(f"Simkl identity lookup failed: {e}")
+            logger.info(f"Simkl identity lookup failed: {type(e).__name__}")
             return None
 
         account_id = (info.get("account") or {}).get("id") if isinstance(info, dict) else None
@@ -261,25 +244,20 @@ class AuthService:
         return survivor, matches[survivor]
 
     async def create_user_token(self, payload: TokenRequest) -> tuple[TokenResponse, str | None, UserSettings]:
-        """
-        Main logic for creating or updating a user token.
+        """Create or update the account token.
 
-        Returns:
-            Tuple of (TokenResponse, resolved_auth_key, user_settings) so the
-            caller can trigger caching without re-fetching credentials.
-            resolved_auth_key is None for accounts without Stremio credentials.
+        Also returns the resolved Stremio auth key (None without Stremio credentials)
+        and the settings, so the caller can warm caches without re-fetching them.
         """
-        # 1. Verify provided credentials and resolve provider identities
         submitted_trakt_token = payload.trakt_access_token
         identities, stremio_auth_key, resolved_email = await self.resolve_identities(payload, refresh_expired=True)
 
-        # 2. Resolve (and possibly merge) the account these identities belong to
         token, existing_data = await self._resolve_account(identities)
 
         if existing_data is None and not settings.ALLOW_SIGNUPS:
             raise HTTPException(status_code=403, detail="New signups are disabled on this instance.")
 
-        # 3. Prepare payload. Identities from earlier configurations are kept:
+        # Identities from earlier configurations are kept:
         # a previously linked provider still identifies this account even when
         # this submit doesn't include it.
         stored_identities = dict((existing_data or {}).get("identities") or {})
@@ -330,7 +308,6 @@ class AuthService:
         if existing_data:
             payload_to_store["last_updated"] = existing_data.get("last_updated")
 
-        # 4. Store user data and index every identity to this token
         token = await self.store_credentials(token, payload_to_store)
         for provider, provider_user_id in stored_identities.items():
             await token_store.set_identity(provider, provider_user_id, token)
@@ -339,24 +316,17 @@ class AuthService:
         # the profile), drop cached profiles so the next catalog request
         # rebuilds from the new source instead of serving the stale cache.
         if existing_data:
-            try:
-                from app.services.user_cache import user_cache as _user_cache
+            old_source = (existing_data.get("settings") or {}).get("watch_history_source", "stremio")
+            if old_source != user_settings.watch_history_source:
+                for ct in ("movie", "series"):
+                    await user_cache.invalidate_profile(token, ct)
+                    await user_cache.invalidate_watched_sets(token, ct)
+                await user_cache.invalidate_all_catalogs(token)
+                logger.info(
+                    f"[{redact_token(token)}] watch_history_source changed "
+                    f"'{old_source}' -> '{user_settings.watch_history_source}'; cleared profile/catalog caches."
+                )
 
-                old_settings = existing_data.get("settings") or {}
-                old_source = old_settings.get("watch_history_source", "stremio")
-                if old_source != user_settings.watch_history_source:
-                    for ct in ("movie", "series"):
-                        await _user_cache.invalidate_profile(token, ct)
-                        await _user_cache.invalidate_watched_sets(token, ct)
-                    await _user_cache.invalidate_all_catalogs(token)
-                    logger.info(
-                        f"[{redact_token(token)}] watch_history_source changed "
-                        f"'{old_source}' -> '{user_settings.watch_history_source}'; cleared profile/catalog caches."
-                    )
-            except Exception as e:
-                logger.warning(f"[{redact_token(token)}] Failed to invalidate caches on source change: {e}")
-
-        # 5. Build response
         base_url = settings.HOST_NAME
         manifest_url = f"{base_url}/{token}/manifest.json"
         expires_in = settings.TOKEN_TTL_SECONDS if settings.TOKEN_TTL_SECONDS > 0 else None
@@ -449,7 +419,7 @@ class AuthService:
         identities, _, email = await self.resolve_identities(payload)
 
         token = await self._find_account_for_identities(identities)
-        existing_data = await self.get_credentials(token) if token else None
+        existing_data = await token_store.get_user_data(token) if token else None
         exists = bool(existing_data)
 
         # Keep the Stremio id as user_id when present so existing frontend
@@ -472,7 +442,8 @@ class AuthService:
             try:
                 plain_settings = UserSettings(**raw_settings).model_dump()
             except Exception as e:
-                logger.warning(f"Failed to normalize settings for user {user_id}: {e}")
+                # Not the error itself: a pydantic error echoes the rejected values.
+                logger.warning(f"Stored settings failed to normalize: {type(e).__name__}")
                 plain_settings = raw_settings
 
             # Hints are derived before masking, from the plaintext, so the page can
@@ -483,11 +454,10 @@ class AuthService:
         return response
 
     async def delete_user_account(self, payload: TokenRequest) -> None:
-        """Deletes user account and associated data."""
         identities, _, _ = await self.resolve_identities(payload)
         token = await self._find_account_for_identities(identities)
 
-        existing_data = await self.get_credentials(token) if token else None
+        existing_data = await token_store.get_user_data(token) if token else None
         if not token or not existing_data:
             raise HTTPException(status_code=404, detail="Account not found.")
 
