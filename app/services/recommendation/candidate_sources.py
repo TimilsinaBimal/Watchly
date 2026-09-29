@@ -82,11 +82,6 @@ class CandidateFetcher:
         mtype: str,
     ) -> list[dict[str, Any]]:
         """Fetch recommendations from Simkl for top library items."""
-        simkl_api_key = self.user_settings.simkl_api_key
-        if not simkl_api_key:
-            logger.debug("Simkl API key not found, skipping Simkl recommendations")
-            return []
-
         top_items = sample_items(library_items, content_type, self.scoring_service, max_items=15)
 
         imdb_ids = []
@@ -105,7 +100,7 @@ class CandidateFetcher:
             candidates = await simkl_service.get_recommendations_batch(
                 imdb_ids,
                 mtype,
-                simkl_api_key,
+                self.user_settings.simkl_api_key,
                 max_per_item=8,
                 year_min=self.user_settings.year_min,
                 year_max=self.user_settings.year_max,
@@ -239,13 +234,12 @@ class CandidateFetcher:
         """Fetch and merge candidates from all sources, deduped by TMDB ID."""
         all_candidates: dict[int, dict[str, Any]] = {}
 
+        rec_candidates = []
         if self.user_settings.simkl_api_key:
             rec_candidates = await self.fetch_simkl_recommendations(library_items, content_type, mtype)
             if not rec_candidates:
                 logger.debug("Simkl returned no results, falling back to TMDB")
-                rec_candidates = await self.fetch_recommendations_from_top_items(library_items, content_type, mtype)
-                rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings)
-        else:
+        if not rec_candidates:
             rec_candidates = await self.fetch_recommendations_from_top_items(library_items, content_type, mtype)
             rec_candidates = filter_items_by_settings(rec_candidates, self.user_settings)
 
