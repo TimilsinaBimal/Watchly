@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
+import httpx
 from async_lru import alru_cache
 from loguru import logger
 
@@ -175,18 +176,17 @@ class StremioLibraryService:
         Returns list of full item metadata.
         """
         path = f"/addons/{status}/movies-shows/{auth_token}/catalog/{media_type}/stremio-{status}-{media_type}.json"
-        try:
-            data = await self.likes_client.get(path)
-            metas = data.get("metas", [])
-            # Return valid items
-            return [meta for meta in metas if meta.get("id")]
-        except Exception as e:
-            logger.exception(f"Failed to fetch {status} {media_type} items: {e}")
-            return []
+        data = await self.likes_client.get(path)
+        metas = data.get("metas", [])
+        # Return valid items
+        return [meta for meta in metas if meta.get("id")]
 
-    async def get_library_items(self, auth_key: str) -> LibraryCollection:
+    async def get_library_items(self, auth_key: str) -> LibraryCollection | None:
         """
         Fetch all library items and categorize them (watched, loved, added, removed).
+
+        Returns None when the library can't be fetched, so callers can tell a failure
+        apart from an empty library and keep what they have cached.
         """
         try:
             # 1. Fetch raw library from datastore
@@ -196,7 +196,12 @@ class StremioLibraryService:
                 "all": True,
             }
             data = await self.client.post("/api/datastoreGet", json=payload)
-            all_raw_items = data.get("result", [])
+            # Stremio reports a rejected authKey in a 200 body, and the client turns an
+            # empty or non-JSON body into {}. Neither is a library.
+            if "error" in data or "result" not in data:
+                logger.warning(f"Stremio datastoreGet returned no library: {data.get('error')}")
+                return None
+            all_raw_items = data["result"]
 
             # 2. Fetch loved/liked items in parallel (now returns full metadata)
             loved_movies_task = self.get_likes_by_type(auth_key, "movie", "loved")
@@ -340,6 +345,9 @@ class StremioLibraryService:
                 removed=removed,
                 source="stremio",
             )
+        except httpx.HTTPError:
+            # BaseClient has already logged the request that failed.
+            return None
         except Exception as e:
             logger.exception(f"Error processing library items: {e}")
-            return LibraryCollection()
+            return None
