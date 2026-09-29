@@ -1,5 +1,4 @@
 import asyncio
-from datetime import datetime
 from typing import Any
 
 import httpx
@@ -48,13 +47,6 @@ def stremio_library_to_watch_history(library: LibraryCollection) -> WatchHistory
             elif is_liked or item.is_liked:
                 rating = 7.0
 
-            last_watched: datetime | None = state.lastWatched
-            if not last_watched and item.mtime:
-                try:
-                    last_watched = datetime.fromisoformat(str(item.mtime).replace("Z", "+00:00"))
-                except (ValueError, TypeError):
-                    pass
-
             items.append(
                 WatchHistoryItem(
                     imdb_id=imdb_id,
@@ -63,7 +55,7 @@ def stremio_library_to_watch_history(library: LibraryCollection) -> WatchHistory
                     rating=rating,
                     watch_count=max(times_watched, 1) if completion > 0 else 0,
                     completion=completion,
-                    last_watched=last_watched,
+                    last_watched=item.last_interaction,
                 )
             )
 

@@ -46,6 +46,16 @@ class StremioLibraryItem(BaseModel):
     class Config:
         populate_by_name = True
 
+    @property
+    def last_interaction(self) -> datetime | None:
+        """When the user last watched the item, else when Stremio last touched it."""
+        if self.state.lastWatched:
+            return self.state.lastWatched
+        try:
+            return datetime.fromisoformat(self.mtime) if self.mtime else None
+        except ValueError:
+            return None
+
 
 class LibraryCollection(BaseModel):
     """Typed container for categorized library items.

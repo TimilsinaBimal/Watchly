@@ -147,13 +147,6 @@ class EvidenceCalculator:
                 interaction_type = EvidenceCalculator.get_interaction_type(item)
                 base_weight = EvidenceCalculator.get_base_weight(interaction_type)
 
-        last_interaction = state.lastWatched
-        if not last_interaction and item.item.mtime:
-            try:
-                last_interaction = datetime.fromisoformat(item.item.mtime)
-            except ValueError:
-                pass
-
-        recency_multiplier = EvidenceCalculator.calculate_recency_multiplier(last_interaction)
+        recency_multiplier = EvidenceCalculator.calculate_recency_multiplier(item.item.last_interaction)
 
         return base_weight * recency_multiplier

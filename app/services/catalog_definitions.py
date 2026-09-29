@@ -257,16 +257,6 @@ class DynamicCatalogService:
 
         return theme, item
 
-    def _parse_item_last_watched(self, item: StremioLibraryItem) -> datetime:
-        if item.state.lastWatched:
-            return item.state.lastWatched
-        if item.mtime:
-            try:
-                return datetime.fromisoformat(item.mtime)
-            except ValueError:
-                pass
-        return datetime.min.replace(tzinfo=timezone.utc)
-
     async def _add_item_based_rows(
         self,
         catalogs: list[dict[str, Any]],
@@ -294,8 +284,9 @@ class DynamicCatalogService:
 
         loved = [i for i in library_items.loved if i.type == content_type]
         watched = [i for i in library_items.watched if i.type == content_type]
-        loved.sort(key=self._parse_item_last_watched, reverse=True)
-        watched.sort(key=self._parse_item_last_watched, reverse=True)
+        oldest = datetime.min.replace(tzinfo=timezone.utc)
+        loved.sort(key=lambda i: i.last_interaction or oldest, reverse=True)
+        watched.sort(key=lambda i: i.last_interaction or oldest, reverse=True)
 
         loved_pool = loved[:3]
         watched_pool = watched[:3]
