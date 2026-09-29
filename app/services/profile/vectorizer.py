@@ -13,7 +13,7 @@ from app.services.profile.constants import (
     RUNTIME_BUCKET_SHORT_MAX_MOVIE,
     RUNTIME_BUCKET_SHORT_MAX_SERIES,
 )
-from app.services.recommendation.utils import year_to_era
+from app.services.recommendation.utils import resolve_tmdb_id, year_to_era
 from app.services.tmdb.service import TMDBService
 
 
@@ -82,7 +82,7 @@ class ItemVectorizer:
 
     async def extract_features(self, item: ScoredItem) -> dict[str, Any] | None:
         try:
-            tmdb_id = await self._resolve_tmdb_id(item.item.id)
+            tmdb_id = await resolve_tmdb_id(item.item.id, self.tmdb_service)
             if not tmdb_id:
                 return None
 
@@ -210,18 +210,3 @@ class ItemVectorizer:
             return "medium"
         else:
             return "long"
-
-    async def _resolve_tmdb_id(self, stremio_id: str) -> int | None:
-        if stremio_id.startswith("tmdb:"):
-            try:
-                return int(stremio_id.split(":")[1])
-            except (ValueError, IndexError):
-                return None
-        elif stremio_id.startswith("tt"):
-            tmdb_id, _ = await self.tmdb_service.find_by_imdb_id(stremio_id)
-            return tmdb_id
-        else:
-            try:
-                return int(stremio_id)
-            except ValueError:
-                return None
