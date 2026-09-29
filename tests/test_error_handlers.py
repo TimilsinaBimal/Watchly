@@ -30,6 +30,10 @@ def client() -> TestClient:
     async def unavailable():
         raise HTTPException(status_code=503, detail="Storage temporarily unavailable.")
 
+    @app.get("/{token}/catalog")
+    async def catalog(token: str):
+        raise HTTPException(status_code=404, detail="hidden")
+
     @app.post("/validated")
     async def validated(body: Body):
         return {"count": body.count}
@@ -96,3 +100,16 @@ def test_handlers_are_registered_on_the_real_app():
 
     assert Exception in app.exception_handlers
     assert StarletteHTTPException in app.exception_handlers
+
+
+def test_logged_paths_never_carry_the_token(client):
+    from loguru import logger
+
+    lines: list[str] = []
+    sink = logger.add(lines.append, format="{message}")
+    try:
+        assert client.get(f"/{SECRET}/catalog").status_code == 404
+    finally:
+        logger.remove(sink)
+
+    assert lines and not any(SECRET in line for line in lines)
