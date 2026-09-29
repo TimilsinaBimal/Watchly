@@ -15,11 +15,6 @@
             theme: {
                 extend: {
                     colors: {
-                        slate: {
-                            850: '#151f32',
-                            900: '#0f172a',
-                            950: '#020617'
-                        },
                         stremio: {
                             DEFAULT: '#3b2667',
                             hover: '#4e3286',
@@ -101,27 +96,6 @@
             overscroll-behavior: contain;
         }
 
-        /* Desktop: Sidebar fixed, main content scrolls independently */
-        @media (min-width: 768px) {
-            #mainSidebar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                height: 100dvh;
-                overflow-y: auto;
-            }
-
-            main {
-                position: fixed;
-                top: 0;
-                right: 0;
-                left: 288px;
-                /* w-72 = 18rem = 288px */
-                height: 100dvh;
-                overflow-y: auto;
-            }
-        }
-
         /* High-contrast text selection to avoid blending with blue OS highlight */
         ::selection {
             background: rgba(59, 130, 246, 0.35);
@@ -199,22 +173,6 @@
             .hamburger .bar {
                 transition: none;
             }
-        }
-
-        /* Number input: hide native spinners; we provide custom +/- */
-        input.stepper-input[type=number]::-webkit-outer-spin-button,
-        input.stepper-input[type=number]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-
-        input.stepper-input[type=number] {
-            -moz-appearance: textfield;
-        }
-
-        /* User profile dropdown chevron transition */
-        #user-profile-chevron {
-            transition: transform 200ms ease;
         }
 
         /* Custom tooltip styles */
