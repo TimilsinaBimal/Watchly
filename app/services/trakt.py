@@ -120,41 +120,24 @@ class TraktService:
         items: list[WatchHistoryItem] = []
         seen_ids: set[str] = set()
 
-        for entry in watched_movies:
-            movie = entry.get("movie", {})
-            imdb_id = movie.get("ids", {}).get("imdb")
-            if not imdb_id or imdb_id in seen_ids:
-                continue
-            seen_ids.add(imdb_id)
-            items.append(
-                WatchHistoryItem(
-                    imdb_id=imdb_id,
-                    type="movie",
-                    name=movie.get("title", ""),
-                    rating=ratings.get(imdb_id),
-                    watch_count=entry.get("plays", 1),
-                    completion=1.0,
-                    last_watched=self._parse_date(entry.get("last_watched_at")),
+        for entries, key, mtype in ((watched_movies, "movie", "movie"), (watched_shows, "show", "series")):
+            for entry in entries:
+                media = entry.get(key, {})
+                imdb_id = media.get("ids", {}).get("imdb")
+                if not imdb_id or imdb_id in seen_ids:
+                    continue
+                seen_ids.add(imdb_id)
+                items.append(
+                    WatchHistoryItem(
+                        imdb_id=imdb_id,
+                        type=mtype,
+                        name=media.get("title", ""),
+                        rating=ratings.get(imdb_id),
+                        watch_count=entry.get("plays", 1),
+                        completion=1.0,
+                        last_watched=self._parse_date(entry.get("last_watched_at")),
+                    )
                 )
-            )
-
-        for entry in watched_shows:
-            show = entry.get("show", {})
-            imdb_id = show.get("ids", {}).get("imdb")
-            if not imdb_id or imdb_id in seen_ids:
-                continue
-            seen_ids.add(imdb_id)
-            items.append(
-                WatchHistoryItem(
-                    imdb_id=imdb_id,
-                    type="series",
-                    name=show.get("title", ""),
-                    rating=ratings.get(imdb_id),
-                    watch_count=entry.get("plays", 1),
-                    completion=1.0,
-                    last_watched=self._parse_date(entry.get("last_watched_at")),
-                )
-            )
 
         # Add rated-but-not-watched items (user rated without watching on Trakt)
         for item in rated_movies + rated_shows:
