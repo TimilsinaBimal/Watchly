@@ -40,12 +40,6 @@ class TokenStore:
 
     KEY_PREFIX = settings.REDIS_TOKEN_KEY
 
-    def __init__(self) -> None:
-        if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
-            logger.warning(
-                "TOKEN_SALT is missing or using the default placeholder. Set a strong value to secure tokens."
-            )
-
     def _ensure_secure_salt(self) -> None:
         if not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me":
             logger.error("TOKEN_SALT is unset or using the insecure default.")
