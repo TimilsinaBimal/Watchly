@@ -21,7 +21,7 @@ class StremioState(BaseModel):
     def parse_last_watched(cls, v):
         if isinstance(v, str):
             try:
-                return datetime.fromisoformat(v.replace("Z", "+00:00"))
+                return datetime.fromisoformat(v)
             except ValueError:
                 return None
         return v

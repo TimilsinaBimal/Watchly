@@ -3,12 +3,11 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-from async_lru import alru_cache
 from loguru import logger
 
+from app.core.base_client import BaseClient
 from app.models.history import WatchHistory, WatchHistoryItem
 from app.models.library import LibraryCollection, StremioLibraryItem, StremioState
-from app.services.stremio.client import StremioClient, StremioLikesClient
 
 
 def stremio_library_to_watch_history(library: LibraryCollection) -> WatchHistory:
@@ -127,56 +126,31 @@ def watch_history_to_library_collection(history: WatchHistory) -> LibraryCollect
             continue
         seen.add(item.imdb_id)
 
-        rating = item.rating
-        if rating is not None and rating >= 9.0:
-            bucket = "loved"
-        elif rating is not None and rating >= 7.0:
-            bucket = "liked"
-        elif rating is None and item.watch_count >= 2:
-            bucket = "loved"
-        else:
-            bucket = "watched"
-
-        is_loved = bucket == "loved"
-        is_liked = bucket == "liked"
+        r = item.rating
+        is_loved = (r is not None and r >= 9.0) or (r is None and item.watch_count >= 2)
+        is_liked = not is_loved and r is not None and r >= 7.0
         lib_item = watch_history_item_to_library_item(item, is_loved, is_liked)
 
-        if bucket == "loved":
+        if is_loved:
             loved.append(lib_item)
-        elif bucket == "liked":
+        elif is_liked:
             liked.append(lib_item)
         else:
             watched.append(lib_item)
 
-    return LibraryCollection(
-        loved=loved,
-        liked=liked,
-        watched=watched,
-        added=[],
-        source=history.source or "stremio",
-    )
+    return LibraryCollection(loved=loved, liked=liked, watched=watched, source=history.source)
 
 
 class StremioLibraryService:
-    """
-    Handles fetching and processing of user's Stremio library and likes.
-    """
-
-    def __init__(self, client: StremioClient, likes_client: StremioLikesClient):
+    def __init__(self, client: BaseClient, likes_client: BaseClient):
         self.client = client
         self.likes_client = likes_client
 
-    @alru_cache(maxsize=100, ttl=3600)
-    async def get_likes_by_type(self, auth_token: str, media_type: str, status: str = "loved") -> list[dict[str, Any]]:
-        """
-        Fetch items liked or loved by the user.
-        status: 'loved' or 'liked'
-        Returns list of full item metadata.
-        """
+    async def get_likes_by_type(self, auth_token: str, media_type: str, status: str) -> list[dict[str, Any]]:
+        """Full metadata of the items the user marked `status` ('loved' or 'liked')."""
         path = f"/addons/{status}/movies-shows/{auth_token}/catalog/{media_type}/stremio-{status}-{media_type}.json"
         data = await self.likes_client.get(path)
         metas = data.get("metas", [])
-        # Return valid items
         return [meta for meta in metas if meta.get("id")]
 
     async def get_library_items(self, auth_key: str) -> LibraryCollection | None:
@@ -187,7 +161,6 @@ class StremioLibraryService:
         apart from an empty library and keep what they have cached.
         """
         try:
-            # 1. Fetch raw library from datastore
             payload = {
                 "authKey": auth_key,
                 "collection": "libraryItem",
@@ -201,7 +174,6 @@ class StremioLibraryService:
                 return None
             all_raw_items = data["result"]
 
-            # 2. Fetch loved/liked items in parallel (now returns full metadata)
             loved_movies_task = self.get_likes_by_type(auth_key, "movie", "loved")
             loved_series_task = self.get_likes_by_type(auth_key, "series", "loved")
             liked_movies_task = self.get_likes_by_type(auth_key, "movie", "liked")
@@ -224,15 +196,12 @@ class StremioLibraryService:
                 f" {len(liked_movies)} liked movies, {len(liked_series)} liked series"
             )
 
-            # Create sets of IDs for faster lookup
             loved_set = {item.get("id") for item in (loved_movies + loved_series) if item.get("id")}
             liked_set = {item.get("id") for item in (liked_movies + liked_series) if item.get("id")}
 
-            # Identify existing library items to avoid duplicates
             existing_library_ids = {item.get("_id") for item in all_raw_items if item.get("_id")}
 
-            # Inject missing loved/liked items into all_raw_items
-            # This handles items the user loved/liked elsewhere but hasn't watched/added
+            # Items loved/liked elsewhere but never watched or added still count.
             for source_items, is_loved in [
                 (loved_movies + loved_series, True),
                 (liked_movies + liked_series, False),
@@ -240,8 +209,6 @@ class StremioLibraryService:
                 for item in source_items:
                     item_id = item.get("id")
                     if item_id and item_id not in existing_library_ids:
-                        # Construct a "virtual" library item
-                        # Use metadata from the Likes API to populate it
                         virtual_item = {
                             "_id": item_id,
                             "name": item.get("name", ""),
@@ -265,14 +232,12 @@ class StremioLibraryService:
                         all_raw_items.append(virtual_item)
                         existing_library_ids.add(item_id)
 
-            # 3. Categorize items and convert to typed models at the boundary
             watched: list[StremioLibraryItem] = []
             loved: list[StremioLibraryItem] = []
             added: list[StremioLibraryItem] = []
             liked: list[StremioLibraryItem] = []
 
             for item in all_raw_items:
-                # Basic validation
                 if item.get("type") not in ["movie", "series"]:
                     continue
                 item_id = item.get("_id", "")
@@ -281,7 +246,6 @@ class StremioLibraryService:
                 if not item_id.startswith("tt"):
                     continue
 
-                # Check Watched status
                 state = item.get("state", {}) or {}
                 times_watched = int(state.get("timesWatched") or 0)
                 flagged_watched = int(state.get("flaggedWatched") or 0)
@@ -291,19 +255,16 @@ class StremioLibraryService:
                 is_completion_high = duration > 0 and (time_watched / duration) >= 0.7
                 is_watched = times_watched > 0 or flagged_watched > 0 or is_completion_high
 
-                # Set enrichment flags before conversion
                 if item_id in loved_set:
                     item["_is_loved"] = True
                 elif item_id in liked_set:
                     item["_is_liked"] = True
 
-                # Convert raw dict to typed model
                 try:
                     typed_item = StremioLibraryItem(**item)
                 except Exception:
                     continue
 
-                # Categorize
                 if item_id in loved_set:
                     loved.append(typed_item)
                 elif item_id in liked_set:
@@ -315,7 +276,6 @@ class StremioLibraryService:
                 else:
                     continue
 
-            # 4. Sort by recency
             def sort_by_recency(x: StremioLibraryItem):
                 return (
                     str(x.state.lastWatched or x.mtime or ""),
@@ -342,6 +302,6 @@ class StremioLibraryService:
         except httpx.HTTPError:
             # BaseClient has already logged the request that failed.
             return None
-        except Exception as e:
-            logger.exception(f"Error processing library items: {e}")
+        except Exception:
+            logger.exception("Error processing library items")
             return None
