@@ -5,9 +5,14 @@
 ### Added
 
 - "Watch it again" catalog: titles you've already watched, loved or liked, ranked by how well they fit your taste profile, with loved titles boosted. Anything watched in the last 6 months is held back. Off by default; enable it on the configure page (#139).
+- Self-hosting guide at `/self-host`, and a Deploy to Vercel button in the README and the guide that creates the project and a Redis Cloud database in one flow. Vercel runs Watchly with no extra config; the guide lists what doesn't work reliably there, mainly background refreshes after a response.
+- A Preview button for the custom poster provider shows what your URL template produces for a sample movie and series. A saved API key works too, as long as the template hasn't changed since it was saved.
+- A "Choose a Redis" section in the README and self-host guide: Redis in Docker for Docker installs, Upstash for Vercel, how many users each free plan roughly covers, and step-by-step Upstash setup.
 
 ### Changed
 
+- The Deploy to Vercel button no longer asks for `TMDB_API_KEY`, and the docs list it as optional but recommended: users enter their own key on the configure page, and the server key only backs the language list and accounts saved without one.
+- The configure page and dashboard are redesigned. A top stepper (Accounts, Preferences, Catalogs, Install) replaces the sidebar, content uses the full width, preferences are grouped into cards with every genre visible, the catalog list has real on/off switches and labelled controls, and the install step keeps Delete account apart from the primary action. The dashboard gains a status summary, stat tiles and a taste profile overview.
 - After the scheduled catalog refresh, the home-screen rows are rebuilt straight away, so the next home screen doesn't wait on rows the refresh dropped.
 
 ### Fixed

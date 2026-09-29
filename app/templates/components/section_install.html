@@ -1,79 +1,94 @@
 <!-- SECTION 4: INSTALL -->
-<section id="sect-install" class="space-y-8 hidden animate-fade-in">
-    <div class="mb-6">
-        <h2 class="text-3xl font-bold text-white mb-2">Save & Install</h2>
-        <p class="text-slate-400">Ready to install your personalized addon.</p>
+<section id="sect-install" class="hidden animate-fade-in space-y-6">
+    <div class="page-header">
+        <h2 class="page-title">Save & install</h2>
+        <p class="page-lead">One click saves your settings and gives you a private addon link.</p>
     </div>
 
-    <div class="bg-neutral-900/60 border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 backdrop-blur-sm shadow-xl shadow-black/20">
-        <div class="pt-4">
-            <button type="submit" id="submitBtn"
-                class="w-full bg-white text-black hover:bg-white/90 font-bold py-4 rounded-xl transition-all shadow-lg shadow-black/10 text-lg flex items-center justify-center gap-2 border border-white/10 hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0">
-                <span class="btn-text">Save & Install</span>
-                <div class="loader hidden w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin">
-                </div>
-            </button>
-        </div>
-    </div>
+    <div class="card md:p-8">
+        <div class="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+            <ol class="space-y-4">
+                <li class="flex gap-3">
+                    <span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-medium text-accent-soft">1</span>
+                    <div>
+                        <p class="text-sm font-medium text-white">Your settings are saved</p>
+                        <p class="text-sm text-neutral-300">Keys and credentials are encrypted before they're stored.</p>
+                    </div>
+                </li>
+                <li class="flex gap-3">
+                    <span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-medium text-accent-soft">2</span>
+                    <div>
+                        <p class="text-sm font-medium text-white">Watchly builds your rows</p>
+                        <p class="text-sm text-neutral-300">It reads your watch history and prepares recommendations.</p>
+                    </div>
+                </li>
+                <li class="flex gap-3">
+                    <span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-medium text-accent-soft">3</span>
+                    <div>
+                        <p class="text-sm font-medium text-white">You add it to Stremio or Nuvio</p>
+                        <p class="text-sm text-neutral-300">Install in one tap, or copy the link.</p>
+                    </div>
+                </li>
+            </ol>
 
-    <div class="pt-8">
-        <div class="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
-            <div class="flex items-start gap-4">
-                <div
-                    class="w-10 h-10 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center flex-shrink-0">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
-                        </path>
-                    </svg>
-                </div>
-                <div class="flex-grow">
-                    <h3 class="text-sm font-semibold text-red-400 mb-1">Danger Zone</h3>
-                    <p class="text-xs text-slate-400 mb-4">Permanently delete your settings and account
-                        data. This action cannot be undone.</p>
-                    <button type="button" id="deleteAccountBtn"
-                        class="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 group">
-                        <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                            </path>
-                        </svg>
-                        <span>Delete Account</span>
-                    </button>
-                </div>
+            <div class="lg:w-72">
+                <button type="submit" id="submitBtn" class="btn btn-primary btn-lg w-full py-4 text-base">
+                    <span class="btn-text">Save & install</span>
+                    <div class="loader hidden h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white">
+                    </div>
+                </button>
+                <p class="mt-2 text-center text-xs text-neutral-400">You can come back and change these anytime.</p>
             </div>
         </div>
+
+        <div id="errorMessage"
+            class="mt-6 hidden flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200 animate-shake">
+            <svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span class="message-content">Error message</span>
+        </div>
     </div>
 
-    <!-- Error Message -->
-    <div id="errorMessage"
-        class="hidden p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-200 text-sm animate-shake">
-        <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor"
-            viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-        <span class="message-content">Error message</span>
+    <div class="flex items-center justify-between border-t border-white/[0.07] pt-6">
+        <button type="button" id="installBackBtn" class="btn btn-ghost">&larr; Back</button>
+    </div>
+
+    <div class="!mt-16 rounded-2xl border border-red-500/15 bg-surface p-5 md:p-6">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h3 class="text-sm font-semibold text-red-300">Delete account</h3>
+                <p class="mt-1 text-sm text-neutral-300">Permanently removes your settings and account data. This
+                    can't be undone.</p>
+            </div>
+            <button type="button" id="deleteAccountBtn" class="btn btn-danger flex-shrink-0">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                    </path>
+                </svg>
+                <span>Delete account</span>
+            </button>
+        </div>
     </div>
 </section>
 
 <!-- SECTION 5: SUCCESS -->
-<section id="sect-success"
-    class="bg-neutral-900/70 border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl text-center hidden animate-fade-in backdrop-blur-sm">
+<section id="sect-success" class="card mx-auto hidden max-w-2xl animate-fade-in text-center md:p-10">
     <div
-        class="w-20 h-20 bg-gradient-to-br from-green-500/20 to-emerald-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-6 ring-1 ring-green-500/30 shadow-lg shadow-green-500/10">
-        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/15 text-green-400 ring-8 ring-green-500/[0.06]">
+        <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
         </svg>
     </div>
-    <h3 id="successHeading" class="text-3xl font-bold text-white mb-2">You're all set!</h3>
-    <p id="successSubheading" class="text-slate-400 mb-8">Your personalized catalog is ready.</p>
+    <h3 id="successHeading" class="page-title">You're all set!</h3>
+    <p id="successSubheading" class="mx-auto mt-2 max-w-md text-[15px] text-neutral-300">Your personalized catalog is ready.</p>
 
     <!-- Shown while the account warms up; replaced by the URL and install buttons below -->
-    <div id="warmProgress" class="hidden max-w-lg mx-auto mb-8">
-        <div class="flex items-center justify-center gap-3 text-sm text-slate-300">
-            <svg class="w-5 h-5 animate-spin text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div id="warmProgress" class="mx-auto mt-8 hidden max-w-md">
+        <div class="flex items-center justify-center gap-3 text-sm text-neutral-200">
+            <svg class="h-5 w-5 animate-spin text-accent-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor"
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
@@ -81,49 +96,64 @@
             </svg>
             <span id="warmProgressLabel">Setting up your account…</span>
         </div>
-        <div class="mt-3 h-1 w-full bg-white/5 rounded-full overflow-hidden">
-            <div id="warmProgressBar" class="h-full bg-white/40 rounded-full transition-all duration-500"
+        <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+            <div id="warmProgressBar" class="h-full rounded-full bg-accent transition-all duration-500"
                 style="width: 10%"></div>
         </div>
-        <p id="warmProgressDetail" class="mt-3 text-xs text-slate-500"></p>
+        <div class="mt-2 flex items-center justify-between text-xs text-neutral-400">
+            <span id="warmProgressStep"></span>
+            <span id="warmProgressDetail"></span>
+        </div>
+        <ol id="warmProgressSteps" class="mt-5 space-y-2 text-left text-sm"></ol>
     </div>
 
-    <div id="successPayload" class="hidden">
-        <div id="singleAddonInstall">
-            <div
-                class="bg-neutral-950 rounded-xl p-4 mb-8 border border-white/10 font-mono text-sm text-slate-200 break-all relative group">
-                <div id="addonUrl">https://...</div>
-                <div
-                    class="absolute inset-0 bg-neutral-900/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl cursor-default">
-                    <span class="text-white font-sans text-sm font-medium">Private Token - Do Not Share</span>
+    <div id="successPayload" class="mt-8 hidden text-left">
+        <div id="singleAddonInstall" class="space-y-6">
+            <div>
+                <div class="mb-1.5 flex items-center justify-between gap-3">
+                    <span class="text-sm font-medium text-neutral-100">Your addon link</span>
+                    <span class="badge border border-amber-400/25 bg-amber-400/10 text-amber-300">Private, don't share</span>
+                </div>
+                <div id="addonUrl"
+                    class="break-all rounded-xl border border-white/10 bg-surface-sunken px-4 py-3 font-mono text-sm text-neutral-100">https://...</div>
+            </div>
+
+            <div>
+                <h4 class="group-title mb-3">Install in</h4>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <button type="button" id="installDesktopBtn" class="btn btn-stremio btn-lg sm:col-span-2">Stremio app</button>
+                    <button type="button" id="installWebBtn" class="btn btn-secondary">Stremio Web</button>
+                    <button type="button" id="installNuvioBtn" class="btn btn-nuvio">Nuvio</button>
+                    <button type="button" id="copyBtn" class="btn btn-ghost sm:col-span-2">Copy link</button>
                 </div>
             </div>
-
-            <div class="grid gap-4 md:grid-cols-2 max-w-lg mx-auto">
-                <button type="button" id="installDesktopBtn"
-                    class="col-span-full md:col-span-1 bg-white hover:bg-white/90 text-black font-semibold py-3.5 rounded-xl transition shadow-lg shadow-black/10 hover:shadow-black/20 hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0 px-4 border border-white/10">Install
-                    on App</button>
-                <button type="button" id="installWebBtn"
-                    class="col-span-full md:col-span-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium py-3.5 rounded-xl transition border border-white/10 px-4">Install
-                    on Web</button>
-                <button type="button" id="installNuvioBtn"
-                    class="col-span-full md:col-span-1 bg-neutral-800 hover:bg-neutral-700 text-white font-medium py-3.5 rounded-xl transition border border-white/10 px-4">Install
-                    on Nuvio</button>
-                <button type="button" id="copyBtn"
-                    class="col-span-full md:col-span-1 bg-transparent hover:bg-neutral-800 text-slate-400 hover:text-white font-medium py-3 rounded-xl transition border border-white/10 px-4">Copy
-                    Link</button>
-            </div>
         </div>
 
-        <div id="profileBatchInstall" class="hidden max-w-2xl mx-auto mb-6 text-left">
+        <div id="profileBatchInstall" class="mb-6 hidden">
             <button type="button" id="installAllProfilesBtn"
-                class="w-full bg-white hover:bg-white/90 text-black font-semibold py-3.5 rounded-lg transition disabled:cursor-wait disabled:opacity-60">
+                class="btn btn-stremio btn-lg w-full disabled:cursor-wait disabled:opacity-60">
                 Install all profiles in Stremio
             </button>
-            <p class="mt-2 text-xs text-slate-500 text-center">Each private instance will be assigned to its matching profile.</p>
+            <p class="mt-2 text-center text-xs text-neutral-400">Each private instance will be assigned to its matching profile.</p>
         </div>
-        <div id="profileAddonInstances" class="hidden max-w-2xl mx-auto text-left divide-y divide-white/10 border-y border-white/10"></div>
+        <div id="profileAddonInstances" class="hidden divide-y divide-white/10 border-y border-white/10"></div>
+
+        <div class="mt-8 rounded-xl border border-white/[0.07] bg-surface-raised p-4">
+            <h4 class="text-sm font-medium text-white">What's next</h4>
+            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-300">
+                <li>Your Watchly rows show up on the Stremio home screen and in Discover.</li>
+                <li>They refresh as you watch, so keep watching.</li>
+                <li>Come back here anytime to change settings.</li>
+            </ul>
+        </div>
+
+        <div id="successSupport" class="mt-4 flex flex-col gap-3 rounded-xl border border-pink-400/20 bg-pink-500/[0.06] p-4 sm:flex-row sm:items-center">
+            <p class="flex-1 text-sm text-neutral-200">Enjoying Watchly? It's free. If you'd like to help keep it running, you can chip in.</p>
+            <div class="flex gap-2">
+                <button type="button" data-open-support class="btn btn-secondary">Support</button>
+                <button type="button" id="successSupportDismiss" class="btn btn-ghost text-neutral-400">No thanks</button>
+            </div>
+        </div>
     </div>
-    <button type="button" id="successResetBtn"
-        class="mt-8 text-sm text-slate-500 hover:text-slate-300">Start Over</button>
+    <button type="button" id="successResetBtn" class="btn btn-ghost mt-6 text-neutral-400">Start over</button>
 </section>

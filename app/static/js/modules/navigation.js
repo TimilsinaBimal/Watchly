@@ -3,13 +3,32 @@
 // DOM Elements - will be initialized
 let navItems = {};
 let sections = {};
-let mainEl = null;
 let appState = null;
+
+const SETUP_STEPS = ['login', 'config', 'catalogs', 'install'];
+
+// The step lives in the URL hash so a reload returns to it. Only step names go
+// there, never anything from the form.
+const HASH_FOR = { login: 'accounts', config: 'preferences', catalogs: 'catalogs', install: 'install', dashboard: 'dashboard' };
+const SECTION_FOR = Object.fromEntries(Object.entries(HASH_FOR).map(([key, hash]) => [hash, key]));
+// Read once at load, before the first switchSection rewrites the hash.
+const requestedSection = SECTION_FOR[window.location.hash.slice(1)] || null;
+
+// The section to open on load: the one in the URL, if it isn't locked.
+export function initialSection(fallback) {
+    // Accounts is always reachable: it's where Get started leads anyway.
+    const open = requestedSection === 'login' || !navItems[requestedSection]?.classList.contains('disabled');
+    return requestedSection && open ? requestedSection : fallback;
+}
+
+// After sign-in unlocks the steps: return to the step in the URL, if any.
+export function resumeSection(fallback) {
+    return SETUP_STEPS.includes(requestedSection) ? requestedSection : fallback;
+}
 
 export function initializeNavigation(domElements, state) {
     navItems = domElements.navItems;
     sections = domElements.sections;
-    mainEl = domElements.mainEl;
     appState = state;
 
     Object.keys(navItems).forEach(key => {
@@ -38,50 +57,6 @@ export function lockNavigationForLoggedOut() {
     if (navItems.install) navItems.install.classList.add('disabled');
 }
 
-export function initializeMobileNav() {
-    const mobileToggle = document.getElementById('mobileNavToggle');
-    const sidebar = document.getElementById('mainSidebar');
-    const backdrop = document.getElementById('mobileNavBackdrop');
-    if (!mobileToggle || !sidebar || !backdrop) return;
-
-    const openNav = () => {
-        sidebar.classList.remove('-translate-x-full');
-        sidebar.classList.add('translate-x-0');
-        backdrop.classList.remove('hidden');
-        document.body.classList.add('overflow-hidden');
-        // Animate hamburger to X
-        mobileToggle.classList.add('is-active');
-        mobileToggle.setAttribute('aria-expanded', 'true');
-        mobileToggle.setAttribute('aria-label', 'Close navigation');
-    };
-    const closeNav = () => {
-        sidebar.classList.remove('translate-x-0');
-        sidebar.classList.add('-translate-x-full');
-        backdrop.classList.add('hidden');
-        document.body.classList.remove('overflow-hidden');
-        // Reset hamburger
-        mobileToggle.classList.remove('is-active');
-        mobileToggle.setAttribute('aria-expanded', 'false');
-        mobileToggle.setAttribute('aria-label', 'Open navigation');
-    };
-
-    mobileToggle.addEventListener('click', (e) => {
-        e.preventDefault();
-        // Toggle open/close for convenience
-        const isOpen = sidebar.classList.contains('translate-x-0');
-        if (isOpen) closeNav(); else openNav();
-    });
-    backdrop.addEventListener('click', closeNav);
-
-    // Auto-close when a nav item is selected (mobile)
-    Object.values(navItems).forEach(n => {
-        if (!n) return;
-        n.addEventListener('click', () => {
-            if (!sidebar.classList.contains('hidden')) closeNav();
-        });
-    });
-}
-
 export function switchSection(sectionKey) {
     if (appState) {
         appState.ui.currentSection = sectionKey;
@@ -97,49 +72,17 @@ export function switchSection(sectionKey) {
         sections[sectionKey].classList.remove('hidden');
     }
 
-    // Update Nav UI Logic
-    // Reset all nav items
     Object.values(navItems).forEach(el => {
-        if (el) {
-            el.classList.remove('active', 'bg-blue-600/10', 'text-blue-400', 'border-l-2', 'border-blue-400');
-        }
+        if (el) el.classList.remove('active', 'done');
     });
-
-    // Activate current if exists in nav
     if (navItems[sectionKey]) {
         navItems[sectionKey].classList.add('active');
     }
+    const current = SETUP_STEPS.indexOf(sectionKey);
+    SETUP_STEPS.slice(0, Math.max(current, 0)).forEach(key => navItems[key]?.classList.add('done'));
 
-    // Ensure new section starts at top in the scroll container
-    try {
-        if (mainEl) {
-            // Using scrollTo with behavior auto to avoid jank on iOS toolbars
-            mainEl.scrollTo({ top: 0, behavior: 'auto' });
-        } else {
-            window.scrollTo({ top: 0, behavior: 'auto' });
-        }
-    } catch (e) { /* noop */ }
-}
+    const hash = HASH_FOR[sectionKey] ? `#${HASH_FOR[sectionKey]}` : '';
+    window.history.replaceState(null, '', window.location.pathname + window.location.search + hash);
 
-export function updateMobileLayout() {
-    try {
-        const headerEl = document.getElementById('mobileHeader');
-        const isMobile = window.matchMedia('(max-width: 767.98px)').matches;
-        if (!headerEl || !mainEl) return;
-        const h = headerEl.offsetHeight || 0;
-        document.documentElement.style.setProperty('--mobile-header', `${h}px`);
-
-        const sidebarEl = document.getElementById('mainSidebar');
-        if (!sidebarEl) return;
-
-        if (isMobile) {
-            if (mainEl) mainEl.style.paddingTop = `${h}px`;
-            sidebarEl.style.top = `${h}px`;
-            sidebarEl.style.height = `calc(100dvh - ${h}px)`;
-        } else {
-            if (mainEl) mainEl.style.paddingTop = '';
-            sidebarEl.style.top = '0';
-            sidebarEl.style.height = '100dvh';
-        }
-    } catch (e) { /* noop */ }
+    window.scrollTo({ top: 0, behavior: 'auto' });
 }

@@ -34,8 +34,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         # FastAPI's default body puts a list of pydantic errors in `detail`. The
         # configure page renders `detail` as a string, so that surfaced to users as
-        # "[object Object]".
-        logger.warning(f"{request.method} {request.url.path} -> 422: {exc.errors()}")
+        # "[object Object]". Only loc and type are logged: each error's `input` echoes
+        # the rejected value, which can be an API key or password.
+        problems = [(e["loc"], e["type"]) for e in exc.errors()]
+        logger.warning(f"{request.method} {request.url.path} -> 422: {problems}")
         return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
     @app.exception_handler(Exception)

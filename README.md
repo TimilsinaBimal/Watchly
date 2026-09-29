@@ -24,6 +24,8 @@ Everything is configured through a web page; you paste the resulting manifest UR
 - [Screenshots](#screenshots)
 - [Installation (Docker)](#installation-docker)
 - [Unraid](#unraid)
+- [Choose a Redis](#choose-a-redis)
+- [Deploy on Vercel](#deploy-on-vercel)
 - [Configuration reference](#configuration-reference)
 - [Optional integrations](#optional-integrations)
 - [Development](#development)
@@ -96,7 +98,7 @@ Find more screenshots [here](./app/static/screenshots/).
 
 ## Installation (Docker)
 
-Docker is the recommended way to self-host. Watchly requires a **Redis** instance and a **TMDB API key**.
+Docker is the recommended way to self-host. Watchly requires a **Redis** instance; a server **TMDB API key** is optional but recommended.
 
 1. **Create a `docker-compose.yml`:**
 
@@ -128,9 +130,11 @@ Docker is the recommended way to self-host. Watchly requires a **Redis** instanc
 
    ```env
    # Required
-   TMDB_API_KEY=your_tmdb_api_key_here
    TOKEN_SALT=generate_a_long_random_secret
    HOST_NAME=https://your-public-addon-url
+
+   # Optional, recommended
+   TMDB_API_KEY=your_tmdb_api_key_here
 
    # Redis (matches the compose service name)
    REDIS_URL=redis://redis:6379/0
@@ -165,15 +169,74 @@ A Community Applications-style template lives at [`unraid/watchly.xml`](unraid/w
    (e.g. `redis://YOUR-UNRAID-IP:6379/0`), and the host name your Stremio clients will reach the addon on.
 4. Start the container and open the WebUI to configure your catalogs.
 
+## Choose a Redis
+
+Watchly keeps every account, cache and rendered row in Redis, so it needs one it can reach on every request.
+
+- **Docker: run Redis next to Watchly.** The `redis:7-alpine` service in the compose file above costs nothing, has no command or connection limits, and never gets deleted for being idle.
+- **Vercel: use [Upstash](https://upstash.com/pricing/redis).** Its free plan fits a small instance, TLS is always on, and a free database that sits idle is archived and can be restored rather than deleted.
+
+Roughly how much a user costs: serving a cached row takes about 3 commands (alias lookup, warm-up check, catalog read), so a home screen of ~10 rows plus the manifest is ~35. Each row is rebuilt once a day, about 10 more commands per row. A user who opens Stremio a few times a day comes to about 150–250 commands, or 5–8K a month.
+
+| | Upstash free | Redis Cloud free (Deploy button) | Docker Redis |
+| --- | --- | --- | --- |
+| Commands | 500K / month (~60–100 users) | 100 ops/sec | no limit |
+| Data | 256 MB | 30 MB | your disk |
+| Connections | not published | 30 | no limit |
+| TLS | always on (`rediss://`) | not available on free | local network |
+| Idle database | archived after 30 days, restorable | deleted after 14 days without commands | never |
+| Next step up | pay as you go, $0.20 per 100K commands | paid plans from $5 / month | — |
+
+Sources: [Upstash pricing](https://upstash.com/docs/redis/overall/pricing), [Upstash FAQ](https://upstash.com/docs/redis/help/faq), [Redis Cloud Essentials limits](https://redis.io/docs/latest/operate/rc/subscriptions/view-essentials-subscription/essentials-plan-details/), [Redis Cloud TLS](https://redis.io/docs/latest/operate/rc/security/database-security/tls-ssl/), [Redis pricing](https://redis.io/pricing/). Checked September 2026; confirm current limits before you pick.
+
+Redis Cloud's free plan is the weaker fit on Vercel: each function instance opens up to `REDIS_MAX_CONNECTIONS` (20) connections, so two instances can exhaust its 30, and a home screen requests every row at once, which a few users together can push past 100 ops/sec. It is fine for trying Watchly out; switch to Upstash before you share the instance.
+
+### Set up Upstash
+
+1. In the [Upstash console](https://console.upstash.com), create a Redis database. Pick the region nearest your Vercel functions; new Vercel projects run in `iad1` (Washington, D.C.), so AWS `us-east-1` is the usual choice.
+2. Open the database's **Connect** section and copy the `rediss://default:<password>@<host>:<port>` URL from the redis-cli snippet. Don't use the REST URL and token (`UPSTASH_REDIS_REST_*`, `KV_REST_API_*`): they are for Upstash's HTTP API, which Watchly's Redis client can't speak.
+3. In Vercel, open **Settings → Environment Variables** and set `REDIS_URL` to that URL.
+4. Redeploy from the **Deployments** tab.
+
+The `rediss://` scheme turns on TLS, and redis-py handles it with no extra settings.
+
+### Redis Cloud (Deploy button)
+
+The Deploy button's **Redis** store creates a free Redis Cloud database and adds `REDIS_URL` to the project for you. On the free plan, set `REDIS_MAX_CONNECTIONS=10` so two instances stay under its 30-connection limit, and remember that the database is deleted after 14 days with no commands.
+
+## Deploy on Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&project-name=watchly&repository-name=watchly&env=TOKEN_SALT,HOST_NAME&envDescription=A%20long%20random%20TOKEN_SALT%20and%20HOST_NAME%20set%20to%20https%3A%2F%2F%3Cproject-name%3E.vercel.app.%20TMDB_API_KEY%20is%20optional%20but%20recommended%3B%20add%20it%20later%20under%20Settings%20%3E%20Environment%20Variables.&envLink=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly%23deploy-on-vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22redis%22%2C%22productSlug%22%3A%22redis%22%7D%5D)
+
+Vercel detects the FastAPI app with no extra config and runs it on Python 3.12, the version `pyproject.toml` and `.python-version` pin. A running instance also serves this guide at `/self-host`.
+
+1. Click the button and pick a project name.
+2. Accept the **Redis** store to try Watchly on a free Redis Cloud database; it adds `REDIS_URL` to the project. For an instance you'll keep, skip it and [set up Upstash](#set-up-upstash) instead (see [Choose a Redis](#choose-a-redis)).
+3. Fill in `TOKEN_SALT` (for example `openssl rand -hex 32`) and `HOST_NAME` (`https://<project-name>.vercel.app`), then deploy. `TMDB_API_KEY` is optional but recommended: add it under **Settings → Environment Variables** (see [Configuration reference](#configuration-reference)).
+4. If the production domain Vercel assigned differs from your `HOST_NAME`, fix it under **Settings → Environment Variables**.
+5. Redeploy from the **Deployments** tab; environment variable changes only apply to new deployments.
+6. Open `https://<your-domain>/configure` and set up your catalogs.
+
+Leave `APP_ENV` unset: the `production` default refuses to start with the placeholder `TOKEN_SALT`.
+
+**Limits.** Watchly finishes some work after it has answered a request, and Vercel's Python runtime has no way to keep the function alive for it, so that work may be paused or cut short:
+
+- The setup warm-up may not finish. The configure page falls back to "Setup is taking a while", and the first home screen builds its rows as Stremio requests them, so it is slower.
+- A stale row is served while it rebuilds in the background; if the rebuild is cut, the next request tries again.
+- There is no scheduler: catalogs refresh only when Stremio requests them, and that refresh is not guaranteed to complete.
+- A request can run for 5 minutes by default, so a very large library may time out on its first build.
+
+If you want background refreshes to run reliably, use Docker.
+
 ## Configuration reference
 
-All settings are environment variables. Only the first three are strictly required.
+All settings are environment variables. Only `TOKEN_SALT` and `HOST_NAME` are strictly required, plus a reachable Redis.
 
 ### Required
 
 | Variable | Description |
 | --- | --- |
-| `TMDB_API_KEY` | TMDB API key used for metadata and discovery. Users may also supply their own key on the configure page. |
+| `TMDB_API_KEY` | Optional, recommended. Each user enters their own TMDB key on the configure page; this server key is the fallback. Without it the configure page offers English only, and accounts saved before the page asked for a key have none to use. |
 | `TOKEN_SALT` | Secret used to derive the encryption key for stored credentials. **Set a long random value** — the default `change-me` is insecure. |
 | `HOST_NAME` | Public base URL of the addon (used for manifest and OAuth callback URLs). |
 
@@ -204,7 +267,7 @@ All settings are environment variables. Only the first three are strictly requir
 | `TOKEN_TTL_SECONDS` | `0` | Token expiry in seconds; `0` = never expire. |
 | `AUTO_UPDATE_CATALOGS` | `true` | Refresh dynamic catalogs in the background on a schedule. |
 | `CATALOG_REFRESH_INTERVAL_SECONDS` | `86400` | Background refresh interval (24 h). |
-| `CATALOG_CACHE_TTL` | `43200` | Rendered-catalog cache TTL (12 h). |
+| `CATALOG_CACHE_TTL` | `60` | `Cache-Control` max-age, in seconds, that Stremio may reuse a catalog response for. |
 | `CATALOG_STALE_TTL` | `604800` | Soft-expiration fallback for cached catalogs (7 d). |
 | `RECOMMENDATION_SOURCE_ITEMS_LIMIT` | `10` | Number of library items used to seed recommendations. |
 | `LIBRARY_ITEMS_LIMIT` | `20` | Library item cap used in parts of the pipeline. |

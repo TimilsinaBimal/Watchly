@@ -48,14 +48,14 @@ export function showToast(message, type = 'info', duration = 5000) {
             </svg>`;
             bgColor = 'bg-white/5';
             borderColor = 'border-white/10';
-            iconColor = 'text-slate-200';
+            iconColor = 'text-neutral-100';
     }
 
     toast.innerHTML = `
         <div class="flex items-start gap-3 p-4 ${bgColor} border ${borderColor} rounded-xl backdrop-blur-xl shadow-lg">
             <div class="${iconColor} flex-shrink-0 mt-0.5">${icon}</div>
-            <div class="flex-1 text-sm text-slate-200 leading-relaxed">${escapeHtml(message)}</div>
-            <button class="toast-close flex-shrink-0 text-slate-400 hover:text-white transition-colors">
+            <div class="flex-1 text-sm text-neutral-100 leading-relaxed">${escapeHtml(message)}</div>
+            <button class="toast-close flex-shrink-0 text-neutral-300 hover:text-white transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
@@ -163,7 +163,6 @@ export function initializeFooter() {
 // Donation Modal Logic
 export function initializeKofi() {
     const kofiBtn = document.getElementById('kofiBtn');
-    const homepageDonateBtn = document.getElementById('homepageDonateBtn');
     const donationModal = document.getElementById('donation-modal');
     const donationBackdrop = document.getElementById('donation-backdrop');
     const closeDonationBtn = document.getElementById('close-donation');
@@ -183,20 +182,12 @@ export function initializeKofi() {
         document.body.classList.remove('overflow-hidden');
     };
 
-    // Open modal when navbar button is clicked
-    if (kofiBtn) {
-        kofiBtn.addEventListener('click', openModal);
-    }
-
-    // Open modal when homepage donate button is clicked
-    if (homepageDonateBtn) {
-        homepageDonateBtn.addEventListener('click', openModal);
-    }
-
-    // Close button
-    if (closeDonationBtn) {
-        closeDonationBtn.addEventListener('click', closeModal);
-    }
+    // The top bar button plus any in-page "support" prompt (home card, success screen).
+    [kofiBtn, ...document.querySelectorAll('[data-open-support]')].forEach(btn => btn?.addEventListener('click', openModal));
+    [closeDonationBtn, document.getElementById('donationLaterBtn')].forEach(btn => btn?.addEventListener('click', closeModal));
+    document.getElementById('successSupportDismiss')?.addEventListener('click', () => {
+        document.getElementById('successSupport')?.classList.add('hidden');
+    });
 
     // Close on backdrop click
     if (donationBackdrop) {
@@ -238,7 +229,7 @@ export function initializeChangelog() {
     const closeBtn = document.getElementById('close-changelog');
     const content = document.getElementById('changelog-content');
 
-    if (!badge || !modal) return;
+    if (!modal) return;
 
     let loaded = false;
     const loadChangelog = async () => {
@@ -269,7 +260,7 @@ export function initializeChangelog() {
         document.body.classList.remove('overflow-hidden');
     };
 
-    badge.addEventListener('click', openModal);
+    [badge, ...document.querySelectorAll('[data-open-changelog]')].forEach(el => el?.addEventListener('click', openModal));
     closeBtn.addEventListener('click', closeModal);
     backdrop.addEventListener('click', closeModal);
     document.addEventListener('keydown', (e) => {

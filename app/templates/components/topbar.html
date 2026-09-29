@@ -1,0 +1,77 @@
+<header id="appHeader"
+    class="sticky top-0 z-40 border-b border-white/[0.06] bg-[#050505]/85 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
+    <div class="mx-auto flex max-w-[88rem] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:flex-nowrap md:px-8">
+        <button id="nav-welcome" type="button" class="nav-item flex items-center gap-2.5 rounded-lg" aria-label="Watchly home">
+            <img src="/app/static/logo.png" alt="" class="h-8 w-8 rounded-lg bg-black ring-1 ring-white/15">
+            <span class="text-lg font-semibold tracking-tight text-white">Watchly</span>
+        </button>
+        <a href="/changelog" data-open-changelog title="What's new in v{{ app_version }}"
+            class="hidden rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-soft transition hover:bg-accent/20 sm:inline-block">v{{ app_version }}</a>
+
+        <nav aria-label="Setup steps"
+            class="order-last flex w-full items-center justify-between gap-1 sm:justify-center md:order-none md:mx-auto md:w-auto">
+            <button id="nav-login" type="button" class="nav-item step-item disabled">
+                <span class="step-num">1</span><span class="step-label">Accounts</span>
+            </button>
+            <span class="step-sep" aria-hidden="true"></span>
+            <button id="nav-config" type="button" class="nav-item step-item disabled">
+                <span class="step-num">2</span><span class="step-label">Preferences</span>
+            </button>
+            <span class="step-sep" aria-hidden="true"></span>
+            <button id="nav-catalogs" type="button" class="nav-item step-item disabled">
+                <span class="step-num">3</span><span class="step-label">Catalogs</span>
+            </button>
+            <span class="step-sep" aria-hidden="true"></span>
+            <button id="nav-install" type="button" class="nav-item step-item disabled">
+                <span class="step-num">4</span><span class="step-label">Install</span>
+            </button>
+        </nav>
+
+        <div class="ml-auto flex items-center gap-1 md:ml-0">
+            <button id="nav-dashboard" type="button" class="nav-item btn btn-ghost px-3 py-2">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zm10-3a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
+                </svg>
+                <span class="hidden sm:inline">Dashboard</span>
+            </button>
+
+            <button type="button" id="kofiBtn"
+                class="btn border border-pink-400/30 bg-pink-500/10 px-3 py-2 text-pink-200 hover:bg-pink-500/20"
+                aria-label="Support Watchly">
+                <svg class="h-4 w-4 text-pink-300" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                <span class="hidden sm:inline">Support</span>
+            </button>
+
+            <div id="user-profile-dropdown-wrapper" class="relative hidden">
+                <button id="user-profile-trigger" type="button" aria-label="Account menu"
+                    class="flex items-center gap-1.5 rounded-full p-1 pr-2 transition hover:bg-white/5">
+                    <span id="user-avatar"
+                        class="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-bold text-black"></span>
+                    <svg id="user-profile-chevron" class="h-3.5 w-3.5 text-neutral-300" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+                <div id="user-profile-dropdown"
+                    class="absolute right-0 top-full z-50 mt-2 hidden w-64 overflow-hidden rounded-xl border border-white/10 bg-surface-raised shadow-2xl shadow-black/50">
+                    <div class="border-b border-white/[0.06] px-4 py-3">
+                        <div class="text-xs text-neutral-400">Signed in as</div>
+                        <div id="user-email" class="truncate text-sm font-medium text-white"></div>
+                    </div>
+                    <button type="button" id="user-profile-logout-btn"
+                        class="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-red-300 transition hover:bg-red-500/10">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Log out
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>

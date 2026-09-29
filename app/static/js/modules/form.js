@@ -285,16 +285,9 @@ function renderGenreList(container, genres, namePrefix) {
     if (!container) return;
 
     container.innerHTML = genres.map(genre => `
-        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition group">
-            <div class="relative flex items-center">
-                <input type="checkbox" name="${namePrefix}" value="${genre.id}"
-                    class="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-neutral-900 checked:bg-white checked:border-white transition-colors">
-                <svg class="absolute w-3.5 h-3.5 text-black left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity"
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
-                </svg>
-            </div>
-            <span class="text-sm text-slate-300 group-hover:text-white transition-colors select-none">${genre.name}</span>
+        <label class="cursor-pointer select-none">
+            <input type="checkbox" name="${namePrefix}" value="${genre.id}" class="peer sr-only">
+            <span class="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 text-sm text-neutral-200 transition hover:border-white/20 hover:text-white peer-checked:border-red-400/40 peer-checked:bg-red-500/10 peer-checked:text-red-200 peer-checked:line-through peer-checked:decoration-red-300/60 peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60">${genre.name}</span>
         </label>
     `).join('');
 }
@@ -318,6 +311,10 @@ function initializePosterRatingProvider() {
     const templateContainer = document.getElementById('posterRatingTemplateContainer');
     const templateInput = document.getElementById('posterRatingUrlTemplate');
     const templateMessage = document.getElementById('posterRatingTemplateMessage');
+    const previewContainer = document.getElementById('posterPreviewContainer');
+    const previewBtn = document.getElementById('posterPreviewBtn');
+    const previewMessage = document.getElementById('posterPreviewMessage');
+    const previewGrid = document.getElementById('posterPreviewGrid');
 
     if (!providerSelect || !apiKeyContainer || !apiKeyInput || !helpContainer || !helpText) {
         return null;
@@ -356,6 +353,73 @@ function initializePosterRatingProvider() {
         isValidated = false;
         clearValidationMessage(validationMessage);
         if (templateMessage) clearValidationMessage(templateMessage);
+        clearPreview();
+    }
+
+    function clearPreview() {
+        if (!previewGrid) return;
+        previewGrid.replaceChildren();
+        previewGrid.classList.add('hidden');
+        clearValidationMessage(previewMessage);
+    }
+
+    function posterTile(title, url) {
+        const tile = document.createElement('figure');
+        const frame = document.createElement('div');
+        frame.className = 'aspect-[2/3] overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] animate-pulse';
+        const img = document.createElement('img');
+        img.className = 'h-full w-full object-cover';
+        img.alt = `${title} poster`;
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('load', () => frame.classList.remove('animate-pulse'));
+        img.addEventListener('error', () => {
+            const note = document.createElement('div');
+            note.className = 'flex h-full items-center justify-center p-3 text-center text-xs text-neutral-400';
+            note.textContent = 'Couldn\u2019t load this poster \u2014 check the template';
+            frame.classList.remove('animate-pulse');
+            frame.replaceChildren(note);
+        });
+        img.src = url;
+        frame.appendChild(img);
+        const caption = document.createElement('figcaption');
+        caption.className = 'mt-2 truncate text-xs text-neutral-300';
+        caption.textContent = title;
+        tile.append(frame, caption);
+        return tile;
+    }
+
+    async function showPreview() {
+        const apiKey = apiKeyInput.value.trim();
+        const payload = {
+            url_template: templateInput?.value.trim() || '',
+            api_key: apiKey || null,
+            language: languageSelect?.value || undefined,
+            // The marker stands for the saved key, which only the server can look up.
+            token: apiKey === window.STORED_SECRET ? appState?.auth.token || undefined : undefined
+        };
+
+        clearPreview();
+        previewBtn.disabled = true;
+        previewBtn.textContent = 'Loading\u2026';
+        try {
+            const response = await fetch('/poster-rating/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setValidationMessage(previewMessage, data.detail || 'Preview failed. Please try again.', 'error');
+                return;
+            }
+            previewGrid.replaceChildren(...data.map(poster => posterTile(poster.title, poster.url)));
+            previewGrid.classList.remove('hidden');
+        } catch {
+            setValidationMessage(previewMessage, 'Preview failed. Please try again.', 'error');
+        } finally {
+            previewBtn.disabled = false;
+            previewBtn.textContent = 'Preview';
+        }
     }
 
     function updateUI() {
@@ -363,6 +427,7 @@ function initializePosterRatingProvider() {
 
         if (selectedProvider === 'custom') {
             if (templateContainer) templateContainer.style.display = 'block';
+            if (previewContainer) previewContainer.style.display = 'block';
             apiKeyContainer.style.display = 'block';
             helpContainer.style.display = 'block';
             helpText.innerHTML = CUSTOM_HELP;
@@ -371,12 +436,13 @@ function initializePosterRatingProvider() {
         }
 
         if (templateContainer) templateContainer.style.display = 'none';
+        if (previewContainer) previewContainer.style.display = 'none';
 
         const info = providerInfo[selectedProvider];
         if (info) {
             apiKeyContainer.style.display = 'block';
             helpContainer.style.display = 'block';
-            helpText.innerHTML = `${info.description}. Get your API key from <a href="${info.url}" target="_blank" class="text-slate-300 hover:text-white underline">${info.name}</a>.`;
+            helpText.innerHTML = `${info.description}. Get your API key from <a href="${info.url}" target="_blank" class="text-neutral-200 hover:text-white underline">${info.name}</a>.`;
             resetValidation();
             return;
         }
@@ -471,6 +537,7 @@ function initializePosterRatingProvider() {
     if (validateBtn) {
         validateBtn.addEventListener('click', validateApiKey);
     }
+    if (previewBtn) previewBtn.addEventListener('click', showPreview);
 
     apiKeyInput.addEventListener('input', resetValidation);
     if (templateInput) templateInput.addEventListener('input', resetValidation);
@@ -659,7 +726,7 @@ function initializeWatchHistorySource() {
             window._watchlyOAuth.trakt = data.tokens;
             if (traktStatus) {
                 traktStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
-                traktStatus.classList.remove('text-slate-500');
+                traktStatus.classList.remove('text-neutral-400');
                 traktStatus.classList.add('text-green-400');
             }
             if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
@@ -668,7 +735,7 @@ function initializeWatchHistorySource() {
             window._watchlyOAuth.simkl = data.tokens;
             if (simklSyncStatus) {
                 simklSyncStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
-                simklSyncStatus.classList.remove('text-slate-500');
+                simklSyncStatus.classList.remove('text-neutral-400');
                 simklSyncStatus.classList.add('text-green-400');
             }
             if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
@@ -701,7 +768,7 @@ function initializeWatchHistorySource() {
             if (traktStatus) {
                 traktStatus.textContent = 'Not connected';
                 traktStatus.classList.remove('text-green-400');
-                traktStatus.classList.add('text-slate-500');
+                traktStatus.classList.add('text-neutral-400');
             }
             traktLogoutBtn.classList.add('hidden');
             setProviderConnected('trakt', false);
@@ -714,7 +781,7 @@ function initializeWatchHistorySource() {
             if (simklSyncStatus) {
                 simklSyncStatus.textContent = 'Not connected';
                 simklSyncStatus.classList.remove('text-green-400');
-                simklSyncStatus.classList.add('text-slate-500');
+                simklSyncStatus.classList.add('text-neutral-400');
             }
             simklSyncLogoutBtn.classList.add('hidden');
             setProviderConnected('simkl', false);

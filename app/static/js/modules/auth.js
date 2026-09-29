@@ -15,6 +15,7 @@ import {
     setWatchHistorySource,
 } from './accounts.js';
 import { markFieldAsSaved } from './field-helpers.js';
+import { resumeSection } from './navigation.js';
 
 // DOM Elements - will be initialized
 let stremioLoginBtn = null;
@@ -82,21 +83,6 @@ function initializeUserProfileDropdown() {
     // Handle logout button click
     logoutBtn.addEventListener('click', () => {
         closeDropdown();
-        // Close mobile nav if open
-        const sidebar = document.getElementById('mainSidebar');
-        const backdrop = document.getElementById('mobileNavBackdrop');
-        if (sidebar && backdrop) {
-            sidebar.classList.remove('translate-x-0');
-            sidebar.classList.add('-translate-x-full');
-            backdrop.classList.add('hidden');
-            document.body.classList.remove('overflow-hidden');
-            const mobileToggle = document.getElementById('mobileNavToggle');
-            if (mobileToggle) {
-                mobileToggle.classList.remove('is-active');
-                mobileToggle.setAttribute('aria-expanded', 'false');
-                mobileToggle.setAttribute('aria-label', 'Open navigation');
-            }
-        }
         if (resetApp) resetApp();
     });
 
@@ -153,7 +139,7 @@ async function attemptAutoLogin() {
             await fetchStremioIdentity(storedAuth.authKey);
             await loadStremioProfiles(stremioProfileCredentials, storedAuth.profileId);
             unlockNavigation();
-            switchSection('config');
+            switchSection(resumeSection('config'));
             return;
         }
 
@@ -168,7 +154,7 @@ async function attemptAutoLogin() {
             setStremioLoggedInState('');
             await loadStremioProfiles(stremioProfileCredentials, storedAuth.profileId);
             unlockNavigation();
-            switchSection('config');
+            switchSection(resumeSection('config'));
             return;
         }
     } catch (error) {
@@ -204,7 +190,8 @@ async function initializeStremioLogin() {
         }
 
         // Remove query param
-        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        // Keep the step hash; only the query string carried the key.
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.hash;
         window.history.replaceState({ path: newUrl }, '', newUrl);
     }
 
@@ -317,7 +304,7 @@ function renderStremioProfilePinList() {
         const label = document.createElement('label');
         const input = document.createElement('input');
 
-        label.className = 'block text-xs text-slate-400 mb-2';
+        label.className = 'field-label';
         label.htmlFor = `stremio-profile-pin-${profile.id}`;
         label.textContent = `PIN for ${profile.name}`;
         input.id = `stremio-profile-pin-${profile.id}`;
@@ -326,7 +313,7 @@ function renderStremioProfilePinList() {
         input.autocomplete = 'one-time-code';
         input.placeholder = `Enter ${profile.name}'s PIN`;
         input.dataset.stremioProfilePin = profile.id;
-        input.className = 'w-full bg-neutral-900 border border-slate-700 rounded-lg px-3 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition';
+        input.className = 'input';
         wrapper.append(label, input);
         container.append(wrapper);
     });
@@ -460,8 +447,8 @@ function setStremioProfileStatus(message, kind = 'neutral') {
     const status = document.getElementById('stremioProfileStatus');
     if (!status) return;
     status.textContent = message;
-    status.classList.remove('text-slate-400', 'text-green-400', 'text-red-300');
-    status.classList.add(kind === 'success' ? 'text-green-400' : kind === 'error' ? 'text-red-300' : 'text-slate-400');
+    status.classList.remove('text-neutral-300', 'text-green-400', 'text-red-300');
+    status.classList.add(kind === 'success' ? 'text-green-400' : kind === 'error' ? 'text-red-300' : 'text-neutral-300');
 }
 
 // Look up an existing account by a freshly connected Trakt/Simkl token, so
@@ -514,7 +501,7 @@ async function fetchIdentity(payload) {
         appState.auth.userDisplay = userDisplay;
     }
 
-    // Show user profile in sidebar
+    // Show user profile in the header
     showUserProfile(userDisplay);
 
     if (data.exists) {
@@ -793,7 +780,7 @@ function restoreWatchHistoryState(settings) {
         const traktStatus = document.getElementById('traktStatus');
         if (traktStatus) {
             traktStatus.textContent = 'Connected';
-            traktStatus.classList.remove('text-slate-500');
+            traktStatus.classList.remove('text-neutral-400');
             traktStatus.classList.add('text-green-400');
         }
         const traktLogoutBtn = document.getElementById('traktLogoutBtn');
@@ -811,7 +798,7 @@ function restoreWatchHistoryState(settings) {
         const simklSyncStatus = document.getElementById('simklSyncStatus');
         if (simklSyncStatus) {
             simklSyncStatus.textContent = 'Connected';
-            simklSyncStatus.classList.remove('text-slate-500');
+            simklSyncStatus.classList.remove('text-neutral-400');
             simklSyncStatus.classList.add('text-green-400');
         }
         const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');

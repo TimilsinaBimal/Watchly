@@ -1,216 +1,234 @@
 <!-- SECTION 0: WELCOME -->
-<section id="sect-welcome" class="space-y-8 animate-fade-in py-6">
-    <!-- Stats & Version Badges -->
-    <div class="flex flex-wrap justify-center gap-3">
-        <!-- Version Badge -->
-        <a href="/changelog" id="versionBadge" title="What's new"
-            class="flex items-center gap-2 text-xs font-semibold text-slate-300 bg-white/5 border border-white/10 rounded-md px-4 py-1.5 backdrop-blur-md hover:bg-white/10 transition-all">
-            <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                    d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14">
-                </path>
-            </svg>
-            <span>v{{ app_version }}</span>
-        </a>
-
-        <!-- Users Badge -->
-        <div
-            class="flex items-center gap-2 text-xs font-semibold text-slate-300 bg-white/5 border border-white/10 rounded-md px-4 py-1.5 backdrop-blur-md hover:bg-white/10 transition-all cursor-default">
-            <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
-                </path>
-            </svg>
-            <span>{{ total_users }} Users</span>
-        </div>
-    </div>
-
-    <!-- Hero Section -->
-    <div class="text-center space-y-4">
-        <div class="inline-block">
-            <div class="flex items-center justify-center gap-3 mb-3">
-                <img src="/app/static/logo.png" alt="Watchly"
-                    class="w-14 h-14 rounded-2xl shadow-lg shadow-white/10 ring-1 ring-white/10 bg-black">
-                <h1 class="text-4xl md:text-5xl font-bold text-white">
-                    Watchly
-                </h1>
-            </div>
-        </div>
-        <p class="text-lg md:text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
-            Personalized Recommendation Engine for Stremio &amp; Nuvio
-        </p>
-        <p class="text-sm text-slate-400 max-w-2xl mx-auto">
-            Discover movies and series tailored to your unique taste, powered by your Stremio, Trakt,
-            or Simkl watch history.
-        </p>
-        <!-- Announcement (from Jinja2 context) -->
+<section id="sect-welcome" class="animate-fade-in">
+    <div class="grid gap-4 lg:grid-cols-12 lg:gap-5">
         {% if announcement_html %}
-        <div id="announcement"
-            class="max-w-2xl mx-auto mt-6 p-3 rounded-xl bg-neutral-800/50 border border-slate-700/50 text-sm text-slate-200 flex items-start gap-3"
-            role="region" aria-live="polite">
-            <div class="flex-shrink-0 text-slate-200 mt-0.5">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        <div id="announcement" role="region" aria-live="polite" aria-label="Announcement"
+            class="card relative flex items-start gap-4 overflow-hidden border-accent/25 bg-gradient-to-r from-accent/[0.07] via-surface to-surface md:gap-5 lg:col-span-12">
+            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent" aria-hidden="true">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
                 </svg>
             </div>
-            <div id="announcement-content" class="flex-grow text-slate-200">{{ announcement_html|safe }}</div>
+            <div id="announcement-content" class="min-w-0 flex-1 text-[15px] leading-relaxed text-neutral-200">{{ announcement_html|safe }}</div>
         </div>
         {% endif %}
-        {% if not allow_signups %}
-        <div class="max-w-2xl mx-auto mt-6 p-3 rounded-xl bg-amber-900/30 border border-amber-700/50 text-sm text-amber-200 flex items-start gap-3"
-            role="region" aria-live="polite">
-            <div class="flex-shrink-0 mt-0.5">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                </svg>
+        <div class="card relative flex flex-col justify-between overflow-hidden p-6 md:p-10 lg:col-span-8 lg:row-span-2">
+            <div class="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-accent/10 blur-3xl" aria-hidden="true"></div>
+            <div class="relative">
+                <span class="badge border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs text-accent-soft">
+                    For Stremio &amp; Nuvio
+                </span>
+                <h1 class="mt-5 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight text-white md:text-6xl">
+                    Recommendations built from what you actually watch.
+                </h1>
+                <p class="mt-5 max-w-2xl text-base leading-relaxed text-neutral-200 md:text-lg">
+                    Watchly turns your Stremio, Trakt or Simkl watch history into personalised movie and series rows
+                    on your home screen. Free, open source, and made to self-host.
+                </p>
             </div>
-            <div class="flex-grow">
-                New signups are disabled on this instance. Existing users can still sign in and update their
-                configuration.
-            </div>
-        </div>
-        {% endif %}
-    </div>
 
-    <!-- Features Grid -->
-    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
-        <!-- Feature 1 -->
-        <div
-            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-rose-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-rose-900/10">
-            <div
-                class="w-10 h-10 bg-rose-500/10 text-rose-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M13.828 10.172a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656-5.656m1.414-2.828a4 4 0 00-5.656 0l-3 3a4 4 0 005.656 5.656l1.414-1.414"></path>
-                </svg>
+            <div class="relative mt-8" aria-hidden="true">
+                <div class="group-title">Rows like these, on your home screen</div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Top Picks for You</span>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Because you loved Interstellar</span>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Mind-bending Sci-Fi</span>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Korean Thrillers</span>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Watch it again</span>
+                </div>
             </div>
-            <h3 class="text-base font-bold text-white mb-1">Trakt &amp; Simkl Integration</h3>
-            <p class="text-xs text-slate-400 leading-relaxed">
-                Connect Trakt or Simkl for explicit ratings and rewatches that sharpen recommendations.
-            </p>
-        </div>
 
-        <!-- Feature 2 -->
-        <div
-            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-cyan-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-cyan-900/10">
-            <div
-                class="w-10 h-10 bg-cyan-500/10 text-cyan-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="relative mt-8">
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="button" id="btn-get-started" class="group btn btn-primary btn-lg">
+                        <span>Get started</span>
+                        <svg class="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                    </button>
+                    <a href="https://github.com/TimilsinaBimal/watchly" target="_blank" rel="noopener"
+                        class="btn btn-secondary btn-lg">
+                        <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387 0.6.111 0.82-.25 0.82-.557 0-.276-0.01-1.003-0.015-1.972-3.337 0.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-0.744 0.084-0.73 0.084-0.73 1.205 0.084 1.838 1.237 1.838 1.237 1.07 1.835 2.809 1.305 3.492 0.998 0.108-0.776 0.419-1.305 0.762-1.604-2.665-0.3-5.466-1.332-5.466-5.93 0-1.31 0.465-2.38 1.235-3.221-0.135-0.303-0.54-1.523 0.116-3.176 0 0 1.008-0.322 3.301 1.23A11.026 11.026 0 0112 5.86c1.02 0 2.047 0.137 3.013 0.403 2.291-1.552 3.297-1.23 3.297-1.23 0.656 1.653 0.24 2.873 0.116 3.176 0.77 0.84 1.235 1.91 1.235 3.221 0 4.61-2.805 5.621-5.476 5.922 0.43 0.37 0.81 1.096 0.81 2.22 0 1.606-0.015 2.899-0.015 3.286 0 0.308 0.219 0.678 0.825 0.557C20.565 21.79 24 17.29 24 12c0-6.627-5.372-12-12-12z" />
+                    </svg>
+                        <span>Source on GitHub</span>
+                    </a>
+                </div>
+            {% if not allow_signups %}
+            <div class="mt-4 flex max-w-2xl items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-200"
+                role="region" aria-live="polite">
+                <svg class="mt-0.5 h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
+                <div class="flex-grow leading-relaxed">
+                    New signups are disabled on this instance. Existing users can still sign in and update their
+                    configuration.
+                </div>
             </div>
-            <h3 class="text-base font-bold text-white mb-1">Custom Catalogs</h3>
-            <p class="text-xs text-slate-400 leading-relaxed">
-                Organize with customizable names and order.
-            </p>
-        </div>
-
-        <!-- Feature 3 -->
-        <div
-            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-purple-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-purple-900/10">
-            <div
-                class="w-10 h-10 bg-purple-500/10 text-purple-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
-                    </path>
-                </svg>
+            {% endif %}
             </div>
-            <h3 class="text-base font-bold text-white mb-1">Genre Filtering</h3>
-            <p class="text-xs text-slate-400 leading-relaxed">
-                Exclude genres you don't like
-            </p>
-        </div>
-        <!-- Feature 4 -->
-        <div
-            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-green-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-green-900/10">
-            <div
-                class="w-10 h-10 bg-green-500/10 text-green-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
-                    </path>
-                </svg>
-            </div>
-            <h3 class="text-base font-bold text-white mb-1">Multi-Language</h3>
-            <p class="text-xs text-slate-400 leading-relaxed">
-                Recommendations in your preferred language
-            </p>
         </div>
 
-        <!-- Feature 5 -->
-        <div
-            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-orange-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-orange-900/10">
-            <div
-                class="w-10 h-10 bg-orange-500/10 text-orange-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
-                    </path>
-                </svg>
+        <div class="card flex flex-col justify-between lg:col-span-4">
+            <div class="flex items-center justify-between">
+                <h2 class="card-title">Watchly today</h2>
+                <a href="/changelog" id="versionBadge" title="See what's new in this release"
+                    class="group inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/10 py-1 pl-1 pr-3 text-xs font-medium text-accent-soft transition hover:bg-accent/20">
+                    <span class="rounded-full bg-accent px-2 py-0.5 font-semibold text-accent-ink">v{{ app_version }}</span>
+                    What's new
+                    <span class="transition group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
+                </a>
             </div>
-            <h3 class="text-base font-bold text-white mb-1">Ratings Posters Integration</h3>
-            <p class="text-xs text-slate-400 leading-relaxed">
-                Enhanced posters with ratings from RPDB or Top Posters.
-            </p>
+            <div class="mt-6">
+                <div class="text-5xl font-semibold tracking-tight text-white" title="{{ "{:,}".format(total_users) }}">{{ total_users | compact }}</div>
+                <div class="mt-1 text-sm text-neutral-300">people have set up Watchly</div>
+            </div>
         </div>
 
-        <!-- Feature 6 -->
-        <div
-            class="group bg-gradient-to-br from-slate-900/50 to-slate-800/30 border border-slate-700/50 hover:border-indigo-500/50 rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-indigo-900/10">
-            <div
-                class="w-10 h-10 bg-indigo-500/10 text-indigo-400 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4">
-                    </path>
-                </svg>
-            </div>
-            <h3 class="text-base font-bold text-white mb-1">Stremio &amp; Nuvio</h3>
-            <p class="text-xs text-slate-400 leading-relaxed">
-                One-click install into either app, or copy the link and add it yourself.
-            </p>
-        </div>
-    </div>
-    <!-- CTA Section -->
-    <div class="text-center space-y-6">
-        <div class="max-w-2xl mx-auto">
-            <button type="button" id="btn-get-started"
-                class="group w-full bg-white text-black hover:bg-white/90 font-bold py-4 px-8 rounded-xl transition-all shadow-xl shadow-black/10 hover:shadow-2xl hover:shadow-black/20 text-lg flex items-center justify-center gap-3 border border-white/10 hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0">
-                <span>Get Started</span>
-                <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6">
-                    </path>
-                </svg>
-            </button>
+        <div class="card lg:col-span-4">
+            <h2 class="card-title">How it works</h2>
+            <ol class="mt-5 space-y-4">
+                <li class="flex gap-3">
+                    <span class="step-num border-accent/40 bg-accent/10 text-accent">1</span>
+                    <div>
+                        <div class="text-sm font-medium text-white">Accounts</div>
+                        <div class="text-sm leading-relaxed text-neutral-300">Connect Stremio, Trakt or Simkl so Watchly can read your history.</div>
+                    </div>
+                </li>
+                <li class="flex gap-3">
+                    <span class="step-num border-accent/40 bg-accent/10 text-accent">2</span>
+                    <div>
+                        <div class="text-sm font-medium text-white">Preferences</div>
+                        <div class="text-sm leading-relaxed text-neutral-300">Pick a language, poster ratings and genres to skip.</div>
+                    </div>
+                </li>
+                <li class="flex gap-3">
+                    <span class="step-num border-accent/40 bg-accent/10 text-accent">3</span>
+                    <div>
+                        <div class="text-sm font-medium text-white">Catalogs</div>
+                        <div class="text-sm leading-relaxed text-neutral-300">Choose which rows to show, rename and reorder them.</div>
+                    </div>
+                </li>
+                <li class="flex gap-3">
+                    <span class="step-num border-accent/40 bg-accent/10 text-accent">4</span>
+                    <div>
+                        <div class="text-sm font-medium text-white">Install</div>
+                        <div class="text-sm leading-relaxed text-neutral-300">Add the addon to Stremio or Nuvio and your rows appear.</div>
+                    </div>
+                </li>
+            </ol>
         </div>
 
-        <!-- Secondary Links: Donate + Source, aligned in two columns under CTA -->
-        <div class="max-w-2xl mx-auto pt-2 grid grid-cols-2 gap-3">
-            <button type="button" id="homepageDonateBtn"
-                class="flex items-center justify-center gap-2 text-sm text-slate-300 hover:text-white transition-colors bg-neutral-800/40 border border-white/10 hover:border-white/20 rounded-xl py-3 hover:shadow-md hover:shadow-black/10">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path
-                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-                <span class="font-medium">Support me</span>
-            </button>
-            <a href="https://github.com/TimilsinaBimal/watchly" target="_blank" rel="noopener"
-                class="flex items-center justify-center gap-2 text-sm text-slate-300 hover:text-white transition-colors bg-neutral-800/50 border border-slate-700/50 hover:border-white/30 rounded-xl py-3 hover:shadow-lg hover:shadow-black/20">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path
-                        d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387 0.6.111 0.82-.25 0.82-.557 0-.276-0.01-1.003-0.015-1.972-3.337 0.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-0.744 0.084-0.73 0.084-0.73 1.205 0.084 1.838 1.237 1.838 1.237 1.07 1.835 2.809 1.305 3.492 0.998 0.108-0.776 0.419-1.305 0.762-1.604-2.665-0.3-5.466-1.332-5.466-5.93 0-1.31 0.465-2.38 1.235-3.221-0.135-0.303-0.54-1.523 0.116-3.176 0 0 1.008-0.322 3.301 1.23A11.026 11.026 0 0112 5.86c1.02 0 2.047 0.137 3.013 0.403 2.291-1.552 3.297-1.23 3.297-1.23 0.656 1.653 0.24 2.873 0.116 3.176 0.77 0.84 1.235 1.91 1.235 3.221 0 4.61-2.805 5.621-5.476 5.922 0.43 0.37 0.81 1.096 0.81 2.22 0 1.606-0.015 2.899-0.015 3.286 0 0.308 0.219 0.678 0.825 0.557C20.565 21.79 24 17.29 24 12c0-6.627-5.372-12-12-12z" />
-                </svg>
-                <span class="font-medium">Source Code</span>
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-            </a>
+        <div class="card lg:col-span-6">
+            <h2 class="card-title">What you get</h2>
+        <div class="mt-5 grid gap-x-6 gap-y-5 sm:grid-cols-2">
+            <div class="flex gap-3">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
+                    <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13.828 10.172a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656-5.656m1.414-2.828a4 4 0 00-5.656 0l-3 3a4 4 0 005.656 5.656l1.414-1.414" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-white">Trakt &amp; Simkl</h3>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Ratings and rewatches sharpen what gets
+                        recommended.</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
+                    <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-white">Custom catalogs</h3>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Name and order your rows however you like.</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
+                    <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-white">Genre filtering</h3>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Exclude genres you never want to see.</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
+                    <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-white">Multi-language</h3>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Recommendations in your preferred language.</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
+                    <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-white">Rating posters</h3>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Posters with ratings from RPDB or Top Posters.</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
+                    <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-medium text-white">Stremio &amp; Nuvio</h3>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">One-click install into either app, or copy the link.</p>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <div class="card flex flex-col justify-between border-pink-400/20 bg-gradient-to-br from-pink-500/[0.08] to-transparent lg:col-span-3">
+            <div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/15 text-pink-300">
+                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                </div>
+                <h2 class="card-title mt-4">Free, no ads</h2>
+                <p class="card-desc">Built and hosted by one person. If Watchly helps you, you can chip in. Entirely
+                    optional.</p>
+            </div>
+            <button type="button" data-open-support class="btn btn-secondary mt-6 w-full">Support Watchly</button>
+        </div>
+
+        <div class="card flex flex-col justify-between lg:col-span-3">
+            <div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] text-neutral-200">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                    </svg>
+                </div>
+                <span class="badge mt-4 border border-accent/30 bg-accent/10 text-accent-soft">Made to self-host</span>
+                <h2 class="card-title mt-2">Run your own</h2>
+                <p class="card-desc">Watchly is built to run on your own server, not only as a hosted service. One
+                    click on Vercel, or Docker next to your other apps.</p>
+            </div>
+            <a href="/self-host" class="btn btn-secondary mt-6 w-full">Self-hosting guide</a>
         </div>
     </div>
 </section>
