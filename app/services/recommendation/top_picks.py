@@ -3,7 +3,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.constants import DEFAULT_CATALOG_LIMIT, MAX_CATALOG_ITEMS
+from app.core.constants import DEFAULT_CATALOG_LIMIT
 from app.core.settings import UserSettings
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
@@ -27,7 +27,6 @@ class TopPicksService:
     2. RecommendationScoring — scores candidates against user profile
     3. apply_diversity_caps — ensures balanced genre/quality distribution
     4. RecommendationMetadata — enriches with full details
-    5. apply_creator_cap — limits per-director/actor saturation
     """
 
     def __init__(self, tmdb_service: TMDBService, user_settings: UserSettings | None = None):
@@ -55,7 +54,7 @@ class TopPicksService:
         3. Score with ProfileScorer + Quality
         4. Apply diversity caps
         5. Enrich metadata with full details
-        6. Apply creator cap and final filters
+        6. Apply final filters
         """
         start_time = time.time()
         logger.info(f"Starting top picks generation for {content_type}, target limit={limit}")
@@ -108,4 +107,4 @@ class TopPicksService:
             f"(target: {limit}, candidates: {len(all_candidates)}, scored: {len(scored_candidates)})"
         )
 
-        return filtered[:MAX_CATALOG_ITEMS]
+        return filtered

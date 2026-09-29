@@ -85,61 +85,6 @@ class RecommendationFiltering:
         return imdb_ids, tmdb_ids
 
     @staticmethod
-    def get_library_imdb_ids(library_data: dict | None) -> set[str]:
-        """Extract all IMDB IDs from Stremio library data."""
-        if not library_data:
-            return set()
-        imdb_ids: set[str] = set()
-        for category in ("loved", "liked", "watched", "added", "removed"):
-            for item in library_data.get(category, []):
-                item_id = item.get("_id", "")
-                if item_id.startswith("tt"):
-                    imdb_ids.add(item_id.split(":")[0])
-        return imdb_ids
-
-    @staticmethod
-    def filter_candidates(
-        candidates: list[dict[str, Any]], watched_imdb: set[str], watched_tmdb: set[int]
-    ) -> list[dict[str, Any]]:
-        """
-        Filter candidates against watched sets.
-        Matches both TMDB (int) and IMDB (str).
-        """
-        filtered = []
-        for item in candidates:
-            tid = item.get("id")
-            # 1. Check TMDB ID (integer)
-            if tid and isinstance(tid, int) and tid in watched_tmdb:
-                continue
-
-            # 2. Check Stremio ID (string) if present as 'id'
-            if tid and isinstance(tid, str):
-                if tid in watched_imdb:
-                    continue
-                if tid.startswith("tmdb:"):
-                    try:
-                        if int(tid.split(":")[1]) in watched_tmdb:
-                            continue
-                    except Exception:
-                        pass
-
-            # 3. Check External IDs
-            ext = item.get("external_ids", {}) or item.get("_external_ids", {})
-            imdb = ext.get("imdb_id")
-            if imdb and imdb in watched_imdb:
-                continue
-
-            # 4. Handle cases where TMDB ID is in 'id' but it's a string
-            try:
-                if tid and int(tid) in watched_tmdb:
-                    continue
-            except Exception:
-                pass
-
-            filtered.append(item)
-        return filtered
-
-    @staticmethod
     def get_quality_thresholds(user_settings: Any) -> tuple[float, int]:
         """
         Get dynamic quality thresholds (min_rating, min_votes) based on popularity preference.

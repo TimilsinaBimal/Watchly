@@ -1,5 +1,3 @@
-import math
-from collections.abc import Callable
 from typing import Any
 
 from app.core.constants import DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_MOVIE, DEFAULT_MINIMUM_RATING_FOR_THEME_BASED_TV
@@ -26,59 +24,6 @@ class RecommendationScoring:
         if max_v == min_v:
             return 0.0
         return max(0.0, min(1.0, (value - min_v) / (max_v - min_v)))
-
-    @staticmethod
-    def get_recency_multiplier_fn(
-        profile: Any, candidate_decades: set[int] | None = None
-    ) -> tuple[Callable[[int | None], float], float]:
-        """
-        Build a multiplier function m(year) based on user's decade preferences.
-        """
-        try:
-            years_map = getattr(profile.years, "values", {}) or {}
-            decade_weights = {int(k): float(v) for k, v in years_map.items() if isinstance(k, int)}
-            total_w = sum(decade_weights.values())
-        except Exception:
-            decade_weights = {}
-            total_w = 0.0
-
-        recent_w = sum(w for d, w in decade_weights.items() if d >= 2010)
-        classic_w = sum(w for d, w in decade_weights.items() if d < 2000)
-        total_rc = recent_w + classic_w
-
-        if total_rc <= 0:
-            return (lambda _y: 1.0), 0.0
-
-        score = (recent_w - classic_w) / (total_rc + 1e-6)
-        k = 2.0
-        intensity_raw = 1.0 / (1.0 + math.exp(-k * score))
-        intensity = 2.0 * (intensity_raw - 0.5)  # [-1, 1]
-        alpha = abs(intensity)
-
-        if candidate_decades:
-            support = {int(d) for d in candidate_decades if isinstance(d, int)} | set(decade_weights.keys())
-        else:
-            support = set(decade_weights.keys())
-
-        if not support:
-            return (lambda _y: 1.0), 0.0
-
-        if total_w > 0:
-            p_user = {d: (decade_weights.get(d, 0.0) / total_w) for d in support}
-        else:
-            p_user = {d: 0.0 for d in support}
-
-        D = max(1, len(support))
-        uniform = 1.0 / D
-
-        def m_raw(year: int | None) -> float:
-            if year is None:
-                return 1.0
-            decade = (int(year) // 10) * 10
-            pu = p_user.get(decade, 0.0)
-            return 1.0 + intensity * (pu - uniform)
-
-        return m_raw, alpha
 
     @staticmethod
     def apply_quality_adjustments(score: float, wr: float, vote_count: int, popularity: float) -> float:

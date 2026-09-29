@@ -245,17 +245,6 @@ class CandidateFetcher:
 
         return candidates
 
-    async def fetch_trending_and_popular(self, content_type: str, mtype: str) -> list[dict[str, Any]]:
-        """Fetch trending and popular items (for recent items injection)."""
-        candidates = []
-        try:
-            trending = await self.tmdb_service.get_trending(mtype, time_window="week", page=1)
-            candidates.extend(trending.get("results", []))
-        except Exception as e:
-            logger.debug(f"Failed to fetch trending: {e}")
-
-        return candidates
-
     async def fetch_all_candidates(
         self,
         profile: TasteProfile,

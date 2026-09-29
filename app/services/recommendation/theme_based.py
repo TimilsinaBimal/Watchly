@@ -336,23 +336,6 @@ class ThemeBasedService:
 
         return []
 
-    def _calculate_pages_to_fetch(self, num_excluded_genres: int) -> list[int]:
-        """
-        Calculate how many pages to fetch based on excluded genres.
-
-        Args:
-            num_excluded_genres: Number of excluded genres
-
-        Returns:
-            List of page numbers to fetch
-        """
-        if num_excluded_genres > 10:
-            return list(range(1, 11))  # 10 pages
-        elif num_excluded_genres > 5:
-            return list(range(1, 6))  # 5 pages
-        else:
-            return [1, 2, 3]  # 3 pages
-
     async def _fetch_discover_candidates(
         self, content_type: str, params: dict[str, Any], pages: list[int]
     ) -> list[dict[str, Any]]:

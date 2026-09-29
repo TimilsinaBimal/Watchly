@@ -12,20 +12,6 @@ class RecommendationMetadata:
     Handles fetching and formatting metadata for Stremio.
     """
 
-    @staticmethod
-    def extract_year(item: dict[str, Any]) -> int | None:
-        """Extract year from TMDB item."""
-        date_str = item.get("release_date") or item.get("first_air_date")
-        if not date_str:
-            ri = item.get("releaseInfo")
-            if isinstance(ri, str) and len(ri) >= 4 and ri[:4].isdigit():
-                return int(ri[:4])
-            return None
-        try:
-            return int(date_str[:4])
-        except Exception:
-            return None
-
     @classmethod
     async def format_for_stremio(
         cls, details: dict[str, Any], media_type: str, user_settings: Any = None, logo_url: str | None = None
@@ -67,7 +53,6 @@ class RecommendationMetadata:
             "popularity": details.get("popularity"),
             "original_language": details.get("original_language"),
             "_external_ids": external_ids,
-            "_tmdb_id": tmdb_id_raw,
             "genre_ids": [g.get("id") for g in genres_full if isinstance(g, dict) and g.get("id") is not None],
         }
         if logo_url:
@@ -77,15 +62,6 @@ class RecommendationMetadata:
         runtime_str = cls._extract_runtime_string(details)
         if runtime_str:
             meta_data["runtime"] = runtime_str
-
-        if media_type == "movie":
-            coll = details.get("belongs_to_collection")
-            if isinstance(coll, dict):
-                meta_data["_collection_id"] = coll.get("id")
-
-        # Cast & Crew
-        cast = details.get("credits", {}).get("cast", []) or []
-        meta_data["_top_cast_ids"] = [c.get("id") for c in cast[:3] if isinstance(c, dict) and c.get("id")]
 
         # Keywords & Credits for similarity re-ranking
         if details.get("keywords"):

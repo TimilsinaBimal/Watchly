@@ -60,7 +60,6 @@ FREQUENCY_MULTIPLIER_LOG_FACTOR: Final[float] = 0.1  # Subtle boost
 
 # Top Picks Caps (diversity constraints)
 TOP_PICKS_GENRE_CAP: Final[float] = 0.50  # Max 50% per genre
-TOP_PICKS_CREATOR_CAP: Final[int] = 3  # Max 3 items per creator (director/actor)
 
 # Runtime Bucket Boundaries (in minutes)
 RUNTIME_BUCKET_SHORT_MAX_SERIES: Final[int] = 30  # < 30 min
