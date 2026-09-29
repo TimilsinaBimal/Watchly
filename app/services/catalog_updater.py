@@ -83,6 +83,7 @@ class CatalogUpdater:
         user_settings = extract_settings(credentials)
 
         bundle = StremioBundle()
+        auth_key = None
         try:
             auth_key = await auth_service.resolve_auth_key_with_bundle(bundle, credentials, token)
 
@@ -159,8 +160,10 @@ class CatalogUpdater:
         except Exception:
             logger.exception(f"[{redact_token(token)}] Failed to update catalogs in background")
             try:
-                error_auth_key = credentials.get("authKey")
-                if isinstance(error_auth_key, str) and error_auth_key:
+                # A re-login during this refresh stored a new key on a copy, so the
+                # resolved key is the live one; credentials may still hold the old.
+                error_auth_key = auth_key or credentials.get("authKey")
+                if error_auth_key:
                     description = (
                         "Movie and series recommendations based on your Stremio library.\n\n"
                         "⚠️ Status: Error\nFailed to update catalogs."
