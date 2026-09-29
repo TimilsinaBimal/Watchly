@@ -30,7 +30,7 @@ async def list_profiles(payload: StremioCredentialsRequest) -> StremioProfilesRe
     except HTTPException:
         raise
     except Exception as exc:
-        logger.info(f"Could not load Stremio profiles: {exc}")
+        logger.info(f"Could not load Stremio profiles: {type(exc).__name__}")
         raise HTTPException(status_code=400, detail="Could not load Stremio profiles.")
     finally:
         await bundle.close()
@@ -62,7 +62,7 @@ async def list_profile_instances(payload: StremioCredentialsRequest) -> StremioP
     except HTTPException:
         raise
     except Exception as exc:
-        logger.info(f"Could not list profile-specific Watchly instances: {exc}")
+        logger.info(f"Could not list profile-specific Watchly instances: {type(exc).__name__}")
         raise HTTPException(status_code=400, detail="Could not load Watchly instances for this Stremio account.")
     finally:
         await bundle.close()
@@ -98,7 +98,7 @@ async def authenticate_profile(payload: StremioProfileAuthRequest) -> StremioPro
     except HTTPException:
         raise
     except Exception as exc:
-        logger.info(f"Could not authenticate Stremio profile: {exc}")
+        logger.info(f"Could not authenticate Stremio profile: {type(exc).__name__}")
         raise HTTPException(status_code=400, detail="Could not unlock the selected Stremio profile.")
     finally:
         await bundle.close()
@@ -124,7 +124,7 @@ async def install_profile_addon(payload: StremioProfileAddonInstallRequest) -> S
         logger.info("Installed a profile-specific Watchly instance in Stremio")
         return StremioProfileAddonInstallResponse(success=True)
     except Exception as exc:
-        logger.info(f"Could not install profile-specific Watchly instance: {exc}")
+        logger.info(f"Could not install profile-specific Watchly instance: {type(exc).__name__}")
         raise HTTPException(status_code=400, detail="Could not install Watchly in the selected Stremio profile.")
     finally:
         await bundle.close()
