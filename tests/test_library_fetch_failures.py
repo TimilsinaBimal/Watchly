@@ -56,7 +56,7 @@ class UnreachableStremio:
 
 
 class NoLikes:
-    async def get(self, path):
+    async def get(self, path, log_url=None):
         return {"metas": []}
 
 
@@ -125,7 +125,7 @@ def test_failed_likes_fetch_is_not_a_library_without_loves():
     rows go blank and loved titles can be recommended again."""
 
     class LikesDown:
-        async def get(self, path):
+        async def get(self, path, log_url=None):
             raise httpx.ConnectError("connection refused")
 
     service = StremioLibraryService(StremioReturning({"result": []}), LikesDown())

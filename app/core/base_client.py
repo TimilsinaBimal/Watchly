@@ -34,7 +34,9 @@ class BaseClient:
             await self._client.aclose()
             self._client = None
 
-    async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
+    async def _request(self, method: str, url: str, log_url: str | None = None, **kwargs) -> httpx.Response:
+        # log_url stands in for url in log lines when the path itself carries a secret.
+        shown = log_url or url
         client = await self.get_client()
         tries = self.max_retries
 
@@ -64,15 +66,15 @@ class BaseClient:
                         if retry_after is not None:
                             wait_time = min(max(retry_after, wait_time), _RETRY_AFTER_CEILING_SECONDS)
                     logger.warning(
-                        f"Request failed ({method} {url}): {self._describe(e)}. "
+                        f"Request failed ({method} {shown}): {self._describe(e)}. "
                         f"Retrying in {wait_time:.2f}s (attempt {attempt}/{tries})"
                     )
                     await asyncio.sleep(wait_time)
                 else:
                     if not is_retryable:
-                        logger.error(f"Non-retryable request failure ({method} {url}): {self._describe(e)}")
+                        logger.error(f"Non-retryable request failure ({method} {shown}): {self._describe(e)}")
                     else:
-                        logger.error(f"Request failed after {tries} attempts ({method} {url}): {self._describe(e)}")
+                        logger.error(f"Request failed after {tries} attempts ({method} {shown}): {self._describe(e)}")
                     raise
 
         raise httpx.RequestError(f"Request failed for {method} {url} with 0 attempts configured")
@@ -120,9 +122,11 @@ class BaseClient:
             logger.warning(f"Non-JSON body from {method} {url} (status={response.status_code}): {e}")
             return {}
 
-    async def get(self, url: str, params: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
-        response = await self._request("GET", url, params=params, **kwargs)
-        return self._safe_json(response, "GET", url)
+    async def get(
+        self, url: str, params: dict[str, Any] | None = None, log_url: str | None = None, **kwargs
+    ) -> dict[str, Any]:
+        response = await self._request("GET", url, params=params, log_url=log_url, **kwargs)
+        return self._safe_json(response, "GET", log_url or url)
 
     async def post(self, url: str, json: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
         response = await self._request("POST", url, json=json, **kwargs)

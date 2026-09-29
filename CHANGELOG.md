@@ -18,6 +18,7 @@
 - A stale row requested while a scheduled refresh runs is rebuilt after the refresh instead of alongside it, where it could be built from the old library and cached as fresh.
 - A stored API key or OAuth token that fails to encrypt is no longer saved in plain text; the save fails instead. A secret that no longer decrypts is dropped rather than sent to the provider as ciphertext.
 - A failed TMDB or Simkl request no longer writes the user's API key to the logs; the log line names the path and status code instead of the full URL.
+- A failed loved/liked lookup no longer writes the user's Stremio auth key to the logs.
 
 
 ## 1.14.0 - 2026-09-20

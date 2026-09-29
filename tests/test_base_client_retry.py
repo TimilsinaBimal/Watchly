@@ -50,3 +50,20 @@ def test_a_failed_request_never_logs_the_query_string():
         logger.remove(sink)
 
     assert lines and not any("SECRET" in line for line in lines)
+
+
+def test_log_url_replaces_a_path_that_carries_a_secret():
+    def reject(request):
+        return httpx.Response(401, request=request)
+
+    client = BaseClient(base_url="https://likes.example.test", max_retries=1)
+    client._client = httpx.AsyncClient(base_url=client.base_url, transport=httpx.MockTransport(reject))
+    lines: list[str] = []
+    sink = logger.add(lines.append, format="{message}")
+    try:
+        with pytest.raises(httpx.HTTPStatusError):
+            asyncio.run(client.get("/addons/SECRET/catalog.json", log_url="/addons/{token}/catalog.json"))
+    finally:
+        logger.remove(sink)
+
+    assert lines and not any("SECRET" in line for line in lines)

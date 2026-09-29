@@ -148,8 +148,9 @@ class StremioLibraryService:
 
     async def get_likes_by_type(self, auth_token: str, media_type: str, status: str) -> list[dict[str, Any]]:
         """Full metadata of the items the user marked `status` ('loved' or 'liked')."""
-        path = f"/addons/{status}/movies-shows/{auth_token}/catalog/{media_type}/stremio-{status}-{media_type}.json"
-        data = await self.likes_client.get(path)
+        path = f"/addons/{status}/movies-shows/{{token}}/catalog/{media_type}/stremio-{status}-{media_type}.json"
+        # The auth token sits in the path; log the template, not the key.
+        data = await self.likes_client.get(path.format(token=auth_token), log_url=path)
         metas = data.get("metas", [])
         return [meta for meta in metas if meta.get("id")]
 
