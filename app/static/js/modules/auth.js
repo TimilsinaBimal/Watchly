@@ -302,7 +302,7 @@ function renderStremioProfilePinList() {
         const label = document.createElement('label');
         const input = document.createElement('input');
 
-        label.className = 'block text-xs text-slate-400 mb-2';
+        label.className = 'field-label';
         label.htmlFor = `stremio-profile-pin-${profile.id}`;
         label.textContent = `PIN for ${profile.name}`;
         input.id = `stremio-profile-pin-${profile.id}`;
@@ -311,7 +311,7 @@ function renderStremioProfilePinList() {
         input.autocomplete = 'one-time-code';
         input.placeholder = `Enter ${profile.name}'s PIN`;
         input.dataset.stremioProfilePin = profile.id;
-        input.className = 'w-full bg-neutral-900 border border-slate-700 rounded-lg px-3 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition';
+        input.className = 'input';
         wrapper.append(label, input);
         container.append(wrapper);
     });

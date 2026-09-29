@@ -149,10 +149,13 @@ function setProviderDot(provider, connected) {
         badge.classList.toggle('bg-green-500/15', connected);
         badge.classList.toggle('text-green-300', connected);
         badge.classList.toggle('border-green-400/20', connected);
-        badge.classList.toggle('bg-red-500/15', !connected);
-        badge.classList.toggle('text-red-300', !connected);
-        badge.classList.toggle('border-red-400/20', !connected);
+        badge.classList.toggle('bg-white/5', !connected);
+        badge.classList.toggle('text-slate-400', !connected);
+        badge.classList.toggle('border-white/10', !connected);
     }
+
+    const card = document.getElementById(`provider-${provider}`);
+    if (card) card.dataset.connected = String(connected);
 
     const pip = document.querySelector(`[data-source-pip="${provider}"]`);
     if (pip) {
