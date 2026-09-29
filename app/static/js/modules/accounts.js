@@ -9,8 +9,8 @@
 import { showToast } from './ui.js';
 import { unlockNavigation } from './navigation.js';
 
-const ACTIVE_CLASSES = ['bg-white/10', 'text-white', 'shadow-sm'];
-const ACTIVE_BORDER_CLASS = 'border-white/20';
+const ACTIVE_CLASSES = ['bg-accent/15', 'text-white'];
+const ACTIVE_BORDER_CLASS = 'border-accent/40';
 const INACTIVE_CLASSES = ['text-slate-400', 'hover:text-white', 'hover:bg-white/5'];
 const INACTIVE_BORDER_CLASS = 'border-transparent';
 

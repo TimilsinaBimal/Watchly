@@ -152,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!accountsNextBtn.disabled) switchSection('config');
     });
     if (configNextBtn) configNextBtn.addEventListener('click', () => switchSection('catalogs'));
+    document.getElementById('configBackBtn')?.addEventListener('click', () => switchSection('login'));
     if (catalogsNextBtn) catalogsNextBtn.addEventListener('click', () => switchSection('install'));
 
     // Reset Buttons

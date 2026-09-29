@@ -285,16 +285,9 @@ function renderGenreList(container, genres, namePrefix) {
     if (!container) return;
 
     container.innerHTML = genres.map(genre => `
-        <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition group">
-            <div class="relative flex items-center">
-                <input type="checkbox" name="${namePrefix}" value="${genre.id}"
-                    class="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-neutral-900 checked:bg-white checked:border-white transition-colors">
-                <svg class="absolute w-3.5 h-3.5 text-black left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity"
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
-                </svg>
-            </div>
-            <span class="text-sm text-slate-300 group-hover:text-white transition-colors select-none">${genre.name}</span>
+        <label class="cursor-pointer select-none">
+            <input type="checkbox" name="${namePrefix}" value="${genre.id}" class="peer sr-only">
+            <span class="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 text-sm text-slate-300 transition hover:border-white/20 hover:text-white peer-checked:border-red-400/40 peer-checked:bg-red-500/10 peer-checked:text-red-200 peer-checked:line-through peer-checked:decoration-red-300/60 peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60">${genre.name}</span>
         </label>
     `).join('');
 }
