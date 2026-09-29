@@ -19,7 +19,7 @@ from app.models.profile import TasteProfile
 from app.services.llm import llm_service
 from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres
-from app.services.tmdb.service import TMDBService, get_tmdb_service
+from app.services.tmdb.service import TMDBService
 
 GOLD_END = 3
 SILVER_START = 3
@@ -33,7 +33,6 @@ AXIS_GENRE = "g"
 AXIS_KEYWORD = "k"
 AXIS_COUNTRY = "ct"
 AXIS_RUNTIME = "r"
-AXIS_CREATOR = "cr"
 
 
 class RowDefinition(BaseModel):
@@ -231,8 +230,8 @@ def build_fallback_rows(
 class RowGeneratorService:
     """Generates dynamic, personalized row definitions from a taste profile."""
 
-    def __init__(self, tmdb_service: TMDBService | None = None):
-        self.tmdb_service = tmdb_service or get_tmdb_service()
+    def __init__(self, tmdb_service: TMDBService):
+        self.tmdb_service = tmdb_service
 
     async def generate_rows(
         self,

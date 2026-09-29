@@ -92,8 +92,6 @@ class DynamicCatalogService:
     """Generates catalog definitions from user history and settings."""
 
     def __init__(self, language: str = "en-US", tmdb_api_key: str | None = None):
-        self.language = language
-        self.tmdb_api_key = tmdb_api_key
         tmdb_service = get_tmdb_service(language=language, api_key=tmdb_api_key)
         self.profile_service = ProfileService(language=language, tmdb_api_key=tmdb_api_key)
         self.row_generator = RowGeneratorService(tmdb_service=tmdb_service)
