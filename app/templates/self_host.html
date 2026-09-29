@@ -55,9 +55,11 @@
 
         <ol class="list-decimal space-y-3 pl-5 text-sm leading-relaxed text-neutral-200 marker:text-neutral-400">
             <li>Click <span class="text-white">Deploy to Vercel</span> and pick a project name.</li>
-            <li>Accept the <span class="text-white">Redis</span> store when prompted. It adds
-                <code class="{{ code }}">REDIS_URL</code> to the project. To use a Redis you already have, skip it and
-                add <code class="{{ code }}">REDIS_URL</code> yourself afterwards.</li>
+            <li>Accept the <span class="text-white">Redis</span> store to try Watchly on a free Redis Cloud
+                database; it adds <code class="{{ code }}">REDIS_URL</code> to the project. For an instance you'll
+                keep, skip it and <a href="#upstash"
+                    class="text-accent-soft underline underline-offset-2 hover:text-white">set up Upstash</a>
+                instead.</li>
             <li>Fill in <code class="{{ code }}">TOKEN_SALT</code> and <code class="{{ code }}">HOST_NAME</code> (see
                 the table below), then deploy. Add <code class="{{ code }}">TMDB_API_KEY</code> under Settings &rarr;
                 Environment Variables too; it is optional but recommended.</li>
@@ -66,14 +68,6 @@
             <li>Redeploy from the Deployments tab. Environment variable changes only apply to new deployments.</li>
             <li>Open <code class="{{ code }}">https://&lt;your-domain&gt;/configure</code> and set up your catalogs.</li>
         </ol>
-
-        <p class="text-sm leading-relaxed text-neutral-300">
-            Using Upstash instead? Watchly can't use its REST variables, so copy the
-            <code class="{{ code }}">rediss://</code> connection string from the Upstash console into
-            <code class="{{ code }}">REDIS_URL</code>. Each Vercel instance opens up to
-            <code class="{{ code }}">REDIS_MAX_CONNECTIONS</code> (20) connections; lower it if your Redis plan caps
-            connections.
-        </p>
 
         <div class="rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm leading-relaxed text-amber-200">
             <h3 class="font-semibold text-amber-100">Limits on Vercel</h3>
@@ -108,6 +102,100 @@
         <a href="{{ readme }}installation-docker" target="_blank" rel="noopener" class="btn btn-secondary">
             Full Docker guide
         </a>
+    </section>
+
+    <section id="redis" class="card space-y-5">
+        <div>
+            <h2 class="card-title">Choose a Redis</h2>
+            <p class="card-desc">Watchly keeps every account, cache and rendered row in Redis. On Docker, run Redis next
+                to Watchly. On Vercel, use Upstash.</p>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-3">
+            <div class="rounded-xl border border-accent/30 bg-accent/5 p-4">
+                <span class="badge border border-accent/30 bg-accent/10 text-accent-soft">Vercel pick</span>
+                <h3 class="mt-3 font-semibold text-white">Upstash free</h3>
+                <ul class="mt-2 space-y-1 text-sm leading-relaxed text-neutral-300">
+                    <li>500K commands a month</li>
+                    <li>256 MB of data</li>
+                    <li>TLS always on</li>
+                    <li>Idle for 30 days: archived, restorable</li>
+                    <li>Then $0.20 per 100K commands</li>
+                </ul>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <span class="badge border border-white/10 bg-white/5 text-neutral-200">Deploy button</span>
+                <h3 class="mt-3 font-semibold text-white">Redis Cloud free</h3>
+                <ul class="mt-2 space-y-1 text-sm leading-relaxed text-neutral-300">
+                    <li>100 ops/sec</li>
+                    <li>30 MB of data, 30 connections</li>
+                    <li>No TLS on the free plan</li>
+                    <li>Idle for 14 days: deleted</li>
+                    <li>Paid plans from $5 a month</li>
+                </ul>
+            </div>
+            <div class="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <span class="badge border border-white/10 bg-white/5 text-neutral-200">Docker pick</span>
+                <h3 class="mt-3 font-semibold text-white">Docker Redis</h3>
+                <ul class="mt-2 space-y-1 text-sm leading-relaxed text-neutral-300">
+                    <li>No command or connection limits</li>
+                    <li>Data limited by your disk</li>
+                    <li>Never deleted for being idle</li>
+                    <li>Free</li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="text-sm leading-relaxed text-neutral-300">
+            A cached row costs about 3 commands, so a home screen of ~10 rows is ~35. Each row also rebuilds once a
+            day for about 10 more. A user who opens Stremio a few times a day uses 5&ndash;8K commands a month, so
+            Upstash's free plan covers roughly 60&ndash;100 users. Redis Cloud's free plan runs out first on
+            connections: each Vercel instance opens up to <code class="{{ code }}">REDIS_MAX_CONNECTIONS</code> (20),
+            so two instances pass its 30. It is fine for trying Watchly; switch to Upstash before you share it.
+        </p>
+
+        <div class="space-y-3">
+            <h3 id="upstash" class="font-semibold text-white">Set up Upstash</h3>
+            <ol class="list-decimal space-y-3 pl-5 text-sm leading-relaxed text-neutral-200 marker:text-neutral-400">
+                <li>In the <a href="https://console.upstash.com" target="_blank" rel="noopener"
+                        class="text-accent-soft underline underline-offset-2 hover:text-white">Upstash console</a>,
+                    create a Redis database in the region nearest your Vercel functions. New Vercel projects run in
+                    <code class="{{ code }}">iad1</code> (Washington, D.C.), so AWS
+                    <code class="{{ code }}">us-east-1</code> is the usual choice.</li>
+                <li>Open the database's Connect section and copy the
+                    <code class="{{ code }}">rediss://default:&lt;password&gt;@&lt;host&gt;:&lt;port&gt;</code> URL
+                    from the redis-cli snippet. Skip the REST URL and token; they are for Upstash's HTTP API, which
+                    Watchly can't use.</li>
+                <li>In Vercel, set <code class="{{ code }}">REDIS_URL</code> to that URL under Settings &rarr;
+                    Environment Variables.</li>
+                <li>Redeploy from the Deployments tab.</li>
+            </ol>
+            <p class="text-sm leading-relaxed text-neutral-300">The <code class="{{ code }}">rediss://</code> scheme
+                turns on TLS; Watchly's Redis client needs no other setting for it.</p>
+        </div>
+
+        <div class="space-y-2">
+            <h3 class="font-semibold text-white">Redis Cloud from the Deploy button</h3>
+            <p class="text-sm leading-relaxed text-neutral-300">The button's Redis store creates a free Redis Cloud
+                database and sets <code class="{{ code }}">REDIS_URL</code> for you. On the free plan, set
+                <code class="{{ code }}">REDIS_MAX_CONNECTIONS=10</code> so two instances stay under its limit, and
+                keep in mind the database is deleted after 14 days without commands.</p>
+        </div>
+
+        <p class="text-xs leading-relaxed text-neutral-400">Limits checked September 2026; confirm them before you
+            pick. Sources:
+            <a href="https://upstash.com/docs/redis/overall/pricing" target="_blank" rel="noopener"
+                class="text-accent-soft underline underline-offset-2 hover:text-white">Upstash pricing</a>,
+            <a href="https://upstash.com/docs/redis/help/faq" target="_blank" rel="noopener"
+                class="text-accent-soft underline underline-offset-2 hover:text-white">Upstash FAQ</a>,
+            <a href="https://redis.io/docs/latest/operate/rc/subscriptions/view-essentials-subscription/essentials-plan-details/"
+                target="_blank" rel="noopener"
+                class="text-accent-soft underline underline-offset-2 hover:text-white">Redis Cloud limits</a>,
+            <a href="https://redis.io/docs/latest/operate/rc/security/database-security/tls-ssl/" target="_blank"
+                rel="noopener" class="text-accent-soft underline underline-offset-2 hover:text-white">Redis Cloud
+                TLS</a>,
+            <a href="https://redis.io/pricing/" target="_blank" rel="noopener"
+                class="text-accent-soft underline underline-offset-2 hover:text-white">Redis pricing</a>.</p>
     </section>
 
     <section class="card space-y-4">
@@ -152,8 +240,9 @@
                     <tr>
                         <td class="py-3 pr-4 align-top"><code class="{{ code }}">REDIS_URL</code></td>
                         <td class="py-3">A <code class="{{ code }}">redis://</code> or
-                            <code class="{{ code }}">rediss://</code> connection string. Set for you by the Vercel
-                            Redis store.</td>
+                            <code class="{{ code }}">rediss://</code> connection string. See
+                            <a href="#redis" class="text-accent-soft underline underline-offset-2 hover:text-white">Choose
+                                a Redis</a>.</td>
                     </tr>
                 </tbody>
             </table>

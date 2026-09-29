@@ -6,7 +6,8 @@
 
 - "Watch it again" catalog: titles you've already watched, loved or liked, ranked by how well they fit your taste profile, with loved titles boosted. Anything watched in the last 6 months is held back. Off by default; enable it on the configure page (#139).
 - Self-hosting guide at `/self-host`, and a Deploy to Vercel button in the README and the guide that creates the project and a Redis Cloud database in one flow. Vercel runs Watchly with no extra config; the guide lists what doesn't work reliably there, mainly background refreshes after a response.
-- A Preview button for the custom poster provider shows what your URL template produces for a sample movie and series, including with an API key you saved earlier.
+- A Preview button for the custom poster provider shows what your URL template produces for a sample movie and series. A saved API key works too, as long as the template hasn't changed since it was saved.
+- A "Choose a Redis" section in the README and self-host guide: Redis in Docker for Docker installs, Upstash for Vercel, how many users each free plan roughly covers, and step-by-step Upstash setup.
 
 ### Changed
 
