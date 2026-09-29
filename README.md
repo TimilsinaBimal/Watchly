@@ -231,7 +231,7 @@ All settings are environment variables. Only `TOKEN_SALT` and `HOST_NAME` are st
 | `TOKEN_TTL_SECONDS` | `0` | Token expiry in seconds; `0` = never expire. |
 | `AUTO_UPDATE_CATALOGS` | `true` | Refresh dynamic catalogs in the background on a schedule. |
 | `CATALOG_REFRESH_INTERVAL_SECONDS` | `86400` | Background refresh interval (24 h). |
-| `CATALOG_CACHE_TTL` | `43200` | Rendered-catalog cache TTL (12 h). |
+| `CATALOG_CACHE_TTL` | `60` | `Cache-Control` max-age, in seconds, that Stremio may reuse a catalog response for. |
 | `CATALOG_STALE_TTL` | `604800` | Soft-expiration fallback for cached catalogs (7 d). |
 | `RECOMMENDATION_SOURCE_ITEMS_LIMIT` | `10` | Number of library items used to seed recommendations. |
 | `LIBRARY_ITEMS_LIMIT` | `20` | Library item cap used in parts of the pipeline. |
