@@ -71,9 +71,9 @@ A reviewer must not be able to tell the diff was AI-written.
 
 ### Recommendations
 
-- Engines return ranked, un-enriched candidates. Genre exclusion, the `watched_tmdb` filter, `fetch_batch` and the `watched_imdb` filter run once, in that order, at the end of `_get_recommendations`, not per engine. `watchly.rewatch` skips both watched filters.
+- Engines return ranked, un-enriched candidates. Genre exclusion, the `watched_tmdb` filter, `fetch_batch` and the `watched_imdb` filter run once, in that order, at the end of `_get_recommendations`, not per engine. `watchly.rewatch` skips both watched filters. An engine that caps its pool applies the `eligible` check from `_get_recommendations` before the cap, so watched titles never take a slot.
 - Scoring runs before enrichment. TMDB `/discover`, `/recommendations` and `/similar` return the compact shape, so any scoring term reading `credits`, `keywords` or `production_countries` is silently zero.
-- `watched_tmdb` is effectively empty for Trakt/Simkl users — exclusion must test `watched_imdb` too, before enrichment.
+- `watched_tmdb` is effectively empty for Trakt/Simkl users — exclusion must test `watched_imdb` too. Compact candidates carry only TMDB ids, so that test runs after `fetch_batch`.
 - `DEFAULT_CATALOG_LIMIT` is a floor, not a cap: rows aim for at least that many titles, and nothing cuts a ranked row below what the engine produced. Bound `fetch_batch` cost (two TMDB round trips per candidate) with the engine's own pool size, not a cut to the row limit.
 - Size diversity caps against the visible row length (`DEFAULT_CATALOG_LIMIT`), never the over-fetch target.
 - One Bayesian prior per media type, from a single helper — never a literal at a call site. Terms combined with blend weights must both be on `[0, 1]` first, and `normalize` needs the value's realistic band.

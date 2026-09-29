@@ -1,4 +1,5 @@
 import time
+from collections.abc import Callable
 from typing import Any
 
 from loguru import logger
@@ -31,6 +32,7 @@ class TopPicksService:
         profile: TasteProfile,
         content_type: str,
         library_items: LibraryCollection,
+        eligible: Callable[[dict[str, Any]], bool],
         limit: int = DEFAULT_CATALOG_LIMIT,
     ) -> list[dict[str, Any]]:
         start_time = time.time()
@@ -43,11 +45,12 @@ class TopPicksService:
         scored_candidates = [
             (RecommendationScoring.calculate_final_score(item, profile, self.scorer, mtype), item)
             for item in all_candidates.values()
+            # Filtered before the diversity cap, so watched titles can't take its slots.
+            if eligible(item)
         ]
         scored_candidates.sort(key=lambda x: x[0], reverse=True)
 
-        # 3x the target so the genre cap is meaningful and the shared filters that
-        # run after this still leave headroom.
+        # 3x the target so the genre cap is meaningful.
         result = apply_diversity_caps(scored_candidates, limit * 3, mtype, self.user_settings)
 
         logger.debug(

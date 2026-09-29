@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from typing import Any
 
 from loguru import logger
@@ -32,6 +33,7 @@ class ThemeBasedService:
         theme_id: str,
         content_type: str,
         profile: TasteProfile | None,
+        eligible: Callable[[dict[str, Any]], bool],
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         anchors, flavors, fallbacks = self._parse_theme_id(theme_id)
@@ -140,7 +142,8 @@ class ThemeBasedService:
         unique_results = []
         seen = set()
         for _, item in scored:
-            if item["id"] not in seen:
+            # Filtered before the pool cap, so watched titles can't take its slots.
+            if item["id"] not in seen and eligible(item):
                 unique_results.append(item)
                 seen.add(item["id"])
             if len(unique_results) >= limit * 2:

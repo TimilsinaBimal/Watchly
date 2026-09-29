@@ -104,27 +104,6 @@ def filter_watched_by_imdb(enriched: list[dict[str, Any]], watched_imdb: set[str
     return final
 
 
-def filter_by_genres(
-    items: list[dict[str, Any]],
-    watched_tmdb: set[int],
-    excluded_ids: list[int] | None = None,
-) -> list[dict[str, Any]]:
-    """Filter items by watched set and excluded genres."""
-    excluded_ids = excluded_ids or []
-    filtered = []
-
-    for item in items:
-        item_id = item.get("id")
-        if not item_id or item_id in watched_tmdb:
-            continue
-        genre_ids = item.get("genre_ids", [])
-        if excluded_ids and any(gid in excluded_ids for gid in genre_ids):
-            continue
-        filtered.append(item)
-
-    return filtered
-
-
 def build_discover_params(user_settings: UserSettings) -> dict[str, Any]:
     """Build TMDB discover API parameters based on user settings."""
     params: dict[str, Any] = {}

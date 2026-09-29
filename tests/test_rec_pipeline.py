@@ -179,3 +179,15 @@ def test_creators_404_reaches_the_client_and_is_not_cached(monkeypatch):
 
     assert raised.value.status_code == 404
     assert writes == []
+
+
+def test_watched_titles_do_not_take_a_capped_pool_slot():
+    """Theme keeps a pool of 2x the row limit. Watched titles are dropped before that
+    cap, or a user whose top matches are all watched would get an empty row."""
+    count = DEFAULT_CATALOG_LIMIT * 2 + 10
+    tmdb = FakeTMDB({t: DRAMA for t in range(1, count + 1)})
+    watched = set(range(1, DEFAULT_CATALOG_LIMIT * 2 + 1))
+
+    ids = row("watchly.theme.a:g18", tmdb, LibraryCollection(), PROFILE, watched=(watched, ()))
+
+    assert len(ids) == 10
