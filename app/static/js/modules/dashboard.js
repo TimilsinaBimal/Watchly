@@ -3,6 +3,7 @@
 // nav click. Account deletion lives in the Save & Install flow, not here.
 
 import { openNuvioInstall } from './nuvio.js';
+import { escapeHtml } from './ui.js';
 
 let appState = null;
 let switchSection = null;
@@ -215,7 +216,7 @@ function renderSettings(s) {
     ];
     fields.forEach(([label, value]) => {
         const cell = document.createElement('div');
-        cell.innerHTML = `<p class="text-xs text-slate-500 mb-1">${label}</p><p class="text-slate-200">${value}</p>`;
+        cell.innerHTML = `<p class="text-xs text-slate-500 mb-1">${label}</p><p class="text-slate-200">${escapeHtml(value)}</p>`;
         grid.appendChild(cell);
     });
 }
@@ -274,7 +275,7 @@ function buildCatalogRow(cat) {
     const header = document.createElement('div');
     header.className = 'flex items-baseline justify-between mb-2';
     header.innerHTML =
-        `<h4 class="text-sm font-medium text-slate-200 truncate">${cat.name || cat.id}</h4>` +
+        `<h4 class="text-sm font-medium text-slate-200 truncate">${escapeHtml(cat.name || cat.id)}</h4>` +
         `<span class="text-xs text-slate-600 ml-3 flex-shrink-0"><span class="dash-row-count"></span>${cat.type === 'series' ? 'Series' : 'Movies'}</span>`;
     row.appendChild(header);
 

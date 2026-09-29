@@ -1,6 +1,6 @@
 // Form Submission and UI Helpers
 
-import { showToast } from './ui.js';
+import { escapeHtml, showToast } from './ui.js';
 import { switchSection } from './navigation.js';
 import {
     clearValidationMessage,
@@ -287,14 +287,14 @@ function renderGenreList(container, genres, namePrefix) {
     container.innerHTML = genres.map(genre => `
         <label class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition group">
             <div class="relative flex items-center">
-                <input type="checkbox" name="${namePrefix}" value="${genre.id}"
+                <input type="checkbox" name="${namePrefix}" value="${escapeHtml(genre.id)}"
                     class="peer appearance-none w-5 h-5 border-2 border-slate-600 rounded bg-neutral-900 checked:bg-white checked:border-white transition-colors">
                 <svg class="absolute w-3.5 h-3.5 text-black left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity"
                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
                 </svg>
             </div>
-            <span class="text-sm text-slate-300 group-hover:text-white transition-colors select-none">${genre.name}</span>
+            <span class="text-sm text-slate-300 group-hover:text-white transition-colors select-none">${escapeHtml(genre.name)}</span>
         </label>
     `).join('');
 }
@@ -652,6 +652,7 @@ function initializeWatchHistorySource() {
     window._watchlyOAuth = window._watchlyOAuth || {};
 
     window.addEventListener('message', (event) => {
+        if (event.origin !== window.location.origin) return;
         const data = event.data;
         if (!data || !data.provider || !data.tokens) return;
 
