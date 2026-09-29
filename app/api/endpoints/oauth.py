@@ -1,6 +1,8 @@
+import html
+import json
 import secrets
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -35,14 +37,11 @@ def _verify_state(request: Request, provider: str, state: str | None) -> None:
         raise HTTPException(status_code=400, detail="Invalid or missing OAuth state. Please try connecting again.")
 
 
-# ── Trakt OAuth ──────────────────────────────────────────────────────────────
-
 TRAKT_AUTH_URL = "https://trakt.tv/oauth/authorize"
 
 
 @router.get("/auth/trakt")
 async def trakt_auth_redirect(request: Request):
-    """Redirect user to Trakt authorization page."""
     if not settings.TRAKT_CLIENT_ID:
         raise HTTPException(status_code=501, detail="Trakt integration is not configured on this server.")
 
@@ -63,7 +62,6 @@ async def trakt_auth_redirect(request: Request):
 
 @router.get("/auth/trakt/callback", response_class=HTMLResponse)
 async def trakt_callback(request: Request, code: str, state: str | None = None):
-    """Handle Trakt OAuth callback, exchange code for tokens."""
     if not settings.TRAKT_CLIENT_ID or not settings.TRAKT_CLIENT_SECRET:
         raise HTTPException(status_code=501, detail="Trakt integration is not configured on this server.")
 
@@ -82,11 +80,10 @@ async def trakt_callback(request: Request, code: str, state: str | None = None):
         created_at = int(token_data.get("created_at") or time.time())
         expires_at = created_at + expires_in if expires_in else 0
 
-        # Fetch username for display
         user_info = await trakt_service.get_user_info(access_token)
         username = user_info.get("user", {}).get("username") or user_info.get("username", "Unknown")
     except Exception as e:
-        logger.error(f"Trakt OAuth callback failed: {e}")
+        logger.error(f"Trakt OAuth callback failed: {type(e).__name__}")
         return HTMLResponse(_oauth_error_page("Trakt", "Could not complete sign-in. Please try again."))
 
     return HTMLResponse(
@@ -102,14 +99,11 @@ async def trakt_callback(request: Request, code: str, state: str | None = None):
     )
 
 
-# ── Simkl OAuth ──────────────────────────────────────────────────────────────
-
 SIMKL_AUTH_URL = "https://simkl.com/oauth/authorize"
 
 
 @router.get("/auth/simkl")
 async def simkl_auth_redirect(request: Request):
-    """Redirect user to Simkl authorization page."""
     if not settings.SIMKL_CLIENT_ID or not settings.SIMKL_CLIENT_SECRET:
         raise HTTPException(status_code=501, detail="Simkl integration is not configured on this server.")
 
@@ -130,7 +124,6 @@ async def simkl_auth_redirect(request: Request):
 
 @router.get("/auth/simkl/callback", response_class=HTMLResponse)
 async def simkl_callback(request: Request, code: str, state: str | None = None):
-    """Handle Simkl OAuth callback, exchange code for tokens."""
     if not settings.SIMKL_CLIENT_ID or not settings.SIMKL_CLIENT_SECRET:
         raise HTTPException(status_code=501, detail="Simkl integration is not configured on this server.")
 
@@ -150,7 +143,7 @@ async def simkl_callback(request: Request, code: str, state: str | None = None):
         user_info = await simkl_service.get_user_settings(access_token, settings.SIMKL_CLIENT_ID)
         username = user_info.get("user", {}).get("name") or user_info.get("account", {}).get("id", "Unknown")
     except Exception as e:
-        logger.error(f"Simkl OAuth callback failed: {e}")
+        logger.error(f"Simkl OAuth callback failed: {type(e).__name__}")
         return HTMLResponse(_oauth_error_page("Simkl", "Could not complete sign-in. Please try again."))
 
     return HTMLResponse(
@@ -162,15 +155,7 @@ async def simkl_callback(request: Request, code: str, state: str | None = None):
     )
 
 
-# ── HTML helpers ─────────────────────────────────────────────────────────────
-
-
 def _oauth_success_page(provider: str, username: str, tokens: dict[str, str]) -> str:
-    """Generate a callback page that sends tokens back to the opener window."""
-    import html
-    import json
-    from urllib.parse import urlparse
-
     safe_username = html.escape(username or "")
     safe_provider = html.escape(provider.title())
     payload = json.dumps({"provider": provider, "username": username, "tokens": tokens}).replace("</", "<\\/")
@@ -193,8 +178,6 @@ def _oauth_success_page(provider: str, username: str, tokens: dict[str, str]) ->
 
 
 def _oauth_error_page(provider: str, error: str) -> str:
-    import html
-
     safe_provider = html.escape(provider.title())
     safe_error = html.escape(error or "")
     return f"""<!DOCTYPE html>

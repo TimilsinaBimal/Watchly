@@ -35,14 +35,15 @@ async def validate_llm_key(data: LLMValidationInput) -> BaseValidationResponse:
 
 @router.post("/tmdb/validation")
 async def validate_tmdb_api_key(data: BaseValidationInput) -> BaseValidationResponse:
+    client = TMDBClient(api_key=data.api_key.strip(), language="en-US")
     try:
-        client = TMDBClient(api_key=data.api_key.strip(), language="en-US")
         await client.get("/configuration")
-        await client.close()
         return BaseValidationResponse(valid=True, message="TMDB API key is valid")
     except Exception as e:
-        logger.debug(f"TMDB API key validation failed: {e}")
+        logger.debug(f"TMDB API key validation failed: {type(e).__name__}")
         return BaseValidationResponse(valid=False, message="Invalid TMDB API key")
+    finally:
+        await client.close()
 
 
 @router.post("/poster-rating/validate")
@@ -69,7 +70,7 @@ async def validate_poster_rating_api_key(payload: PosterRatingValidationInput) -
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Poster rating validation failed: {str(e)}")
+        logger.error(f"Poster rating validation failed: {type(e).__name__}")
         return BaseValidationResponse(valid=False, message="Could not validate API key. Please try again.")
 
 
@@ -81,7 +82,7 @@ async def validate_simkl_api_key(data: BaseValidationInput) -> BaseValidationRes
             return BaseValidationResponse(valid=True, message="Valid API Key")
         return BaseValidationResponse(valid=False, message="Invalid API Key")
     except Exception as e:
-        logger.error(f"Simkl validation failed: {str(e)}")
+        logger.error(f"Simkl validation failed: {type(e).__name__}")
         return BaseValidationResponse(valid=False, message="Could not validate API key. Please try again.")
 
 
@@ -91,19 +92,17 @@ class OAuthTokenValidationInput(BaseModel):
 
 @router.post("/trakt/validation")
 async def validate_trakt_token(data: OAuthTokenValidationInput) -> BaseValidationResponse:
-    """Validate a Trakt OAuth access token by calling /users/me."""
     try:
         user_info = await trakt_service.get_user_info(data.access_token)
         username = user_info.get("user", {}).get("username") or user_info.get("username", "")
         return BaseValidationResponse(valid=True, message=f"Connected as {username}")
     except Exception as e:
-        logger.debug(f"Trakt token validation failed: {e}")
+        logger.debug(f"Trakt token validation failed: {type(e).__name__}")
         return BaseValidationResponse(valid=False, message="Invalid or expired Trakt token")
 
 
 @router.post("/simkl-sync/validation")
 async def validate_simkl_sync_token(data: OAuthTokenValidationInput) -> BaseValidationResponse:
-    """Validate a Simkl OAuth access token."""
     if not settings.SIMKL_CLIENT_ID:
         return BaseValidationResponse(valid=False, message="Simkl integration is not configured on this server")
     try:

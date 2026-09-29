@@ -11,13 +11,6 @@ GENERIC_ERROR = "Something went wrong. Please try again."
 
 
 def register_exception_handlers(app: FastAPI) -> None:
-    """Turn exceptions into responses in one place.
-
-    Endpoints used to repeat this per route, which meant the routes that didn't —
-    dashboard, manifest, status — returned a bare 500 with nothing logged at all.
-    Handlers here cover every route, including ones added later.
-    """
-
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         # Deliberate answers rather than faults, so they keep the status and message
@@ -27,7 +20,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
-            headers=getattr(exc, "headers", None),
+            headers=exc.headers,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -35,10 +28,13 @@ def register_exception_handlers(app: FastAPI) -> None:
         # FastAPI's default body puts a list of pydantic errors in `detail`. The
         # configure page renders `detail` as a string, so that surfaced to users as
         # "[object Object]".
-        logger.warning(f"{request.method} {request.url.path} -> 422: {exc.errors()}")
+        # Log loc and type only: each error's `input` echoes the rejected value, which
+        # can be a password.
+        errors = [(e["loc"], e["type"]) for e in exc.errors()]
+        logger.warning(f"{request.method} {request.url.path} -> 422: {errors}")
         return JSONResponse(status_code=422, content={"detail": "Invalid request."})
 
     @app.exception_handler(Exception)
     async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
-        logger.exception(f"{request.method} {request.url.path} -> unhandled {type(exc).__name__}: {exc}")
+        logger.exception(f"{request.method} {request.url.path} -> unhandled {type(exc).__name__}")
         return JSONResponse(status_code=500, content={"detail": GENERIC_ERROR})

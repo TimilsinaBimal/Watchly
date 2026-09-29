@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 from loguru import logger
 
 from app.api.models.tokens import TokenRequest, TokenResponse
@@ -29,7 +28,4 @@ async def check_identity(payload: TokenRequest):
 @router.delete("/", status_code=200)
 async def delete_redis_token(payload: TokenRequest):
     await auth_service.delete_user_account(payload)
-    return JSONResponse(
-        status_code=200,
-        content={"status": "ok", "message": "Settings deleted successfully"},
-    )
+    return {"status": "ok", "message": "Settings deleted successfully"}
