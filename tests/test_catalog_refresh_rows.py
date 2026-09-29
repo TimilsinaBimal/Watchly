@@ -147,7 +147,7 @@ def test_refresh_leaves_every_row_rebuilt_and_cached(due_refresh):
     async def run_the_scheduled_refresh():
         credentials = await token_store.get_user_data(TOKEN)
         await catalog_updater.trigger_update(TOKEN, credentials)
-        await asyncio.gather(*list(catalog_updater._pending_tasks))
+        await asyncio.gather(*list(catalog_updater._running.values()))
 
     asyncio.run(run_the_scheduled_refresh())
 
@@ -169,7 +169,7 @@ def test_a_failed_refresh_leaves_rows_to_their_own_requests(due_refresh, monkeyp
     async def run_the_scheduled_refresh():
         credentials = await token_store.get_user_data(TOKEN)
         await catalog_updater.trigger_update(TOKEN, credentials)
-        await asyncio.gather(*list(catalog_updater._pending_tasks))
+        await asyncio.gather(*list(catalog_updater._running.values()))
 
     asyncio.run(run_the_scheduled_refresh())
 

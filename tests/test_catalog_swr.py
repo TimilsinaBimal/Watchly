@@ -179,7 +179,7 @@ def refresh_due_while_stale(harness, monkeypatch, refresh_rebuilds_the_row: bool
         await asyncio.sleep(0.05)
         builds_during_refresh = harness["builds"]
         release.set()
-        await asyncio.gather(*list(cs_module.catalog_updater._pending_tasks))
+        await asyncio.gather(*list(cs_module.catalog_updater._running.values()))
         await asyncio.gather(*list(catalog_service._refresh_tasks))
         assert builds_during_refresh == 0
         return harness["builds"]

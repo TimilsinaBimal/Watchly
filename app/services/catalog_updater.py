@@ -23,20 +23,8 @@ class CatalogUpdater:
     """
 
     def __init__(self):
-        self._updating_tokens: set[str] = set()
-        # Retain background task handles so they don't get GC'd mid-flight,
-        # and so unhandled exceptions surface in logs.
-        self._pending_tasks: set[asyncio.Task] = set()
+        # Also holds the task handles, so a background update isn't GC'd mid-flight.
         self._running: dict[str, asyncio.Task] = {}
-
-    def _on_task_done(self, task: asyncio.Task) -> None:
-        self._pending_tasks.discard(task)
-        try:
-            exc = task.exception()
-        except asyncio.CancelledError:
-            return
-        if exc is not None:
-            logger.error(f"Background catalog update task crashed: {exc!r}")
 
     async def wait_for(self, token: str) -> None:
         """Wait for a refresh running for this token, if there is one."""
@@ -179,7 +167,7 @@ class CatalogUpdater:
 
     async def trigger_update(self, token: str, credentials: dict[str, Any]) -> None:
         """Fire a background catalog update if needed. In-memory lock prevents duplicates."""
-        if token in self._updating_tokens:
+        if token in self._running:
             logger.debug(f"[{redact_token(token)}] Update already in progress, skipping")
             return
 
@@ -187,12 +175,8 @@ class CatalogUpdater:
             logger.debug(f"[{redact_token(token)}] Catalog update not needed yet")
             return
 
-        self._updating_tokens.add(token)
         logger.info(f"[{redact_token(token)}] Triggering catalog update")
-        task = asyncio.create_task(self._update_task(token, credentials))
-        self._pending_tasks.add(task)
-        self._running[token] = task
-        task.add_done_callback(self._on_task_done)
+        self._running[token] = asyncio.create_task(self._update_task(token, credentials))
 
     async def _update_task(self, token: str, credentials: dict[str, Any]) -> None:
         """Background task that performs the actual catalog update."""
@@ -205,7 +189,6 @@ class CatalogUpdater:
         except Exception:
             logger.exception(f"[{redact_token(token)}] Catalog update task failed")
         finally:
-            self._updating_tokens.discard(token)
             self._running.pop(token, None)
 
 
