@@ -53,9 +53,6 @@ function createCatalogItem(cat, index) {
     let activeMode = 'both';
     if (enabledMovie && !enabledSeries) activeMode = 'movie';
     else if (!enabledMovie && enabledSeries) activeMode = 'series';
-    // Initialize display_at_home and shuffle if not present (for backward compatibility)
-    if (cat.display_at_home === undefined) cat.display_at_home = true;
-    if (cat.shuffle === undefined) cat.shuffle = false;
 
     item.innerHTML = `
         <div class="flex gap-2 sm:gap-3">
@@ -91,7 +88,7 @@ function createCatalogItem(cat, index) {
                                     <polyline points="9 22 9 12 15 12 15 22"></polyline>
                                 </svg>
                             </button>
-                            <span class="custom-tooltip" data-tooltip-text="${cat.display_at_home ? 'Hide from Home Page - This catalog will not appear on your Stremio home screen' : 'Show on Home Page - Display this catalog on your Stremio home screen'}">${cat.display_at_home ? 'Hide from Home Page- Only display this catalog in discover section.' : 'Show on Home Page as well as Discover section.'}</span>
+                            <span class="custom-tooltip">${cat.display_at_home ? 'Hide from Home Page- Only display this catalog in discover section.' : 'Show on Home Page as well as Discover section.'}</span>
                         </div>
                         <div class="tooltip-wrapper">
                             <button type="button" class="catalog-action-btn shuffle-btn p-2 rounded-lg transition-all ${cat.shuffle ? 'text-purple-400 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 hover:border-purple-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-purple-500/10" data-catalog-id="${cat.id}" data-action="shuffle">
@@ -99,7 +96,7 @@ function createCatalogItem(cat, index) {
                                     <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
                                 </svg>
                             </button>
-                            <span class="custom-tooltip" data-tooltip-text="${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}">${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}</span>
+                            <span class="custom-tooltip">${cat.shuffle ? 'Disable Random Order - Show items in recommended order' : 'Enable Random Order - Shuffle items in this catalog randomly'}</span>
                         </div>
                         <div class="tooltip-wrapper">
                             <button type="button" class="catalog-action-btn visibility-btn p-2 rounded-lg transition-all ${cat.enabled ? 'text-cyan-400 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 hover:border-cyan-400/60' : 'text-slate-500 bg-slate-700/30 hover:bg-slate-700/40 border border-slate-600/40 hover:border-slate-500/60'} shadow-sm hover:shadow-md hover:shadow-cyan-500/10" data-catalog-id="${cat.id}" data-action="visibility">
@@ -117,7 +114,7 @@ function createCatalogItem(cat, index) {
                                     </svg>
                                 `}
                             </button>
-                            <span class="custom-tooltip" data-tooltip-text="${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}">${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}</span>
+                            <span class="custom-tooltip">${cat.enabled ? 'Disable Catalog - Hide this catalog from Stremio' : 'Enable Catalog - Show this catalog in Stremio'}</span>
                         </div>
                     </div>
                 </div>
@@ -147,41 +144,14 @@ function createCatalogItem(cat, index) {
 
     if (isRenamable) setupRenameLogic(item, cat);
 
-    // Handle rename button (now always visible, triggers edit mode)
-    const renameBtn = item.querySelector('.rename-btn');
-    if (renameBtn) {
-        renameBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const nameContainer = item.querySelector('.name-container');
-            const nameText = item.querySelector('.catalog-name-text');
-            const nameInputWrapper = item.querySelector('.catalog-name-input-wrapper');
-            const nameInput = item.querySelector('.catalog-name-input');
-            const editActions = item.querySelector('.edit-actions');
-            if (nameContainer && nameText && nameInputWrapper && nameInput && editActions) {
-                nameContainer.classList.add('editing');
-                nameText.classList.add('hidden');
-                nameInputWrapper.classList.remove('hidden');
-                editActions.classList.remove('hidden');
-                editActions.classList.add('flex');
-                nameInput.focus();
-            }
-        });
-    }
-
-    // Handle visibility button toggle (replaces old switch)
-    const visibilityBtn = item.querySelector('.visibility-btn');
-    if (visibilityBtn) {
-        visibilityBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            cat.enabled = !cat.enabled;
-            updateVisibilityButton(visibilityBtn, cat.enabled);
-            if (cat.enabled) item.classList.remove('opacity-50');
-            else item.classList.add('opacity-50');
-        });
-    }
+    item.querySelector('.visibility-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        cat.enabled = !cat.enabled;
+        item.replaceWith(createCatalogItem(cat, index));
+    });
 
     // Handle movie/series toggle button changes
-    const allTypeButtons = item.querySelectorAll(`.catalog-type-btn[data-catalog-id="${cat.id}"]`);
+    const allTypeButtons = item.querySelectorAll('.catalog-type-btn');
 
     allTypeButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -212,25 +182,17 @@ function createCatalogItem(cat, index) {
     item.querySelector('.move-up').addEventListener('click', (e) => { e.preventDefault(); moveCatalogUp(index); });
     item.querySelector('.move-down').addEventListener('click', (e) => { e.preventDefault(); moveCatalogDown(index); });
 
-    // Handle home button toggle
-    const homeBtn = item.querySelector('.home-btn');
-    if (homeBtn) {
-        homeBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            cat.display_at_home = !cat.display_at_home;
-            updateHomeButton(homeBtn, cat.display_at_home);
-        });
-    }
+    item.querySelector('.home-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        cat.display_at_home = !cat.display_at_home;
+        item.replaceWith(createCatalogItem(cat, index));
+    });
 
-    // Handle shuffle button toggle
-    const shuffleBtn = item.querySelector('.shuffle-btn');
-    if (shuffleBtn) {
-        shuffleBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            cat.shuffle = !cat.shuffle;
-            updateShuffleButton(shuffleBtn, cat.shuffle);
-        });
-    }
+    item.querySelector('.shuffle-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        cat.shuffle = !cat.shuffle;
+        item.replaceWith(createCatalogItem(cat, index));
+    });
 
     item.querySelectorAll('.rows-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -245,86 +207,6 @@ function createCatalogItem(cat, index) {
     });
 
     return item;
-}
-
-// Helper function to update button state with active/inactive classes and tooltips
-function updateButtonState(btn, isActive, activeClasses, inactiveTooltip, activeTooltip, activeHTML = null, inactiveHTML = null) {
-    const inactiveClasses = ['text-slate-500', 'bg-slate-700/30', 'border-slate-600/40', 'hover:bg-slate-700/40', 'hover:border-slate-500/60'];
-
-    // Find the tooltip element (it's a sibling in the tooltip-wrapper)
-    const tooltipWrapper = btn.closest('.tooltip-wrapper');
-    const tooltip = tooltipWrapper ? tooltipWrapper.querySelector('.custom-tooltip') : null;
-
-    if (isActive) {
-        btn.classList.remove(...inactiveClasses);
-        btn.classList.add(...activeClasses);
-        if (tooltip) {
-            tooltip.textContent = activeTooltip;
-            tooltip.setAttribute('data-tooltip-text', activeTooltip);
-        }
-        if (activeHTML !== null) {
-            btn.innerHTML = activeHTML;
-        }
-    } else {
-        btn.classList.remove(...activeClasses);
-        btn.classList.add(...inactiveClasses);
-        if (tooltip) {
-            tooltip.textContent = inactiveTooltip;
-            tooltip.setAttribute('data-tooltip-text', inactiveTooltip);
-        }
-        if (inactiveHTML !== null) {
-            btn.innerHTML = inactiveHTML;
-        }
-    }
-}
-
-function updateHomeButton(btn, isActive) {
-    const activeClasses = ['text-emerald-400', 'bg-emerald-500/20', 'border-emerald-500/40', 'hover:bg-emerald-500/30', 'hover:border-emerald-400/60'];
-    updateButtonState(
-        btn,
-        isActive,
-        activeClasses,
-        'Show on Home Page - Display this catalog on your Stremio home screen',
-        'Hide from Home Page - This catalog will not appear on your Stremio home screen'
-    );
-}
-
-function updateShuffleButton(btn, isActive) {
-    const activeClasses = ['text-purple-400', 'bg-purple-500/20', 'border-purple-500/40', 'hover:bg-purple-500/30', 'hover:border-purple-400/60'];
-    updateButtonState(
-        btn,
-        isActive,
-        activeClasses,
-        'Enable Random Order - Shuffle items in this catalog randomly',
-        'Disable Random Order - Show items in recommended order'
-    );
-}
-
-function updateVisibilityButton(btn, isActive) {
-    const activeClasses = ['text-cyan-400', 'bg-cyan-500/20', 'border-cyan-500/40', 'hover:bg-cyan-500/30', 'hover:border-cyan-400/60'];
-    const activeHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-        </svg>
-    `;
-    const inactiveHTML = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
-            <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
-            <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
-            <line x1="2" x2="22" y1="2" y2="22"></line>
-        </svg>
-    `;
-    updateButtonState(
-        btn,
-        isActive,
-        activeClasses,
-        'Enable Catalog - Show this catalog in Stremio',
-        'Disable Catalog - Hide this catalog from Stremio',
-        activeHTML,
-        inactiveHTML
-    );
 }
 
 function setupRenameLogic(item, cat) {
@@ -344,6 +226,16 @@ function setupRenameLogic(item, cat) {
 
     const saveBtn = editActions.querySelector('.save');
     const cancelBtn = editActions.querySelector('.cancel');
+
+    renameBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        nameContainer.classList.add('editing');
+        nameText.classList.add('hidden');
+        nameInputWrapper.classList.remove('hidden');
+        editActions.classList.remove('hidden');
+        editActions.classList.add('flex');
+        nameInput.focus();
+    });
 
     function saveEdit() {
         const newName = nameInput.value.trim();
