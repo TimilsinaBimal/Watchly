@@ -90,6 +90,17 @@ jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
 jinja_env.filters["tojson"] = lambda v: json.dumps(v)
 
 
+def compact_number(n: int) -> str:
+    """1234 -> 1.2K, 10100 -> 10.1K, 2500000 -> 2.5M."""
+    for size, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "K")):
+        if n >= size:
+            return f"{n / size:.1f}".removesuffix(".0") + suffix
+    return str(n)
+
+
+jinja_env.filters["compact"] = compact_number
+
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/configure", response_class=HTMLResponse)
 @app.get("/{token}/configure", response_class=HTMLResponse)

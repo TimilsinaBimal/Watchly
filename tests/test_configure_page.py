@@ -55,3 +55,9 @@ def test_static_files_require_revalidation():
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-cache"
     assert "etag" in response.headers
+
+
+def test_user_counts_are_shown_compactly():
+    compact = importlib.import_module("app.core.app").compact_number
+
+    assert [compact(n) for n in (999, 1000, 1234, 10_100, 2_500_000)] == ["999", "1K", "1.2K", "10.1K", "2.5M"]
