@@ -1,7 +1,11 @@
-from typing import Any
+import copy
+import time
 
+import httpx
 from loguru import logger
 
+from app.core.config import settings as app_settings
+from app.core.security import redact_token
 from app.core.settings import UserSettings
 from app.models.history import WatchHistory
 from app.models.library import LibraryCollection
@@ -11,8 +15,11 @@ from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
 from app.services.profile.vectorizer import ItemVectorizer
 from app.services.recommendation.filtering import RecommendationFiltering
+from app.services.simkl import simkl_service
 from app.services.stremio.library import stremio_library_to_watch_history, watch_history_to_library_collection
 from app.services.tmdb.service import get_tmdb_service
+from app.services.token_store import token_store
+from app.services.trakt import trakt_service
 from app.services.user_cache import user_cache
 
 
@@ -29,13 +36,9 @@ class ProfileService:
         self,
         library_items: LibraryCollection,
         content_type: str,
-        stremio_service: Any = None,
-        auth_key: str | None = None,
     ) -> tuple[TasteProfile | None, set[int], set[str]]:
         """Build taste profile from library items and get watched sets."""
-        watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
-            stremio_service, library_items, auth_key
-        )
+        watched_imdb, watched_tmdb = RecommendationFiltering.get_exclusion_sets(library_items)
 
         typed = library_items.for_type(content_type)
         if typed.is_empty():
@@ -69,13 +72,9 @@ class ProfileService:
         library_items: LibraryCollection,
         content_type: str,
         token: str,
-        stremio_service: Any = None,
-        auth_key: str | None = None,
     ) -> tuple[TasteProfile | None, set[int], set[str]]:
         """Build profile incrementally if possible, fallback to full rebuild."""
-        watched_imdb, watched_tmdb = await RecommendationFiltering.get_exclusion_sets(
-            stremio_service, library_items, auth_key
-        )
+        watched_imdb, watched_tmdb = RecommendationFiltering.get_exclusion_sets(library_items)
 
         typed = library_items.for_type(content_type)
         typed_items = typed.all_items()
@@ -91,7 +90,9 @@ class ProfileService:
                 return existing_profile, watched_tmdb, watched_imdb
 
             if plan == "incremental":
-                logger.debug(f"[{token[:8]}...] {len(new_ids)} new items for {content_type}, updating incrementally")
+                logger.debug(
+                    f"[{redact_token(token)}] {len(new_ids)} new items for {content_type}, updating incrementally"
+                )
                 sampled = sample_items(self._items_with_ids(typed, new_ids), content_type, self.scoring_service)
                 if not sampled:
                     return existing_profile, watched_tmdb, watched_imdb
@@ -103,10 +104,12 @@ class ProfileService:
                 return updated_profile, watched_tmdb, watched_imdb
 
         except Exception as e:
-            logger.warning(f"[{token[:8]}...] Incremental update failed, falling back to full rebuild: {e}")
+            logger.warning(
+                f"[{redact_token(token)}] Incremental update failed, falling back to full rebuild: {type(e).__name__}"
+            )
 
-        logger.debug(f"[{token[:8]}...] Using full rebuild")
-        profile, _, _ = await self.build_profile_from_library(library_items, content_type, stremio_service, auth_key)
+        logger.debug(f"[{redact_token(token)}] Using full rebuild")
+        profile, _, _ = await self.build_profile_from_library(library_items, content_type)
         await user_cache.set_library_buckets(token, content_type, typed)
         return profile, watched_tmdb, watched_imdb
 
@@ -134,16 +137,16 @@ class ProfileService:
             return "full", set()
 
         if self._is_legacy_profile(existing_profile):
-            logger.debug(f"[{token[:8]}...] Legacy profile shape, falling back to full rebuild")
+            logger.debug(f"[{redact_token(token)}] Legacy profile shape, falling back to full rebuild")
             return "full", set()
 
         current_buckets = user_cache.bucket_map(typed)
         for item_id in existing_profile.processed_items:
             if item_id not in current_buckets:
-                logger.debug(f"[{token[:8]}...] Scored item left the library, falling back to full rebuild")
+                logger.debug(f"[{redact_token(token)}] Scored item left the library, falling back to full rebuild")
                 return "full", set()
             if stored_buckets.get(item_id) != current_buckets[item_id]:
-                logger.debug(f"[{token[:8]}...] Scored item was re-rated, falling back to full rebuild")
+                logger.debug(f"[{redact_token(token)}] Scored item was re-rated, falling back to full rebuild")
                 return "full", set()
 
         new_ids = current_buckets.keys() - existing_profile.processed_items
@@ -159,25 +162,6 @@ class ProfileService:
             added=[i for i in typed.added if i.id in ids],
             source=typed.source,
         )
-
-    async def build_profile_from_watch_history(
-        self,
-        watch_history: WatchHistory,
-        content_type: str,
-        extra_exclusion_imdb: set[str] | None = None,
-        source: str | None = None,
-    ) -> tuple[TasteProfile | None, set[str]]:
-        """Build taste profile from external watch history (Trakt/Simkl)."""
-        collection = watch_history_to_library_collection(watch_history)
-        profile = await self._build_from_collection(
-            collection, content_type, source or watch_history.source or "stremio"
-        )
-
-        watched_imdb = watch_history.imdb_ids()
-        if extra_exclusion_imdb:
-            watched_imdb |= extra_exclusion_imdb
-
-        return profile, watched_imdb
 
     async def _build_from_collection(
         self, collection: LibraryCollection, content_type: str, source: str
@@ -203,8 +187,6 @@ class ProfileService:
         token: str,
         content_type: str,
         library_items: LibraryCollection,
-        stremio_service: Any = None,
-        auth_key: str | None = None,
         user_settings: UserSettings | None = None,
     ) -> tuple[TasteProfile | None, set[int], set[str]]:
         """Build profile data and cache the profile and watched sets.
@@ -218,9 +200,9 @@ class ProfileService:
         # one the user has currently selected — otherwise switching sources in
         # the configure page silently keeps serving the old (wrong) profile.
         cached = await user_cache.get_profile(token, content_type)
-        if cached and getattr(cached, "source", "stremio") != source:
+        if cached and cached.source != source:
             logger.info(
-                f"[{token[:8]}...] Cached profile source '{cached.source}' "
+                f"[{redact_token(token)}] Cached profile source '{cached.source}' "
                 f"!= requested '{source}'; invalidating before rebuild."
             )
             await user_cache.invalidate_profile(token, content_type)
@@ -232,11 +214,7 @@ class ProfileService:
             )
         else:
             profile, watched_tmdb, watched_imdb = await self.build_profile_incremental(
-                library_items,
-                content_type,
-                token,
-                stremio_service,
-                auth_key,
+                library_items, content_type, token
             )
 
         await user_cache.set_profile_and_watched_sets(token, content_type, profile, watched_tmdb, watched_imdb)
@@ -255,8 +233,6 @@ class ProfileService:
         fall back. token_revoked=True implies the stored credential has been
         cleared from the user record by `_clear_revoked_token`.
         """
-        import httpx
-
         watch_history: WatchHistory | None = None
         token_missing = False
         token_revoked = False
@@ -269,13 +245,11 @@ class ProfileService:
                 # or the server clock skewed past it.
                 access_token, _ = await self._ensure_trakt_token_fresh(token, user_settings)
 
-                from app.services.trakt import trakt_service
-
                 try:
                     watch_history = await trakt_service.get_history(access_token)
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 401 and user_settings.trakt_refresh_token and token:
-                        logger.info(f"[{token[:8]}...] Trakt 401 on get_history; attempting reactive refresh.")
+                        logger.info(f"[{redact_token(token)}] Trakt 401 on get_history; attempting reactive refresh.")
                         refreshed = await self._refresh_trakt_token(token, user_settings.trakt_refresh_token)
                         if refreshed:
                             try:
@@ -290,7 +264,7 @@ class ProfileService:
                                 else:
                                     logger.error(
                                         f"Trakt history fetch failed after refresh (HTTP "
-                                        f"{retry_e.response.status_code}: {retry_e})."
+                                        f"{retry_e.response.status_code})."
                                     )
                                 watch_history = None
                         else:
@@ -304,22 +278,17 @@ class ProfileService:
                         )
                     else:
                         logger.error(
-                            f"Trakt history fetch failed (HTTP {e.response.status_code}: {e}). "
+                            f"Trakt history fetch failed (HTTP {e.response.status_code}). "
                             "Falling back to Stremio library."
                         )
                         watch_history = None
                 except Exception as e:
-                    logger.error(
-                        f"Trakt history fetch failed ({type(e).__name__}: {e}). Falling back to Stremio library."
-                    )
+                    logger.error(f"Trakt history fetch failed ({type(e).__name__}). Falling back to Stremio library.")
                     watch_history = None
             else:
                 token_missing = True
         elif source == "simkl":
             if user_settings and user_settings.simkl_access_token:
-                from app.core.config import settings as app_settings
-                from app.services.simkl import simkl_service
-
                 try:
                     watch_history = await simkl_service.get_history(
                         user_settings.simkl_access_token,
@@ -334,14 +303,12 @@ class ProfileService:
                         )
                     else:
                         logger.error(
-                            f"Simkl history fetch failed (HTTP {e.response.status_code}: {e}). "
+                            f"Simkl history fetch failed (HTTP {e.response.status_code}). "
                             "Falling back to Stremio library."
                         )
                     watch_history = None
                 except Exception as e:
-                    logger.error(
-                        f"Simkl history fetch failed ({type(e).__name__}: {e}). Falling back to Stremio library."
-                    )
+                    logger.error(f"Simkl history fetch failed ({type(e).__name__}). Falling back to Stremio library.")
                     watch_history = None
             else:
                 token_missing = True
@@ -402,10 +369,9 @@ class ProfileService:
                 watch_history = stremio_library_to_watch_history(library)
                 effective_source = "stremio"
 
-            profile, watched_imdb = await self.build_profile_from_watch_history(
-                watch_history, content_type, extra_exclusion_imdb=library.all_imdb_ids(), source=effective_source
-            )
-            return profile, set(), watched_imdb
+            collection = watch_history_to_library_collection(watch_history)
+            profile = await self._build_from_collection(collection, content_type, effective_source)
+            return profile, set(), watch_history.imdb_ids() | library.all_imdb_ids()
 
         # The context layer already pulled from this source and the library is itself
         # a conversion of that history, so it is the build input.
@@ -417,7 +383,9 @@ class ProfileService:
         if plan == "reuse":
             cached = await user_cache.get_profile_and_watched_sets(token, content_type)
             if cached:
-                logger.debug(f"[{token[:8]}...] {source} library unchanged; reusing cached {content_type} profile")
+                logger.debug(
+                    f"[{redact_token(token)}] {source} library unchanged; reusing cached {content_type} profile"
+                )
                 return cached
 
         elif plan == "incremental":
@@ -425,7 +393,7 @@ class ProfileService:
             scored = [self.scoring_service.process_item(item) for item in new_items]
             if scored:
                 logger.debug(
-                    f"[{token[:8]}...] {len(scored)} new {source} items, updating {content_type} incrementally"
+                    f"[{redact_token(token)}] {len(scored)} new {source} items, updating {content_type} incrementally"
                 )
                 profile = await self.builder.update_profile_incrementally(
                     existing_profile, scored, content_type=content_type
@@ -444,18 +412,16 @@ class ProfileService:
         token we have — even if refresh fails the original is returned so the
         caller can still attempt the request and surface the real failure.
         """
-        import time as _time
-
         access_token = user_settings.trakt_access_token or ""
         expires_at = user_settings.trakt_token_expires_at or 0
         if not (token and user_settings.trakt_refresh_token and expires_at):
             return access_token, False
 
         seven_days = 7 * 24 * 60 * 60
-        if _time.time() < expires_at - seven_days:
+        if time.time() < expires_at - seven_days:
             return access_token, False
 
-        logger.info(f"[{token[:8]}...] Trakt token within refresh window; refreshing proactively.")
+        logger.info(f"[{redact_token(token)}] Trakt token within refresh window; refreshing proactively.")
         refreshed = await self._refresh_trakt_token(token, user_settings.trakt_refresh_token)
         if refreshed:
             return refreshed, True
@@ -466,40 +432,35 @@ class ProfileService:
 
         Returns the new access token on success, None on failure.
         """
-        import time as _time
-
-        from app.core.config import settings as app_settings
-        from app.services.token_store import token_store
-        from app.services.trakt import trakt_service
-
         redirect_uri = f"{app_settings.HOST_NAME}/auth/trakt/callback"
         try:
             data = await trakt_service.refresh_token(refresh_token, redirect_uri)
         except Exception as e:
-            logger.warning(f"[{token[:8]}...] Trakt refresh_token call failed: {e}")
+            logger.warning(f"[{redact_token(token)}] Trakt refresh_token call failed: {type(e).__name__}")
             return None
 
         new_access = data.get("access_token") or ""
         new_refresh = data.get("refresh_token") or refresh_token
         expires_in = int(data.get("expires_in") or 0)
-        created_at = int(data.get("created_at") or _time.time())
+        created_at = int(data.get("created_at") or time.time())
         new_expires_at = created_at + expires_in if expires_in else 0
         if not new_access:
-            logger.warning(f"[{token[:8]}...] Trakt refresh returned no access_token.")
+            logger.warning(f"[{redact_token(token)}] Trakt refresh returned no access_token.")
             return None
 
         try:
-            credentials = await token_store.get_user_data(token)
-            if credentials:
+            cached = await token_store.get_user_data(token)
+            if cached:
+                credentials = copy.deepcopy(cached)
                 settings_dict = credentials.get("settings") or {}
                 settings_dict["trakt_access_token"] = new_access
                 settings_dict["trakt_refresh_token"] = new_refresh
                 settings_dict["trakt_token_expires_at"] = new_expires_at
                 credentials["settings"] = settings_dict
                 await token_store.update_user_data(token, credentials)
-                logger.info(f"[{token[:8]}...] Trakt token refreshed; new expiry={new_expires_at}.")
+                logger.info(f"[{redact_token(token)}] Trakt token refreshed; new expiry={new_expires_at}.")
         except Exception as e:
-            logger.warning(f"[{token[:8]}...] Failed to persist refreshed Trakt token: {e}")
+            logger.warning(f"[{redact_token(token)}] Failed to persist refreshed Trakt token: {type(e).__name__}")
 
         return new_access
 
@@ -510,12 +471,11 @@ class ProfileService:
         on a dead token forever. Their /configure page will show the source
         as disconnected on next visit so they can reconnect.
         """
-        from app.services.token_store import token_store
-
         try:
-            credentials = await token_store.get_user_data(token)
-            if not credentials:
+            cached = await token_store.get_user_data(token)
+            if not cached:
                 return
+            credentials = copy.deepcopy(cached)
             settings_dict = credentials.get("settings") or {}
             mutated = False
             if source == "trakt":
@@ -530,6 +490,6 @@ class ProfileService:
             if mutated:
                 credentials["settings"] = settings_dict
                 await token_store.update_user_data(token, credentials)
-                logger.info(f"[{token[:8]}...] Cleared revoked {source} credentials.")
+                logger.info(f"[{redact_token(token)}] Cleared revoked {source} credentials.")
         except Exception as e:
-            logger.warning(f"[{token[:8]}...] Failed to clear revoked {source} token: {e}")
+            logger.warning(f"[{redact_token(token)}] Failed to clear revoked {source} token: {type(e).__name__}")

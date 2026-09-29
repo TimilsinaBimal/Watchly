@@ -217,12 +217,10 @@ class DynamicCatalogService:
         if not profile:
             if token:
                 profile, _, _ = await self.profile_service.build_and_cache_profile(
-                    token, media_type, library_items, None, None, user_settings=user_settings
+                    token, media_type, library_items, user_settings=user_settings
                 )
             else:
-                profile, _, _ = await self.profile_service.build_profile_from_library(
-                    library_items, media_type, None, None
-                )
+                profile, _, _ = await self.profile_service.build_profile_from_library(library_items, media_type)
 
         if not profile:
             logger.warning(f"Failed to build profile for {media_type}")

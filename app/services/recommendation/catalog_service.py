@@ -199,12 +199,7 @@ class CatalogService:
                     f"[{redact_token(ctx.token)}] Profile not cached for {content_type}, building from {source}"
                 )
                 profile, watched_tmdb, watched_imdb = await profile_service.build_and_cache_profile(
-                    ctx.token,
-                    content_type,
-                    ctx.library,
-                    ctx.bundle,
-                    ctx.auth_key,
-                    user_settings=ctx.user_settings,
+                    ctx.token, content_type, ctx.library, user_settings=ctx.user_settings
                 )
 
             recommendations = await self._get_recommendations(

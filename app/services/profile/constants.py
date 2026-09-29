@@ -53,9 +53,7 @@ RECENCY_HALF_LIFE_DAYS: Final[float] = 30.0
 # per item.
 SMART_SAMPLING_MAX_ITEMS: Final[int] = 200
 
-# Frequency Multiplier (optional, subtle boost for repeated patterns)
-FREQUENCY_ENABLED: Final[bool] = True
-FREQUENCY_MULTIPLIER_BASE: Final[float] = 1.0
+# Frequency multiplier: a subtle boost for repeated patterns
 FREQUENCY_MULTIPLIER_LOG_FACTOR: Final[float] = 0.1  # Subtle boost
 
 # Top Picks Caps (diversity constraints)
@@ -68,5 +66,4 @@ RUNTIME_BUCKET_SHORT_MAX_MOVIE: Final[int] = 120  # < 120 min
 RUNTIME_BUCKET_MEDIUM_MAX_MOVIE: Final[int] = 180  # 120-180 min, > 180 is long
 
 # Profile Decay Settings
-PROFILE_DECAY_ENABLED: Final[bool] = True
 PROFILE_DECAY_FACTOR: Final[float] = 0.98  # 2% decay per update

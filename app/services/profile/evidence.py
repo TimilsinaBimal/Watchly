@@ -113,30 +113,14 @@ class EvidenceCalculator:
         otherwise falls back to the legacy interaction-type bucket system.
         Abandonment detection is applied for unrated items.
         """
-        # Check for an explicit rating (set by the WatchHistory → ScoredItem converter)
-        # The converter maps loved→is_loved (rating≥9) and liked→is_liked (rating≥7).
-        # For items with external ratings, we use the continuous scale.
-        has_explicit_rating = False
-        rating: float | None = None
-
-        # Detect external-history items by checking the synthetic state pattern:
-        # External items have flaggedWatched=1 and a specific duration sentinel (6000)
-        # OR they have is_loved/is_liked set from external ratings.
-        # We use a simpler heuristic: if is_loved with flaggedWatched=1, compute from rating=9.
-        # For more granularity, we'll check the state for our sentinel.
+        # Stremio loves and external ratings >= 9 both arrive as is_loved, likes and
+        # ratings >= 7 as is_liked, so they weigh as a 9 and a 7 on the rating scale.
         state = item.item.state
 
         if item.item.is_loved:
-            # Could be Stremio loved (legacy) or external rating ≥ 9
-            # Use rating-proportional weight for loved items
-            rating = 9.0
-            has_explicit_rating = True
+            base_weight = EvidenceCalculator.weight_from_rating(9.0)
         elif item.item.is_liked:
-            rating = 7.0
-            has_explicit_rating = True
-
-        if has_explicit_rating and rating is not None:
-            base_weight = EvidenceCalculator.weight_from_rating(rating)
+            base_weight = EvidenceCalculator.weight_from_rating(7.0)
         else:
             # Check for abandonment on unrated items
             watch_time_minutes: float | None = None
@@ -163,13 +147,11 @@ class EvidenceCalculator:
                 interaction_type = EvidenceCalculator.get_interaction_type(item)
                 base_weight = EvidenceCalculator.get_base_weight(interaction_type)
 
-        # Get last interaction date
         last_interaction = state.lastWatched
-        if not last_interaction:
+        if not last_interaction and item.item.mtime:
             try:
-                if item.item.mtime:
-                    last_interaction = datetime.fromisoformat(item.item.mtime.replace("Z", "+00:00"))
-            except Exception:
+                last_interaction = datetime.fromisoformat(item.item.mtime)
+            except ValueError:
                 pass
 
         recency_multiplier = EvidenceCalculator.calculate_recency_multiplier(last_interaction)

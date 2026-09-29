@@ -1,6 +1,7 @@
 from typing import Any
 
 import httpx
+from loguru import logger
 
 from app.models.profile import ScoredItem
 from app.services.cinemeta_service import CinemetaService, cinemeta_service
@@ -16,29 +17,15 @@ from app.services.tmdb.service import TMDBService
 
 
 class ProfileVectorizer:
-    """
-    Legacy vectorizer for extracting features from TMDB metadata.
-    Used by old profile service and similarity calculations.
-    """
+    """Extracts raw feature ids from TMDB metadata."""
 
     @staticmethod
     def vectorize_item(metadata: dict[str, Any]) -> dict[str, Any] | None:
-        """
-        Extract features from TMDB metadata.
-
-        Args:
-            metadata: TMDB metadata dict
-
-        Returns:
-            Dictionary with extracted features or None
-        """
         if not metadata:
             return None
 
-        # Extract genres
         genres = [g.get("id") for g in metadata.get("genres", []) if g.get("id")]
 
-        # Extract keywords
         keywords_dict = metadata.get("keywords")
         if isinstance(keywords_dict, dict):
             keywords = keywords_dict.get("results", [])  # for series
@@ -61,7 +48,6 @@ class ProfileVectorizer:
             if actor_id:
                 cast.append(actor_id)
 
-        # Extract countries
         countries = []
         production_countries = metadata.get("production_countries", []) or []
         for country in production_countries:
@@ -69,7 +55,6 @@ class ProfileVectorizer:
             if country_code:
                 countries.append(country_code)
 
-        # Extract year
         release_date = metadata.get("release_date") or metadata.get("first_air_date")
         year = None
         if release_date:
@@ -88,39 +73,18 @@ class ProfileVectorizer:
 
 
 class ItemVectorizer:
-    """
-    Extracts features from items for taste profile building.
+    """Extracts features from items for taste profile building; no scoring or accumulation."""
 
-    Pure extraction: no scoring, no accumulation, just feature extraction.
-    """
-
-    def __init__(self, tmdb_service: Any):
-        """
-        Initialize vectorizer.
-
-        Args:
-            tmdb_service: TMDB service for fetching metadata
-        """
-        self.tmdb_service: TMDBService = tmdb_service
+    def __init__(self, tmdb_service: TMDBService):
+        self.tmdb_service = tmdb_service
         self.cinemeta_service: CinemetaService = cinemeta_service
 
     async def extract_features(self, item: ScoredItem) -> dict[str, Any] | None:
-        """
-        Extract all features from an item.
-
-        Args:
-            item: ScoredItem to extract features from
-
-        Returns:
-            Dictionary with extracted features, or None if extraction fails
-        """
         try:
-            # Resolve TMDB ID
             tmdb_id = await self._resolve_tmdb_id(item.item.id)
             if not tmdb_id:
                 return None
 
-            # Fetch metadata
             if item.item.type == "movie":
                 metadata = await self.tmdb_service.get_movie_details(tmdb_id)
             else:
@@ -129,42 +93,25 @@ class ItemVectorizer:
             if not metadata:
                 return None
 
-            # Extract features using legacy vectorizer (reuse existing logic)
             vector = ProfileVectorizer.vectorize_item(metadata)
             if not vector:
                 return None
 
-            # Transform to our format (pass metadata and item type for extraction)
             return await self._transform_vector(vector, metadata, item.item.type)
 
         except httpx.HTTPStatusError as e:
-            from loguru import logger
-
             if e.response.status_code == 404:
                 logger.debug(f"TMDB not found ({e.response.status_code}) for item {item.item.id}, skipping")
             else:
-                logger.warning(f"TMDB error {e.response.status_code} for item {item.item.id}: {e}")
+                logger.warning(f"TMDB error {e.response.status_code} for item {item.item.id}")
             return None
         except Exception as e:
-            from loguru import logger
-
-            logger.exception(f"Failed to extract features from item {item.item.id}: {e}")
+            logger.warning(f"Failed to extract features from item {item.item.id}: {type(e).__name__}")
             return None
 
     async def _transform_vector(
         self, vector: dict[str, Any], metadata: dict[str, Any], content_type: str
     ) -> dict[str, Any]:
-        """
-        Transform legacy vector format to our feature format.
-
-        Args:
-            vector: Legacy vector format
-            metadata: Full metadata for additional extraction
-            content_type: Content type (movie or series)
-
-        Returns:
-            Transformed feature dictionary
-        """
         features = {
             "genres": vector.get("genres", []),
             "keywords": vector.get("keywords", []),
@@ -174,30 +121,19 @@ class ItemVectorizer:
             "year": vector.get("year"),
         }
 
-        # Extract era bucket from year
         if features["year"]:
             features["era"] = self._year_to_era(features["year"])
 
         imdb_id = metadata.get("external_ids", {}).get("imdb_id")
         cinemeta_metadata = await self.cinemeta_service.get_metadata(imdb_id, content_type) if imdb_id else {}
 
-        # Extract runtime bucket
-        runtime_bucket = await self._extract_runtime_bucket(cinemeta_metadata)
+        runtime_bucket = self._extract_runtime_bucket(cinemeta_metadata)
         if runtime_bucket:
             features["runtime_bucket"] = runtime_bucket
 
         return features
 
     def _extract_cast_with_positions(self, cast: list[Any]) -> list[dict[str, Any]]:
-        """
-        Extract cast with position weights.
-
-        Args:
-            cast: Cast list (can be list of IDs or list of dicts)
-
-        Returns:
-            List of cast dicts with position and weight
-        """
         if not cast:
             return []
 
@@ -219,15 +155,6 @@ class ItemVectorizer:
 
     @staticmethod
     def _get_position_weight(position: int) -> float:
-        """
-        Get weight for cast position.
-
-        Args:
-            position: Cast position (0 = lead, higher = supporting)
-
-        Returns:
-            Position weight
-        """
         # Use a decremental (not step-wise) formula for cast position weight, e.g., exponential decay
         # Lead (position 0) is 1.0, next: base**position, with minimum clamp at CAST_POSITION_MINOR.
         BASE = 0.7  # Chosen for smooth, decremental decay
@@ -235,17 +162,7 @@ class ItemVectorizer:
         return max(weight, CAST_POSITION_MINOR)
 
     def _extract_crew_with_jobs(self, metadata: dict[str, Any]) -> list[dict[str, Any]]:
-        """
-        Extract crew with job information.
-
-        Args:
-            metadata: Full metadata dict with credits
-
-        Returns:
-            List of crew dicts with id and job
-        """
         crew_list = []
-        # check if it has created_by
         created_by = metadata.get("created_by", []) or []
         if created_by:
             for creator in created_by:
@@ -269,29 +186,14 @@ class ItemVectorizer:
 
         return crew_list
 
-    async def _extract_runtime_bucket(self, cinemeta_metadata: dict[str, Any]) -> str | None:
-        """
-        Extract runtime and convert to bucket.
-
-        Args:
-            metadata: Full metadata dict
-
-        Returns:
-            Runtime bucket string (short/medium/long) or None
-        """
-
-        # fetch metadata from cinemeta for runtime.
-        runtime = 0
+    @staticmethod
+    def _extract_runtime_bucket(cinemeta_metadata: dict[str, Any]) -> str | None:
         content_type = cinemeta_metadata.get("type")
-
-        runtime_str = cinemeta_metadata.get("runtime", "0 min")
-        if runtime_str:
-            try:
-                runtime = int(str(runtime_str).split(" ")[0])
-            except (ValueError, TypeError):
-                runtime = 0
-
-        if not runtime or not isinstance(runtime, (int, float)):
+        try:
+            runtime = int(str(cinemeta_metadata.get("runtime") or "0").split(" ")[0])
+        except ValueError:
+            return None
+        if not runtime:
             return None
 
         short_runtime_max = (
@@ -310,15 +212,6 @@ class ItemVectorizer:
 
     @staticmethod
     def _year_to_era(year: int) -> str:
-        """
-        Convert year to era bucket.
-
-        Args:
-            year: Release year
-
-        Returns:
-            Era bucket string (e.g., "1990s", "2010s")
-        """
         if year < 1970:
             return "pre-1970s"
         elif year < 1980:
@@ -335,15 +228,6 @@ class ItemVectorizer:
             return "2020s"
 
     async def _resolve_tmdb_id(self, stremio_id: str) -> int | None:
-        """
-        Resolve Stremio ID to TMDB ID.
-
-        Args:
-            stremio_id: Stremio item ID
-
-        Returns:
-            TMDB ID or None
-        """
         if stremio_id.startswith("tmdb:"):
             try:
                 return int(stremio_id.split(":")[1])

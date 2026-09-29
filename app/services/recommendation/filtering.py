@@ -39,27 +39,13 @@ class RecommendationFiltering:
     """
 
     @staticmethod
-    async def get_exclusion_sets(
-        stremio_service: Any,
-        library_data: LibraryCollection | None = None,
-        auth_key: str | None = None,
-    ) -> tuple[set[str], set[int]]:
+    def get_exclusion_sets(library_data: LibraryCollection) -> tuple[set[str], set[int]]:
         """Build exclusion sets for watched/loved content."""
-        if library_data is None:
-            if not auth_key:
-                return set(), set()
-            library_data = await stremio_service.library.get_library_items(auth_key)
-
-        if library_data is None:
-            return set(), set()
-
-        all_items = library_data.all_items()
-
         imdb_ids = set()
         tmdb_ids = set()
 
-        for item in all_items:
-            item_id = item.id if hasattr(item, "id") else item.get("_id", "")
+        for item in library_data.all_items():
+            item_id = item.id
             if not item_id:
                 continue
 
