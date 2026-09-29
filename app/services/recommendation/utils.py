@@ -5,6 +5,23 @@ def content_type_to_mtype(content_type: str) -> str:
     return "tv" if content_type in ("tv", "series") else "movie"
 
 
+def year_to_era(year: int) -> str:
+    if year < 1970:
+        return "pre-1970s"
+    elif year < 1980:
+        return "1970s"
+    elif year < 1990:
+        return "1980s"
+    elif year < 2000:
+        return "1990s"
+    elif year < 2010:
+        return "2000s"
+    elif year < 2020:
+        return "2010s"
+    else:
+        return "2020s"
+
+
 async def resolve_tmdb_id(item_id: str, tmdb_service: Any) -> int | None:
     """Resolve item ID to TMDB ID.
 

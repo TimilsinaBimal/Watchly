@@ -8,6 +8,7 @@ from app.services.profile.constants import (
     FEATURE_WEIGHT_GENRE,
     FEATURE_WEIGHT_KEYWORD,
 )
+from app.services.recommendation.utils import year_to_era
 
 
 class ProfileScorer:
@@ -73,7 +74,7 @@ class ProfileScorer:
         if year:
             try:
                 year_int = int(str(year)[:4])
-                era = ProfileScorer._year_to_era(year_int)
+                era = year_to_era(year_int)
                 era_score = normalized["eras"].get(era, 0.0)
                 score += era_score * FEATURE_WEIGHT_ERA
             except (ValueError, TypeError):
@@ -131,21 +132,3 @@ class ProfileScorer:
             if country_code:
                 countries.append(country_code)
         return countries
-
-    @staticmethod
-    def _year_to_era(year: int) -> str:
-        """Convert year to era bucket."""
-        if year < 1970:
-            return "pre-1970s"
-        elif year < 1980:
-            return "1970s"
-        elif year < 1990:
-            return "1980s"
-        elif year < 2000:
-            return "1990s"
-        elif year < 2010:
-            return "2000s"
-        elif year < 2020:
-            return "2010s"
-        else:
-            return "2020s"

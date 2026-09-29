@@ -13,6 +13,7 @@ from app.services.profile.constants import (
     RUNTIME_BUCKET_SHORT_MAX_MOVIE,
     RUNTIME_BUCKET_SHORT_MAX_SERIES,
 )
+from app.services.recommendation.utils import year_to_era
 from app.services.tmdb.service import TMDBService
 
 
@@ -122,7 +123,7 @@ class ItemVectorizer:
         }
 
         if features["year"]:
-            features["era"] = self._year_to_era(features["year"])
+            features["era"] = year_to_era(features["year"])
 
         imdb_id = metadata.get("external_ids", {}).get("imdb_id")
         cinemeta_metadata = await self.cinemeta_service.get_metadata(imdb_id, content_type) if imdb_id else {}
@@ -209,23 +210,6 @@ class ItemVectorizer:
             return "medium"
         else:
             return "long"
-
-    @staticmethod
-    def _year_to_era(year: int) -> str:
-        if year < 1970:
-            return "pre-1970s"
-        elif year < 1980:
-            return "1970s"
-        elif year < 1990:
-            return "1980s"
-        elif year < 2000:
-            return "1990s"
-        elif year < 2010:
-            return "2000s"
-        elif year < 2020:
-            return "2010s"
-        else:
-            return "2020s"
 
     async def _resolve_tmdb_id(self, stremio_id: str) -> int | None:
         if stremio_id.startswith("tmdb:"):
