@@ -1,49 +1,53 @@
 <!-- SECTION 0: WELCOME -->
-<section id="sect-welcome" class="space-y-10 animate-fade-in md:py-4">
-    <div class="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-12">
-        <div>
-            <span class="badge border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs text-accent-soft">
-                For Stremio &amp; Nuvio
-            </span>
-            <h1 class="mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-white md:text-5xl">
-                Recommendations built from what you actually watch.
-            </h1>
-            <p class="mt-4 max-w-xl text-base leading-relaxed text-slate-300 md:text-lg">
-                Watchly turns your Stremio, Trakt or Simkl watch history into personalised movie and series rows on
-                your home screen.
-            </p>
+<section id="sect-welcome" class="animate-fade-in">
+    <div class="grid gap-4 lg:grid-cols-12 lg:gap-5">
+        <div class="card relative flex flex-col justify-between overflow-hidden p-6 md:p-10 lg:col-span-8 lg:row-span-2">
+            <div class="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-accent/10 blur-3xl" aria-hidden="true"></div>
+            <div class="relative">
+                <span class="badge border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs text-accent-soft">
+                    For Stremio &amp; Nuvio
+                </span>
+                <h1 class="mt-5 max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight text-white md:text-6xl">
+                    Recommendations built from what you actually watch.
+                </h1>
+                <p class="mt-5 max-w-2xl text-base leading-relaxed text-neutral-200 md:text-lg">
+                    Watchly turns your Stremio, Trakt or Simkl watch history into personalised movie and series rows
+                    on your home screen. Free, open source, and set up in a couple of minutes.
+                </p>
+            </div>
 
-            <div class="mt-7 flex flex-wrap items-center gap-3">
-                <button type="button" id="btn-get-started" class="group btn btn-primary btn-lg">
-                    <span>Get started</span>
-                    <svg class="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                </button>
-                <a href="https://github.com/TimilsinaBimal/watchly" target="_blank" rel="noopener"
-                    class="btn btn-ghost btn-lg">
-                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <div class="relative mt-8" aria-hidden="true">
+                <div class="group-title">Rows like these, on your home screen</div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Top Picks for You</span>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Because you loved Interstellar</span>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Mind-bending Sci-Fi</span>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Korean Thrillers</span>
+                    <span class="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-neutral-100">Watch it again</span>
+                </div>
+            </div>
+
+            <div class="relative mt-8">
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="button" id="btn-get-started" class="group btn btn-primary btn-lg">
+                        <span>Get started</span>
+                        <svg class="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                    </button>
+                    <a href="https://github.com/TimilsinaBimal/watchly" target="_blank" rel="noopener"
+                        class="btn btn-secondary btn-lg">
+                        <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path
                             d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387 0.6.111 0.82-.25 0.82-.557 0-.276-0.01-1.003-0.015-1.972-3.337 0.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-0.744 0.084-0.73 0.084-0.73 1.205 0.084 1.838 1.237 1.838 1.237 1.07 1.835 2.809 1.305 3.492 0.998 0.108-0.776 0.419-1.305 0.762-1.604-2.665-0.3-5.466-1.332-5.466-5.93 0-1.31 0.465-2.38 1.235-3.221-0.135-0.303-0.54-1.523 0.116-3.176 0 0 1.008-0.322 3.301 1.23A11.026 11.026 0 0112 5.86c1.02 0 2.047 0.137 3.013 0.403 2.291-1.552 3.297-1.23 3.297-1.23 0.656 1.653 0.24 2.873 0.116 3.176 0.77 0.84 1.235 1.91 1.235 3.221 0 4.61-2.805 5.621-5.476 5.922 0.43 0.37 0.81 1.096 0.81 2.22 0 1.606-0.015 2.899-0.015 3.286 0 0.308 0.219 0.678 0.825 0.557C20.565 21.79 24 17.29 24 12c0-6.627-5.372-12-12-12z" />
                     </svg>
-                    <span>Source on GitHub</span>
-                </a>
-            </div>
-
-            <div class="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-400">
-                <a href="/changelog" id="versionBadge" title="What's new"
-                    class="inline-flex items-center gap-1.5 rounded-md hover:text-white">
-                    <span class="font-medium text-slate-200">v{{ app_version }}</span>
-                    <span class="underline decoration-slate-600 underline-offset-2">What's new</span>
-                </a>
-                <span class="h-1 w-1 rounded-full bg-slate-600" aria-hidden="true"></span>
-                <span><span class="font-medium text-slate-200">{{ "{:,}".format(total_users) }}</span> users</span>
-            </div>
-
+                        <span>Source on GitHub</span>
+                    </a>
+                </div>
             {% if announcement_html %}
             <div id="announcement"
-                class="mt-6 flex max-w-xl items-start gap-3 rounded-xl border border-white/10 bg-surface-raised p-3.5 text-sm text-slate-200"
+                class="mt-6 flex max-w-2xl items-start gap-3 rounded-xl border border-white/10 bg-surface-raised p-3.5 text-sm text-neutral-100"
                 role="region" aria-live="polite">
                 <svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-accent-soft" fill="none" stroke="currentColor"
                     viewBox="0 0 24 24" aria-hidden="true">
@@ -54,7 +58,7 @@
             </div>
             {% endif %}
             {% if not allow_signups %}
-            <div class="mt-4 flex max-w-xl items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-200"
+            <div class="mt-4 flex max-w-2xl items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-200"
                 role="region" aria-live="polite">
                 <svg class="mt-0.5 h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     aria-hidden="true">
@@ -67,49 +71,62 @@
                 </div>
             </div>
             {% endif %}
+            </div>
         </div>
 
-        <div class="card">
+        <div class="card flex flex-col justify-between lg:col-span-4">
+            <div class="flex items-center justify-between">
+                <h2 class="card-title">Watchly today</h2>
+                <a href="/changelog" id="versionBadge" title="What's new"
+                    class="badge border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-neutral-200 hover:text-white">
+                    v{{ app_version }} &middot; What's new
+                </a>
+            </div>
+            <div class="mt-6">
+                <div class="text-5xl font-semibold tracking-tight text-white">{{ "{:,}".format(total_users) }}</div>
+                <div class="mt-1 text-sm text-neutral-300">people have set up Watchly</div>
+            </div>
+        </div>
+
+        <div class="card lg:col-span-4">
             <h2 class="card-title">How it works</h2>
-            <p class="card-desc">The same four steps as the bar above.</p>
             <ol class="mt-5 space-y-4">
                 <li class="flex gap-3">
-                    <span class="step-num border-accent/40 bg-accent/15 text-accent-soft">1</span>
+                    <span class="step-num border-accent/40 bg-accent/10 text-accent">1</span>
                     <div>
                         <div class="text-sm font-medium text-white">Accounts</div>
-                        <div class="text-sm text-slate-400">Connect Stremio, Trakt or Simkl so Watchly can read your history.</div>
+                        <div class="text-sm leading-relaxed text-neutral-300">Connect Stremio, Trakt or Simkl so Watchly can read your history.</div>
                     </div>
                 </li>
                 <li class="flex gap-3">
-                    <span class="step-num border-accent/40 bg-accent/15 text-accent-soft">2</span>
+                    <span class="step-num border-accent/40 bg-accent/10 text-accent">2</span>
                     <div>
                         <div class="text-sm font-medium text-white">Preferences</div>
-                        <div class="text-sm text-slate-400">Pick a language, poster ratings and genres to skip.</div>
+                        <div class="text-sm leading-relaxed text-neutral-300">Pick a language, poster ratings and genres to skip.</div>
                     </div>
                 </li>
                 <li class="flex gap-3">
-                    <span class="step-num border-accent/40 bg-accent/15 text-accent-soft">3</span>
+                    <span class="step-num border-accent/40 bg-accent/10 text-accent">3</span>
                     <div>
                         <div class="text-sm font-medium text-white">Catalogs</div>
-                        <div class="text-sm text-slate-400">Choose which rows to show, rename and reorder them.</div>
+                        <div class="text-sm leading-relaxed text-neutral-300">Choose which rows to show, rename and reorder them.</div>
                     </div>
                 </li>
                 <li class="flex gap-3">
-                    <span class="step-num border-accent/40 bg-accent/15 text-accent-soft">4</span>
+                    <span class="step-num border-accent/40 bg-accent/10 text-accent">4</span>
                     <div>
                         <div class="text-sm font-medium text-white">Install</div>
-                        <div class="text-sm text-slate-400">Add the addon to Stremio or Nuvio and your rows appear.</div>
+                        <div class="text-sm leading-relaxed text-neutral-300">Add the addon to Stremio or Nuvio and your rows appear.</div>
                     </div>
                 </li>
             </ol>
         </div>
-    </div>
 
-    <div>
-        <h2 class="group-title">What you get</h2>
-        <div class="mt-4 grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div class="card lg:col-span-6">
+            <h2 class="card-title">What you get</h2>
+        <div class="mt-5 grid gap-x-6 gap-y-5 sm:grid-cols-2">
             <div class="flex gap-3">
-                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-slate-400">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
                     <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M13.828 10.172a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656-5.656m1.414-2.828a4 4 0 00-5.656 0l-3 3a4 4 0 005.656 5.656l1.414-1.414" />
@@ -117,23 +134,23 @@
                 </div>
                 <div>
                     <h3 class="text-sm font-medium text-white">Trakt &amp; Simkl</h3>
-                    <p class="mt-0.5 text-sm leading-relaxed text-slate-400">Ratings and rewatches sharpen what gets
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Ratings and rewatches sharpen what gets
                         recommended.</p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-slate-400">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
                     <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                     </svg>
                 </div>
                 <div>
                     <h3 class="text-sm font-medium text-white">Custom catalogs</h3>
-                    <p class="mt-0.5 text-sm leading-relaxed text-slate-400">Name and order your rows however you like.</p>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Name and order your rows however you like.</p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-slate-400">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
                     <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -141,11 +158,11 @@
                 </div>
                 <div>
                     <h3 class="text-sm font-medium text-white">Genre filtering</h3>
-                    <p class="mt-0.5 text-sm leading-relaxed text-slate-400">Exclude genres you never want to see.</p>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Exclude genres you never want to see.</p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-slate-400">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
                     <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -153,11 +170,11 @@
                 </div>
                 <div>
                     <h3 class="text-sm font-medium text-white">Multi-language</h3>
-                    <p class="mt-0.5 text-sm leading-relaxed text-slate-400">Recommendations in your preferred language.</p>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Recommendations in your preferred language.</p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-slate-400">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
                     <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
@@ -165,11 +182,11 @@
                 </div>
                 <div>
                     <h3 class="text-sm font-medium text-white">Rating posters</h3>
-                    <p class="mt-0.5 text-sm leading-relaxed text-slate-400">Posters with ratings from RPDB or Top Posters.</p>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">Posters with ratings from RPDB or Top Posters.</p>
                 </div>
             </div>
             <div class="flex gap-3">
-                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-slate-400">
+                <div class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-300">
                     <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -177,9 +194,39 @@
                 </div>
                 <div>
                     <h3 class="text-sm font-medium text-white">Stremio &amp; Nuvio</h3>
-                    <p class="mt-0.5 text-sm leading-relaxed text-slate-400">One-click install into either app, or copy the link.</p>
+                    <p class="mt-0.5 text-sm leading-relaxed text-neutral-300">One-click install into either app, or copy the link.</p>
                 </div>
             </div>
+        </div>
+        </div>
+
+        <div class="card flex flex-col justify-between border-pink-400/20 bg-gradient-to-br from-pink-500/[0.08] to-transparent lg:col-span-3">
+            <div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/15 text-pink-300">
+                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                </div>
+                <h2 class="card-title mt-4">Free, no ads</h2>
+                <p class="card-desc">Built and hosted by one person. If Watchly helps you, you can chip in. Entirely
+                    optional.</p>
+            </div>
+            <button type="button" data-open-support class="btn btn-secondary mt-6 w-full">Support Watchly</button>
+        </div>
+
+        <div class="card flex flex-col justify-between lg:col-span-3">
+            <div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] text-neutral-200">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                    </svg>
+                </div>
+                <h2 class="card-title mt-4">Run your own</h2>
+                <p class="card-desc">Host a private instance on Vercel in a few clicks, or with Docker on your own
+                    server.</p>
+            </div>
+            <a href="/self-host" class="btn btn-secondary mt-6 w-full">Self-hosting guide</a>
         </div>
     </div>
 </section>
