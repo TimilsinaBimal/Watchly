@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.config import settings
 from app.services.poster_ratings.factory import PosterProvider
 
 # The seed pool is the 3 most-recent loved + 3 most-recent watched items. Capped
@@ -87,17 +88,6 @@ def get_current_year() -> int:
 DEFAULT_YEAR_MIN = 1970
 
 
-def get_default_year_max() -> int:
-    return get_current_year()
-
-
-def get_default_year_range() -> dict[str, int]:
-    return {
-        "min": DEFAULT_YEAR_MIN,
-        "max": get_default_year_max(),
-    }
-
-
 class UserSettings(BaseModel):
     catalogs: list[CatalogConfig]
     stremio_profile_id: str | None = None
@@ -107,7 +97,7 @@ class UserSettings(BaseModel):
     excluded_movie_genres: list[str] = Field(default_factory=list)
     excluded_series_genres: list[str] = Field(default_factory=list)
     year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year")
-    year_max: int = Field(default_factory=get_default_year_max, description="Maximum release year")
+    year_max: int = Field(default_factory=get_current_year, description="Maximum release year")
     popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(
         default="balanced", description="Popularity preference"
     )
@@ -131,7 +121,6 @@ class UserSettings(BaseModel):
     )
 
 
-# Catalog descriptions for frontend
 CATALOG_DESCRIPTIONS = {
     "watchly.rec": "Personalized recommendations based on your watch history, library and your reactions.",
     "watchly.item": (
@@ -161,80 +150,21 @@ CATALOG_DESCRIPTIONS = {
 
 def get_default_settings() -> UserSettings:
     return UserSettings(
-        language="en-US",
         catalogs=[
-            CatalogConfig(
-                id="watchly.rec",
-                name="Top Picks for You",
-                enabled=True,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
-            CatalogConfig(
-                id="watchly.item",
-                name="Because you Watched/Loved",
-                enabled=True,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
-            CatalogConfig(
-                id="watchly.theme",
-                name="Genre & Keyword Catalogs",
-                enabled=True,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
-            CatalogConfig(
-                id="watchly.creators",
-                name="From your favourite Creators",
-                enabled=False,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
-            CatalogConfig(
-                id="watchly.all.loved",
-                name="Based on what you loved",
-                enabled=False,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
-            CatalogConfig(
-                id="watchly.liked.all",
-                name="Based on what you liked",
-                enabled=False,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
-            CatalogConfig(
-                id="watchly.rewatch",
-                name="Watch it again",
-                enabled=False,
-                enabled_movie=True,
-                enabled_series=True,
-                display_at_home=True,
-                shuffle=False,
-            ),
+            CatalogConfig(id="watchly.rec", name="Top Picks for You"),
+            CatalogConfig(id="watchly.item", name="Because you Watched/Loved"),
+            CatalogConfig(id="watchly.theme", name="Genre & Keyword Catalogs"),
+            CatalogConfig(id="watchly.creators", name="From your favourite Creators", enabled=False),
+            CatalogConfig(id="watchly.all.loved", name="Based on what you loved", enabled=False),
+            CatalogConfig(id="watchly.liked.all", name="Based on what you liked", enabled=False),
+            CatalogConfig(id="watchly.rewatch", name="Watch it again", enabled=False),
         ],
     )
 
 
 def get_default_catalogs_for_frontend() -> list[dict]:
-    """Get default catalogs formatted for frontend JavaScript."""
-    settings = get_default_settings()
     catalogs = []
-    for catalog in settings.catalogs:
+    for catalog in get_default_settings().catalogs:
         catalogs.append(
             {
                 "id": catalog.id,
@@ -268,8 +198,6 @@ def resolve_llm_config(user_settings: UserSettings | None) -> LLMConfig | None:
 
 def resolve_tmdb_api_key(user_settings: UserSettings | None) -> str | None:
     """Use TMDB API key from user settings (Redis) if set, else from server config."""
-    from app.core.config import settings
-
     if user_settings and user_settings.tmdb_api_key:
         return user_settings.tmdb_api_key
     return settings.TMDB_API_KEY

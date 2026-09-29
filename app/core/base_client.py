@@ -1,5 +1,7 @@
 import asyncio
 import random
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -11,10 +13,6 @@ _RETRY_AFTER_CEILING_SECONDS = 8.0
 
 
 class BaseClient:
-    """
-    Base asynchronous HTTP client with built-in retry logic and logging.
-    """
-
     def __init__(
         self, base_url: str = "", timeout: float = 10.0, max_retries: int = 3, headers: dict[str, str] | None = None
     ):
@@ -25,7 +23,6 @@ class BaseClient:
         self._client: httpx.AsyncClient | None = None
 
     async def get_client(self) -> httpx.AsyncClient:
-        """Get or create the httpx.AsyncClient instance."""
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 base_url=self.base_url, timeout=self.timeout, headers=self.headers, follow_redirects=True
@@ -33,13 +30,11 @@ class BaseClient:
         return self._client
 
     async def close(self):
-        """Close the underlying HTTP client."""
         if self._client and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
 
     async def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
-        """Internal request handler with retry logic."""
         client = await self.get_client()
         tries = self.max_retries
 
@@ -74,12 +69,11 @@ class BaseClient:
                     )
                     await asyncio.sleep(wait_time)
                 else:
-                    # If not retryable or no more attempts left, log and raise
                     if not is_retryable:
                         logger.error(f"Non-retryable request failure ({method} {url}): {self._describe(e)}")
                     else:
                         logger.error(f"Request failed after {tries} attempts ({method} {url}): {self._describe(e)}")
-                    raise e
+                    raise
 
         raise httpx.RequestError(f"Request failed for {method} {url} with 0 attempts configured")
 
@@ -106,16 +100,11 @@ class BaseClient:
         except ValueError:
             pass
         try:
-            from email.utils import parsedate_to_datetime
-
             retry_dt = parsedate_to_datetime(value)
         except (TypeError, ValueError):
             return None
         if retry_dt is None:
             return None
-
-        from datetime import datetime, timezone
-
         if retry_dt.tzinfo is None:
             retry_dt = retry_dt.replace(tzinfo=timezone.utc)
         return max((retry_dt - datetime.now(timezone.utc)).total_seconds(), 0.0)
@@ -132,11 +121,9 @@ class BaseClient:
             return {}
 
     async def get(self, url: str, params: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
-        """Perform a GET request and return the JSON response."""
         response = await self._request("GET", url, params=params, **kwargs)
         return self._safe_json(response, "GET", url)
 
     async def post(self, url: str, json: dict[str, Any] | None = None, **kwargs) -> dict[str, Any]:
-        """Perform a POST request and return the JSON response."""
         response = await self._request("POST", url, json=json, **kwargs)
         return self._safe_json(response, "POST", url)

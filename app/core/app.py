@@ -1,4 +1,3 @@
-import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,7 +13,7 @@ from app.api.router import api_router
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, register_request_id_middleware
 from app.core.security import STORED_SECRET_SENTINEL
-from app.core.settings import MAX_ITEM_ROWS, get_current_year, get_default_catalogs_for_frontend, get_default_year_range
+from app.core.settings import DEFAULT_YEAR_MIN, MAX_ITEM_ROWS, get_current_year, get_default_catalogs_for_frontend
 from app.services.language_service import fetch_languages_list
 from app.services.redis_service import redis_service
 from app.services.tmdb.genre import movie_genres, series_genres
@@ -32,10 +31,6 @@ templates_dir = project_root / "app/templates"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Manage application lifespan events (startup/shutdown).
-    """
-    # Startup checks
     if settings.APP_ENV == "production" and (not settings.TOKEN_SALT or settings.TOKEN_SALT == "change-me"):
         raise RuntimeError(
             "TOKEN_SALT is unset or using the insecure default 'change-me' in production. "
@@ -43,11 +38,7 @@ async def lifespan(app: FastAPI):
         )
 
     yield
-    try:
-        await redis_service.close()
-        logger.info("Redis client closed")
-    except Exception as exc:
-        logger.warning(f"Failed to close Redis client: {exc}")
+    await redis_service.close()
 
 
 app = FastAPI(
@@ -85,30 +76,23 @@ class RevalidatedStaticFiles(StaticFiles):
 if static_dir.exists():
     app.mount("/app/static", RevalidatedStaticFiles(directory=str(static_dir)), name="static")
 
-# Initialize Jinja2 templates
 jinja_env = Environment(loader=FileSystemLoader(str(templates_dir)))
-jinja_env.filters["tojson"] = lambda v: json.dumps(v)
 
 
 @app.get("/", response_class=HTMLResponse)
 @app.get("/configure", response_class=HTMLResponse)
 @app.get("/{token}/configure", response_class=HTMLResponse)
 async def configure_page(request: Request, _token: str | None = None):
-    languages = []
     try:
         languages = await fetch_languages_list()
     except Exception as e:
-        logger.warning(f"Failed to fetch languages for template: {e}")
+        logger.warning(f"Failed to fetch languages for template: {type(e).__name__}")
         languages = [{"iso_639_1": "en-US", "language": "English", "country": "US"}]
 
-    # Get total users count
     total_users = await token_store.count_users()
 
-    # Format default catalogs for frontend
     default_catalogs = get_default_catalogs_for_frontend()
-    year_range_defaults = get_default_year_range()
 
-    # Format genres for frontend
     movie_genres_list = [{"id": str(id), "name": name} for id, name in movie_genres.items()]
     series_genres_list = [{"id": str(id), "name": name} for id, name in series_genres.items()]
 
@@ -123,7 +107,7 @@ async def configure_page(request: Request, _token: str | None = None):
         default_catalogs=default_catalogs,
         max_item_rows=MAX_ITEM_ROWS,
         current_year=get_current_year(),
-        year_range_defaults=year_range_defaults,
+        year_range_defaults={"min": DEFAULT_YEAR_MIN, "max": get_current_year()},
         stored_secret_sentinel=STORED_SECRET_SENTINEL,
         movie_genres=movie_genres_list,
         series_genres=series_genres_list,

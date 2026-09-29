@@ -34,18 +34,6 @@ REQUEST_ID_HEADER = "X-Request-ID"
 
 
 def configure_logging() -> None:
-    """Replace loguru's default handler with a configured one.
-
-    Nothing configured loguru before, so the app ran on its defaults: every debug
-    line emitted regardless of environment, and — the reason this matters —
-    `diagnose=True`, which annotates tracebacks with the *values* of variables in
-    the failing frame.
-
-    That is a credential leak here. `stremio/auth.py` holds a payload containing the
-    user's email and password across the call that can raise, and the handler logs
-    the traceback; the same is true anywhere decrypted API keys are in scope. Turning
-    diagnose off is the whole point of this module.
-    """
     logger.configure(extra={"request_id": NO_REQUEST})
     logger.remove()
     logger.add(
@@ -56,22 +44,12 @@ def configure_logging() -> None:
         diagnose=False,
         # The frame chain is still useful, and it carries no user data.
         backtrace=True,
-        enqueue=False,
     )
 
 
 def register_request_id_middleware(app: FastAPI) -> None:
-    """Tag every line emitted during a request with the same id.
-
-    Messages already carry a redacted token, which identifies the account but not
-    the request — and Stremio asks for every row at once, so one account's lines
-    interleave with no way to tell which request produced which. The id is returned
-    in a header too, so a user reporting a problem can quote it.
-
-    Background work started during a request inherits the id, because a task copies
-    the current context when it is created. A stale-row refresh therefore stays
-    attributable to the request that triggered it.
-    """
+    """Tag every line of a request with one id: Stremio requests every row at once, so
+    one account's lines interleave. Background tasks inherit it via the copied context."""
 
     @app.middleware("http")
     async def add_request_id(request: Request, call_next):
