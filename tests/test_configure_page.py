@@ -36,6 +36,17 @@ def test_changelog_page_renders_markdown():
     assert "<h2>1.14.0" in response.text
 
 
+def test_self_host_page_links_the_vercel_deploy_flow():
+    response = client.get("/self-host")
+
+    assert response.status_code == 200
+    assert (
+        'href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&amp;'
+        in response.text
+    )
+    assert "integrationSlug%22%3A%22redis" in response.text
+
+
 def test_static_files_require_revalidation():
     # A cached stale ES module against a newer backend broke saves (#167);
     # no-cache makes browsers revalidate each module against its ETag.

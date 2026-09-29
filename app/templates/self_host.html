@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% set deploy_url = "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&amp;project-name=watchly&amp;repository-name=watchly&amp;env=TMDB_API_KEY,TOKEN_SALT,HOST_NAME&amp;envDescription=Your%20TMDB%20API%20key%2C%20a%20long%20random%20TOKEN_SALT%2C%20and%20HOST_NAME%20set%20to%20https%3A%2F%2F%3Cproject-name%3E.vercel.app&amp;envLink=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly%23deploy-on-vercel&amp;stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22redis%22%2C%22productSlug%22%3A%22redis%22%7D%5D" %}
+{% set readme = "https://github.com/TimilsinaBimal/Watchly#" %}
+{% set code = "rounded bg-white/[0.07] px-1.5 py-0.5 font-mono text-[13px] text-slate-200" %}
+
+{% block content %}
+<main class="mx-auto w-full max-w-4xl space-y-10 px-4 pb-16 pt-8 md:px-6 md:pt-12">
+    <header class="page-header flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h1 class="page-title">Self-host Watchly</h1>
+            <p class="page-lead">
+                Run your own instance with your own TMDB key and Redis. Every method needs the same four settings;
+                pick the one that fits where you want it to live.
+            </p>
+        </div>
+        <a href="/configure" class="btn btn-secondary">&larr; Back to Watchly v{{ app_version }}</a>
+    </header>
+
+    <section class="space-y-4">
+        <h2 class="group-title">Choose a method</h2>
+        <div class="grid gap-4 md:grid-cols-3">
+            <a href="#vercel" class="card block transition hover:border-accent/40">
+                <span class="badge border border-accent/30 bg-accent/10 text-accent-soft">One click</span>
+                <h3 class="card-title mt-3">Vercel</h3>
+                <p class="card-desc">No server to run: deploy from the button and add a Redis Cloud database in the same
+                    flow. Background refreshes are best effort.</p>
+            </a>
+            <a href="#docker" class="card block transition hover:border-accent/40">
+                <span class="badge border border-white/10 bg-white/5 text-slate-300">Recommended</span>
+                <h3 class="card-title mt-3">Docker</h3>
+                <p class="card-desc">Watchly and Redis with Docker Compose on any machine. Everything works, including
+                    background refreshes.</p>
+            </a>
+            <a href="{{ readme }}unraid" target="_blank" rel="noopener" class="card block transition hover:border-accent/40">
+                <span class="badge border border-white/10 bg-white/5 text-slate-300">Template</span>
+                <h3 class="card-title mt-3">Unraid</h3>
+                <p class="card-desc">Install from the bundled Community Applications template, next to any Redis
+                    container.</p>
+            </a>
+        </div>
+    </section>
+
+    <section id="vercel" class="card space-y-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h2 class="card-title">Deploy on Vercel</h2>
+                <p class="card-desc">Vercel detects the FastAPI app and runs it on Python 3.12. The button clones the
+                    repository to your Git account and offers to create a Redis Cloud database.</p>
+            </div>
+            <a href="{{ deploy_url }}" target="_blank" rel="noopener" class="btn btn-primary">Deploy to Vercel</a>
+        </div>
+
+        <ol class="list-decimal space-y-3 pl-5 text-sm leading-relaxed text-slate-300 marker:text-slate-500">
+            <li>Click <span class="text-white">Deploy to Vercel</span> and pick a project name.</li>
+            <li>Accept the <span class="text-white">Redis</span> store when prompted. It adds
+                <code class="{{ code }}">REDIS_URL</code> to the project. To use a Redis you already have, skip it and
+                add <code class="{{ code }}">REDIS_URL</code> yourself afterwards.</li>
+            <li>Fill in <code class="{{ code }}">TMDB_API_KEY</code>, <code class="{{ code }}">TOKEN_SALT</code> and
+                <code class="{{ code }}">HOST_NAME</code> (see the table below), then deploy.</li>
+            <li>Check the production domain Vercel gave you. If it differs from what you entered, update
+                <code class="{{ code }}">HOST_NAME</code> under Settings &rarr; Environment Variables.</li>
+            <li>Redeploy from the Deployments tab. Environment variable changes only apply to new deployments.</li>
+            <li>Open <code class="{{ code }}">https://&lt;your-domain&gt;/configure</code> and set up your catalogs.</li>
+        </ol>
+
+        <p class="text-sm leading-relaxed text-slate-400">
+            Using Upstash instead? Watchly can't use its REST variables, so copy the
+            <code class="{{ code }}">rediss://</code> connection string from the Upstash console into
+            <code class="{{ code }}">REDIS_URL</code>. Each Vercel instance opens up to
+            <code class="{{ code }}">REDIS_MAX_CONNECTIONS</code> (20) connections; lower it if your Redis plan caps
+            connections.
+        </p>
+
+        <div class="rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm leading-relaxed text-amber-200">
+            <h3 class="font-semibold text-amber-100">Limits on Vercel</h3>
+            <p class="mt-1">Watchly does some work after it has already answered a request, and Vercel's Python runtime
+                has no way to keep a function alive for that. That work may be paused or cut short:</p>
+            <ul class="mt-2 list-disc space-y-1 pl-5">
+                <li>Setup may stop at "Setup is taking a while". Your URL still works; the first home screen builds
+                    its rows as Stremio asks for them, so it is slower.</li>
+                <li>Stale rows are served as they are while a rebuild runs in the background. If that rebuild is cut,
+                    the next request tries again.</li>
+                <li>There is no scheduler. Catalogs refresh only when Stremio requests them, and that refresh is not
+                    guaranteed to finish.</li>
+                <li>A single request can run for up to 5 minutes by default. A very large library can take longer on
+                    its first build.</li>
+            </ul>
+            <p class="mt-2">If you want refreshes to run reliably, use Docker.</p>
+        </div>
+    </section>
+
+    <section id="docker" class="card space-y-3">
+        <h2 class="card-title">Docker</h2>
+        <p class="card-desc">Run the published image next to Redis with Docker Compose.</p>
+        <ol class="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-300 marker:text-slate-500">
+            <li>Create a <code class="{{ code }}">docker-compose.yml</code> with a
+                <code class="{{ code }}">redis:7-alpine</code> service and
+                <code class="{{ code }}">ghcr.io/timilsinabimal/watchly:latest</code> on port 8000.</li>
+            <li>Create a <code class="{{ code }}">.env</code> with the variables below and
+                <code class="{{ code }}">REDIS_URL=redis://redis:6379/0</code>.</li>
+            <li>Run <code class="{{ code }}">docker compose up -d</code> and open
+                <code class="{{ code }}">/configure</code> on your <code class="{{ code }}">HOST_NAME</code>.</li>
+        </ol>
+        <a href="{{ readme }}installation-docker" target="_blank" rel="noopener" class="btn btn-secondary">
+            Full Docker guide
+        </a>
+    </section>
+
+    <section class="card space-y-4">
+        <div>
+            <h2 class="card-title">Required environment variables</h2>
+            <p class="card-desc">Everything else has a working default. The
+                <a href="{{ readme }}configuration-reference" target="_blank" rel="noopener"
+                    class="text-accent-soft underline underline-offset-2 hover:text-white">configuration reference</a>
+                lists every option, including Trakt and Simkl.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[32rem] text-left text-sm">
+                <thead class="text-xs uppercase tracking-wider text-slate-500">
+                    <tr>
+                        <th class="py-2 pr-4 font-semibold">Variable</th>
+                        <th class="py-2 font-semibold">What to set</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/[0.06] text-slate-300">
+                    <tr>
+                        <td class="py-3 pr-4 align-top"><code class="{{ code }}">TMDB_API_KEY</code></td>
+                        <td class="py-3">A free API key from
+                            <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener"
+                                class="text-accent-soft underline underline-offset-2 hover:text-white">TMDB</a>.</td>
+                    </tr>
+                    <tr>
+                        <td class="py-3 pr-4 align-top"><code class="{{ code }}">TOKEN_SALT</code></td>
+                        <td class="py-3">A long random secret that encrypts stored credentials, for example the output
+                            of <code class="{{ code }}">openssl rand -hex 32</code>. Changing it later makes
+                            every stored credential unreadable.</td>
+                    </tr>
+                    <tr>
+                        <td class="py-3 pr-4 align-top"><code class="{{ code }}">HOST_NAME</code></td>
+                        <td class="py-3">The public URL of your instance, such as
+                            <code class="{{ code }}">https://watchly.vercel.app</code>. Manifest and OAuth callback
+                            URLs are built from it.</td>
+                    </tr>
+                    <tr>
+                        <td class="py-3 pr-4 align-top"><code class="{{ code }}">REDIS_URL</code></td>
+                        <td class="py-3">A <code class="{{ code }}">redis://</code> or
+                            <code class="{{ code }}">rediss://</code> connection string. Set for you by the Vercel
+                            Redis store.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+{% endblock %}

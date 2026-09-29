@@ -146,4 +146,22 @@ def changelog_page():
     return HTMLResponse(content=template.render(changelog_html=changelog_html, app_version=__version__))
 
 
+@app.get("/self-host", response_class=HTMLResponse)
+def self_host_page():
+    # base.html renders the configure page's bootstrap globals unconditionally,
+    # so every page extending it has to pass them.
+    template = jinja_env.get_template("self_host.html")
+    html_content = template.render(
+        app_version=__version__,
+        app_host=settings.HOST_NAME,
+        default_catalogs=get_default_catalogs_for_frontend(),
+        max_item_rows=MAX_ITEM_ROWS,
+        year_range_defaults=get_default_year_range(),
+        stored_secret_sentinel=STORED_SECRET_SENTINEL,
+        movie_genres=[{"id": str(id), "name": name} for id, name in movie_genres.items()],
+        series_genres=[{"id": str(id), "name": name} for id, name in series_genres.items()],
+    )
+    return HTMLResponse(content=html_content, media_type="text/html")
+
+
 app.include_router(api_router)

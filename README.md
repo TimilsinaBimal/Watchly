@@ -24,6 +24,7 @@ Everything is configured through a web page; you paste the resulting manifest UR
 - [Screenshots](#screenshots)
 - [Installation (Docker)](#installation-docker)
 - [Unraid](#unraid)
+- [Deploy on Vercel](#deploy-on-vercel)
 - [Configuration reference](#configuration-reference)
 - [Optional integrations](#optional-integrations)
 - [Development](#development)
@@ -164,6 +165,30 @@ A Community Applications-style template lives at [`unraid/watchly.xml`](unraid/w
 3. Fill in the required fields: TMDB API key, a long random token salt, the Redis URL from step 1
    (e.g. `redis://YOUR-UNRAID-IP:6379/0`), and the host name your Stremio clients will reach the addon on.
 4. Start the container and open the WebUI to configure your catalogs.
+
+## Deploy on Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&project-name=watchly&repository-name=watchly&env=TMDB_API_KEY,TOKEN_SALT,HOST_NAME&envDescription=Your%20TMDB%20API%20key%2C%20a%20long%20random%20TOKEN_SALT%2C%20and%20HOST_NAME%20set%20to%20https%3A%2F%2F%3Cproject-name%3E.vercel.app&envLink=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly%23deploy-on-vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22redis%22%2C%22productSlug%22%3A%22redis%22%7D%5D)
+
+Vercel detects the FastAPI app with no extra config and runs it on Python 3.12, the version `pyproject.toml` and `.python-version` pin. A running instance also serves this guide at `/self-host`.
+
+1. Click the button and pick a project name.
+2. Accept the **Redis** store when prompted; it adds `REDIS_URL` to the project. To use your own Redis, skip it and add `REDIS_URL` yourself. With Upstash, don't rely on its REST variables (`KV_REST_API_URL`, `KV_REST_API_TOKEN`), which Watchly can't use — copy the `rediss://` connection string from the Upstash console into `REDIS_URL` instead.
+3. Fill in `TMDB_API_KEY`, `TOKEN_SALT` (for example `openssl rand -hex 32`) and `HOST_NAME` (`https://<project-name>.vercel.app`), then deploy.
+4. If the production domain Vercel assigned differs from your `HOST_NAME`, fix it under **Settings → Environment Variables**.
+5. Redeploy from the **Deployments** tab; environment variable changes only apply to new deployments.
+6. Open `https://<your-domain>/configure` and set up your catalogs.
+
+Leave `APP_ENV` unset: the `production` default refuses to start with the placeholder `TOKEN_SALT`. Each function instance opens up to `REDIS_MAX_CONNECTIONS` (20) Redis connections, so lower it if your Redis plan caps connections.
+
+**Limits.** Watchly finishes some work after it has answered a request, and Vercel's Python runtime has no way to keep the function alive for it, so that work may be paused or cut short:
+
+- The setup warm-up may not finish. The configure page falls back to "Setup is taking a while", and the first home screen builds its rows as Stremio requests them, so it is slower.
+- A stale row is served while it rebuilds in the background; if the rebuild is cut, the next request tries again.
+- There is no scheduler: catalogs refresh only when Stremio requests them, and that refresh is not guaranteed to complete.
+- A request can run for 5 minutes by default, so a very large library may time out on its first build.
+
+If you want background refreshes to run reliably, use Docker.
 
 ## Configuration reference
 
