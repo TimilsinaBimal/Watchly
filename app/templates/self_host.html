@@ -2,7 +2,9 @@
 
 {% set deploy_url = "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&amp;project-name=watchly&amp;repository-name=watchly&amp;env=TMDB_API_KEY,TOKEN_SALT,HOST_NAME&amp;envDescription=Your%20TMDB%20API%20key%2C%20a%20long%20random%20TOKEN_SALT%2C%20and%20HOST_NAME%20set%20to%20https%3A%2F%2F%3Cproject-name%3E.vercel.app&amp;envLink=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly%23deploy-on-vercel&amp;stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22redis%22%2C%22productSlug%22%3A%22redis%22%7D%5D" %}
 {% set readme = "https://github.com/TimilsinaBimal/Watchly#" %}
-{% set code = "rounded bg-white/[0.07] px-1.5 py-0.5 font-mono text-[13px] text-slate-200" %}
+{% set code = "rounded bg-white/[0.07] px-1.5 py-0.5 font-mono text-[13px] text-neutral-100" %}
+
+{% block title %}Self-host Watchly{% endblock %}
 
 {% block content %}
 <main class="mx-auto w-full max-w-4xl space-y-10 px-4 pb-16 pt-8 md:px-6 md:pt-12">
@@ -27,13 +29,13 @@
                     flow. Background refreshes are best effort.</p>
             </a>
             <a href="#docker" class="card block transition hover:border-accent/40">
-                <span class="badge border border-white/10 bg-white/5 text-slate-300">Recommended</span>
+                <span class="badge border border-white/10 bg-white/5 text-neutral-200">Recommended</span>
                 <h3 class="card-title mt-3">Docker</h3>
                 <p class="card-desc">Watchly and Redis with Docker Compose on any machine. Everything works, including
                     background refreshes.</p>
             </a>
             <a href="{{ readme }}unraid" target="_blank" rel="noopener" class="card block transition hover:border-accent/40">
-                <span class="badge border border-white/10 bg-white/5 text-slate-300">Template</span>
+                <span class="badge border border-white/10 bg-white/5 text-neutral-200">Template</span>
                 <h3 class="card-title mt-3">Unraid</h3>
                 <p class="card-desc">Install from the bundled Community Applications template, next to any Redis
                     container.</p>
@@ -51,7 +53,7 @@
             <a href="{{ deploy_url }}" target="_blank" rel="noopener" class="btn btn-primary">Deploy to Vercel</a>
         </div>
 
-        <ol class="list-decimal space-y-3 pl-5 text-sm leading-relaxed text-slate-300 marker:text-slate-500">
+        <ol class="list-decimal space-y-3 pl-5 text-sm leading-relaxed text-neutral-200 marker:text-neutral-400">
             <li>Click <span class="text-white">Deploy to Vercel</span> and pick a project name.</li>
             <li>Accept the <span class="text-white">Redis</span> store when prompted. It adds
                 <code class="{{ code }}">REDIS_URL</code> to the project. To use a Redis you already have, skip it and
@@ -64,7 +66,7 @@
             <li>Open <code class="{{ code }}">https://&lt;your-domain&gt;/configure</code> and set up your catalogs.</li>
         </ol>
 
-        <p class="text-sm leading-relaxed text-slate-400">
+        <p class="text-sm leading-relaxed text-neutral-300">
             Using Upstash instead? Watchly can't use its REST variables, so copy the
             <code class="{{ code }}">rediss://</code> connection string from the Upstash console into
             <code class="{{ code }}">REDIS_URL</code>. Each Vercel instance opens up to
@@ -93,7 +95,7 @@
     <section id="docker" class="card space-y-3">
         <h2 class="card-title">Docker</h2>
         <p class="card-desc">Run the published image next to Redis with Docker Compose.</p>
-        <ol class="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-slate-300 marker:text-slate-500">
+        <ol class="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-neutral-200 marker:text-neutral-400">
             <li>Create a <code class="{{ code }}">docker-compose.yml</code> with a
                 <code class="{{ code }}">redis:7-alpine</code> service and
                 <code class="{{ code }}">ghcr.io/timilsinabimal/watchly:latest</code> on port 8000.</li>
@@ -117,13 +119,13 @@
         </div>
         <div class="overflow-x-auto">
             <table class="w-full min-w-[32rem] text-left text-sm">
-                <thead class="text-xs uppercase tracking-wider text-slate-500">
+                <thead class="text-xs uppercase tracking-wider text-neutral-400">
                     <tr>
                         <th class="py-2 pr-4 font-semibold">Variable</th>
                         <th class="py-2 font-semibold">What to set</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-white/[0.06] text-slate-300">
+                <tbody class="divide-y divide-white/[0.06] text-neutral-200">
                     <tr>
                         <td class="py-3 pr-4 align-top"><code class="{{ code }}">TMDB_API_KEY</code></td>
                         <td class="py-3">A free API key from

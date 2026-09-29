@@ -17,10 +17,31 @@
 
     <footer class="mx-auto flex max-w-[88rem] flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-4 py-6 text-xs text-neutral-400 md:px-8">
         <span>&copy; <span id="currentYear">2024</span> Watchly</span>
-        <a href="https://github.com/TimilsinaBimal/Watchly" target="_blank" rel="noopener"
-            class="transition hover:text-neutral-200">Source on GitHub</a>
+        <div class="flex items-center gap-5">
+            <a href="/self-host" class="transition hover:text-neutral-200">Self-host</a>
+            <a href="https://github.com/TimilsinaBimal/Watchly" target="_blank" rel="noopener"
+                class="transition hover:text-neutral-200">Source on GitHub</a>
+        </div>
     </footer>
 
     {% include "components/modal_donation.html" %}
     {% include "components/modal_changelog.html" %}
+{% endblock %}
+
+{% block scripts %}
+    <!-- Inject backend constants for frontend -->
+    <script>
+        // Default catalog configurations from backend
+        window.DEFAULT_CATALOGS = {{ default_catalogs | tojson }};
+        window.MAX_ITEM_ROWS = {{ max_item_rows | tojson }};
+        window.YEAR_RANGE_DEFAULTS = {{ year_range_defaults | tojson }};
+
+        // Placeholder that stands in for a saved API key the server won't send back
+        window.STORED_SECRET = {{ stored_secret_sentinel | tojson }};
+
+        // Genre constants from backend
+        window.MOVIE_GENRES = {{ movie_genres | tojson }};
+        window.SERIES_GENRES = {{ series_genres | tojson }};
+    </script>
+    <script type="module" src="/app/static/js/main.js"></script>
 {% endblock %}
