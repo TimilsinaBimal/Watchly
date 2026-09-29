@@ -43,10 +43,6 @@ class ProfileBuilder:
         feature_frequencies: dict[str, dict[Any, int]] = {
             "genres": defaultdict(int),
             "keywords": defaultdict(int),
-            "eras": defaultdict(int),
-            "countries": defaultdict(int),
-            "directors": defaultdict(int),
-            "cast": defaultdict(int),
             "runtime_buckets": defaultdict(int),
         }
 
@@ -154,15 +150,11 @@ class ProfileBuilder:
         if era:
             weight = evidence_weight * FEATURE_WEIGHT_ERA
             profile.era_scores[era] = profile.era_scores.get(era, 0.0) + weight
-            if frequencies is not None:
-                frequencies["eras"][era] += 1
 
         for country_code in features.get("countries", []):
             if country_code:
                 weight = evidence_weight * FEATURE_WEIGHT_COUNTRY
                 profile.country_scores[country_code] = profile.country_scores.get(country_code, 0.0) + weight
-                if frequencies is not None:
-                    frequencies["countries"][country_code] += 1
 
         crew_list = features.get("crew", [])
         if isinstance(crew_list, list):
@@ -179,8 +171,6 @@ class ProfileBuilder:
                         weight = evidence_weight * FEATURE_WEIGHT_CREATOR
                         profile.director_scores[crew_id] = profile.director_scores.get(crew_id, 0.0) + weight
                         profile.director_frequency[crew_id] = profile.director_frequency.get(crew_id, 0) + 1
-                        if frequencies is not None:
-                            frequencies["directors"][crew_id] += 1
 
         for cast_item in features.get("cast", []):
             if isinstance(cast_item, dict):
@@ -194,8 +184,6 @@ class ProfileBuilder:
                 weight = evidence_weight * FEATURE_WEIGHT_CREATOR * position_weight
                 profile.cast_scores[cast_id] = profile.cast_scores.get(cast_id, 0.0) + weight
                 profile.cast_frequency[cast_id] = profile.cast_frequency.get(cast_id, 0) + 1
-                if frequencies is not None:
-                    frequencies["cast"][cast_id] += 1
 
         runtime_bucket = features.get("runtime_bucket")
         if runtime_bucket:
@@ -210,8 +198,8 @@ class ProfileBuilder:
         for scores, counts in (
             (profile.genre_scores, frequencies["genres"]),
             (profile.keyword_scores, frequencies["keywords"]),
-            (profile.director_scores, frequencies["directors"]),
-            (profile.cast_scores, frequencies["cast"]),
+            (profile.director_scores, profile.director_frequency),
+            (profile.cast_scores, profile.cast_frequency),
             (profile.runtime_bucket_scores, frequencies["runtime_buckets"]),
         ):
             for key, freq in counts.items():
