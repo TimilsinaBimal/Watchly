@@ -14,19 +14,17 @@ import {
     setWatchHistorySource,
 } from './accounts.js';
 import { markFieldAsSaved } from './field-helpers.js';
+import { closeMobileNav, switchSection, unlockNavigation } from './navigation.js';
+import { renderCatalogList } from './catalog.js';
 
 // DOM Elements - will be initialized
 let stremioLoginBtn = null;
-let stremioLoginText = null;
 let emailInput = null;
 let passwordInput = null;
 let emailPwdContinueBtn = null;
 let languageSelect = null;
 let appState = null;
-let renderCatalogList = null;
 let resetApp = null;
-let switchSection = null;
-let unlockNavigation = null;
 let updateYearSlider = null;
 let stremioProfileCredentials = null;
 let stremioProfiles = [];
@@ -34,16 +32,12 @@ let preparedStremioProfiles = [];
 
 export function initializeAuth(domElements, state, actions) {
     stremioLoginBtn = domElements.stremioLoginBtn;
-    stremioLoginText = domElements.stremioLoginText;
     emailInput = domElements.emailInput;
     passwordInput = domElements.passwordInput;
     emailPwdContinueBtn = domElements.emailPwdContinueBtn;
     languageSelect = domElements.languageSelect;
     appState = state;
-    renderCatalogList = actions.renderCatalogList;
     resetApp = actions.resetApp;
-    switchSection = actions.switchSection;
-    unlockNavigation = actions.unlockNavigation;
     updateYearSlider = actions.updateYearSlider;
 
     // Initialize logout buttons
@@ -83,22 +77,8 @@ function initializeUserProfileDropdown() {
     // Handle logout button click
     logoutBtn.addEventListener('click', () => {
         closeDropdown();
-        // Close mobile nav if open
-        const sidebar = document.getElementById('mainSidebar');
-        const backdrop = document.getElementById('mobileNavBackdrop');
-        if (sidebar && backdrop) {
-            sidebar.classList.remove('translate-x-0');
-            sidebar.classList.add('-translate-x-full');
-            backdrop.classList.add('hidden');
-            document.body.classList.remove('overflow-hidden');
-            const mobileToggle = document.getElementById('mobileNavToggle');
-            if (mobileToggle) {
-                mobileToggle.classList.remove('is-active');
-                mobileToggle.setAttribute('aria-expanded', 'false');
-                mobileToggle.setAttribute('aria-label', 'Open navigation');
-            }
-        }
-        if (resetApp) resetApp();
+        closeMobileNav();
+        resetApp();
     });
 
     // Close dropdown when clicking outside
@@ -129,7 +109,7 @@ function initializeLoginStatusLogoutButton() {
     if (!logoutBtn) return;
 
     logoutBtn.addEventListener('click', () => {
-        if (resetApp) resetApp();
+        resetApp();
     });
 }
 
@@ -151,25 +131,21 @@ async function initializeStremioLogin() {
             switchSection('login');
         } catch (error) {
             showToast(error.message, "error");
-            if (resetApp) resetApp();
+            resetApp();
             return;
         }
     }
 
     if (stremioLoginBtn) {
         stremioLoginBtn.addEventListener('click', () => {
-            if (stremioLoginBtn.getAttribute('data-action') === 'logout') {
-                if (resetApp) resetApp(); // Logout effectively resets the app flow
-            } else {
-                let appHost = window.APP_HOST;
-                if (!appHost || appHost.includes('<!--')) {
-                    appHost = window.location.origin;
-                }
-                appHost = appHost.replace(/\/$/, '');
-                const callbackUrl = `${appHost}/configure`;
-                const stremioLoginUrl = `https://www.stremio.com/login?appName=Watchly&appCallback=${encodeURIComponent(callbackUrl)}`;
-                window.location.href = stremioLoginUrl;
+            let appHost = window.APP_HOST;
+            if (!appHost || appHost.includes('<!--')) {
+                appHost = window.location.origin;
             }
+            appHost = appHost.replace(/\/$/, '');
+            const callbackUrl = `${appHost}/configure`;
+            const stremioLoginUrl = `https://www.stremio.com/login?appName=Watchly&appCallback=${encodeURIComponent(callbackUrl)}`;
+            window.location.href = stremioLoginUrl;
         });
     }
 }
@@ -437,12 +413,10 @@ async function fetchIdentity(payload) {
 
     // Remember whether this account already has an install (and its token) so the
     // Dashboard section can load it without a second login.
-    if (appState) {
-        appState.auth.loggedIn = true;
-        appState.auth.token = data.token || '';
-        appState.auth.hasInstall = !!data.exists;
-        appState.auth.userDisplay = userDisplay;
-    }
+    appState.auth.loggedIn = true;
+    appState.auth.token = data.token || '';
+    appState.auth.hasInstall = !!data.exists;
+    appState.auth.userDisplay = userDisplay;
 
     // Show user profile in sidebar
     showUserProfile(userDisplay);
@@ -464,12 +438,11 @@ async function fetchIdentity(payload) {
             if (s.popularity && popularitySelect) popularitySelect.value = s.popularity;
             if (s.year_min && yearMinInput) yearMinInput.value = s.year_min;
             if (s.year_max && yearMaxInput) yearMaxInput.value = s.year_max;
-            if (updateYearSlider) updateYearSlider();
+            updateYearSlider();
 
             const sortingOrderSelect = document.getElementById('sortingOrderSelect');
             if (s.sorting_order && sortingOrderSelect) sortingOrderSelect.value = s.sorting_order;
 
-            // Handle poster rating: prefer new format, fallback to old rpdb_key
             const posterRatingProvider = document.getElementById('posterRatingProvider');
             const posterRatingApiKey = document.getElementById('posterRatingApiKey');
             const posterRatingUrlTemplate = document.getElementById('posterRatingUrlTemplate');
@@ -483,12 +456,6 @@ async function fetchIdentity(payload) {
                         hint: hints['poster_rating.api_key'],
                     });
                     if (posterRatingUrlTemplate) posterRatingUrlTemplate.value = s.poster_rating.url_template || '';
-                    // Trigger change event to show/hide fields
-                    posterRatingProvider.dispatchEvent(new Event('change'));
-                } else if (s.rpdb_key) {
-                    // Old format - migrate to new format in UI
-                    posterRatingProvider.value = 'rpdb';
-                    posterRatingApiKey.value = s.rpdb_key;
                     // Trigger change event to show/hide fields
                     posterRatingProvider.dispatchEvent(new Event('change'));
                 }
@@ -544,9 +511,8 @@ async function fetchIdentity(payload) {
 
             // Catalogs
             if (s.catalogs && Array.isArray(s.catalogs)) {
-                const catalogs = appState ? appState.catalogs : [];
                 s.catalogs.forEach(remote => {
-                    const local = catalogs.find(c => c.id === remote.id);
+                    const local = appState.catalogs.find(c => c.id === remote.id);
                     if (local) {
                         local.enabled = remote.enabled;
                         if (remote.name) local.name = remote.name;
@@ -557,7 +523,7 @@ async function fetchIdentity(payload) {
                         if (typeof remote.rows === 'number') local.rows = remote.rows;
                     }
                 });
-                if (renderCatalogList) renderCatalogList();
+                renderCatalogList();
             }
         }
 
@@ -574,11 +540,7 @@ async function fetchIdentity(payload) {
 function initializeEmailPasswordLogin() {
     if (!emailPwdContinueBtn) return;
     emailPwdContinueBtn.addEventListener('click', async () => {
-        const errorEl = document.getElementById('emailPwdError');
-        if (errorEl) {
-            errorEl.textContent = '';
-            errorEl.classList.add('hidden');
-        }
+        showEmailPwdError('');
         const email = emailInput?.value.trim();
         const pwd = passwordInput?.value;
         if (!email || !pwd) {
@@ -587,7 +549,7 @@ function initializeEmailPasswordLogin() {
         }
         if (!isValidEmail(email)) {
             showEmailPwdError('Please enter a valid email address.');
-            try { emailInput?.focus(); } catch (e) { }
+            emailInput?.focus();
             return;
         }
         try {
@@ -611,16 +573,14 @@ function initializeEmailPasswordLogin() {
 }
 
 function setEmailPwdLoading(loading) {
-    try {
-        if (!emailPwdContinueBtn) return;
-        const t = emailPwdContinueBtn.querySelector('.btn-text');
-        const l = emailPwdContinueBtn.querySelector('.loader');
-        emailPwdContinueBtn.disabled = loading;
-        if (t) t.classList.toggle('hidden', loading);
-        if (l) l.classList.toggle('hidden', !loading);
-        if (emailInput) emailInput.disabled = loading;
-        if (passwordInput) passwordInput.disabled = loading;
-    } catch (e) { /* noop */ }
+    if (!emailPwdContinueBtn) return;
+    const t = emailPwdContinueBtn.querySelector('.btn-text');
+    const l = emailPwdContinueBtn.querySelector('.loader');
+    emailPwdContinueBtn.disabled = loading;
+    if (t) t.classList.toggle('hidden', loading);
+    if (l) l.classList.toggle('hidden', !loading);
+    if (emailInput) emailInput.disabled = loading;
+    if (passwordInput) passwordInput.disabled = loading;
 }
 
 function showEmailPwdError(message) {
@@ -641,21 +601,17 @@ function isValidEmail(value) {
 }
 
 export function setStremioLoggedInState(authKey) {
-    if (appState) {
-        appState.auth.loggedIn = true;
-        appState.auth.authKey = authKey || '';
-    }
+    appState.auth.loggedIn = true;
+    appState.auth.authKey = authKey || '';
 
-    renderLoggedInControls({ stremioLoginBtn, stremioLoginText, authKey });
+    renderLoggedInControls({ authKey });
     setStremioConnected(true);
 }
 
 export function setStremioLoggedOutState() {
-    if (appState) {
-        appState.auth.loggedIn = false;
-        appState.auth.authKey = '';
-        appState.auth.userDisplay = null;
-    }
+    appState.auth.loggedIn = false;
+    appState.auth.authKey = '';
+    appState.auth.userDisplay = null;
 
     stremioProfileCredentials = null;
     stremioProfiles = [];
@@ -670,7 +626,7 @@ export function setStremioLoggedOutState() {
     // Hide user profile
     hideUserProfile();
 
-    renderLoggedOutControls({ stremioLoginBtn, stremioLoginText, emailInput, passwordInput });
+    renderLoggedOutControls({ emailInput, passwordInput });
     setStremioConnected(false);
 }
 
@@ -680,7 +636,7 @@ export function setStremioLoggedOutState() {
 // shown as its last few characters and the reveal button is hidden — see
 // mask_stored_secrets and secret_hints on the backend. Submitting the marker
 // unchanged keeps the stored key; clearing the field removes it.
-function setSecretField(input, value, { toggleId, hintId, hint } = {}) {
+function setSecretField(input, value, { toggleId, hintId, hint }) {
     if (!input) return;
 
     if (!value) {
@@ -691,8 +647,8 @@ function setSecretField(input, value, { toggleId, hintId, hint } = {}) {
     if (value === window.STORED_SECRET) {
         markFieldAsSaved({
             input,
-            toggleBtn: toggleId ? document.getElementById(toggleId) : null,
-            hintEl: hintId ? document.getElementById(hintId) : null,
+            toggleBtn: document.getElementById(toggleId),
+            hintEl: document.getElementById(hintId),
             hint,
         });
         return;

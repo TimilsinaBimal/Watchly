@@ -38,6 +38,22 @@ export function lockNavigationForLoggedOut() {
     if (navItems.install) navItems.install.classList.add('disabled');
 }
 
+export function closeMobileNav() {
+    const mobileToggle = document.getElementById('mobileNavToggle');
+    const sidebar = document.getElementById('mainSidebar');
+    const backdrop = document.getElementById('mobileNavBackdrop');
+    if (!mobileToggle || !sidebar || !backdrop) return;
+
+    sidebar.classList.remove('translate-x-0');
+    sidebar.classList.add('-translate-x-full');
+    backdrop.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    // Reset hamburger
+    mobileToggle.classList.remove('is-active');
+    mobileToggle.setAttribute('aria-expanded', 'false');
+    mobileToggle.setAttribute('aria-label', 'Open navigation');
+}
+
 export function initializeMobileNav() {
     const mobileToggle = document.getElementById('mobileNavToggle');
     const sidebar = document.getElementById('mainSidebar');
@@ -54,30 +70,20 @@ export function initializeMobileNav() {
         mobileToggle.setAttribute('aria-expanded', 'true');
         mobileToggle.setAttribute('aria-label', 'Close navigation');
     };
-    const closeNav = () => {
-        sidebar.classList.remove('translate-x-0');
-        sidebar.classList.add('-translate-x-full');
-        backdrop.classList.add('hidden');
-        document.body.classList.remove('overflow-hidden');
-        // Reset hamburger
-        mobileToggle.classList.remove('is-active');
-        mobileToggle.setAttribute('aria-expanded', 'false');
-        mobileToggle.setAttribute('aria-label', 'Open navigation');
-    };
 
     mobileToggle.addEventListener('click', (e) => {
         e.preventDefault();
         // Toggle open/close for convenience
         const isOpen = sidebar.classList.contains('translate-x-0');
-        if (isOpen) closeNav(); else openNav();
+        if (isOpen) closeMobileNav(); else openNav();
     });
-    backdrop.addEventListener('click', closeNav);
+    backdrop.addEventListener('click', closeMobileNav);
 
     // Auto-close when a nav item is selected (mobile)
     Object.values(navItems).forEach(n => {
         if (!n) return;
         n.addEventListener('click', () => {
-            if (!sidebar.classList.contains('hidden')) closeNav();
+            if (!sidebar.classList.contains('hidden')) closeMobileNav();
         });
     });
 }

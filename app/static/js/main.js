@@ -2,7 +2,7 @@
 
 import { createAppState, resetAppState } from './state.js';
 import { initializeChangelog, initializeFooter, initializeKofi, initializeProviderCards } from './modules/ui.js';
-import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initializeMobileNav, updateMobileLayout, unlockNavigation } from './modules/navigation.js';
+import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initializeMobileNav, updateMobileLayout } from './modules/navigation.js';
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
 import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
 import { initializeForm, clearErrors, refreshYearSlider } from './modules/form.js';
@@ -18,7 +18,6 @@ const movieGenreList = document.getElementById('movieGenreList');
 const seriesGenreList = document.getElementById('seriesGenreList');
 const submitBtn = document.getElementById('submitBtn');
 const stremioLoginBtn = document.getElementById('stremioLoginBtn');
-const stremioLoginText = document.getElementById('stremioLoginText');
 const emailInput = document.getElementById('emailInput');
 const passwordInput = document.getElementById('passwordInput');
 const emailPwdContinueBtn = document.getElementById('emailPwdContinueBtn');
@@ -105,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // By default, ensure logged-out users see only Welcome/Login
     lockNavigationForLoggedOut();
 
-    initializeAccountsUI({ switchSection });
+    initializeAccountsUI();
 
     initializeCatalogList({ catalogList }, appState);
 
@@ -128,7 +127,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAuth(
         {
             stremioLoginBtn,
-            stremioLoginText,
             emailInput,
             passwordInput,
             emailPwdContinueBtn,
@@ -136,17 +134,13 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         appState,
         {
-            renderCatalogList,
             resetApp,
-            switchSection,
-            unlockNavigation,
-            lockNavigationForLoggedOut,
             updateYearSlider: refreshYearSlider
         }
     );
 
     // Initialize the Dashboard nav section
-    initializeDashboard({ switchSection }, appState);
+    initializeDashboard(appState);
 
     // Initialize mobile navigation
     initializeMobileNav();

@@ -7,7 +7,7 @@
 // silently doing nothing.
 
 import { showToast } from './ui.js';
-import { unlockNavigation } from './navigation.js';
+import { switchSection, unlockNavigation } from './navigation.js';
 
 const ACTIVE_CLASSES = ['bg-white/10', 'text-white', 'shadow-sm'];
 const ACTIVE_BORDER_CLASS = 'border-white/20';
@@ -16,12 +16,9 @@ const INACTIVE_BORDER_CLASS = 'border-transparent';
 
 const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl' };
 
-let switchSectionFn = null;
 const connectedState = { stremio: false, trakt: false, simkl: false };
 
-export function initializeAccountsUI({ switchSection } = {}) {
-    switchSectionFn = switchSection || null;
-
+export function initializeAccountsUI() {
     document.querySelectorAll('.source-btn').forEach(btn => {
         btn.addEventListener('click', () => onSourceButtonClick(btn.dataset.sourceBtn));
     });
@@ -51,12 +48,6 @@ export function setStremioConnected(connected) {
 }
 
 export function setProviderConnected(provider, connected) {
-    if (provider === 'stremio') {
-        setStremioConnected(connected);
-        return;
-    }
-    if (provider !== 'trakt' && provider !== 'simkl') return;
-
     connectedState[provider] = connected;
     setProviderDot(provider, connected);
     setProviderView(provider, connected);
@@ -103,9 +94,7 @@ function onSourceButtonClick(provider) {
 }
 
 function goToAccounts(scrollTo) {
-    if (typeof switchSectionFn === 'function') {
-        switchSectionFn('login');
-    }
+    switchSection('login');
     if (scrollTo) {
         // Defer until the section is visible after switchSection completes.
         requestAnimationFrame(() => {

@@ -1,3 +1,5 @@
+import { SHOW_PASSWORD_ICON } from './field-helpers.js';
+
 function getInitialsFromEmail(email) {
     if (!email) return '?';
 
@@ -76,11 +78,10 @@ export function renderLoggedOutControls({ emailInput, passwordInput }) {
     if (passwordInput) passwordInput.value = '';
 
     const toggleBtn = document.querySelector('.toggle-btn[data-target="passwordInput"]');
-    const pwd = document.getElementById('passwordInput');
-    if (toggleBtn && pwd) {
-        pwd.type = 'password';
+    if (toggleBtn && passwordInput) {
+        passwordInput.type = 'password';
         toggleBtn.setAttribute('title', 'Show');
         toggleBtn.setAttribute('aria-label', 'Show password');
-        toggleBtn.innerHTML = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+        toggleBtn.innerHTML = SHOW_PASSWORD_ICON;
     }
 }

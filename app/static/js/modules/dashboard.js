@@ -4,9 +4,9 @@
 
 import { openNuvioInstall } from './nuvio.js';
 import { escapeHtml } from './ui.js';
+import { switchSection } from './navigation.js';
 
 let appState = null;
-let switchSection = null;
 let dashboardData = null;
 let activeContentType = 'movie';
 let dashboardInstances = [];
@@ -23,15 +23,14 @@ const SORTING_LABELS = { default: 'Default', movies_first: 'Movies first', serie
 
 const STATE_BLOCKS = ['dashLoggedOut', 'dashNoInstall', 'dashLoading', 'dashError', 'dashContent'];
 
-export function initializeDashboard(actions, state) {
+export function initializeDashboard(state) {
     appState = state;
-    switchSection = actions.switchSection;
 
     const nav = $('nav-dashboard');
     if (nav) nav.addEventListener('click', render);
 
     const loginBtn = $('dashLoginBtn');
-    if (loginBtn) loginBtn.addEventListener('click', () => switchSection && switchSection('login'));
+    if (loginBtn) loginBtn.addEventListener('click', () => switchSection('login'));
 
     wireCopy();
     wireNuvioInstall();
