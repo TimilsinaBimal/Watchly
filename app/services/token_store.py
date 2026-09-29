@@ -315,26 +315,17 @@ class TokenStore:
         except Exception as e:
             logger.warning(f"Failed to invalidate user data cache during token deletion: {e}")
 
+    # The configure page shows this on every load, and a SCAN walks the whole
+    # keyspace. Per process is fine: it's a display number. token_store is a
+    # process singleton, so caching the method doesn't retain per-request state.
+    @alru_cache(maxsize=1, ttl=43200)
     async def count_users(self) -> int:
-        """Count total users by scanning Redis keys with the configured prefix.
-
-        Cached for 12 hours to avoid frequent Redis scans.
-        """
         try:
             client = await redis_service.get_client()
+            return sum([1 async for _ in client.scan_iter(match=f"{self.KEY_PREFIX}*", count=500)])
         except (redis.RedisError, OSError) as exc:
             logger.warning(f"Cannot count users; Redis unavailable: {exc}")
             return 0
-
-        pattern = f"{self.KEY_PREFIX}*"
-        total = 0
-        try:
-            async for _ in client.scan_iter(match=pattern, count=500):
-                total += 1
-        except (redis.RedisError, OSError) as exc:
-            logger.warning(f"Failed to scan for user count: {exc}")
-            return 0
-        return total
 
 
 token_store = TokenStore()
