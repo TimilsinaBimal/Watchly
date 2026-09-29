@@ -82,21 +82,6 @@ function initializeUserProfileDropdown() {
     // Handle logout button click
     logoutBtn.addEventListener('click', () => {
         closeDropdown();
-        // Close mobile nav if open
-        const sidebar = document.getElementById('mainSidebar');
-        const backdrop = document.getElementById('mobileNavBackdrop');
-        if (sidebar && backdrop) {
-            sidebar.classList.remove('translate-x-0');
-            sidebar.classList.add('-translate-x-full');
-            backdrop.classList.add('hidden');
-            document.body.classList.remove('overflow-hidden');
-            const mobileToggle = document.getElementById('mobileNavToggle');
-            if (mobileToggle) {
-                mobileToggle.classList.remove('is-active');
-                mobileToggle.setAttribute('aria-expanded', 'false');
-                mobileToggle.setAttribute('aria-label', 'Open navigation');
-            }
-        }
         if (resetApp) resetApp();
     });
 
@@ -514,7 +499,7 @@ async function fetchIdentity(payload) {
         appState.auth.userDisplay = userDisplay;
     }
 
-    // Show user profile in sidebar
+    // Show user profile in the header
     showUserProfile(userDisplay);
 
     if (data.exists) {

@@ -1,25 +1,25 @@
 {% extends "base.html" %}
 
 {% block content %}
-    {% include "components/sidebar.html" %}
+    {% include "components/topbar.html" %}
 
-    <!-- Main Content Area -->
-    <main
-        class="min-h-[100dvh] md:fixed md:inset-y-0 md:right-0 md:left-72 overflow-y-auto relative no-scrollbar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-        <div class="max-w-2xl mx-auto px-4 py-8 md:py-16 pb-[calc(env(safe-area-inset-bottom)+8rem)]">
+    <main class="mx-auto w-full max-w-6xl px-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] pt-8 md:px-6 md:pt-12">
+        <form id="configForm">
+            {% include "components/section_welcome.html" %}
+            {% include "components/section_login.html" %}
+            {% include "components/section_config.html" %}
+            {% include "components/section_catalogs.html" %}
+            {% include "components/section_install.html" %}
+        </form>
 
-            <form id="configForm">
-                {% include "components/section_welcome.html" %}
-                {% include "components/section_login.html" %}
-                {% include "components/section_config.html" %}
-                {% include "components/section_catalogs.html" %}
-                {% include "components/section_install.html" %}
-            </form>
-
-            {% include "components/section_dashboard.html" %}
-
-        </div>
+        {% include "components/section_dashboard.html" %}
     </main>
+
+    <footer class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-4 py-6 text-xs text-slate-500 md:px-6">
+        <span>&copy; <span id="currentYear">2024</span> Watchly</span>
+        <a href="https://github.com/TimilsinaBimal/Watchly" target="_blank" rel="noopener"
+            class="transition hover:text-slate-300">Source on GitHub</a>
+    </footer>
 
     {% include "components/modal_donation.html" %}
     {% include "components/modal_changelog.html" %}

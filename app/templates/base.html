@@ -14,208 +14,92 @@
             darkMode: 'class',
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    },
                     colors: {
-                        slate: {
-                            850: '#151f32',
-                            900: '#0f172a',
-                            950: '#020617'
-                        },
-                        stremio: {
-                            DEFAULT: '#3b2667',
-                            hover: '#4e3286',
-                            border: '#573b94'
-                        }
+                        accent: { DEFAULT: '#8b5cf6', hover: '#7c3aed', soft: '#c4b5fd' },
+                        surface: { DEFAULT: '#121318', raised: '#181a21', sunken: '#0c0d11' },
+                        stremio: { DEFAULT: '#3b2667', hover: '#4e3286', border: '#573b94' },
                     },
-                    animation: {
-                        'fade-in': 'fadeIn 0.3s ease-out forwards',
-                    },
+                    animation: { 'fade-in': 'fadeIn 0.25s ease-out forwards' },
                     keyframes: {
                         fadeIn: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '0%': { opacity: '0', transform: 'translateY(6px)' },
                             '100%': { opacity: '1', transform: 'translateY(0)' },
-                        }
-                    }
-                }
-            }
+                        },
+                    },
+                },
+            },
         }
     </script>
+    <style type="text/tailwindcss">
+        @layer components {
+            .page-header { @apply mb-8; }
+            .page-title { @apply text-2xl md:text-3xl font-semibold tracking-tight text-white; }
+            .page-lead { @apply mt-2 max-w-2xl text-[15px] leading-relaxed text-slate-400; }
+            .group-title { @apply text-xs font-semibold uppercase tracking-wider text-slate-500; }
+
+            .card { @apply rounded-2xl border border-white/[0.07] bg-surface p-5 md:p-6; }
+            .card-title { @apply text-[15px] font-semibold text-white; }
+            .card-desc { @apply mt-1 text-sm leading-relaxed text-slate-400; }
+
+            .field-label { @apply mb-1.5 block text-sm font-medium text-slate-200; }
+            .field-hint { @apply mt-1.5 text-xs leading-relaxed text-slate-500; }
+            .field-hint a { @apply text-slate-300 underline decoration-slate-600 underline-offset-2 hover:text-white; }
+            .input {
+                @apply w-full rounded-xl border border-white/10 bg-surface-sunken px-3.5 py-2.5 text-sm text-white
+                    placeholder:text-slate-500 transition focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30;
+            }
+
+            .btn {
+                @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition
+                    focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-50;
+            }
+            .btn-lg { @apply px-5 py-3 text-[15px]; }
+            .btn-primary { @apply bg-accent text-white shadow-lg shadow-accent/20 hover:bg-accent-hover; }
+            .btn-secondary { @apply border border-white/10 bg-white/[0.05] text-slate-100 hover:bg-white/[0.09]; }
+            .btn-ghost { @apply text-slate-300 hover:bg-white/5 hover:text-white; }
+            .btn-danger { @apply border border-red-500/25 bg-red-500/10 text-red-300 hover:bg-red-500/15; }
+            .icon-btn { @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/5 hover:text-white; }
+
+            .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium; }
+
+            .step-item { @apply flex items-center gap-2 rounded-full px-2.5 py-1.5 text-sm font-medium text-slate-400 transition hover:text-white; }
+            .step-num {
+                @apply flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-white/15 text-xs text-slate-400 transition;
+            }
+            .step-item.active { @apply bg-white/[0.06] text-white; }
+            .step-item.active .step-num { @apply border-accent bg-accent text-white; }
+            .step-item.done .step-num { @apply border-accent/40 bg-accent/15 text-accent-soft; }
+            .step-sep { @apply h-px w-4 bg-white/10 lg:w-8; }
+            .nav-item.disabled { @apply pointer-events-none cursor-not-allowed opacity-40; }
+            /* Phones keep the stepper to numbers, with the current step's name. */
+            @media (max-width: 639.98px) {
+                .step-item .step-label { @apply hidden; }
+                .step-item.active .step-label { @apply inline; }
+            }
+        }
+    </style>
     <style>
         body {
-            /* Modern layered dark background: subtle vignette + ultra-faint grid */
-            background-color: #0c0d10;
-            background-image:
-                radial-gradient(1200px 600px at 50% -10%, rgba(255, 255, 255, 0.05), transparent 60%),
-                radial-gradient(800px 400px at 85% -5%, rgba(255, 255, 255, 0.03), transparent 60%),
-                radial-gradient(600px 300px at 10% -5%, rgba(255, 255, 255, 0.025), transparent 60%),
-                linear-gradient(to bottom, rgba(255, 255, 255, 0.02), transparent 200px),
-                repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.015) 0, rgba(255, 255, 255, 0.015) 1px, transparent 1px, transparent 24px),
-                repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012) 0, rgba(255, 255, 255, 0.012) 1px, transparent 1px, transparent 24px);
-            background-blend-mode: screen, screen, screen, normal, normal, normal;
+            background-color: #0b0c0f;
+            background-image: radial-gradient(900px 480px at 50% -120px, rgba(139, 92, 246, 0.10), transparent 70%);
+            background-repeat: no-repeat;
         }
 
-        /* Custom scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
+        ::selection { background: rgba(139, 92, 246, 0.4); color: #ffffff; }
+        input, textarea { caret-color: #ffffff; }
 
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #334155;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
-        }
-
-        .nav-item.active {
-            background-color: rgba(255, 255, 255, 0.1);
-            color: #ffffff;
-            border-left: 2px solid #ffffff;
-        }
-
-        .nav-item.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            pointer-events: none;
-        }
-
-        /* Announcement link styling to ensure visibility (neutral theme) */
-        #announcement-content a {
-            color: #e5e7eb;
-            /* slate-200 */
-            text-decoration: underline;
-        }
-
-        #announcement-content a:hover {
-            color: #ffffff;
-            text-decoration: underline;
-        }
-
-        /* Improve mobile scrolling behavior */
-        main {
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
-        }
-
-        /* Desktop: Sidebar fixed, main content scrolls independently */
-        @media (min-width: 768px) {
-            #mainSidebar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                height: 100dvh;
-                overflow-y: auto;
-            }
-
-            main {
-                position: fixed;
-                top: 0;
-                right: 0;
-                left: 288px;
-                /* w-72 = 18rem = 288px */
-                height: 100dvh;
-                overflow-y: auto;
-            }
-        }
-
-        /* High-contrast text selection to avoid blending with blue OS highlight */
-        ::selection {
-            background: rgba(59, 130, 246, 0.35);
-            /* blue-500 @ 35% */
-            color: #ffffff;
-        }
-
-        ::-moz-selection {
-            background: rgba(59, 130, 246, 0.35);
-            color: #ffffff;
-        }
-
-        input::selection,
-        textarea::selection {
-            background: rgba(59, 130, 246, 0.45);
-            color: #ffffff;
-        }
-
-        input::-moz-selection,
-        textarea::-moz-selection {
-            background: rgba(59, 130, 246, 0.45);
-            color: #ffffff;
-        }
-
-        /* Ensure caret is visible on dark inputs */
-        input,
-        textarea {
-            caret-color: #ffffff;
-        }
-
-        /* Animated hamburger icon */
-        .hamburger {
-            position: relative;
-            width: 40px;
-            height: 40px;
-        }
-
-        .hamburger .bar {
-            position: absolute;
-            left: 9px;
-            right: 9px;
-            height: 2px;
-            background: #e5e7eb;
-            /* slate-200 */
-            border-radius: 2px;
-            transform-origin: center;
-            transition: transform 200ms ease, opacity 180ms ease;
-        }
-
-        .hamburger .bar.top {
-            top: 12px;
-        }
-
-        .hamburger .bar.middle {
-            top: 19px;
-        }
-
-        .hamburger .bar.bottom {
-            top: 26px;
-        }
-
-        .hamburger.is-active .bar.top {
-            transform: translateY(7px) rotate(45deg);
-        }
-
-        .hamburger.is-active .bar.middle {
-            opacity: 0;
-        }
-
-        .hamburger.is-active .bar.bottom {
-            transform: translateY(-7px) rotate(-45deg);
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .hamburger .bar {
-                transition: none;
-            }
-        }
+        #announcement-content a { color: #e5e7eb; text-decoration: underline; }
+        #announcement-content a:hover { color: #ffffff; }
 
         /* Number input: hide native spinners; we provide custom +/- */
         input.stepper-input[type=number]::-webkit-outer-spin-button,
-        input.stepper-input[type=number]::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
+        input.stepper-input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input.stepper-input[type=number] { -moz-appearance: textfield; }
 
-        input.stepper-input[type=number] {
-            -moz-appearance: textfield;
-        }
-
-        /* User profile dropdown chevron transition */
-        #user-profile-chevron {
-            transition: transform 200ms ease;
-        }
+        #user-profile-chevron { transition: transform 200ms ease; }
 
         /* Custom tooltip styles */
         .tooltip-wrapper {
