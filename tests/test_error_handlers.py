@@ -82,6 +82,20 @@ def test_validation_errors_return_a_readable_detail(client):
     assert isinstance(response.json()["detail"], str)
 
 
+def test_validation_errors_do_not_log_the_rejected_value(client):
+    from loguru import logger
+
+    lines = []
+    sink = logger.add(lines.append)
+    try:
+        client.post("/validated", json={"count": SECRET})
+    finally:
+        logger.remove(sink)
+
+    assert any("422" in line for line in lines)
+    assert not any(SECRET in line for line in lines)
+
+
 def test_unmatched_routes_still_404(client):
     response = client.get("/no-such-route")
 
