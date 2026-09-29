@@ -20,7 +20,11 @@ class FakeClient:
 def service(status: int, body=None) -> tuple[TopPostersService, FakeClient]:
     svc = TopPostersService()
     client = FakeClient(status, body)
-    svc._get_client = lambda: client
+
+    async def get_client():
+        return client
+
+    svc.get_client = get_client
     return svc, client
 
 
@@ -40,7 +44,7 @@ def test_known_key_is_accepted():
     svc, client = service(200, {"valid": True})
 
     assert validate(svc) is True
-    assert client.requested == ["https://api.top-posters.com/auth/verify/k"]
+    assert client.requested == ["/auth/verify/k"]
 
 
 def test_a_200_without_the_valid_flag_still_counts_as_valid():
@@ -76,6 +80,6 @@ def test_client_follows_redirects():
     """The old domain 301s to the new one; not following it is what broke #158."""
     svc = TopPostersService()
     try:
-        assert svc._get_client().follow_redirects is True
+        assert asyncio.run(svc.get_client()).follow_redirects is True
     finally:
         asyncio.run(svc.close())

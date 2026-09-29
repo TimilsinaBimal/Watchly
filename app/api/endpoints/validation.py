@@ -1,10 +1,12 @@
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from app.api.models.validation import BaseValidationInput, BaseValidationResponse, PosterRatingValidationInput
+from app.core.config import settings
 from app.core.settings import LLMConfig
 from app.services.llm import llm_service
 from app.services.poster_ratings.factory import PosterProvider, poster_ratings_factory
@@ -102,26 +104,12 @@ async def validate_trakt_token(data: OAuthTokenValidationInput) -> BaseValidatio
 @router.post("/simkl-sync/validation")
 async def validate_simkl_sync_token(data: OAuthTokenValidationInput) -> BaseValidationResponse:
     """Validate a Simkl OAuth access token."""
-    from app.core.config import settings as app_settings
-
-    if not app_settings.SIMKL_CLIENT_ID:
+    if not settings.SIMKL_CLIENT_ID:
         return BaseValidationResponse(valid=False, message="Simkl integration is not configured on this server")
     try:
-        from httpx import AsyncClient
-
-        async with AsyncClient(timeout=10) as client:
-            resp = await client.get(
-                "https://api.simkl.com/users/settings",
-                headers={
-                    "Authorization": f"Bearer {data.access_token}",
-                    "simkl-api-key": app_settings.SIMKL_CLIENT_ID,
-                },
-                follow_redirects=True,
-            )
-            resp.raise_for_status()
-            user_info = resp.json()
-            username = user_info.get("user", {}).get("name") or "Unknown"
-        return BaseValidationResponse(valid=True, message=f"Connected as {username}")
-    except Exception as e:
-        logger.debug(f"Simkl sync token validation failed: {e}")
+        user_info = await simkl_service.get_user_settings(data.access_token, settings.SIMKL_CLIENT_ID)
+    except httpx.HTTPError:
+        # BaseClient has already logged the failed request.
         return BaseValidationResponse(valid=False, message="Invalid or expired Simkl token")
+    username = user_info.get("user", {}).get("name") or "Unknown"
+    return BaseValidationResponse(valid=True, message=f"Connected as {username}")
