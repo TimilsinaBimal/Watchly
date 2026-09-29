@@ -156,14 +156,14 @@ class CatalogUpdater:
 
             return success
 
-        except Exception as e:
+        except Exception:
             logger.exception(f"[{redact_token(token)}] Failed to update catalogs in background")
             try:
                 error_auth_key = credentials.get("authKey")
                 if isinstance(error_auth_key, str) and error_auth_key:
                     description = (
                         "Movie and series recommendations based on your Stremio library.\n\n"
-                        f"⚠️ Status: Error\nFailed to update catalogs: {e}"
+                        "⚠️ Status: Error\nFailed to update catalogs."
                     )
                     await bundle.addons.update_description(error_auth_key, description)
             except Exception as update_err:
