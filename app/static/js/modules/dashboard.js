@@ -3,6 +3,7 @@
 // nav click. Account deletion lives in the Save & Install flow, not here.
 
 import { openNuvioInstall } from './nuvio.js';
+import { escapeHtml } from './ui.js';
 
 let appState = null;
 let switchSection = null;
@@ -19,6 +20,18 @@ const hide = (el) => el && el.classList.add('hidden');
 
 const POPULARITY_LABELS = { mainstream: 'Mainstream', balanced: 'Balanced', gems: 'Hidden Gems', all: 'All' };
 const SORTING_LABELS = { default: 'Default', movies_first: 'Movies first', series_first: 'Series first' };
+const SOURCE_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl' };
+const WARMING_LABELS = {
+    pending: 'Saving your configuration',
+    building_profile: 'Reading your watch history',
+    profile_ready: 'Building your taste profile',
+    warming_manifest: 'Assembling your catalogs',
+    warming_catalogs: 'Picking your first recommendations',
+};
+const BADGE_OK = 'bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20';
+const BADGE_WARN = 'bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/20';
+const BADGE_MUTED = 'bg-white/[0.04] text-slate-400 ring-1 ring-white/10';
+const SEGMENT_ACTIVE = ['bg-accent', 'text-white'];
 
 const STATE_BLOCKS = ['dashLoggedOut', 'dashNoInstall', 'dashLoading', 'dashError', 'dashContent'];
 
@@ -31,6 +44,8 @@ export function initializeDashboard(actions, state) {
 
     const loginBtn = $('dashLoginBtn');
     if (loginBtn) loginBtn.addEventListener('click', () => switchSection && switchSection('login'));
+    $('dashSetupBtn')?.addEventListener('click', () => switchSection && switchSection('config'));
+    $('dashEditBtn')?.addEventListener('click', () => switchSection && switchSection('config'));
 
     wireCopy();
     wireNuvioInstall();
@@ -101,14 +116,17 @@ async function loadDashboard(token) {
     }
     setState('dashLoading');
     try {
-        const res = await fetch(`/${token}/dashboard/data`);
+        const [res, warm] = await Promise.all([
+            fetch(`/${token}/dashboard/data`),
+            fetch(`/${token}/status`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+        ]);
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.detail || 'Could not load your dashboard.');
         }
         if (requestId !== dashboardRequestId) return;
         dashboardData = await res.json();
-        renderContent();
+        renderContent(warm);
         setState('dashContent');
     } catch (e) {
         if (requestId !== dashboardRequestId) return;
@@ -159,47 +177,67 @@ function wireInstancePicker() {
     });
 }
 
-function chip(text) {
-    const span = document.createElement('span');
-    span.className = 'inline-block text-xs bg-neutral-800 border border-slate-700 rounded-full px-3 py-1 text-slate-200';
-    span.textContent = text;
-    return span;
-}
-
+// The profile summary carries names in rank order but no weights, so rank is shown
+// as order (the top entry accented) rather than as bar lengths the data can't back.
 function chipRow(label, values) {
     if (!values || !values.length) return null;
     const wrap = document.createElement('div');
-    wrap.className = 'mb-4';
     const heading = document.createElement('p');
-    heading.className = 'text-xs text-slate-500 mb-2';
+    heading.className = 'mb-2 text-sm font-medium text-slate-300';
     heading.textContent = label;
     wrap.appendChild(heading);
     const row = document.createElement('div');
-    row.className = 'flex flex-wrap gap-2';
+    row.className = 'flex flex-wrap gap-1.5';
     values.forEach((v, idx) => {
-        const c = chip(v);
-        c.classList.add('dash-chip');
-        c.style.animationDelay = `${idx * 40}ms`;
-        row.appendChild(c);
+        const span = document.createElement('span');
+        span.className = idx === 0
+            ? 'rounded-lg bg-accent/15 px-2.5 py-1 text-[13px] font-medium text-accent-soft ring-1 ring-accent/30'
+            : 'rounded-lg bg-white/[0.04] px-2.5 py-1 text-[13px] text-slate-200 ring-1 ring-white/10';
+        span.textContent = v;
+        row.appendChild(span);
     });
     wrap.appendChild(row);
     return wrap;
+}
+
+function countryName(code) {
+    try {
+        return new Intl.DisplayNames(undefined, { type: 'region' }).of(code) || code;
+    } catch (e) {
+        return code;
+    }
+}
+
+function renderStatus(warm, stats) {
+    const el = $('dashStatus');
+    let label = 'Installed';
+    let tone = BADGE_OK;
+    if (warm && WARMING_LABELS[warm.state]) {
+        label = `Warming up: ${WARMING_LABELS[warm.state]}`;
+        tone = BADGE_WARN;
+    } else if (warm && warm.state === 'error') {
+        label = 'Some rows finish on first open';
+        tone = BADGE_WARN;
+    } else if (!stats || !stats.library) {
+        label = 'Waiting for first open in Stremio';
+        tone = BADGE_WARN;
+    }
+    el.className = `badge px-2.5 py-1 text-xs ${tone}`;
+    el.textContent = label;
 }
 
 function renderSources(sources) {
     const row = $('dashSources');
     row.innerHTML = '';
     const items = [
-        { label: `Source: ${sources.active}`, on: true },
-        { label: 'Trakt', on: sources.trakt },
-        { label: 'Simkl', on: sources.simkl },
+        { label: `History from ${SOURCE_LABELS[sources.active] || sources.active}`, tone: BADGE_MUTED },
+        { label: sources.trakt ? 'Trakt connected' : 'Trakt not connected', tone: sources.trakt ? BADGE_OK : BADGE_MUTED },
+        { label: sources.simkl ? 'Simkl connected' : 'Simkl not connected', tone: sources.simkl ? BADGE_OK : BADGE_MUTED },
     ];
-    items.forEach(({ label, on }) => {
+    items.forEach(({ label, tone }) => {
         const span = document.createElement('span');
-        span.className = on
-            ? 'text-xs rounded-full px-3 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
-            : 'text-xs rounded-full px-3 py-1 bg-neutral-800 text-slate-500 border border-slate-700';
-        span.textContent = on ? `${label} ✓` : label;
+        span.className = `badge px-2.5 py-1 text-xs ${tone}`;
+        span.textContent = label;
         row.appendChild(span);
     });
 }
@@ -215,7 +253,8 @@ function renderSettings(s) {
     ];
     fields.forEach(([label, value]) => {
         const cell = document.createElement('div');
-        cell.innerHTML = `<p class="text-xs text-slate-500 mb-1">${label}</p><p class="text-slate-200">${value}</p>`;
+        cell.className = 'flex items-baseline justify-between gap-4 py-2.5';
+        cell.innerHTML = `<dt class="text-slate-400">${label}</dt><dd class="text-right text-slate-100">${escapeHtml(value)}</dd>`;
         grid.appendChild(cell);
     });
 }
@@ -226,7 +265,7 @@ const PREVIEW_ITEM_LIMIT = 14;
 // scrolls into view so opening the dashboard doesn't fan out every catalog at once.
 async function loadCatalogRows() {
     const container = $('dashCatalogRows');
-    container.innerHTML = '<p class="text-sm text-slate-500">Loading catalogs…</p>';
+    container.innerHTML = '<p class="text-sm text-slate-400">Loading catalogs…</p>';
 
     let manifest;
     try {
@@ -241,7 +280,7 @@ async function loadCatalogRows() {
     const catalogs = manifest.catalogs || [];
     container.innerHTML = '';
     if (!catalogs.length) {
-        container.innerHTML = '<p class="text-sm text-slate-500">No catalogs enabled.</p>';
+        container.innerHTML = '<p class="text-sm text-slate-400">No catalogs enabled.</p>';
         return;
     }
 
@@ -272,10 +311,10 @@ function buildCatalogRow(cat) {
     row.dataset.id = cat.id;
 
     const header = document.createElement('div');
-    header.className = 'flex items-baseline justify-between mb-2';
+    header.className = 'mb-2.5 flex items-baseline justify-between';
     header.innerHTML =
-        `<h4 class="text-sm font-medium text-slate-200 truncate">${cat.name || cat.id}</h4>` +
-        `<span class="text-xs text-slate-600 ml-3 flex-shrink-0"><span class="dash-row-count"></span>${cat.type === 'series' ? 'Series' : 'Movies'}</span>`;
+        `<h4 class="truncate text-sm font-medium text-slate-100">${escapeHtml(cat.name || cat.id)}</h4>` +
+        `<span class="ml-3 flex-shrink-0 text-[13px] text-slate-500"><span class="dash-row-count"></span>${cat.type === 'series' ? 'Series' : 'Movies'}</span>`;
     row.appendChild(header);
 
     const strip = document.createElement('div');
@@ -290,8 +329,8 @@ function skeletonCard() {
     const card = document.createElement('div');
     card.className = 'flex-shrink-0 w-[110px]';
     card.innerHTML =
-        '<div class="w-[110px] h-[165px] rounded-lg bg-neutral-800 animate-pulse"></div>' +
-        '<div class="mt-1.5 h-3 w-20 rounded bg-neutral-800 animate-pulse"></div>';
+        '<div class="w-[110px] h-[165px] rounded-lg bg-white/[0.05] animate-pulse"></div>' +
+        '<div class="mt-1.5 h-3 w-20 rounded bg-white/[0.05] animate-pulse"></div>';
     return card;
 }
 
@@ -307,13 +346,13 @@ async function fetchCatalogRow(row) {
         const metas = all.slice(0, PREVIEW_ITEM_LIMIT);
         strip.innerHTML = '';
         if (!metas.length) {
-            strip.innerHTML = '<p class="text-xs text-slate-600">No items yet — open it in Stremio to build it.</p>';
+            strip.innerHTML = '<p class="text-[13px] text-slate-500">No items yet. Open it in Stremio to build it.</p>';
             return;
         }
         if (countEl) countEl.textContent = `${all.length} · `;
         metas.forEach((m) => strip.appendChild(posterCard(m, type)));
     } catch (e) {
-        strip.innerHTML = '<p class="text-xs text-red-400">Could not load items.</p>';
+        strip.innerHTML = '<p class="text-[13px] text-red-400">Could not load items.</p>';
     }
 }
 
@@ -321,7 +360,7 @@ function posterCard(meta, type) {
     // IMDb-id items deep-link to their Stremio detail page; TMDB-only items aren't linkable.
     const linkable = typeof meta.id === 'string' && meta.id.startsWith('tt');
     const card = document.createElement(linkable ? 'a' : 'div');
-    card.className = 'dash-poster-card flex-shrink-0 w-[110px] group';
+    card.className = 'flex-shrink-0 w-[110px] group';
     if (linkable) {
         card.href = `https://web.stremio.com/#/detail/${type}/${meta.id}`;
         card.target = '_blank';
@@ -338,12 +377,12 @@ function posterCard(meta, type) {
         img.alt = meta.name || '';
         img.loading = 'lazy';
         img.className =
-            'dash-poster-img w-[110px] h-[165px] object-cover rounded-lg bg-neutral-800 ring-1 ring-white/5 group-hover:ring-white/30';
+            'w-[110px] h-[165px] object-cover rounded-lg bg-white/[0.05] ring-1 ring-white/5 transition group-hover:ring-accent/60';
         img.onerror = () => { img.style.visibility = 'hidden'; };
         card.appendChild(img);
     } else {
         const ph = document.createElement('div');
-        ph.className = 'w-[110px] h-[165px] rounded-lg bg-neutral-800 ring-1 ring-white/5';
+        ph.className = 'w-[110px] h-[165px] rounded-lg bg-white/[0.05] ring-1 ring-white/5';
         card.appendChild(ph);
     }
 
@@ -355,7 +394,7 @@ function posterCard(meta, type) {
 
     if (rating || year) {
         const sub = document.createElement('p');
-        sub.className = 'text-[11px] text-slate-600 truncate';
+        sub.className = 'text-xs text-slate-500 truncate';
         sub.textContent = `${rating}${year}`.trim();
         card.appendChild(sub);
     }
@@ -366,8 +405,7 @@ function posterCard(meta, type) {
 function setCatalogFilter(filter) {
     document.querySelectorAll('.dashCatFilter').forEach((b) => {
         const active = b.dataset.filter === filter;
-        b.classList.toggle('bg-white', active);
-        b.classList.toggle('text-black', active);
+        SEGMENT_ACTIVE.forEach((c) => b.classList.toggle(c, active));
         b.classList.toggle('text-slate-300', !active);
     });
     document.querySelectorAll('#dashCatalogRows [data-type]').forEach((row) => {
@@ -387,22 +425,24 @@ function renderProfile() {
 
     document.querySelectorAll('.dashProfileTab').forEach((tab) => {
         const isActive = tab.dataset.ct === activeContentType;
-        tab.classList.toggle('bg-white', isActive);
-        tab.classList.toggle('text-black', isActive);
+        SEGMENT_ACTIVE.forEach((c) => tab.classList.toggle(c, isActive));
         tab.classList.toggle('text-slate-300', !isActive);
     });
 
     const p = dashboardData.profiles[activeContentType];
     if (!p) {
-        body.innerHTML = `<p class="text-sm text-slate-500">No ${activeContentType} profile yet — it builds after your first catalog request.</p>`;
+        body.innerHTML = `<p class="text-sm text-slate-400">No ${activeContentType} profile yet. It builds after your first catalog request.</p>`;
         return;
     }
 
     const meta = document.createElement('p');
-    meta.className = 'text-xs text-slate-500 mb-4';
+    meta.className = 'mb-5 text-sm text-slate-400';
     const when = p.last_updated ? new Date(p.last_updated).toLocaleDateString() : '—';
     meta.textContent = `Built from ${p.items} item(s) · updated ${when}`;
     body.appendChild(meta);
+
+    const grid = document.createElement('div');
+    grid.className = 'grid gap-5 sm:grid-cols-2';
 
     const rows = [
         chipRow('Top genres', p.genres),
@@ -410,18 +450,21 @@ function renderProfile() {
         chipRow('Cast', p.cast),
         chipRow('Keywords', p.keywords),
         chipRow('Eras', p.eras),
-        chipRow('Countries', p.countries),
+        chipRow('Countries', (p.countries || []).map(countryName)),
     ].filter(Boolean);
 
     if (!rows.length) {
-        body.innerHTML += `<p class="text-sm text-slate-500">Not enough signal yet.</p>`;
+        body.innerHTML += `<p class="text-sm text-slate-400">Not enough signal yet.</p>`;
         return;
     }
-    rows.forEach((r) => body.appendChild(r));
+    rows.forEach((r) => grid.appendChild(r));
+    body.appendChild(grid);
 }
 
-function renderContent() {
+function renderContent(warm) {
     $('dashManifestUrl').textContent = dashboardData.manifest_url;
+    $('dashManifestUrl').title = dashboardData.manifest_url;
+    renderStatus(warm, dashboardData.stats);
     renderIdentity();
     renderInstallLink();
     renderKpis(dashboardData.stats);
@@ -454,8 +497,11 @@ function animateCount(el, target) {
         return;
     }
     const duration = 750;
-    const start = performance.now();
+    // A frame timestamp can precede a performance.now() taken just before, so start
+    // the clock on the first frame instead, or the first frame counts below zero.
+    let start = null;
     function tick(now) {
+        if (start === null) start = now;
         const p = Math.min(1, (now - start) / duration);
         el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
         if (p < 1) requestAnimationFrame(tick);
@@ -520,12 +566,13 @@ function wireRefresh() {
         const msg = $('dashRefreshMsg');
         btn.disabled = true;
         btn.classList.add('opacity-50', 'cursor-not-allowed');
-        const original = btn.textContent;
-        btn.textContent = 'Refreshing…';
+        const label = btn.querySelector('[data-label]');
+        const original = label.textContent;
+        label.textContent = 'Refreshing…';
         try {
             const res = await fetch(`/${activeDashboardToken}/dashboard/refresh`, { method: 'POST' });
             if (!res.ok) throw new Error('Refresh failed. Please try again.');
-            msg.textContent = 'Refresh started — your catalogs will rebuild on the next open in Stremio.';
+            msg.textContent = 'Refresh started. Your catalogs rebuild the next time you open Stremio.';
             msg.classList.remove('hidden', 'text-red-400');
             msg.classList.add('text-emerald-300');
         } catch (e) {
@@ -535,7 +582,7 @@ function wireRefresh() {
         } finally {
             btn.disabled = false;
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
-            btn.textContent = original;
+            label.textContent = original;
         }
     });
 }
