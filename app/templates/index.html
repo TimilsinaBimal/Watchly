@@ -3,7 +3,7 @@
 {% block content %}
     {% include "components/topbar.html" %}
 
-    <main class="mx-auto w-full max-w-6xl px-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] pt-8 md:px-6 md:pt-12">
+    <main class="mx-auto w-full max-w-[88rem] px-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] pt-8 md:px-8 md:pt-12">
         <form id="configForm">
             {% include "components/section_welcome.html" %}
             {% include "components/section_login.html" %}
@@ -15,10 +15,10 @@
         {% include "components/section_dashboard.html" %}
     </main>
 
-    <footer class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-4 py-6 text-xs text-slate-500 md:px-6">
+    <footer class="mx-auto flex max-w-[88rem] flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] px-4 py-6 text-xs text-neutral-400 md:px-8">
         <span>&copy; <span id="currentYear">2024</span> Watchly</span>
         <a href="https://github.com/TimilsinaBimal/Watchly" target="_blank" rel="noopener"
-            class="transition hover:text-slate-300">Source on GitHub</a>
+            class="transition hover:text-neutral-200">Source on GitHub</a>
     </footer>
 
     {% include "components/modal_donation.html" %}

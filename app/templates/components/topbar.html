@@ -1,6 +1,6 @@
 <header id="appHeader"
     class="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0b0c0f]/80 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
-    <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:flex-nowrap md:px-6">
+    <div class="mx-auto flex max-w-[88rem] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:flex-nowrap md:px-8">
         <button id="nav-welcome" type="button" class="nav-item flex items-center gap-2.5 rounded-lg" aria-label="Watchly home">
             <img src="/app/static/logo.png" alt="" class="h-8 w-8 rounded-lg bg-black ring-1 ring-white/15">
             <span class="text-lg font-semibold tracking-tight text-white">Watchly</span>
@@ -34,11 +34,14 @@
                 <span class="hidden sm:inline">Dashboard</span>
             </button>
 
-            <button type="button" id="kofiBtn" class="icon-btn text-pink-300 hover:text-pink-200" aria-label="Support Watchly">
-                <svg class="h-[18px] w-[18px]" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <button type="button" id="kofiBtn"
+                class="btn border border-pink-400/30 bg-pink-500/10 px-3 py-2 text-pink-200 hover:bg-pink-500/20"
+                aria-label="Support Watchly">
+                <svg class="h-4 w-4 text-pink-300" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path
                         d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
+                <span class="hidden sm:inline">Support</span>
             </button>
 
             <div id="user-profile-dropdown-wrapper" class="relative hidden">
@@ -46,7 +49,7 @@
                     class="flex items-center gap-1.5 rounded-full p-1 pr-2 transition hover:bg-white/5">
                     <span id="user-avatar"
                         class="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-bold text-black"></span>
-                    <svg id="user-profile-chevron" class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor"
+                    <svg id="user-profile-chevron" class="h-3.5 w-3.5 text-neutral-300" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
@@ -54,7 +57,7 @@
                 <div id="user-profile-dropdown"
                     class="absolute right-0 top-full z-50 mt-2 hidden w-64 overflow-hidden rounded-xl border border-white/10 bg-surface-raised shadow-2xl shadow-black/50">
                     <div class="border-b border-white/[0.06] px-4 py-3">
-                        <div class="text-xs text-slate-500">Signed in as</div>
+                        <div class="text-xs text-neutral-400">Signed in as</div>
                         <div id="user-email" class="truncate text-sm font-medium text-white"></div>
                     </div>
                     <button type="button" id="user-profile-logout-btn"

@@ -12,21 +12,21 @@
                     <span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-medium text-accent-soft">1</span>
                     <div>
                         <p class="text-sm font-medium text-white">Your settings are saved</p>
-                        <p class="text-sm text-slate-400">Keys and credentials are encrypted before they're stored.</p>
+                        <p class="text-sm text-neutral-300">Keys and credentials are encrypted before they're stored.</p>
                     </div>
                 </li>
                 <li class="flex gap-3">
                     <span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-medium text-accent-soft">2</span>
                     <div>
                         <p class="text-sm font-medium text-white">Watchly builds your rows</p>
-                        <p class="text-sm text-slate-400">It reads your watch history and prepares recommendations.</p>
+                        <p class="text-sm text-neutral-300">It reads your watch history and prepares recommendations.</p>
                     </div>
                 </li>
                 <li class="flex gap-3">
                     <span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-medium text-accent-soft">3</span>
                     <div>
                         <p class="text-sm font-medium text-white">You add it to Stremio or Nuvio</p>
-                        <p class="text-sm text-slate-400">Install in one tap, or copy the link.</p>
+                        <p class="text-sm text-neutral-300">Install in one tap, or copy the link.</p>
                     </div>
                 </li>
             </ol>
@@ -37,7 +37,7 @@
                     <div class="loader hidden h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white">
                     </div>
                 </button>
-                <p class="mt-2 text-center text-xs text-slate-500">You can come back and change these anytime.</p>
+                <p class="mt-2 text-center text-xs text-neutral-400">You can come back and change these anytime.</p>
             </div>
         </div>
 
@@ -59,7 +59,7 @@
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h3 class="text-sm font-semibold text-red-300">Delete account</h3>
-                <p class="mt-1 text-sm text-slate-400">Permanently removes your settings and account data. This
+                <p class="mt-1 text-sm text-neutral-300">Permanently removes your settings and account data. This
                     can't be undone.</p>
             </div>
             <button type="button" id="deleteAccountBtn" class="btn btn-danger flex-shrink-0">
@@ -83,11 +83,11 @@
         </svg>
     </div>
     <h3 id="successHeading" class="page-title">You're all set!</h3>
-    <p id="successSubheading" class="mx-auto mt-2 max-w-md text-[15px] text-slate-400">Your personalized catalog is ready.</p>
+    <p id="successSubheading" class="mx-auto mt-2 max-w-md text-[15px] text-neutral-300">Your personalized catalog is ready.</p>
 
     <!-- Shown while the account warms up; replaced by the URL and install buttons below -->
     <div id="warmProgress" class="mx-auto mt-8 hidden max-w-md">
-        <div class="flex items-center justify-center gap-3 text-sm text-slate-300">
+        <div class="flex items-center justify-center gap-3 text-sm text-neutral-200">
             <svg class="h-5 w-5 animate-spin text-accent-soft" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor"
@@ -100,18 +100,18 @@
             <div id="warmProgressBar" class="h-full rounded-full bg-accent transition-all duration-500"
                 style="width: 10%"></div>
         </div>
-        <p id="warmProgressDetail" class="mt-3 text-xs text-slate-500"></p>
+        <p id="warmProgressDetail" class="mt-3 text-xs text-neutral-400"></p>
     </div>
 
     <div id="successPayload" class="mt-8 hidden text-left">
         <div id="singleAddonInstall" class="space-y-6">
             <div>
                 <div class="mb-1.5 flex items-center justify-between gap-3">
-                    <span class="text-sm font-medium text-slate-200">Your addon link</span>
+                    <span class="text-sm font-medium text-neutral-100">Your addon link</span>
                     <span class="badge border border-amber-400/25 bg-amber-400/10 text-amber-300">Private, don't share</span>
                 </div>
                 <div id="addonUrl"
-                    class="break-all rounded-xl border border-white/10 bg-surface-sunken px-4 py-3 font-mono text-sm text-slate-200">https://...</div>
+                    class="break-all rounded-xl border border-white/10 bg-surface-sunken px-4 py-3 font-mono text-sm text-neutral-100">https://...</div>
             </div>
 
             <div>
@@ -130,18 +130,26 @@
                 class="btn btn-primary btn-lg w-full disabled:cursor-wait disabled:opacity-60">
                 Install all profiles in Stremio
             </button>
-            <p class="mt-2 text-center text-xs text-slate-500">Each private instance will be assigned to its matching profile.</p>
+            <p class="mt-2 text-center text-xs text-neutral-400">Each private instance will be assigned to its matching profile.</p>
         </div>
         <div id="profileAddonInstances" class="hidden divide-y divide-white/10 border-y border-white/10"></div>
 
         <div class="mt-8 rounded-xl border border-white/[0.07] bg-surface-raised p-4">
             <h4 class="text-sm font-medium text-white">What's next</h4>
-            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-400">
+            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-300">
                 <li>Your Watchly rows show up on the Stremio home screen and in Discover.</li>
                 <li>They refresh as you watch, so keep watching.</li>
                 <li>Come back here anytime to change settings.</li>
             </ul>
         </div>
+
+        <div id="successSupport" class="mt-4 flex flex-col gap-3 rounded-xl border border-pink-400/20 bg-pink-500/[0.06] p-4 sm:flex-row sm:items-center">
+            <p class="flex-1 text-sm text-neutral-200">Enjoying Watchly? It's free. If you'd like to help keep it running, you can chip in.</p>
+            <div class="flex gap-2">
+                <button type="button" data-open-support class="btn btn-secondary">Support</button>
+                <button type="button" id="successSupportDismiss" class="btn btn-ghost text-neutral-400">No thanks</button>
+            </div>
+        </div>
     </div>
-    <button type="button" id="successResetBtn" class="btn btn-ghost mt-6 text-slate-500">Start over</button>
+    <button type="button" id="successResetBtn" class="btn btn-ghost mt-6 text-neutral-400">Start over</button>
 </section>
