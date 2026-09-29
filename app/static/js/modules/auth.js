@@ -672,13 +672,7 @@ function restoreWatchHistoryState(settings) {
             expires_at: settings.trakt_token_expires_at || 0,
         };
         const traktStatus = document.getElementById('traktStatus');
-        if (traktStatus) {
-            traktStatus.textContent = 'Connected';
-            traktStatus.classList.remove('text-slate-500');
-            traktStatus.classList.add('text-green-400');
-        }
-        const traktLogoutBtn = document.getElementById('traktLogoutBtn');
-        if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
+        if (traktStatus) traktStatus.textContent = 'Connected';
         setProviderConnected('trakt', true);
         if (settings.trakt_access_token !== window.STORED_SECRET) {
             validateAndShowTraktUser(settings.trakt_access_token);
@@ -690,13 +684,7 @@ function restoreWatchHistoryState(settings) {
             access_token: settings.simkl_access_token,
         };
         const simklSyncStatus = document.getElementById('simklSyncStatus');
-        if (simklSyncStatus) {
-            simklSyncStatus.textContent = 'Connected';
-            simklSyncStatus.classList.remove('text-slate-500');
-            simklSyncStatus.classList.add('text-green-400');
-        }
-        const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');
-        if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
+        if (simklSyncStatus) simklSyncStatus.textContent = 'Connected';
         setProviderConnected('simkl', true);
         if (settings.simkl_access_token !== window.STORED_SECRET) {
             validateAndShowSimklUser(settings.simkl_access_token);

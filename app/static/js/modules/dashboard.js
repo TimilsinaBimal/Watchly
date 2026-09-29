@@ -3,7 +3,7 @@
 // nav click. Account deletion lives in the Save & Install flow, not here.
 
 import { openNuvioInstall } from './nuvio.js';
-import { escapeHtml } from './ui.js';
+import { escapeHtml, stremioAppUrl, stremioWebUrl } from './ui.js';
 import { switchSection } from './navigation.js';
 
 let appState = null;
@@ -465,9 +465,8 @@ function animateCount(el, target) {
 
 function renderInstallLink() {
     const url = dashboardData.manifest_url || '';
-    // stremio:// deep link opens the install dialog in the Stremio app; web link installs via web.stremio.com.
-    $('dashInstallBtn').href = url.replace(/^https?:\/\//, 'stremio://');
-    $('dashInstallWebBtn').href = `https://web.stremio.com/#/addons?addon=${encodeURIComponent(url)}`;
+    $('dashInstallBtn').href = stremioAppUrl(url);
+    $('dashInstallWebBtn').href = stremioWebUrl(url);
 }
 
 function renderKpis(stats) {

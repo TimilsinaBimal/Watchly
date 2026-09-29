@@ -7,6 +7,7 @@ import {
     initializeEyeToggle,
     initializePasswordToggleButton,
     initializeValidatedSecretField,
+    LOADING_ICON,
     setValidationMessage
 } from './field-helpers.js';
 import { initializeSuccessActions, showSuccessSection } from './form-success.js';
@@ -14,9 +15,6 @@ import { initializeYearSliderControl } from './year-slider.js';
 import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 import { setProviderConnected } from './accounts.js';
 import { getPreparedStremioProfiles, recallProviderAccount } from './auth.js';
-
-const YEAR_RANGE_DEFAULTS = window.YEAR_RANGE_DEFAULTS || { min: 1970, max: new Date().getFullYear() };
-const LOADING_ICON = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
 
 // DOM Elements - will be initialized
 let submitBtn = null;
@@ -28,7 +26,6 @@ let seriesGenreList = null;
 let appState = null;
 let resetApp = null;
 let validatePosterRatingApiKey = null;
-let updateYearSlider = () => {};
 
 export function initializeForm(domElements, state, actions) {
     submitBtn = domElements.submitBtn;
@@ -42,15 +39,21 @@ export function initializeForm(domElements, state, actions) {
 
     initializeFormSubmission();
     initializeGenreLists();
-    initializeLanguageSelect();
-    initializePasswordToggles();
-    initializeSuccessHandlers();
+    initializePasswordToggleButton();
+    initializeSuccessActions({
+        emailInput,
+        passwordInput,
+        resetApp,
+        setLoading,
+        showError
+    });
     validatePosterRatingApiKey = initializePosterRatingProvider();
     initializeTmdb();
     initializeSimkl();
     initializeLlm();
-    updateYearSlider = initializeYearSliderControl();
+    const updateYearSlider = initializeYearSliderControl();
     initializeWatchHistorySource();
+    return updateYearSlider;
 }
 
 async function postJson(url, payload) {
@@ -64,81 +67,54 @@ async function postJson(url, payload) {
 }
 
 function getRequestPayload() {
-    const catalogs = appState ? appState.catalogs : [];
-    const authKey = (document.getElementById('authKey')?.value || '').trim() || undefined;
-    const hasSelectedProfile = !!(document.getElementById('stremioProfileId')?.value && authKey);
+    const authKey = document.getElementById('authKey').value.trim() || undefined;
+    const hasSelectedProfile = !!(document.getElementById('stremioProfileId').value && authKey);
+
+    const posterProvider = document.getElementById('posterRatingProvider').value;
+    const posterApiKey = document.getElementById('posterRatingApiKey').value.trim();
+    const posterUrlTemplate = document.getElementById('posterRatingUrlTemplate').value.trim();
+    let posterRating = null;
+    if (posterProvider === 'custom' && posterUrlTemplate) {
+        posterRating = { provider: 'custom', api_key: posterApiKey || null, url_template: posterUrlTemplate };
+    } else if (posterProvider && posterApiKey) {
+        posterRating = { provider: posterProvider, api_key: posterApiKey };
+    }
+
+    const llmProvider = document.getElementById('llmProvider').value;
+    const llmApiKey = document.getElementById('llmApiKey').value.trim();
 
     return {
         authKey,
-        email: hasSelectedProfile ? undefined : emailInput?.value.trim() || undefined,
-        password: hasSelectedProfile ? undefined : passwordInput?.value || undefined,
-        catalogs: catalogs.map(catalog => ({
+        email: hasSelectedProfile ? undefined : emailInput.value.trim() || undefined,
+        password: hasSelectedProfile ? undefined : passwordInput.value || undefined,
+        catalogs: appState.catalogs.map(catalog => ({
             id: catalog.id,
             name: catalog.name,
-            enabled: catalog.enabled !== false,
-            enabled_movie: catalog.enabledMovie !== false,
-            enabled_series: catalog.enabledSeries !== false,
-            display_at_home: catalog.display_at_home !== false,
-            shuffle: catalog.shuffle === true,
+            enabled: catalog.enabled,
+            enabled_movie: catalog.enabledMovie,
+            enabled_series: catalog.enabledSeries,
+            display_at_home: catalog.display_at_home,
+            shuffle: catalog.shuffle,
             rows: catalog.rows
         })),
-        language: languageSelect?.value || 'english',
-        year_min: parseInt(document.getElementById('yearMin')?.value || String(YEAR_RANGE_DEFAULTS.min), 10),
-        year_max: parseInt(document.getElementById('yearMax')?.value || String(YEAR_RANGE_DEFAULTS.max), 10),
-        popularity: document.getElementById('popularitySelect')?.value || 'balanced',
-        sorting_order: document.getElementById('sortingOrderSelect')?.value || 'default',
-        poster_rating_provider: document.getElementById('posterRatingProvider')?.value || '',
-        poster_rating_api_key: document.getElementById('posterRatingApiKey')?.value.trim() || '',
-        poster_rating_url_template: document.getElementById('posterRatingUrlTemplate')?.value.trim() || '',
-        tmdb_api_key: document.getElementById('tmdbApiKey')?.value.trim() || '',
-        simkl_api_key: document.getElementById('simklApiKey')?.value.trim() || '',
-        llm_provider: document.getElementById('llmProvider')?.value || '',
-        llm_api_key: document.getElementById('llmApiKey')?.value.trim() || '',
-        llm_model: document.getElementById('llmModel')?.value.trim() || '',
-        excluded_movie_genres: Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value),
-        excluded_series_genres: Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value),
-        watch_history_source: document.getElementById('watchHistorySource')?.value || 'stremio',
-    };
-}
-
-function buildTokenPayload(formData) {
-    let posterRating;
-    if (formData.poster_rating_provider === 'custom' && formData.poster_rating_url_template) {
-        posterRating = {
-            provider: 'custom',
-            api_key: formData.poster_rating_api_key || null,
-            url_template: formData.poster_rating_url_template
-        };
-    } else if (formData.poster_rating_provider && formData.poster_rating_api_key) {
-        posterRating = {
-            provider: formData.poster_rating_provider,
-            api_key: formData.poster_rating_api_key
-        };
-    }
-
-    return {
-        authKey: formData.authKey,
-        email: formData.email,
-        password: formData.password,
-        catalogs: formData.catalogs,
-        language: formData.language,
-        year_min: formData.year_min,
-        year_max: formData.year_max,
-        popularity: formData.popularity,
-        sorting_order: formData.sorting_order,
-        poster_rating: posterRating || null,
-        tmdb_api_key: formData.tmdb_api_key || undefined,
-        simkl_api_key: formData.simkl_api_key,
-        llm: (formData.llm_provider && formData.llm_api_key)
+        language: languageSelect.value,
+        year_min: parseInt(document.getElementById('yearMin').value, 10),
+        year_max: parseInt(document.getElementById('yearMax').value, 10),
+        popularity: document.getElementById('popularitySelect').value,
+        sorting_order: document.getElementById('sortingOrderSelect').value,
+        poster_rating: posterRating,
+        tmdb_api_key: document.getElementById('tmdbApiKey').value.trim() || undefined,
+        simkl_api_key: document.getElementById('simklApiKey').value.trim(),
+        llm: (llmProvider && llmApiKey)
             ? {
-                provider: formData.llm_provider,
-                api_key: formData.llm_api_key,
-                model: formData.llm_model || undefined,
+                provider: llmProvider,
+                api_key: llmApiKey,
+                model: document.getElementById('llmModel').value.trim() || undefined,
             }
             : undefined,
-        excluded_movie_genres: formData.excluded_movie_genres,
-        excluded_series_genres: formData.excluded_series_genres,
-        watch_history_source: formData.watch_history_source,
+        excluded_movie_genres: Array.from(document.querySelectorAll('input[name="movie-genre"]:checked')).map(cb => cb.value),
+        excluded_series_genres: Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value),
+        watch_history_source: document.getElementById('watchHistorySource').value,
         trakt_access_token: window._watchlyOAuth?.trakt?.access_token || undefined,
         trakt_refresh_token: window._watchlyOAuth?.trakt?.refresh_token || undefined,
         trakt_token_expires_at: window._watchlyOAuth?.trakt?.expires_at || undefined,
@@ -152,19 +128,19 @@ function validateFormData(formData) {
     const hasSimkl = !!window._watchlyOAuth?.simkl?.access_token;
 
     if (!hasStremio && !hasTrakt && !hasSimkl) {
-        showError('generalError', 'Connect at least one account: Stremio, Trakt, or Simkl.');
+        showError('Connect at least one account: Stremio, Trakt, or Simkl.');
         switchSection('login');
         return false;
     }
 
     if (formData.watch_history_source === 'stremio' && !hasStremio) {
-        showError('generalError', 'Login with Stremio, or pick Trakt/Simkl as your watch history source.');
+        showError('Login with Stremio, or pick Trakt/Simkl as your watch history source.');
         switchSection('login');
         return false;
     }
 
     if (!formData.tmdb_api_key) {
-        showError('generalError', 'TMDB API key is required.');
+        showError('TMDB API key is required.');
         const tmdbInput = document.getElementById('tmdbApiKey');
         if (tmdbInput) {
             tmdbInput.focus();
@@ -184,12 +160,12 @@ function initializeFormSubmission() {
         e.preventDefault();
         clearErrors();
 
-        const formData = getRequestPayload();
-        if (!validateFormData(formData)) {
+        const payload = getRequestPayload();
+        if (!validateFormData(payload)) {
             return;
         }
 
-        if (formData.poster_rating_provider && validatePosterRatingApiKey) {
+        if (document.getElementById('posterRatingProvider').value && validatePosterRatingApiKey) {
             const isValid = await validatePosterRatingApiKey();
             if (!isValid) {
                 return;
@@ -199,7 +175,6 @@ function initializeFormSubmission() {
         setLoading(true);
 
         try {
-            const payload = buildTokenPayload(formData);
             const preparedProfiles = getPreparedStremioProfiles();
             const profileRequests = preparedProfiles.length ? preparedProfiles : [null];
             const installations = [];
@@ -258,17 +233,13 @@ function initializeFormSubmission() {
                 }
             }
 
-            if (appState && installations.length) {
-                const firstInstallation = installations[0];
-                const manifestPath = new URL(firstInstallation.url).pathname.split('/').filter(Boolean);
-                appState.auth.token = firstInstallation.token || manifestPath.at(-2) || '';
-                appState.auth.hasInstall = !!appState.auth.token;
-            }
+            appState.auth.token = installations[0].token;
+            appState.auth.hasInstall = true;
 
-            showSuccess(installations.length === 1 ? installations[0] : installations);
+            showSuccessSection(installations);
         } catch (error) {
             console.error('Error:', error);
-            showError('generalError', error.message);
+            showError(error.message);
         } finally {
             setLoading(false);
         }
@@ -297,10 +268,6 @@ function renderGenreList(container, genres, namePrefix) {
             <span class="text-sm text-slate-300 group-hover:text-white transition-colors select-none">${escapeHtml(genre.name)}</span>
         </label>
     `).join('');
-}
-
-function initializeLanguageSelect() {
-    if (!languageSelect) return;
 }
 
 // Poster Rating Provider
@@ -498,7 +465,7 @@ function initializeTmdb() {
         emptyMessage: 'Please enter a TMDB API key',
         successMessage: 'TMDB API key is valid ✓',
         request: (apiKey) => postJson('/tmdb/validation', { api_key: apiKey }),
-        getErrorMessage: (data) => data.message || 'Invalid TMDB API key'
+        errorMessage: 'Invalid TMDB API key'
     });
 }
 
@@ -514,7 +481,7 @@ function initializeSimkl() {
         emptyMessage: 'Please enter a Simkl API key',
         successMessage: 'Simkl API key is valid ✓',
         request: (apiKey) => postJson('/simkl/validation', { api_key: apiKey }),
-        getErrorMessage: (data) => data.message || 'Invalid Simkl API key'
+        errorMessage: 'Invalid Simkl API key'
     });
 }
 
@@ -562,21 +529,7 @@ function initializeLlm() {
             api_key: apiKey,
             model: modelInput?.value.trim() || undefined,
         }),
-        getErrorMessage: (data) => data.message || 'Could not validate this key'
-    });
-}
-
-function initializePasswordToggles() {
-    initializePasswordToggleButton();
-}
-
-function initializeSuccessHandlers() {
-    initializeSuccessActions({
-        emailInput,
-        passwordInput,
-        resetApp,
-        setLoading,
-        showError
+        errorMessage: 'Could not validate this key'
     });
 }
 
@@ -597,47 +550,14 @@ function setLoading(loading) {
     if (loader) loader.classList.add('hidden');
 }
 
-function showError(target, message) {
-    if (target === 'generalError') {
-        const errEl = document.getElementById('errorMessage');
-        if (errEl) {
-            errEl.querySelector('.message-content').textContent = message;
-            errEl.classList.remove('hidden');
-        } else {
-            showToast(message, 'error');
-        }
-        return;
-    }
-
-    if (target === 'stremioAuthSection') {
-        showToast(message, 'error');
-        return;
-    }
-
-    const element = document.getElementById(target);
-    if (!element) return;
-
-    element.classList.add('border-red-500');
-    element.focus();
+function showError(message) {
+    const errEl = document.getElementById('errorMessage');
+    errEl.querySelector('.message-content').textContent = message;
+    errEl.classList.remove('hidden');
 }
 
 export function clearErrors() {
-    const errEl = document.getElementById('errorMessage');
-    if (errEl) {
-        errEl.classList.add('hidden');
-    }
-
-    document.querySelectorAll('.border-red-500').forEach(element => {
-        element.classList.remove('border-red-500');
-    });
-}
-
-export function refreshYearSlider() {
-    updateYearSlider();
-}
-
-function showSuccess(url, token) {
-    showSuccessSection(url, token);
+    document.getElementById('errorMessage').classList.add('hidden');
 }
 
 // Watch History Source + OAuth
@@ -658,21 +578,11 @@ function initializeWatchHistorySource() {
 
         if (data.provider === 'trakt') {
             window._watchlyOAuth.trakt = data.tokens;
-            if (traktStatus) {
-                traktStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
-                traktStatus.classList.remove('text-slate-500');
-                traktStatus.classList.add('text-green-400');
-            }
-            if (traktLogoutBtn) traktLogoutBtn.classList.remove('hidden');
+            if (traktStatus) traktStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
             setProviderConnected('trakt', true);
         } else if (data.provider === 'simkl') {
             window._watchlyOAuth.simkl = data.tokens;
-            if (simklSyncStatus) {
-                simklSyncStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
-                simklSyncStatus.classList.remove('text-slate-500');
-                simklSyncStatus.classList.add('text-green-400');
-            }
-            if (simklSyncLogoutBtn) simklSyncLogoutBtn.classList.remove('hidden');
+            if (simklSyncStatus) simklSyncStatus.textContent = `Connected as ${data.username || 'Unknown'}`;
             setProviderConnected('simkl', true);
         }
 
@@ -699,12 +609,6 @@ function initializeWatchHistorySource() {
     if (traktLogoutBtn) {
         traktLogoutBtn.addEventListener('click', () => {
             delete window._watchlyOAuth.trakt;
-            if (traktStatus) {
-                traktStatus.textContent = 'Not connected';
-                traktStatus.classList.remove('text-green-400');
-                traktStatus.classList.add('text-slate-500');
-            }
-            traktLogoutBtn.classList.add('hidden');
             setProviderConnected('trakt', false);
         });
     }
@@ -712,12 +616,6 @@ function initializeWatchHistorySource() {
     if (simklSyncLogoutBtn) {
         simklSyncLogoutBtn.addEventListener('click', () => {
             delete window._watchlyOAuth.simkl;
-            if (simklSyncStatus) {
-                simklSyncStatus.textContent = 'Not connected';
-                simklSyncStatus.classList.remove('text-green-400');
-                simklSyncStatus.classList.add('text-slate-500');
-            }
-            simklSyncLogoutBtn.classList.add('hidden');
             setProviderConnected('simkl', false);
         });
     }

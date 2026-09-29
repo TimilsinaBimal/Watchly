@@ -1,4 +1,4 @@
-import { showConfirm, showToast } from './ui.js';
+import { showConfirm, showToast, stremioAppUrl, stremioWebUrl } from './ui.js';
 import { switchSection } from './navigation.js';
 import { openNuvioInstall } from './nuvio.js';
 
@@ -26,7 +26,7 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
             e.preventDefault();
             e.stopPropagation();
             const url = document.getElementById('addonUrl').textContent;
-            window.location.href = `stremio://${url.replace(/^https?:\/\//, '')}`;
+            window.location.href = stremioAppUrl(url);
         });
     }
 
@@ -36,7 +36,7 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
             e.preventDefault();
             e.stopPropagation();
             const url = document.getElementById('addonUrl').textContent;
-            window.open(`https://web.stremio.com/#/addons?addon=${encodeURIComponent(url)}`, '_blank');
+            window.open(stremioWebUrl(url), '_blank');
         });
     }
 
@@ -104,7 +104,7 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
             const password = passwordInput?.value;
 
             if (!sAuthKey && !(email && password)) {
-                showError('generalError', 'Provide Stremio auth key or email & password to delete your account.');
+                showError('Provide Stremio auth key or email & password to delete your account.');
                 switchSection('login');
                 return;
             }
@@ -121,7 +121,7 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
                 showToast('Account deleted successfully.', 'success');
                 if (resetApp) resetApp();
             } catch (e) {
-                showError('generalError', e.message);
+                showError(e.message);
             } finally {
                 setLoading(false);
             }
@@ -236,7 +236,7 @@ function pollWarmStatus(tokens, deadline) {
     }, POLL_INTERVAL_MS);
 }
 
-export function showSuccessSection(result, legacyToken) {
+export function showSuccessSection(installations) {
     const sections = {
         welcome: document.getElementById('sect-welcome'),
         login: document.getElementById('sect-login'),
@@ -253,11 +253,6 @@ export function showSuccessSection(result, legacyToken) {
     if (!sections.success) return;
 
     sections.success.classList.remove('hidden');
-    const installations = Array.isArray(result)
-        ? result
-        : result
-            ? [{ url: typeof result === 'string' ? result : result.url, token: legacyToken || result.token }]
-            : [];
     const isBatch = installations.length > 1;
     const singleInstall = document.getElementById('singleAddonInstall');
     const profileInstances = document.getElementById('profileAddonInstances');
@@ -278,7 +273,7 @@ export function showSuccessSection(result, legacyToken) {
         }
         renderProfileInstallations(profileInstances, installations);
     } else {
-        const url = installations[0]?.url || '';
+        const url = installations[0].url;
         if (subheading) subheading.textContent = 'Your personalized catalog is ready.';
         const addonUrl = document.getElementById('addonUrl');
         if (addonUrl) addonUrl.textContent = url;
@@ -286,16 +281,6 @@ export function showSuccessSection(result, legacyToken) {
     }
 
     stopWarmPolling();
-
-    const warmTokens = installations.map(installation => installation?.token).filter(Boolean);
-    if (legacyToken && !warmTokens.length) warmTokens.push(legacyToken);
-
-    // Without a token we can't track progress, so just show the URL or profile
-    // instances — the rows build on first request as they always did.
-    if (!warmTokens.length) {
-        revealInstall();
-        return;
-    }
 
     const progress = document.getElementById('warmProgress');
     const payload = document.getElementById('successPayload');
@@ -306,7 +291,7 @@ export function showSuccessSection(result, legacyToken) {
     if (subheading) subheading.textContent = 'Getting your recommendations ready before you install.';
 
     renderWarmState({ state: 'pending' });
-    pollWarmStatus(warmTokens, Date.now() + POLL_TIMEOUT_MS);
+    pollWarmStatus(installations.map(installation => installation.token), Date.now() + POLL_TIMEOUT_MS);
 }
 
 function renderProfileInstallations(container, installations) {
@@ -333,10 +318,10 @@ function renderProfileInstallations(container, installations) {
         installation.statusElement = metadata;
 
         appButton.addEventListener('click', () => {
-            window.location.href = `stremio://${installation.url.replace(/^https?:\/\//, '')}`;
+            window.location.href = stremioAppUrl(installation.url);
         });
         webButton.addEventListener('click', () => {
-            window.open(`https://web.stremio.com/#/addons?addon=${encodeURIComponent(installation.url)}`, '_blank');
+            window.open(stremioWebUrl(installation.url), '_blank');
         });
         copyButton.addEventListener('click', async () => {
             try {

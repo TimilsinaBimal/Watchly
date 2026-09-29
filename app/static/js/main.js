@@ -5,7 +5,7 @@ import { initializeChangelog, initializeFooter, initializeKofi, initializeProvid
 import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initializeMobileNav, updateMobileLayout } from './modules/navigation.js';
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
 import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
-import { initializeForm, clearErrors, refreshYearSlider } from './modules/form.js';
+import { initializeForm, clearErrors } from './modules/form.js';
 import { initializeAccountsUI } from './modules/accounts.js';
 import { initializeDashboard } from './modules/dashboard.js';
 
@@ -109,9 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeCatalogList({ catalogList }, appState);
 
     // Initialize form handling
-    initializeForm(
+    const updateYearSlider = initializeForm(
         {
-            configForm,
             submitBtn,
             emailInput,
             passwordInput,
@@ -135,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appState,
         {
             resetApp,
-            updateYearSlider: refreshYearSlider
+            updateYearSlider
         }
     );
 

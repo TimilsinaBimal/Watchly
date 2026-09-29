@@ -1,5 +1,5 @@
 export const SHOW_PASSWORD_ICON = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
-const LOADING_ICON = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+export const LOADING_ICON = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
 
 export function setValidationMessage(validationMessage, message, type) {
     if (!validationMessage) return;
@@ -56,8 +56,8 @@ export function markFieldAsSaved({ input, toggleBtn, hintEl, hint }) {
     input.addEventListener('input', onEdit);
 }
 
-export function initializePasswordToggleButton(selector = '.toggle-btn') {
-    document.querySelectorAll(selector).forEach(btn => {
+export function initializePasswordToggleButton() {
+    document.querySelectorAll('.toggle-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const targetId = btn.getAttribute('data-target');
             const input = document.getElementById(targetId);
@@ -87,15 +87,8 @@ export function initializeValidatedSecretField({
     emptyMessage,
     successMessage,
     request,
-    getErrorMessage,
-    onValid,
-    onInvalid,
-    onErrorMessage = 'Validation failed. Please try again.'
+    errorMessage
 }) {
-    if (!input || !validateBtn || !validationMessage) {
-        return async () => false;
-    }
-
     initializeEyeToggle({ input, toggleBtn, eyeIcon, eyeOffIcon });
 
     async function validate() {
@@ -120,15 +113,13 @@ export function initializeValidatedSecretField({
             const data = await request(value);
             if (data.valid) {
                 setValidationMessage(validationMessage, successMessage, 'success');
-                if (onValid) onValid(data);
                 return true;
             }
 
-            setValidationMessage(validationMessage, getErrorMessage ? getErrorMessage(data) : 'Invalid API key', 'error');
-            if (onInvalid) onInvalid(data);
+            setValidationMessage(validationMessage, data.message || errorMessage, 'error');
             return false;
         } catch (error) {
-            setValidationMessage(validationMessage, onErrorMessage, 'error');
+            setValidationMessage(validationMessage, 'Validation failed. Please try again.', 'error');
             return false;
         } finally {
             validateBtn.disabled = false;

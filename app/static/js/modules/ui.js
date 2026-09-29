@@ -7,6 +7,14 @@ export function escapeHtml(text) {
     return div.innerHTML;
 }
 
+export function stremioAppUrl(url) {
+    return `stremio://${url.replace(/^https?:\/\//, '')}`;
+}
+
+export function stremioWebUrl(url) {
+    return `https://web.stremio.com/#/addons?addon=${encodeURIComponent(url)}`;
+}
+
 // Toast Notification System
 export function showToast(message, type = 'info', duration = 5000) {
     const container = document.getElementById('toastContainer');
