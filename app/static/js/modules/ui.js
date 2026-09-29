@@ -229,7 +229,7 @@ export function initializeChangelog() {
     const closeBtn = document.getElementById('close-changelog');
     const content = document.getElementById('changelog-content');
 
-    if (!badge || !modal) return;
+    if (!modal) return;
 
     let loaded = false;
     const loadChangelog = async () => {
@@ -260,7 +260,7 @@ export function initializeChangelog() {
         document.body.classList.remove('overflow-hidden');
     };
 
-    badge.addEventListener('click', openModal);
+    [badge, ...document.querySelectorAll('[data-open-changelog]')].forEach(el => el?.addEventListener('click', openModal));
     closeBtn.addEventListener('click', closeModal);
     backdrop.addEventListener('click', closeModal);
     document.addEventListener('keydown', (e) => {

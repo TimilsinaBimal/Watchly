@@ -1,10 +1,12 @@
 <header id="appHeader"
-    class="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0b0c0f]/80 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
+    class="sticky top-0 z-40 border-b border-white/[0.06] bg-[#050505]/85 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
     <div class="mx-auto flex max-w-[88rem] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 md:flex-nowrap md:px-8">
         <button id="nav-welcome" type="button" class="nav-item flex items-center gap-2.5 rounded-lg" aria-label="Watchly home">
             <img src="/app/static/logo.png" alt="" class="h-8 w-8 rounded-lg bg-black ring-1 ring-white/15">
             <span class="text-lg font-semibold tracking-tight text-white">Watchly</span>
         </button>
+        <a href="/changelog" data-open-changelog title="What's new in v{{ app_version }}"
+            class="hidden rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-soft transition hover:bg-accent/20 sm:inline-block">v{{ app_version }}</a>
 
         <nav aria-label="Setup steps"
             class="order-last flex w-full items-center justify-between gap-1 sm:justify-center md:order-none md:mx-auto md:w-auto">

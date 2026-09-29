@@ -77,13 +77,15 @@
         <div class="card flex flex-col justify-between lg:col-span-4">
             <div class="flex items-center justify-between">
                 <h2 class="card-title">Watchly today</h2>
-                <a href="/changelog" id="versionBadge" title="What's new"
-                    class="badge border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-neutral-200 hover:text-white">
-                    v{{ app_version }} &middot; What's new
+                <a href="/changelog" id="versionBadge" title="See what's new in this release"
+                    class="group inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/10 py-1 pl-1 pr-3 text-xs font-medium text-accent-soft transition hover:bg-accent/20">
+                    <span class="rounded-full bg-accent px-2 py-0.5 font-semibold text-accent-ink">v{{ app_version }}</span>
+                    What's new
+                    <span class="transition group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
                 </a>
             </div>
             <div class="mt-6">
-                <div class="text-5xl font-semibold tracking-tight text-white">{{ "{:,}".format(total_users) }}</div>
+                <div class="text-5xl font-semibold tracking-tight text-white" title="{{ "{:,}".format(total_users) }}">{{ total_users | compact }}</div>
                 <div class="mt-1 text-sm text-neutral-300">people have set up Watchly</div>
             </div>
         </div>
