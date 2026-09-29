@@ -204,6 +204,7 @@ class DynamicCatalogService:
                 True,
             )
         )
+        catalogs.extend(get_catalogs_from_config(user_settings, "watchly.rewatch", "Watch it again", True, True))
 
         if token:
             for content_type in ("movie", "series"):
