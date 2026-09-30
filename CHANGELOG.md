@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.15.0 - 2026-09-30
 
 ### Added
 
@@ -22,6 +22,7 @@
 - A scheduled catalog refresh no longer writes back the credentials it started with, which could undo a settings save or a Trakt token rotation made while it ran, or recreate a token deleted in the meantime.
 - A stale row requested while a scheduled refresh runs is rebuilt after the refresh instead of alongside it, where it could be built from the old library and cached as fresh.
 - A stored API key or OAuth token that fails to encrypt is no longer saved in plain text; the save fails instead. A secret that no longer decrypts is dropped rather than sent to the provider as ciphertext.
+- A Trakt or Simkl request that failed (expired token, outage) came back as an empty history, which was then cached as the user's library: the dashboard showed zero titles and the rows were built from nothing, and it stayed that way until a manual refresh. A failed fetch now raises and nothing is cached. A token Trakt rejects is cleared, but a refresh that fails for another reason (network, or a concurrent request already rotated it) no longer clears it.
 
 
 ## 1.14.0 - 2026-09-20
