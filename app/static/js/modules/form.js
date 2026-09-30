@@ -13,6 +13,7 @@ import { initializeSuccessActions, showSuccessSection } from './form-success.js'
 import { initializeYearSliderControl } from './year-slider.js';
 import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 import { setProviderConnected } from './accounts.js';
+import { openNuvioConnect } from './nuvio.js';
 import { getPreparedStremioProfiles, recallProviderAccount } from './auth.js';
 
 const YEAR_RANGE_DEFAULTS = window.YEAR_RANGE_DEFAULTS || { min: 1970, max: new Date().getFullYear() };
@@ -143,6 +144,12 @@ function buildTokenPayload(formData) {
         trakt_refresh_token: window._watchlyOAuth?.trakt?.refresh_token || undefined,
         trakt_token_expires_at: window._watchlyOAuth?.trakt?.expires_at || undefined,
         simkl_access_token: window._watchlyOAuth?.simkl?.access_token || undefined,
+        nuvio_access_token: window._watchlyNuvio?.access_token || undefined,
+        nuvio_refresh_token: window._watchlyNuvio?.refresh_token || undefined,
+        nuvio_expires_at: window._watchlyNuvio?.expires_at || undefined,
+        nuvio_user_id: window._watchlyNuvio?.user_id || undefined,
+        nuvio_profile_id: window._watchlyNuvio?.profile_id || undefined,
+        nuvio_profile_name: window._watchlyNuvio?.profile_name || undefined,
     };
 }
 
@@ -150,15 +157,16 @@ function validateFormData(formData) {
     const hasStremio = !!(formData.authKey || (formData.email && formData.password));
     const hasTrakt = !!window._watchlyOAuth?.trakt?.access_token;
     const hasSimkl = !!window._watchlyOAuth?.simkl?.access_token;
+    const hasNuvio = !!window._watchlyNuvio?.access_token;
 
-    if (!hasStremio && !hasTrakt && !hasSimkl) {
-        showError('generalError', 'Connect at least one account: Stremio, Trakt, or Simkl.');
+    if (!hasStremio && !hasTrakt && !hasSimkl && !hasNuvio) {
+        showError('generalError', 'Connect at least one account: Stremio, Trakt, Simkl or Nuvio.');
         switchSection('login');
         return false;
     }
 
     if (formData.watch_history_source === 'stremio' && !hasStremio) {
-        showError('generalError', 'Login with Stremio, or pick Trakt/Simkl as your watch history source.');
+        showError('generalError', 'Login with Stremio, or pick Trakt/Simkl/Nuvio as your watch history source.');
         switchSection('login');
         return false;
     }
@@ -648,6 +656,9 @@ function initializeWatchHistorySource() {
     const simklLoginBtn = document.getElementById('simklLoginBtn');
     const simklSyncStatus = document.getElementById('simklSyncStatus');
     const simklSyncLogoutBtn = document.getElementById('simklSyncLogoutBtn');
+    const nuvioConnectBtn = document.getElementById('nuvioConnectBtn');
+    const nuvioStatus = document.getElementById('nuvioStatus');
+    const nuvioLogoutBtn = document.getElementById('nuvioLogoutBtn');
 
     window._watchlyOAuth = window._watchlyOAuth || {};
 
@@ -718,6 +729,39 @@ function initializeWatchHistorySource() {
             }
             simklSyncLogoutBtn.classList.add('hidden');
             setProviderConnected('simkl', false);
+        });
+    }
+
+    if (nuvioConnectBtn) {
+        nuvioConnectBtn.addEventListener('click', () => {
+            // Nuvio signs in from this page (see nuvio.js) — the session is handed
+            // back here and travels with the next save, never through a redirect.
+            openNuvioConnect((session) => {
+                window._watchlyNuvio = session;
+                if (nuvioStatus) {
+                    nuvioStatus.textContent = session.profile_name ? `Connected — ${session.profile_name}` : 'Connected';
+                    nuvioStatus.classList.remove('text-slate-500');
+                    nuvioStatus.classList.add('text-green-400');
+                }
+                if (nuvioLogoutBtn) nuvioLogoutBtn.classList.remove('hidden');
+                setProviderConnected('nuvio', true);
+                if (!appState?.auth?.loggedIn) {
+                    recallProviderAccount('nuvio', session);
+                }
+            });
+        });
+    }
+
+    if (nuvioLogoutBtn) {
+        nuvioLogoutBtn.addEventListener('click', () => {
+            delete window._watchlyNuvio;
+            if (nuvioStatus) {
+                nuvioStatus.textContent = 'Not connected';
+                nuvioStatus.classList.remove('text-green-400');
+                nuvioStatus.classList.add('text-slate-500');
+            }
+            nuvioLogoutBtn.classList.add('hidden');
+            setProviderConnected('nuvio', false);
         });
     }
 }

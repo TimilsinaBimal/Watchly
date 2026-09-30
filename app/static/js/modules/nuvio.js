@@ -1,24 +1,38 @@
-// "Install on Nuvio" — writes the addon into the user's Nuvio Sync account.
+// Nuvio sign-in — used both to install the addon and to connect Nuvio as a
+// watch history source.
 //
-// Nuvio has no install deep link, but its apps sync installed addons from a
-// Supabase table. We sign the user in with their Nuvio credentials directly
-// from the browser (same approach as the community Trakt-Nuvio bridge) and
-// insert the addon row. Credentials and tokens never touch Watchly's servers.
+// Nuvio has no install deep link, and its account data (installed addons, watch
+// history, profiles) lives in one Supabase project that it advertises at
+// `/.well-known/nuvio`. We sign the user in with their Nuvio email and password
+// straight from this page — the same approach as the community Trakt-Nuvio
+// bridge — and then either insert the addon row or hand the session to the
+// configure page. Nuvio credentials and tokens never touch Watchly's servers:
+// only the session the user connects is stored, with the account.
 //
 // This rides on Nuvio's unofficial API: failures are expected eventually, so
-// every error path falls back to "copy the URL and paste it in Nuvio".
+// every error path falls back to the manual path.
 
-const NUVIO_BASE = 'https://dpyhjjcoabcglfmgecug.supabase.co';
-// Public (publishable) client key, same one Nuvio's own web app ships.
-const NUVIO_KEY = 'sb_publishable_zcNkgqGJjBtj8GoRlMvl9A_zkdmXhf5';
+let nuvioConfig = null;
 
 const FALLBACK_HINT = 'You can always install manually: copy the manifest URL, then in Nuvio go to Settings → Addons and paste it.';
 
+async function nuvioBackend() {
+    if (nuvioConfig) return nuvioConfig;
+    const response = await fetch('/nuvio/config');
+    if (!response.ok) {
+        throw new Error('Could not reach Nuvio. Try again in a moment.');
+    }
+    const data = await response.json();
+    nuvioConfig = { base: data.backend_url, key: data.publishable_key };
+    return nuvioConfig;
+}
+
 async function nuvioRequest(path, { method = 'GET', token, body, headers = {} } = {}) {
-    const response = await fetch(`${NUVIO_BASE}${path}`, {
+    const { base, key } = await nuvioBackend();
+    const response = await fetch(`${base}${path}`, {
         method,
         headers: {
-            apikey: NUVIO_KEY,
+            apikey: key,
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...headers,
@@ -46,7 +60,12 @@ async function nuvioLogin(email, password) {
     if (!data?.access_token || !data?.user?.id) {
         throw new Error('Nuvio did not return a session. Check your credentials.');
     }
-    return { token: data.access_token, userId: data.user.id };
+    return {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token || '',
+        expires_at: Math.floor(Date.now() / 1000) + (Number(data.expires_in) || 0),
+        user_id: data.user.id,
+    };
 }
 
 async function nuvioProfiles(token) {
@@ -94,13 +113,13 @@ function ensureModal() {
         <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" data-nuvio-close></div>
         <div class="relative bg-neutral-900 border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/50">
             <div class="flex items-start justify-between mb-1">
-                <h3 class="text-lg font-semibold text-white">Install on Nuvio</h3>
+                <h3 class="text-lg font-semibold text-white" id="nuvioModalTitle">Install on Nuvio</h3>
                 <button type="button" class="text-slate-500 hover:text-white transition" data-nuvio-close aria-label="Close">✕</button>
             </div>
             <p class="text-xs text-slate-500 mb-2">This signs you in to <strong class="text-slate-400">Nuvio</strong>,
                 not Watchly. Your Nuvio email and password go straight from this page to Nuvio's own servers &mdash;
                 Watchly never receives, stores or logs them.</p>
-            <p class="text-xs text-slate-500 mb-5">Prefer not to type them here? Close this and use
+            <p class="text-xs text-slate-500 mb-5" id="nuvioModalFallbackHint">Prefer not to type them here? Close this and use
                 <strong class="text-slate-400">Copy Link</strong> instead, then paste the URL into Nuvio under
                 Settings &rarr; Addons.</p>
 
@@ -115,7 +134,7 @@ function ensureModal() {
             </div>
 
             <div id="nuvioProfileStep" class="hidden grid gap-3">
-                <label class="text-xs text-slate-400">Choose the profile to install to</label>
+                <label class="text-xs text-slate-400" id="nuvioProfileLabel">Choose the profile to install to</label>
                 <select id="nuvioProfileSelect"
                     class="w-full appearance-none bg-neutral-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none"></select>
                 <button type="button" id="nuvioProfileInstallBtn"
@@ -161,36 +180,61 @@ function setBusy(button, busy, busyText) {
     }
 }
 
-export function openNuvioInstall(manifestUrl) {
-    if (!manifestUrl) return;
-    const modal = ensureModal();
+/**
+ * Sign in to Nuvio and either install the manifest or hand the session back.
+ *
+ * @param {object} options
+ * @param {string} [options.manifestUrl] install the addon into the chosen profile
+ * @param {(session: object) => void} [options.onSession] connect instead of install
+ */
+function openNuvioDialog({ manifestUrl, onSession } = {}) {
+    const installing = Boolean(manifestUrl);
+    if (!installing && !onSession) return;
 
+    const modal = ensureModal();
     const loginStep = modal.querySelector('#nuvioLoginStep');
     const profileStep = modal.querySelector('#nuvioProfileStep');
     const status = modal.querySelector('#nuvioStatus');
+    const profileBtn = modal.querySelector('#nuvioProfileInstallBtn');
+
+    modal.querySelector('#nuvioModalTitle').textContent = installing ? 'Install on Nuvio' : 'Connect Nuvio';
+    modal.querySelector('#nuvioProfileLabel').textContent = installing
+        ? 'Choose the profile to install to'
+        : 'Choose the profile to read your watch history from';
+    profileBtn.textContent = installing ? 'Install' : 'Connect';
+    modal.querySelector('#nuvioModalFallbackHint').classList.toggle('hidden', !installing);
+
     loginStep.classList.remove('hidden');
     profileStep.classList.add('hidden');
     status.classList.add('hidden');
 
     let session = null;
 
-    const finishInstall = async (profileId, button) => {
-        setBusy(button, true, 'Installing…');
+    const finish = async (profileId, profileName, button) => {
+        setBusy(button, true, installing ? 'Installing…' : 'Connecting…');
         try {
-            const result = await installToProfile({ ...session, profileId, manifestUrl });
-            loginStep.classList.add('hidden');
-            profileStep.classList.add('hidden');
-            setStatus('success', result === 'already-installed'
-                ? 'Watchly is already installed on this Nuvio profile.'
-                : 'Installed! Watchly will appear in Nuvio after its next sync (reopen the app if needed).');
+            if (installing) {
+                const result = await installToProfile({ ...session, userId: session.user_id, profileId, manifestUrl });
+                loginStep.classList.add('hidden');
+                profileStep.classList.add('hidden');
+                setStatus('success', result === 'already-installed'
+                    ? 'Watchly is already installed on this Nuvio profile.'
+                    : 'Installed! Watchly will appear in Nuvio after its next sync (reopen the app if needed).');
+            } else {
+                closeModal();
+                onSession({ ...session, profile_id: profileId, profile_name: profileName });
+            }
         } catch (err) {
-            setStatus('error', `Install failed: ${err.message}. ${FALLBACK_HINT}`);
+            setStatus('error', installing
+                ? `Install failed: ${err.message}. ${FALLBACK_HINT}`
+                : `Could not connect: ${err.message}`);
         } finally {
             setBusy(button, false);
         }
     };
 
     const submitBtn = modal.querySelector('#nuvioSubmitBtn');
+    submitBtn.textContent = installing ? 'Sign in & Install' : 'Sign in';
     submitBtn.onclick = async () => {
         const email = modal.querySelector('#nuvioEmail').value.trim();
         const password = modal.querySelector('#nuvioPassword').value;
@@ -204,10 +248,11 @@ export function openNuvioInstall(manifestUrl) {
             session = await nuvioLogin(email, password);
             // Session token in hand, so the password has no reason to stay in the DOM.
             modal.querySelector('#nuvioPassword').value = '';
-            const profiles = await nuvioProfiles(session.token);
+            const profiles = await nuvioProfiles(session.access_token);
 
             if (profiles.length === 1) {
-                await finishInstall(Number(profiles[0].profile_index) || 1, submitBtn);
+                const only = profiles[0];
+                await finish(Number(only.profile_index) || 1, only.name || 'Default', submitBtn);
             } else {
                 const select = modal.querySelector('#nuvioProfileSelect');
                 select.innerHTML = '';
@@ -223,18 +268,26 @@ export function openNuvioInstall(manifestUrl) {
                 status.classList.add('hidden');
             }
         } catch (err) {
-            setStatus('error', `${err.message} ${FALLBACK_HINT}`);
+            setStatus('error', installing ? `${err.message} ${FALLBACK_HINT}` : err.message);
         } finally {
             setBusy(submitBtn, false);
         }
     };
 
-    const profileInstallBtn = modal.querySelector('#nuvioProfileInstallBtn');
-    profileInstallBtn.onclick = () => {
-        const profileId = Number(modal.querySelector('#nuvioProfileSelect').value) || 1;
-        finishInstall(profileId, profileInstallBtn);
+    profileBtn.onclick = () => {
+        const select = modal.querySelector('#nuvioProfileSelect');
+        const selected = select.options[select.selectedIndex];
+        finish(Number(select.value) || 1, selected ? selected.textContent : '', profileBtn);
     };
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+}
+
+export function openNuvioInstall(manifestUrl) {
+    openNuvioDialog({ manifestUrl });
+}
+
+export function openNuvioConnect(onSession) {
+    openNuvioDialog({ onSession });
 }

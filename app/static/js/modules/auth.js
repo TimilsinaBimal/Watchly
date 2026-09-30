@@ -470,7 +470,9 @@ function setStremioProfileStatus(message, kind = 'neutral') {
 export async function recallProviderAccount(provider, tokens) {
     const payload = provider === 'trakt'
         ? { trakt_access_token: tokens.access_token }
-        : { simkl_access_token: tokens.access_token };
+        : provider === 'nuvio'
+            ? { nuvio_access_token: tokens.access_token, nuvio_profile_id: tokens.profile_id }
+            : { simkl_access_token: tokens.access_token };
     try {
         await fetchIdentity(payload);
     } catch (e) {
@@ -781,6 +783,11 @@ function hasLiveToken(provider) {
     return !!token && token !== window.STORED_SECRET;
 }
 
+function hasLiveNuvioToken() {
+    const token = window._watchlyNuvio?.access_token;
+    return !!token && token !== window.STORED_SECRET;
+}
+
 function restoreWatchHistoryState(settings) {
     window._watchlyOAuth = window._watchlyOAuth || {};
 
@@ -820,6 +827,30 @@ function restoreWatchHistoryState(settings) {
         if (settings.simkl_access_token !== window.STORED_SECRET) {
             validateAndShowSimklUser(settings.simkl_access_token);
         }
+    }
+
+    if (settings.nuvio_refresh_token && !hasLiveNuvioToken()) {
+        // A stored session arrives masked; the placeholder is what round-trips so a
+        // later save doesn't overwrite the tokens the server already holds.
+        window._watchlyNuvio = {
+            access_token: settings.nuvio_access_token,
+            refresh_token: settings.nuvio_refresh_token,
+            expires_at: settings.nuvio_expires_at || 0,
+            user_id: settings.nuvio_user_id,
+            profile_id: settings.nuvio_profile_id,
+            profile_name: settings.nuvio_profile_name,
+        };
+        const nuvioStatus = document.getElementById('nuvioStatus');
+        if (nuvioStatus) {
+            nuvioStatus.textContent = settings.nuvio_profile_name
+                ? `Connected — ${settings.nuvio_profile_name}`
+                : 'Connected';
+            nuvioStatus.classList.remove('text-slate-500');
+            nuvioStatus.classList.add('text-green-400');
+        }
+        const nuvioLogoutBtn = document.getElementById('nuvioLogoutBtn');
+        if (nuvioLogoutBtn) nuvioLogoutBtn.classList.remove('hidden');
+        setProviderConnected('nuvio', true);
     }
 
     if (settings.watch_history_source) {

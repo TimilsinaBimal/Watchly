@@ -14,10 +14,10 @@ const ACTIVE_BORDER_CLASS = 'border-white/20';
 const INACTIVE_CLASSES = ['text-slate-400', 'hover:text-white', 'hover:bg-white/5'];
 const INACTIVE_BORDER_CLASS = 'border-transparent';
 
-const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl' };
+const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', nuvio: 'Nuvio' };
 
 let switchSectionFn = null;
-const connectedState = { stremio: false, trakt: false, simkl: false };
+const connectedState = { stremio: false, trakt: false, simkl: false, nuvio: false };
 
 export function initializeAccountsUI({ switchSection } = {}) {
     switchSectionFn = switchSection || null;
@@ -55,7 +55,7 @@ export function setProviderConnected(provider, connected) {
         setStremioConnected(connected);
         return;
     }
-    if (provider !== 'trakt' && provider !== 'simkl') return;
+    if (provider !== 'trakt' && provider !== 'simkl' && provider !== 'nuvio') return;
 
     connectedState[provider] = connected;
     setProviderDot(provider, connected);
@@ -82,6 +82,7 @@ function firstConnectedSource() {
     if (connectedState.stremio) return 'stremio';
     if (connectedState.trakt) return 'trakt';
     if (connectedState.simkl) return 'simkl';
+    if (connectedState.nuvio) return 'nuvio';
     return 'stremio';
 }
 
@@ -118,7 +119,7 @@ function goToAccounts(scrollTo) {
 function syncAccountsNextButton() {
     const btn = document.getElementById('accountsNextBtn');
     if (!btn) return;
-    btn.disabled = !(connectedState.stremio || connectedState.trakt || connectedState.simkl);
+    btn.disabled = !(connectedState.stremio || connectedState.trakt || connectedState.simkl || connectedState.nuvio);
 }
 
 function setProviderView(provider, connected) {

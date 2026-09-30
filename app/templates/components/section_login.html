@@ -2,7 +2,7 @@
 <section id="sect-login" class="space-y-6 hidden animate-fade-in">
     <div class="mb-6">
         <h2 class="text-3xl font-bold text-white mb-2">Accounts</h2>
-        <p class="text-slate-400">Connect at least one account — Stremio, Trakt, or Simkl — so Watchly can read your watch history. Connecting more than one links them to the same Watchly setup and sharpens recommendations.</p>
+        <p class="text-slate-400">Connect at least one account — Stremio, Trakt, Simkl, or Nuvio — so Watchly can read your watch history. Connecting more than one links them to the same Watchly setup and sharpens recommendations.</p>
     </div>
 
     <!-- Intro / Privacy note -->
@@ -274,6 +274,66 @@
                 </div>
                 <button type="button" id="simklSyncLogoutBtn"
                     class="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 hover:text-blue-200 text-sm font-medium py-2 px-4 rounded-lg transition">
+                    Disconnect
+                </button>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- NUVIO -->
+    <div id="provider-nuvio" class="bg-neutral-900/60 border border-white/10 rounded-2xl backdrop-blur-sm shadow-xl shadow-black/20">
+        <button type="button" data-provider-toggle="nuvio" aria-expanded="false"
+            class="w-full flex items-start justify-between gap-4 p-6 md:p-8 text-left">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-400/20 flex items-center justify-center text-amber-400">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4.5 1.6 4.4 4.4 1.6-4.4 1.6-1.6 4.4-1.6-4.4L6 12.5l4.4-1.6L12 6.5z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Nuvio</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Your Nuvio account's own watch history, per profile.</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 mt-2 flex-shrink-0">
+                <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-400/20" data-account-dot="nuvio">Not connected</span>
+                <svg class="w-4 h-4 text-slate-500 transition-transform" data-provider-chevron="nuvio" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+        </button>
+
+        <div data-provider-body="nuvio" class="hidden px-6 md:px-8 pb-6 md:pb-8">
+        <!-- Disconnected view -->
+        <div data-provider-view="disconnected" data-provider-for="nuvio">
+            <button type="button" id="nuvioConnectBtn"
+                class="w-full bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 hover:text-amber-200 font-medium py-4 rounded-xl transition flex items-center justify-center gap-3">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 4.5 1.6 4.4 4.4 1.6-4.4 1.6-1.6 4.4-1.6-4.4L6 12.5l4.4-1.6L12 6.5z"/>
+                </svg>
+                <span class="text-base">Connect Nuvio</span>
+            </button>
+            <p class="mt-4 text-xs text-slate-500 leading-relaxed">
+                Reads the history Nuvio already syncs for your account, so you don't need a separate tracker. Sign-in happens in this page directly against Nuvio — your Nuvio password never reaches Watchly. Nuvio keeps no ratings, so its items count as watched.
+            </p>
+        </div>
+
+        <!-- Connected view -->
+        <div data-provider-view="connected" data-provider-for="nuvio" class="hidden">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/20 flex items-center justify-center">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-xs text-green-400 mb-0.5">Connected</div>
+                        <div class="text-sm text-white font-medium" id="nuvioStatus">Nuvio</div>
+                    </div>
+                </div>
+                <button type="button" id="nuvioLogoutBtn"
+                    class="bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300 hover:text-amber-200 text-sm font-medium py-2 px-4 rounded-lg transition">
                     Disconnect
                 </button>
             </div>
