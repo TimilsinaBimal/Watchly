@@ -28,6 +28,10 @@ dependencies = [
 [tool.setuptools.dynamic]
 version = { attr = "app.core.version.__version__" }
 
+# Auto-discovery sees every top-level directory as a package; unraid/ is a template.
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 [dependency-groups]
 dev = [
     "black>=25.11.0",
