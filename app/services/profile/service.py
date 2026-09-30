@@ -294,8 +294,10 @@ class ProfileService:
                                     )
                                 watch_history = None
                         else:
-                            token_revoked = True
-                            logger.error("Trakt refresh failed; clearing stored token. User must reconnect Trakt.")
+                            # Not a revocation: the refresh can fail on a network error or
+                            # because a concurrent request already spent this refresh token
+                            # (Trakt rotates them), and that request has persisted the new pair.
+                            logger.warning("Trakt refresh failed after 401; keeping stored token for this request.")
                     elif e.response.status_code in (401, 403):
                         token_revoked = True
                         logger.error(
