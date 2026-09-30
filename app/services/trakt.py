@@ -78,8 +78,7 @@ class TraktService:
         items: list[dict[str, Any]] = []
         for page in range(1, MAX_HISTORY_PAGES + 1):
             batch = self._safe_list(
-                await self.client.get(url, params={"page": page, "limit": HISTORY_PAGE_LIMIT}, headers=headers),
-                url,
+                await self.client.get(url, params={"page": page, "limit": HISTORY_PAGE_LIMIT}, headers=headers)
             )
             items.extend(batch)
             if len(batch) != HISTORY_PAGE_LIMIT:
@@ -92,20 +91,15 @@ class TraktService:
         """Fetch watched + rated items, return as WatchHistory."""
         headers = self._headers(access_token)
 
-        # Fetch all 4 endpoints in parallel; BaseClient returns parsed JSON
-        # and handles retry on 429/5xx internally.
-        results = await asyncio.gather(
+        # A failed endpoint raises rather than degrading to an empty list: an empty
+        # history looks like a user who has watched nothing, and the callers cache it
+        # as the user's library.
+        watched_movies, watched_shows, rated_movies, rated_shows = await asyncio.gather(
             self._get_all_pages("/users/me/watched/movies", headers),
             self._get_all_pages("/users/me/watched/shows", headers),
             self._get_all_pages("/users/me/ratings/movies", headers),
             self._get_all_pages("/users/me/ratings/shows", headers),
-            return_exceptions=True,
         )
-
-        watched_movies = self._safe_list(results[0], "watched/movies")
-        watched_shows = self._safe_list(results[1], "watched/shows")
-        rated_movies = self._safe_list(results[2], "ratings/movies")
-        rated_shows = self._safe_list(results[3], "ratings/shows")
 
         # Build rating lookup: imdb_id -> rating (1-10)
         ratings: dict[str, float] = {}
@@ -182,17 +176,10 @@ class TraktService:
         return WatchHistory(items=items, source="trakt")
 
     @staticmethod
-    def _safe_list(result, label: str) -> list:
-        if isinstance(result, Exception):
-            logger.warning(f"Trakt {label} request failed: {result}")
-            return []
+    def _safe_list(result) -> list:
         # BaseClient returns dict for JSON objects; Trakt list endpoints return
         # arrays which BaseClient parses to list — but its type is annotated as
         # dict. Accept either shape defensively.
-        if isinstance(result, list):
-            return result
-        if isinstance(result, dict) and not result:
-            return []
         return result if isinstance(result, list) else []
 
     @staticmethod
