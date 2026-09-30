@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from app.services.trakt import HISTORY_PAGE_LIMIT, MAX_HISTORY_PAGES, TraktService
 
 
@@ -84,7 +86,9 @@ def test_page_cap_is_honoured():
     assert len([1 for url, _ in client.calls if url == WATCHED_MOVIES]) == MAX_HISTORY_PAGES
 
 
-def test_a_failing_endpoint_does_not_lose_the_others():
+def test_a_failing_endpoint_fails_the_whole_fetch():
+    """A partial history would be cached as the user's library, so it must not exist."""
+
     class PartlyBroken(FakeClient):
         async def get(self, url, params=None, headers=None):
             if "ratings" in url:
@@ -92,6 +96,6 @@ def test_a_failing_endpoint_does_not_lose_the_others():
             return await super().get(url, params=params, headers=headers)
 
     client = PartlyBroken({WATCHED_MOVIES: 120})
-    history = asyncio.run(service(client).get_history("token"))
 
-    assert len(history.items) == 120
+    with pytest.raises(RuntimeError):
+        asyncio.run(service(client).get_history("token"))

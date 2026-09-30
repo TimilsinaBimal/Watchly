@@ -9,9 +9,9 @@
 import { showToast } from './ui.js';
 import { unlockNavigation } from './navigation.js';
 
-const ACTIVE_CLASSES = ['bg-white/10', 'text-white', 'shadow-sm'];
-const ACTIVE_BORDER_CLASS = 'border-white/20';
-const INACTIVE_CLASSES = ['text-slate-400', 'hover:text-white', 'hover:bg-white/5'];
+const ACTIVE_CLASSES = ['bg-accent/15', 'text-white'];
+const ACTIVE_BORDER_CLASS = 'border-accent/40';
+const INACTIVE_CLASSES = ['text-neutral-300', 'hover:text-white', 'hover:bg-white/5'];
 const INACTIVE_BORDER_CLASS = 'border-transparent';
 
 const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl' };
@@ -149,14 +149,17 @@ function setProviderDot(provider, connected) {
         badge.classList.toggle('bg-green-500/15', connected);
         badge.classList.toggle('text-green-300', connected);
         badge.classList.toggle('border-green-400/20', connected);
-        badge.classList.toggle('bg-red-500/15', !connected);
-        badge.classList.toggle('text-red-300', !connected);
-        badge.classList.toggle('border-red-400/20', !connected);
+        badge.classList.toggle('bg-white/5', !connected);
+        badge.classList.toggle('text-neutral-300', !connected);
+        badge.classList.toggle('border-white/10', !connected);
     }
+
+    const card = document.getElementById(`provider-${provider}`);
+    if (card) card.dataset.connected = String(connected);
 
     const pip = document.querySelector(`[data-source-pip="${provider}"]`);
     if (pip) {
         pip.classList.toggle('bg-green-400', connected);
-        pip.classList.toggle('bg-slate-600', !connected);
+        pip.classList.toggle('bg-neutral-600', !connected);
     }
 }

@@ -164,9 +164,35 @@ function revealInstall(message) {
     if (subheading && message) subheading.textContent = message;
 }
 
+const STEP_KEYS = Object.keys(WARM_STEPS);
+
+// One row per warm-up step: done (tick), current (spinner dot) or still to come.
+function renderWarmSteps(currentKey) {
+    const list = document.getElementById('warmProgressSteps');
+    if (!list) return;
+    const current = STEP_KEYS.indexOf(currentKey);
+    list.replaceChildren(...STEP_KEYS.map((key, i) => {
+        const state = i < current ? 'done' : i === current ? 'current' : 'todo';
+        const item = document.createElement('li');
+        item.className = 'flex items-center gap-3 ' + (state === 'todo' ? 'text-neutral-500' : 'text-neutral-100');
+        const mark = document.createElement('span');
+        mark.className = 'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold '
+            + (state === 'done' ? 'bg-accent text-accent-ink'
+                : state === 'current' ? 'border border-accent text-accent animate-pulse' : 'border border-white/15');
+        mark.textContent = state === 'done' ? '\u2713' : String(i + 1);
+        const text = document.createElement('span');
+        text.textContent = WARM_STEPS[key].label.replace(/…$/, '');
+        item.append(mark, text);
+        return item;
+    }));
+    const stepLabel = document.getElementById('warmProgressStep');
+    if (stepLabel) stepLabel.textContent = `Step ${current + 1} of ${STEP_KEYS.length}`;
+}
+
 function renderWarmState(status, profileCount = 1, readyCount = 0) {
     const step = WARM_STEPS[status.state];
     if (!step) return;
+    renderWarmSteps(status.state);
 
     const label = document.getElementById('warmProgressLabel');
     const bar = document.getElementById('warmProgressBar');
@@ -326,7 +352,7 @@ function renderProfileInstallations(container, installations) {
         row.className = 'py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between';
         details.className = 'min-w-0';
         name.className = 'text-sm font-semibold text-white truncate';
-        metadata.className = 'text-xs text-slate-500 mt-1';
+        metadata.className = 'text-xs text-neutral-400 mt-1';
         actions.className = 'flex gap-2 flex-shrink-0';
         name.textContent = `Watchly - ${installation.profileName}`;
         metadata.textContent = 'Private profile-specific manifest';
@@ -358,7 +384,7 @@ function createInstallButton(label, primary = false) {
     button.type = 'button';
     button.textContent = label;
     button.className = primary
-        ? 'bg-white text-black hover:bg-white/90 text-sm font-medium px-4 py-2 rounded-lg transition'
-        : 'bg-neutral-800 text-slate-200 hover:bg-neutral-700 text-sm font-medium px-4 py-2 rounded-lg transition';
+        ? 'btn btn-stremio'
+        : 'btn btn-secondary';
     return button;
 }

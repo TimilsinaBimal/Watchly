@@ -2,7 +2,7 @@
 
 import { createAppState, resetAppState } from './state.js';
 import { initializeChangelog, initializeFooter, initializeKofi, initializeProviderCards } from './modules/ui.js';
-import { initializeNavigation, switchSection, lockNavigationForLoggedOut, initializeMobileNav, updateMobileLayout, unlockNavigation } from './modules/navigation.js';
+import { initializeNavigation, switchSection, lockNavigationForLoggedOut, unlockNavigation, initialSection } from './modules/navigation.js';
 import { initializeAuth, setStremioLoggedOutState } from './modules/auth.js';
 import { initializeCatalogList, renderCatalogList } from './modules/catalog.js';
 import { initializeForm, clearErrors, refreshYearSlider } from './modules/form.js';
@@ -48,9 +48,6 @@ const sections = {
     dashboard: document.getElementById('sect-dashboard')
 };
 
-// Main scroll container
-const mainEl = document.querySelector('main');
-
 // Reset App Function
 function resetApp() {
     if (configForm) configForm.reset();
@@ -91,16 +88,11 @@ function initializeWelcomeFlow() {
 
 // Initialize everything
 document.addEventListener('DOMContentLoaded', () => {
-    // Start at Welcome
-    switchSection(appState.ui.currentSection);
     initializeWelcomeFlow();
 
     // Initialize all modules
-    initializeNavigation({
-        navItems,
-        sections,
-        mainEl
-    }, appState);
+    initializeNavigation({ navItems, sections }, appState);
+    switchSection(initialSection(appState.ui.currentSection));
 
     // By default, ensure logged-out users see only Welcome/Login
     lockNavigationForLoggedOut();
@@ -148,26 +140,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize the Dashboard nav section
     initializeDashboard({ switchSection }, appState);
 
-    // Initialize mobile navigation
-    initializeMobileNav();
-
     // Initialize UI components
     initializeFooter();
     initializeKofi();
     initializeChangelog();
     initializeProviderCards();
 
-    // Layout adjustments for fixed mobile header
-    updateMobileLayout();
-    window.addEventListener('resize', updateMobileLayout);
-    window.addEventListener('orientationchange', updateMobileLayout);
-
     // Next Buttons
     if (accountsNextBtn) accountsNextBtn.addEventListener('click', () => {
         if (!accountsNextBtn.disabled) switchSection('config');
     });
     if (configNextBtn) configNextBtn.addEventListener('click', () => switchSection('catalogs'));
+    document.getElementById('configBackBtn')?.addEventListener('click', () => switchSection('login'));
     if (catalogsNextBtn) catalogsNextBtn.addEventListener('click', () => switchSection('install'));
+    document.getElementById('catalogsBackBtn')?.addEventListener('click', () => switchSection('config'));
+    document.getElementById('installBackBtn')?.addEventListener('click', () => switchSection('catalogs'));
 
     // Reset Buttons
     const resetBtn = document.getElementById('resetBtn');

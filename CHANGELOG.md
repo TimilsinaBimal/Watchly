@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.15.0 - 2026-09-30
+
+### Added
+
+- "Watch it again" catalog: titles you've already watched, loved or liked, ranked by how well they fit your taste profile, with loved titles boosted. Anything watched in the last 6 months is held back. Off by default; enable it on the configure page (#139).
+- Self-hosting guide at `/self-host`, and a Deploy to Vercel button in the README and the guide that creates the project and a Redis Cloud database in one flow. Vercel runs Watchly with no extra config; the guide lists what doesn't work reliably there, mainly background refreshes after a response.
+- A Preview button for the custom poster provider shows what your URL template produces for a sample movie and series. A saved API key works too, as long as the template hasn't changed since it was saved.
+- A "Choose a Redis" section in the README and self-host guide: Redis in Docker for Docker installs, Upstash for Vercel, how many users each free plan roughly covers, and step-by-step Upstash setup.
+
+### Changed
+
+- The Deploy to Vercel button no longer asks for `TMDB_API_KEY`, and the docs list it as optional but recommended: users enter their own key on the configure page, and the server key only backs the language list and accounts saved without one.
+- The configure page and dashboard are redesigned. A top stepper (Accounts, Preferences, Catalogs, Install) replaces the sidebar, content uses the full width, preferences are grouped into cards with every genre visible, the catalog list has real on/off switches and labelled controls, and the install step keeps Delete account apart from the primary action. The dashboard gains a status summary, stat tiles and a taste profile overview.
+- After the scheduled catalog refresh, the home-screen rows are rebuilt straight away, so the next home screen doesn't wait on rows the refresh dropped.
+
+### Fixed
+
+- For Stremio-sourced users, the scheduled catalog refresh re-fetches the library and updates the taste profiles before rebuilding. It used to reuse the library cached at setup, and since every read renewed that cache, recommendations for an active user never reflected anything watched after the first fetch. Trakt and Simkl users keep the library from setup for now.
+- A failed Stremio library fetch (unreachable, a rejected session, an empty response, or the loved/liked lookup failing) is no longer cached as the user's library, which left rows empty or missing loved titles until the cache was dropped.
+- A scheduled catalog refresh no longer writes back the credentials it started with, which could undo a settings save or a Trakt token rotation made while it ran, or recreate a token deleted in the meantime.
+- A stale row requested while a scheduled refresh runs is rebuilt after the refresh instead of alongside it, where it could be built from the old library and cached as fresh.
+- A stored API key or OAuth token that fails to encrypt is no longer saved in plain text; the save fails instead. A secret that no longer decrypts is dropped rather than sent to the provider as ciphertext.
+- A Trakt or Simkl request that failed (expired token, outage) came back as an empty history, which was then cached as the user's library: the dashboard showed zero titles and the rows were built from nothing, and it stayed that way until a manual refresh. A failed fetch now raises and nothing is cached. A token Trakt rejects is cleared, but a refresh that fails for another reason (network, or a concurrent request already rotated it) no longer clears it.
+
+
 ## 1.14.0 - 2026-09-20
 
 ### Added

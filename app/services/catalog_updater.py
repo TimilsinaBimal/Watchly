@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from datetime import datetime, timezone
 from typing import Any
 
@@ -8,6 +9,7 @@ from loguru import logger
 from app.core.config import settings
 from app.core.security import redact_token
 from app.services.auth import auth_service
+from app.services.context import extract_settings
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 
@@ -24,6 +26,7 @@ class CatalogUpdater:
         # Retain background task handles so they don't get GC'd mid-flight,
         # and so unhandled exceptions surface in logs.
         self._pending_tasks: set[asyncio.Task] = set()
+        self._running: dict[str, asyncio.Task] = {}
 
     def _on_task_done(self, task: asyncio.Task) -> None:
         self._pending_tasks.discard(task)
@@ -33,6 +36,12 @@ class CatalogUpdater:
             return
         if exc is not None:
             logger.error(f"Background catalog update task crashed: {exc!r}")
+
+    async def wait_for(self, token: str) -> None:
+        """Wait for a refresh running for this token, if there is one."""
+        task = self._running.get(token)
+        if task is not None:
+            await asyncio.wait([task])
 
     def _needs_update(self, credentials: dict[str, Any]) -> bool:
         """Check if catalog update is needed based on last_updated timestamp."""
@@ -70,6 +79,10 @@ class CatalogUpdater:
                 detail="Invalid or expired token. Please reconfigure the addon.",
             )
 
+        # Read before resolving the auth key: a Stremio re-login stores this shared dict,
+        # and store_user_data encrypts its nested settings in place.
+        user_settings = extract_settings(credentials)
+
         bundle = StremioBundle()
         try:
             auth_key = await auth_service.resolve_auth_key_with_bundle(bundle, credentials, token)
@@ -85,9 +98,18 @@ class CatalogUpdater:
                     return False
 
             # Reuse ManifestService to build catalogs
-            # (handles library caching, profile building, catalog definitions,
-            #  translation, and sorting — no need to reimplement here)
+            # (handles catalog definitions, translation, and sorting — no need to
+            #  reimplement here)
             from app.services.manifest import manifest_service
+
+            # The manifest build only reads the cached library, and that cache is
+            # re-fetched only when it is missing — every read renews its TTL. For an
+            # active user this is the one place new watches reach the library and
+            # the profiles, so refetch before rebuilding. Stremio only for now: Trakt
+            # and Simkl report an outage or a rejected token as an empty history,
+            # which a daily refetch would cache over the user's library.
+            if user_settings.watch_history_source == "stremio":
+                await manifest_service.cache_library_and_profiles(bundle, auth_key, user_settings, token)
 
             # Force a rebuild: this job exists to push a *fresh* catalog list to
             # Stremio, so reading the manifest cache would make it a no-op.
@@ -105,12 +127,39 @@ class CatalogUpdater:
 
             if success and update_timestamp:
                 try:
-                    now = datetime.now(timezone.utc)
-                    credentials["last_updated"] = now.replace(microsecond=0).isoformat()
-                    await token_store.update_user_data(token, credentials)
-                    logger.debug(f"[{redact_token(token)}] Updated last_updated timestamp")
+                    # Stamp what is stored now, not the credentials this refresh started
+                    # with: a settings save or a Trakt token rotation may have replaced
+                    # them since, and writing the old ones back would undo it.
+                    stored = await token_store.get_user_data(token)
+                    if stored is None:
+                        logger.info(f"[{redact_token(token)}] Token removed during the refresh; not stamping it")
+                    else:
+                        stored = copy.deepcopy(stored)
+                        stored["last_updated"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+                        await token_store.update_user_data(token, stored)
+                        logger.debug(f"[{redact_token(token)}] Updated last_updated timestamp")
                 except Exception as e:
                     logger.warning(f"[{redact_token(token)}] Failed to update timestamp: {e}")
+
+            if success:
+                # Rewriting the library and profiles drops every cached row. Build them
+                # now so the next home screen doesn't wait on each one. Imported here
+                # because the catalog service imports this module to trigger refreshes.
+                from app.services.recommendation.catalog_service import catalog_service
+
+                for catalog in catalogs:
+                    # Stremio's home board skips a row with a required extra; that one is
+                    # built when the user opens it in Discover.
+                    if any(extra.get("isRequired") for extra in catalog.get("extra", [])):
+                        continue
+                    try:
+                        await catalog_service.get_catalog(token, catalog["type"], catalog["id"])
+                    except Exception as e:
+                        # A row that fails to build comes back empty, so what gets here is
+                        # the account (credentials gone, Stremio session lost), and every
+                        # remaining row would hit it too.
+                        logger.warning(f"[{redact_token(token)}] Stopped rebuilding rows: {type(e).__name__}")
+                        break
 
             return success
 
@@ -144,6 +193,7 @@ class CatalogUpdater:
         logger.info(f"[{redact_token(token)}] Triggering catalog update")
         task = asyncio.create_task(self._update_task(token, credentials))
         self._pending_tasks.add(task)
+        self._running[token] = task
         task.add_done_callback(self._on_task_done)
 
     async def _update_task(self, token: str, credentials: dict[str, Any]) -> None:
@@ -158,6 +208,7 @@ class CatalogUpdater:
             logger.exception(f"[{redact_token(token)}] Catalog update task failed: {e}")
         finally:
             self._updating_tokens.discard(token)
+            self._running.pop(token, None)
 
 
 catalog_updater = CatalogUpdater()

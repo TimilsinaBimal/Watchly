@@ -36,6 +36,17 @@ def test_changelog_page_renders_markdown():
     assert "<h2>1.14.0" in response.text
 
 
+def test_self_host_page_links_the_vercel_deploy_flow():
+    response = client.get("/self-host")
+
+    assert response.status_code == 200
+    assert (
+        'href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FTimilsinaBimal%2FWatchly&amp;'
+        in response.text
+    )
+    assert "integrationSlug%22%3A%22redis" in response.text
+
+
 def test_static_files_require_revalidation():
     # A cached stale ES module against a newer backend broke saves (#167);
     # no-cache makes browsers revalidate each module against its ETag.
@@ -44,3 +55,9 @@ def test_static_files_require_revalidation():
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-cache"
     assert "etag" in response.headers
+
+
+def test_user_counts_are_shown_compactly():
+    compact = importlib.import_module("app.core.app").compact_number
+
+    assert [compact(n) for n in (999, 1000, 1234, 10_100, 2_500_000)] == ["999", "1K", "1.2K", "10.1K", "2.5M"]

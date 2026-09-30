@@ -142,19 +142,18 @@ class SimklService:
             "simkl-api-key": client_id,
         }
 
+        # A failed endpoint raises rather than degrading to an empty list: an empty
+        # history looks like a user who has watched nothing, and the callers cache it
+        # as the user's library.
         results = await asyncio.gather(
             self.client.get("/sync/all-items/movies", headers=headers),
             self.client.get("/sync/all-items/shows", headers=headers),
-            return_exceptions=True,
         )
 
         items: list[WatchHistoryItem] = []
         seen: set[str] = set()
 
         for idx, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.warning(f"Simkl sync request failed: {result}")
-                continue
             data = result if isinstance(result, dict) else {}
             mtype = "movie" if idx == 0 else "series"
             entries = data.get("movies", []) if idx == 0 else data.get("shows", [])

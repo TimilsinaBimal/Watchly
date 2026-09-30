@@ -147,6 +147,10 @@ CATALOG_DESCRIPTIONS = {
     ),
     "watchly.all.loved": "Recommendations based on all your loved items",
     "watchly.liked.all": "Recommendations based on all your liked items",
+    "watchly.rewatch": (
+        "Titles you've already watched, loved or liked, ranked by how well they fit your taste. Anything"
+        " watched in the last 6 months is held back, and loved titles get a boost."
+    ),
     "watchly.theme": (
         "Dynamic catalogs based on your favorite genres, keyword, countries and many more.Just like netflix."
         " Example: American Horror, Based on Novel or Book etc. This will show atmost 4 catalogs each for"
@@ -207,6 +211,15 @@ def get_default_settings() -> UserSettings:
             CatalogConfig(
                 id="watchly.liked.all",
                 name="Based on what you liked",
+                enabled=False,
+                enabled_movie=True,
+                enabled_series=True,
+                display_at_home=True,
+                shuffle=False,
+            ),
+            CatalogConfig(
+                id="watchly.rewatch",
+                name="Watch it again",
                 enabled=False,
                 enabled_movie=True,
                 enabled_series=True,

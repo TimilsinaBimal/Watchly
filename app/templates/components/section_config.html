@@ -14,465 +14,288 @@
         z-index: 40 !important;
     }
 </style>
-<section id="sect-config" class="space-y-8 hidden animate-fade-in">
-    <div class="mb-6">
-        <h2 class="text-3xl font-bold text-white mb-2">Preferences</h2>
-        <p class="text-slate-400">Customize how your recommendations appear.</p>
+
+{% macro select_chevron() %}
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-neutral-300">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+    </svg>
+</div>
+{% endmacro %}
+
+{# The JS finds each part by suffix: {id}Toggle, {id}Eye, {id}EyeOff, {id}Validate. #}
+{% macro secret_input(id, placeholder, tooltip, required=false) %}
+<div class="relative">
+    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-neutral-400">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
+            </path>
+        </svg>
+    </div>
+    <input type="password" id="{{ id }}" {% if required %}required aria-required="true"{% endif %}
+        class="input pl-10 pr-24 font-mono placeholder:font-sans" placeholder="{{ placeholder }}">
+    <div class="absolute inset-y-0 right-11 flex items-center">
+        <button type="button" id="{{ id }}Toggle" aria-label="Show or hide key"
+            class="flex h-full w-11 items-center justify-center text-neutral-300 transition-colors hover:text-white">
+            <svg id="{{ id }}Eye" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg id="{{ id }}EyeOff" class="hidden h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31">
+                </path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.12 14.12A3 3 0 0 1 9.88 9.88">
+                </path>
+            </svg>
+        </button>
+    </div>
+    <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
+        <button type="button" id="{{ id }}Validate" aria-label="Validate key"
+            class="flex h-full w-11 items-center justify-center rounded-r-xl border-l border-white/10 text-neutral-300 transition-colors hover:bg-white/5 hover:text-white">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+        </button>
+        <span class="custom-tooltip" data-tooltip-text="{{ tooltip }}">{{ tooltip }}</span>
+    </div>
+</div>
+{% endmacro %}
+
+<section id="sect-config" class="hidden animate-fade-in space-y-6">
+    <div class="page-header">
+        <h2 class="page-title">Preferences</h2>
+        <p class="page-lead">Tune what Watchly recommends and how your rows look.</p>
     </div>
 
-    <!-- Language -->
-    <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Language</label>
-        <div class="relative">
-            <select id="languageSelect"
-                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
-                {% for lang in languages %}
-                <option value="{{ lang.iso_639_1 }}" {% if lang.iso_639_1=='en-US' %}selected{% endif %}>
-                    {{ lang.language }} ({{ lang.country }})
-                </option>
-                {% endfor %}
-            </select>
-            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </div>
-        </div>
-    </div>
-
-    <div class="border-t border-white/10"></div>
-
-    <!-- Popularity & Quality -->
-    <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Discovery Style
-            (Popularity)</label>
-        <div class="relative">
-            <select id="popularitySelect"
-                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
-                <option value="mainstream">Mainstream (All well-known titles)</option>
-                <option value="balanced" selected>Balanced (Popular & hidden gems mix)</option>
-                <option value="gems">Hidden Gems (Highly rated, less popular)</option>
-                <option value="all">Everything (No popularity filters)</option>
-            </select>
-            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </div>
-        </div>
-    </div>
-
-    <div class="border-t border-white/10"></div>
-
-    <!-- Sorting Order -->
-    <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Sorting Order (Movie vs
-            Series)</label>
-        <div class="relative">
-            <select id="sortingOrderSelect"
-                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
-                <option value="default" selected>Default (Interleaved)</option>
-                <option value="movies_first">Movies First</option>
-                <option value="series_first">Series First</option>
-            </select>
-            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </div>
-        </div>
-        <p class="text-xs text-slate-500">Choose whether to group movies first, series first, or keep them interleaved
-            by category.</p>
-    </div>
-
-    <div class="border-t border-white/10"></div>
-
-    <!-- Year Range -->
-    <div class="space-y-6">
-        <div class="flex items-center justify-between">
-            <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Release Year Range</label>
-            <div class="text-sm font-mono text-white">
-                <span id="yearMinLabel">{{ year_range_defaults.min }}</span> — <span id="yearMaxLabel">{{ current_year }}</span>
-            </div>
-        </div>
-
-        <div class="relative h-6 flex items-center group">
-            <!-- Background Track -->
-            <div class="absolute w-full h-1.5 bg-slate-800 rounded-full"></div>
-            <!-- Progress Track (Selected portion) -->
-            <div id="yearSliderTrack" class="absolute h-1.5 bg-white rounded-full" style="left: 0%; right: 0%;"></div>
-
-            <!-- Hidden Dual Sliders -->
-            <input type="range" id="yearMin" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.min }}" step="1"
-                class="absolute w-full appearance-none bg-transparent pointer-events-none z-30 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-black [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-black [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-lg">
-
-            <input type="range" id="yearMax" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.max }}" step="1"
-                class="absolute w-full appearance-none bg-transparent pointer-events-none z-30 [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-black [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-black [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-lg">
-        </div>
-
-        <p class="text-xs text-slate-500">Note: Setting max year to current year includes all new releases up to today
-            (the
-            day recommendations are fetched).</p>
-    </div>
-
-    <div class="border-t border-white/10"></div>
-
-    <!-- Genre Exclusion -->
-    <div class="space-y-6">
-        <div class="flex items-center justify-between">
-            <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Exclude Genres</label>
-            <span class="text-xs text-slate-500">Uncheck to include</span>
-        </div>
-        <div class="grid md:grid-cols-2 gap-6">
-            <div class="space-y-3">
-                <label class="block text-xs font-semibold text-slate-500 uppercase">Movies</label>
-                <div id="movieGenreList"
-                    class="h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar bg-neutral-900/60 rounded-xl p-3 border border-white/10 backdrop-blur-sm">
+    <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Watch history -->
+        <div class="card lg:col-span-2">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h3 class="card-title">Watch history</h3>
+                    <p class="card-desc">Where Watchly reads what you've watched. Connect Trakt or Simkl in
+                        <button type="button" class="account-link text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-white">Accounts</button>
+                        to use them.</p>
                 </div>
-            </div>
-            <div class="space-y-3">
-                <label class="block text-xs font-semibold text-slate-500 uppercase">Series</label>
-                <div id="seriesGenreList"
-                    class="h-64 overflow-y-auto pr-2 space-y-2 custom-scrollbar bg-neutral-900/60 rounded-xl p-3 border border-white/10 backdrop-blur-sm">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="border-t border-white/10"></div>
-
-    <!-- Poster Rating Provider -->
-    <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Poster Rating Provider
-            (Optional)</label>
-
-        <!-- Provider Dropdown -->
-        <div class="relative">
-            <select id="posterRatingProvider"
-                class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
-                <option value="">None</option>
-                <option value="rpdb">RPDB (RatingPosterDB)</option>
-                <option value="top_posters">Top Posters</option>
-                <option value="custom">Custom Provider</option>
-            </select>
-            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-            </div>
-        </div>
-
-        <!-- Custom URL Template Input -->
-        <div id="posterRatingTemplateContainer" style="display: none;">
-            <input type="text" id="posterRatingUrlTemplate"
-                class="w-full bg-neutral-900 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
-                placeholder="https://example.com/{type}/{imdb_id}.jpg">
-            <div id="posterRatingTemplateMessage" class="mt-2 text-xs hidden"></div>
-        </div>
-
-        <!-- API Key Input -->
-        <div id="posterRatingApiKeyContainer" style="display: none;">
-            <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
-                        </path>
-                    </svg>
-                </div>
-                <input type="password" id="posterRatingApiKey"
-                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-32 sm:pr-24 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
-                    placeholder="Paste your API key here">
-                <!-- Eye toggle button -->
-                <div class="absolute inset-y-0 right-12">
-                    <button type="button" id="posterRatingApiKeyToggle"
-                        class="flex items-center px-3 h-full text-slate-400 hover:text-white transition-colors">
-                        <svg id="posterRatingApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                        <svg id="posterRatingApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31">
-                            </path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
-                        </svg>
+                <div class="inline-flex flex-shrink-0 items-center self-start rounded-xl border border-white/10 bg-surface-sunken p-1 sm:self-auto"
+                    role="group" aria-label="Watch history source">
+                    <button type="button"
+                        class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none bg-accent/15 text-white border-accent/40"
+                        data-source-btn="stremio">Stremio</button>
+                    <button type="button"
+                        class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none text-neutral-300 hover:text-white hover:bg-white/5 border-transparent"
+                        data-source-btn="trakt">
+                        <span class="h-1.5 w-1.5 rounded-full bg-neutral-600" data-source-pip="trakt"></span>
+                        Trakt
+                    </button>
+                    <button type="button"
+                        class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none text-neutral-300 hover:text-white hover:bg-white/5 border-transparent"
+                        data-source-btn="simkl">
+                        <span class="h-1.5 w-1.5 rounded-full bg-neutral-600" data-source-pip="simkl"></span>
+                        Simkl
                     </button>
                 </div>
-                <!-- Validate button -->
-                <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
-                    <button type="button" id="posterRatingApiKeyValidate"
-                        class="flex items-center px-4 h-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors border-l border-slate-700 rounded-r-xl">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </button>
-                    <span class="custom-tooltip"
-                        data-tooltip-text="Validate API key - Click to verify your key is valid">Validate API key -
-                        Click to verify your key is valid</span>
-                </div>
             </div>
-            <!-- Validation message -->
-            <div id="posterRatingValidationMessage" class="mt-2 text-xs hidden"></div>
+            <input type="hidden" id="watchHistorySource" value="stremio">
         </div>
 
-        <!-- Help Text -->
-        <div id="posterRatingHelp" class="text-xs text-slate-500" style="display: none;">
-            <p id="posterRatingHelpText"></p>
-        </div>
-    </div>
-    <div class="border-t border-white/10"></div>
+        <!-- Discovery -->
+        <div class="card lg:col-span-2">
+            <h3 class="card-title">Discovery</h3>
+            <p class="card-desc">Language, how mainstream the picks are, and which years they come from.</p>
+            <div class="mt-5 grid gap-5 md:grid-cols-2">
+                <div>
+                    <label for="languageSelect" class="field-label">Language</label>
+                    <div class="relative">
+                        <select id="languageSelect" class="input cursor-pointer appearance-none pr-10">
+                            {% for lang in languages %}
+                            <option value="{{ lang.iso_639_1 }}" {% if lang.iso_639_1=='en-US' %}selected{% endif %}>
+                                {{ lang.language }} ({{ lang.country }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {{ select_chevron() }}
+                    </div>
+                </div>
 
-    <!-- TMDB API Key (Required) -->
-    <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">TMDB API Key
-            <span class="text-amber-400/90">(Required)</span></label>
-        <div class="space-y-4">
-            <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
-                        </path>
-                    </svg>
+                <div>
+                    <label for="popularitySelect" class="field-label">Discovery style</label>
+                    <div class="relative">
+                        <select id="popularitySelect" class="input cursor-pointer appearance-none pr-10">
+                            <option value="mainstream">Mainstream (All well-known titles)</option>
+                            <option value="balanced" selected>Balanced (Popular & hidden gems mix)</option>
+                            <option value="gems">Hidden Gems (Highly rated, less popular)</option>
+                            <option value="all">Everything (No popularity filters)</option>
+                        </select>
+                        {{ select_chevron() }}
+                    </div>
                 </div>
-                <input type="password" id="tmdbApiKey" required
-                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-32 sm:pr-24 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
-                    placeholder="Paste your TMDB API key here">
-                <!-- Eye toggle button -->
-                <div class="absolute inset-y-0 right-12 flex items-center border-l border-slate-700">
-                    <button type="button" id="tmdbApiKeyToggle"
-                        class="flex items-center justify-center w-12 h-full text-slate-400 hover:text-white transition-colors">
-                        <svg id="tmdbApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                        <svg id="tmdbApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31">
-                            </path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
-                        </svg>
-                    </button>
-                </div>
-                <!-- Validate button -->
-                <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
-                    <button type="button" id="tmdbApiKeyValidate"
-                        class="flex items-center px-4 h-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors border-l border-slate-700 rounded-r-xl">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </button>
-                    <span class="custom-tooltip"
-                        data-tooltip-text="Validate key - Click to verify your TMDB key is valid">Validate key</span>
-                </div>
-            </div>
-            <div id="tmdbValidationMessage" class="mt-2 text-xs hidden"></div>
-            <div class="text-xs text-slate-500">
-                <p>Required for metadata and recommendations. Get a free API key from
-                    <a href="https://www.themoviedb.org/settings/api" target="_blank"
-                        class="text-slate-300 hover:text-white underline">TMDB API</a>.
-                </p>
-            </div>
-        </div>
-    </div>
-    <div class="border-t border-white/10"></div>
 
-    <!-- Simkl Integration -->
-    <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Simkl Integration
-            (Optional)</label>
-        <div class="space-y-4">
-            <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
-                        </path>
-                    </svg>
+                <div>
+                    <label for="sortingOrderSelect" class="field-label">Movies and series order</label>
+                    <div class="relative">
+                        <select id="sortingOrderSelect" class="input cursor-pointer appearance-none pr-10">
+                            <option value="default" selected>Default (Interleaved)</option>
+                            <option value="movies_first">Movies First</option>
+                            <option value="series_first">Series First</option>
+                        </select>
+                        {{ select_chevron() }}
+                    </div>
+                    <p class="field-hint">Group movie rows first, series first, or mix them.</p>
                 </div>
-                <input type="password" id="simklApiKey"
-                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-32 sm:pr-24 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
-                    placeholder="Paste your Simkl API key here">
-                <!-- Eye toggle button -->
-                <div class="absolute inset-y-0 right-12">
-                    <button type="button" id="simklApiKeyToggle"
-                        class="flex items-center px-3 h-full text-slate-400 hover:text-white transition-colors">
-                        <svg id="simklApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                        <svg id="simklApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31">
-                            </path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
-                        </svg>
-                    </button>
-                </div>
-                <!-- Validate button -->
-                <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
-                    <button type="button" id="simklApiKeyValidate"
-                        class="flex items-center px-4 h-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors border-l border-slate-700 rounded-r-xl">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </button>
-                    <span class="custom-tooltip"
-                        data-tooltip-text="Validate key - Click to verify your Simkl key is valid">Validate key - Click
-                        to
-                        verify your Simkl key is valid</span>
-                </div>
-            </div>
-            <!-- Validation message -->
-            <div id="simklValidationMessage" class="mt-2 text-xs hidden"></div>
 
-            <div class="text-xs text-slate-500">
-                <p>Enter your Simkl API key to get better recommendations. Please note, this will not use your watch
-                    history from
-                    Simkl. The system will use resources from simkl to show better recommendations. Get your API key
-                    from
-                    <a href="https://simkl.com/settings/apps/" target="_blank"
-                        class="text-slate-300 hover:text-white underline">Simkl Settings</a>.
-                </p>
+                <div>
+                    <div class="flex items-center justify-between">
+                        <span class="field-label">Release years</span>
+                        <span class="mb-1.5 font-mono text-sm text-white">
+                            <span id="yearMinLabel">{{ year_range_defaults.min }}</span> – <span id="yearMaxLabel">{{ current_year }}</span>
+                        </span>
+                    </div>
+                    <div class="group relative flex h-10 items-center">
+                        <div class="absolute h-1.5 w-full rounded-full bg-white/10"></div>
+                        <div id="yearSliderTrack" class="absolute h-1.5 rounded-full bg-accent" style="left: 0%; right: 0%;"></div>
+                        <input type="range" id="yearMin" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.min }}" step="1" aria-label="Earliest release year"
+                            class="pointer-events-none absolute z-30 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-accent [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg">
+                        <input type="range" id="yearMax" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.max }}" step="1" aria-label="Latest release year"
+                            class="pointer-events-none absolute z-30 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-accent [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg">
+                    </div>
+                    <p class="field-hint">A max of this year includes everything released up to today.</p>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="border-t border-white/10"></div>
 
-    <!-- Watch History Source -->
-    <div class="space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-                <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">Watch History Source</label>
-                <p class="text-xs text-slate-500 mt-1">Where Watchly should read your history from. Connect Trakt or Simkl in <button type="button" class="account-link text-slate-300 hover:text-white underline">Accounts</button> to use them.</p>
-            </div>
-            <div class="inline-flex items-center bg-neutral-900/60 border border-white/10 rounded-xl p-1 backdrop-blur-sm self-start sm:self-auto" role="group" aria-label="Watch history source">
-                <button type="button"
-                    class="source-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none bg-white/10 text-white border border-white/20 shadow-sm flex items-center gap-1.5"
-                    data-source-btn="stremio">Stremio</button>
-                <button type="button"
-                    class="source-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none text-slate-400 hover:text-white hover:bg-white/5 border border-transparent flex items-center gap-1.5"
-                    data-source-btn="trakt">
-                    <span class="w-1.5 h-1.5 rounded-full bg-slate-600" data-source-pip="trakt"></span>
-                    Trakt
-                </button>
-                <button type="button"
-                    class="source-btn px-4 py-2 text-sm font-medium rounded-lg transition-all outline-none focus:outline-none text-slate-400 hover:text-white hover:bg-white/5 border border-transparent flex items-center gap-1.5"
-                    data-source-btn="simkl">
-                    <span class="w-1.5 h-1.5 rounded-full bg-slate-600" data-source-pip="simkl"></span>
-                    Simkl
-                </button>
+        <!-- Genres to exclude -->
+        <div class="card lg:col-span-2">
+            <h3 class="card-title">Genres to exclude</h3>
+            <p class="card-desc">Tap a genre to keep it out of every row.</p>
+            <div class="mt-5 grid gap-6 md:grid-cols-2">
+                <div>
+                    <h4 class="group-title mb-3">Movies</h4>
+                    <div id="movieGenreList" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div>
+                    <h4 class="group-title mb-3">Series</h4>
+                    <div id="seriesGenreList" class="flex flex-wrap gap-2"></div>
+                </div>
             </div>
         </div>
-        <input type="hidden" id="watchHistorySource" value="stremio">
-    </div>
-    <div class="border-t border-white/10"></div>
 
-    <!-- AI / LLM Integration -->
-    <div class="space-y-4">
-        <label class="block text-sm font-medium text-slate-400 uppercase tracking-wider">AI Features
-            (Optional)</label>
-        <div class="space-y-4">
-            <!-- Provider Dropdown -->
-            <div class="relative">
-                <select id="llmProvider"
-                    class="w-full appearance-none bg-neutral-900 hover:bg-neutral-800/80 border border-slate-700 rounded-xl px-4 py-3.5 text-white focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all cursor-pointer">
-                    <option value="">None</option>
-                    <option value="gemini">Google Gemini</option>
-                    <option value="openai">OpenAI</option>
-                    <option value="anthropic">Anthropic</option>
-                    <option value="openrouter">OpenRouter</option>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
+        <!-- API keys -->
+        <div class="card">
+            <h3 class="card-title">API keys</h3>
+            <p class="card-desc">Keys are encrypted and only used for your recommendations.</p>
+            <div class="mt-5 space-y-5">
+                <div>
+                    <div class="mb-1.5 flex items-center gap-2">
+                        <label for="tmdbApiKey" class="text-sm font-medium text-neutral-100">TMDB</label>
+                        <span class="badge border border-amber-400/25 bg-amber-400/10 text-amber-300">Required</span>
+                    </div>
+                    {{ secret_input('tmdbApiKey', 'Paste your TMDB API key', 'Validate key - Click to verify your TMDB key is valid', required=true) }}
+                    <div id="tmdbValidationMessage" class="mt-2 text-xs hidden"></div>
+                    <p class="field-hint">Powers metadata and recommendations. Get a free key from
+                        <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">TMDB</a>.</p>
+                </div>
+
+                <div>
+                    <div class="mb-1.5 flex items-center gap-2">
+                        <label for="simklApiKey" class="text-sm font-medium text-neutral-100">Simkl</label>
+                        <span class="badge border border-white/10 bg-white/[0.04] text-neutral-300">Optional</span>
+                    </div>
+                    {{ secret_input('simklApiKey', 'Paste your Simkl API key', 'Validate key - Click to verify your Simkl key is valid') }}
+                    <div id="simklValidationMessage" class="mt-2 text-xs hidden"></div>
+                    <p class="field-hint">Adds Simkl's suggestions to your rows; it doesn't read your Simkl history.
+                        Get a key from <a href="https://simkl.com/settings/apps/" target="_blank" rel="noopener">Simkl settings</a>.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <!-- Posters -->
+            <div class="card">
+                <h3 class="card-title">Posters</h3>
+                <p class="card-desc">Show ratings on posters with a rating provider.</p>
+                <div class="mt-5 space-y-3">
+                    <div>
+                        <label for="posterRatingProvider" class="field-label">Rating provider</label>
+                        <div class="relative">
+                            <select id="posterRatingProvider" class="input cursor-pointer appearance-none pr-10">
+                                <option value="">None</option>
+                                <option value="rpdb">RPDB (RatingPosterDB)</option>
+                                <option value="top_posters">Top Posters</option>
+                                <option value="custom">Custom Provider</option>
+                            </select>
+                            {{ select_chevron() }}
+                        </div>
+                    </div>
+
+                    <div id="posterRatingTemplateContainer" style="display: none;">
+                        <input type="text" id="posterRatingUrlTemplate" class="input font-mono"
+                            placeholder="https://example.com/{type}/{imdb_id}.jpg">
+                        <div id="posterRatingTemplateMessage" class="mt-2 text-xs hidden"></div>
+                    </div>
+
+                    <div id="posterRatingApiKeyContainer" style="display: none;">
+                        {{ secret_input('posterRatingApiKey', 'Paste your API key', 'Validate API key - Click to verify your key is valid') }}
+                        <div id="posterRatingValidationMessage" class="mt-2 text-xs hidden"></div>
+                    </div>
+
+                    <div id="posterPreviewContainer" style="display: none;">
+                        <button type="button" id="posterPreviewBtn" class="btn btn-secondary">Preview</button>
+                        <div id="posterPreviewMessage" class="mt-2 text-xs hidden"></div>
+                        <div id="posterPreviewGrid" class="mt-3 grid max-w-xs grid-cols-2 gap-3 hidden"></div>
+                    </div>
+
+                    <div id="posterRatingHelp" class="field-hint" style="display: none;">
+                        <p id="posterRatingHelpText"></p>
+                    </div>
                 </div>
             </div>
 
-            <div id="llmApiKeyContainer" class="relative" style="display: none;">
-                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 10V3L4 14h7v7l9-11h-7z">
-                        </path>
-                    </svg>
+            <!-- AI features -->
+            <div class="card">
+                <div class="flex items-center gap-2">
+                    <h3 class="card-title">AI features</h3>
+                    <span class="badge border border-white/10 bg-white/[0.04] text-neutral-300">Optional</span>
                 </div>
-                <input type="password" id="llmApiKey"
-                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl pl-11 pr-32 sm:pr-24 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
-                    placeholder="Paste your API key here">
-                <!-- Eye toggle button -->
-                <div class="absolute inset-y-0 right-12">
-                    <button type="button" id="llmApiKeyToggle"
-                        class="flex items-center px-3 h-full text-slate-400 hover:text-white transition-colors">
-                        <svg id="llmApiKeyEye" class="w-5 h-5" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
-                            <circle cx="12" cy="12" r="3"></circle>
-                        </svg>
-                        <svg id="llmApiKeyEyeOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-6.17M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.31">
-                            </path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1l22 22">
-                            </path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M14.12 14.12A3 3 0 0 1 9.88 9.88"></path>
-                        </svg>
-                    </button>
+                <p id="llmHelpText" class="card-desc">Bring your own LLM key for interest profiles and smarter themed
+                    rows. Without one, rows use standard titles.</p>
+                <div class="mt-5 space-y-3">
+                    <div>
+                        <label for="llmProvider" class="field-label">Provider</label>
+                        <div class="relative">
+                            <select id="llmProvider" class="input cursor-pointer appearance-none pr-10">
+                                <option value="">None</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="openrouter">OpenRouter</option>
+                            </select>
+                            {{ select_chevron() }}
+                        </div>
+                    </div>
+
+                    <div id="llmApiKeyContainer" style="display: none;">
+                        {{ secret_input('llmApiKey', 'Paste your API key', 'Validate key - Click to verify your API key works') }}
+                    </div>
+
+                    <div id="llmModelContainer" style="display: none;">
+                        <input type="text" id="llmModel" spellcheck="false" class="input font-mono placeholder:font-sans"
+                            placeholder="Model (optional)">
+                    </div>
+
+                    <div id="llmValidationMessage" class="mt-2 text-xs hidden"></div>
                 </div>
-                <!-- Validate button -->
-                <div class="tooltip-wrapper tooltip-right absolute inset-y-0 right-0">
-                    <button type="button" id="llmApiKeyValidate"
-                        class="flex items-center px-4 h-full text-slate-400 hover:text-white hover:bg-white/5 transition-colors border-l border-slate-700 rounded-r-xl">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </button>
-                    <span class="custom-tooltip"
-                        data-tooltip-text="Validate key - Click to verify your API key works">Validate key -
-                        Click to verify your API key works</span>
-                </div>
-            </div>
-
-            <div id="llmModelContainer" style="display: none;">
-                <input type="text" id="llmModel" spellcheck="false"
-                    class="w-full bg-neutral-900 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder-slate-500 focus:ring-2 focus:ring-white/20 focus:border-white/30 outline-none transition-all font-mono text-sm"
-                    placeholder="Model (optional)">
-            </div>
-
-            <!-- Validation message -->
-            <div id="llmValidationMessage" class="mt-2 text-xs hidden"></div>
-
-            <div class="text-xs text-slate-500">
-                <p id="llmHelpText">Bring your own LLM API key to unlock AI-powered features: personalized interest
-                    profiles and smarter theme-based catalogs. Without a key these features are disabled and
-                    catalog rows use standard titles.</p>
             </div>
         </div>
     </div>
-    <div class="pt-4 flex justify-end">
-        <button type="button" id="configNextBtn"
-            class="bg-white text-black hover:bg-white/90 border border-white/10 px-8 py-3 rounded-xl font-medium transition hover:-translate-y-0.5 hover:ring-2 hover:ring-black/10 focus:outline-none focus:ring-2 focus:ring-black/20 active:translate-y-0">Next:
-            Catalogs &rarr;</button>
+
+    <div class="flex items-center justify-between border-t border-white/[0.07] pt-6">
+        <button type="button" id="configBackBtn" class="btn btn-ghost">&larr; Back</button>
+        <button type="button" id="configNextBtn" class="btn btn-primary btn-lg">Next: Catalogs &rarr;</button>
     </div>
 </section>

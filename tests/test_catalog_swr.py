@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime, timezone
 
 import pytest
 
@@ -35,13 +36,19 @@ def harness(monkeypatch):
     monkeypatch.setattr(cs_module.redis_service, "set_nx", fake_redis.set_nx)
     monkeypatch.setattr(cs_module.redis_service, "delete", fake_redis.delete)
 
-    state = {"cached": None, "age": 0, "builds": 0}
+    state = {"cached": None, "age": 0, "builds": 0, "refresh_due": False}
 
     async def fake_resolve_alias(token):
         return token
 
     async def fake_get_user_data(token):
-        return {"settings": UserSettings(catalogs=[], watch_history_source="stremio").model_dump()}
+        # A recent last_updated keeps the scheduled refresh from firing, so a test sees
+        # the per-row path on its own unless it asks for a refresh to be due.
+        last_updated = None if state["refresh_due"] else datetime.now(timezone.utc).isoformat()
+        return {
+            "settings": UserSettings(catalogs=[], watch_history_source="stremio").model_dump(),
+            "last_updated": last_updated,
+        }
 
     async def fake_get_catalog(token, content_type, catalog_id):
         if state["cached"] is None:
@@ -148,3 +155,46 @@ def test_client_cache_window_stays_short(harness):
 
     assert "max-age=60," in headers["Cache-Control"]
     assert "stale-while-revalidate=3600" in headers["Cache-Control"]
+
+
+def refresh_due_while_stale(harness, monkeypatch, refresh_rebuilds_the_row: bool) -> int:
+    """Open a stale row whose request also starts the scheduled refresh; return how many
+    times the row was built after the refresh finished."""
+    harness["cached"] = STALE
+    harness["age"] = 10**6
+    harness["refresh_due"] = True
+    release = asyncio.Event()
+
+    async def scheduled_refresh(token, credentials, update_timestamp=True):
+        await release.wait()
+        if refresh_rebuilds_the_row:
+            harness["age"] = 0
+        return True
+
+    monkeypatch.setattr(cs_module.catalog_updater, "refresh_catalogs_for_credentials", scheduled_refresh)
+
+    async def scenario():
+        data, _ = await catalog_service.get_catalog(TOKEN, "movie", "watchly.rec")
+        assert data["metas"][0]["id"] == "tt-stale"
+        await asyncio.sleep(0.05)
+        builds_during_refresh = harness["builds"]
+        release.set()
+        await asyncio.gather(*list(cs_module.catalog_updater._pending_tasks))
+        await asyncio.gather(*list(catalog_service._refresh_tasks))
+        assert builds_during_refresh == 0
+        return harness["builds"]
+
+    return asyncio.run(scenario())
+
+
+def test_stale_row_waits_for_a_scheduled_refresh_that_rebuilds_it(harness, monkeypatch):
+    """The request that starts the scheduled refresh usually finds its row stale too. A
+    rebuild running alongside the refresh uses the library and profiles it is replacing,
+    and could land after the refresh as fresh."""
+    assert refresh_due_while_stale(harness, monkeypatch, refresh_rebuilds_the_row=True) == 0
+
+
+def test_stale_row_is_rebuilt_after_a_refresh_that_leaves_it(harness, monkeypatch):
+    """Not every refresh replaces the library: Trakt and Simkl users, a failed fetch, or
+    an install missing from the Stremio collection leave the row stale."""
+    assert refresh_due_while_stale(harness, monkeypatch, refresh_rebuilds_the_row=False) == 1

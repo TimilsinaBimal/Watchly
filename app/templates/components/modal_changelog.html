@@ -2,28 +2,27 @@
 <div id="changelog-modal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="changelog-backdrop"></div>
 
-    <div class="absolute inset-0 flex items-center justify-center p-4">
+    <!-- Clicks outside the dialog fall through to the backdrop, which closes it. -->
+    <div class="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
         <div
-            class="bg-neutral-900 border border-white/10 rounded-xl w-full max-w-2xl max-h-[85vh] shadow-2xl relative animate-fade-in flex flex-col">
-            <button type="button" id="close-changelog"
-                class="absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-            </button>
-
-            <div class="p-6 pb-4 border-b border-white/10">
-                <h3 class="text-xl font-bold text-white">What's new</h3>
+            class="pointer-events-auto relative flex max-h-[85vh] w-full max-w-2xl animate-fade-in flex-col rounded-2xl border border-white/10 bg-surface-raised shadow-2xl shadow-black/50">
+            <div class="flex items-center justify-between gap-4 border-b border-white/[0.07] px-5 py-4 md:px-6">
+                <h3 class="text-lg font-semibold text-white">What's new</h3>
+                <button type="button" id="close-changelog" class="icon-btn -mr-2" aria-label="Close">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
             </div>
 
-            <div id="changelog-content" class="px-6 py-4 overflow-y-auto flex-1 text-sm text-slate-300">
-                <p class="text-slate-400">Loading&hellip;</p>
+            <div id="changelog-content" class="flex-1 overflow-y-auto px-5 py-5 text-sm leading-relaxed text-neutral-200 md:px-6">
+                <p class="text-neutral-300">Loading&hellip;</p>
             </div>
 
-            <div class="p-4 border-t border-white/10 flex justify-end">
+            <div class="flex justify-end border-t border-white/[0.07] px-5 py-3 md:px-6">
                 <a href="https://github.com/TimilsinaBimal/watchly/releases" target="_blank" rel="noopener"
-                    class="inline-flex items-center gap-2 text-sm font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-4 py-2 transition-colors">
-                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    class="btn btn-secondary">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <path
                             d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
                     </svg>
@@ -42,12 +41,12 @@
     }
 
     #changelog-content h2 {
-        color: #f1f5f9;
+        color: #ffffff;
         font-size: 1rem;
-        font-weight: 700;
-        margin: 1.5rem 0 0.5rem;
-        padding-top: 1rem;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        font-weight: 600;
+        margin: 1.75rem 0 0.25rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
     }
 
     #changelog-content h2:first-of-type {
@@ -57,11 +56,9 @@
     }
 
     #changelog-content h3 {
-        color: #93c5fd;
-        font-size: 0.7rem;
+        color: rgb(var(--accent-soft));
+        font-size: 0.8125rem;
         font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
         margin: 1rem 0 0.25rem;
     }
 
@@ -72,22 +69,28 @@
     }
 
     #changelog-content li {
-        margin: 0.3rem 0;
-    }
-
-    #changelog-content p {
         margin: 0.4rem 0;
     }
 
+    #changelog-content li::marker {
+        color: #64748b;
+    }
+
+    #changelog-content p {
+        margin: 0.5rem 0;
+    }
+
     #changelog-content a {
-        color: #93c5fd;
+        color: rgb(var(--accent-soft));
         text-decoration: underline;
+        text-underline-offset: 2px;
     }
 
     #changelog-content code {
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.07);
         border-radius: 4px;
         padding: 0.1em 0.35em;
         font-size: 0.9em;
+        color: #e2e8f0;
     }
 </style>
