@@ -57,6 +57,22 @@ class TMDBService:
             logger.exception(f"Unexpected error finding TMDB ID for IMDB {imdb_id}: {e}")
             return None, None
 
+    async def get_imdb_id(self, media_type: str, tmdb_id: int) -> str | None:
+        """IMDb id for a TMDB id, or None when TMDB has no mapping.
+
+        Deliberately uncached: callers resolve a whole history in one gather, so an
+        @alru_cache on this would only retain the instance for nothing.
+        """
+        path = "tv" if media_type == "series" else "movie"
+        try:
+            data = await self.client.get(f"/{path}/{tmdb_id}/external_ids")
+        except Exception as e:
+            logger.debug(f"TMDB external_ids({path}/{tmdb_id}) failed: {type(e).__name__}")
+            return None
+
+        imdb_id = (data or {}).get("imdb_id")
+        return imdb_id if isinstance(imdb_id, str) and imdb_id.startswith("tt") else None
+
     @alru_cache(maxsize=500, ttl=86400)
     async def get_movie_details(self, movie_id: int) -> dict[str, Any]:
         """Get details of a specific movie with credits and keywords."""

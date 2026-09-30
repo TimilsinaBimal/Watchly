@@ -114,9 +114,9 @@ class ManifestService:
             base_manifest["name"] = self._profiled_addon_name(ctx.user_settings.stremio_profile_name)
         fetched_catalogs: list[dict[str, Any]] = []
         try:
-            # Trakt/Simkl-only accounts have no Stremio auth key but their
+            # Trakt/Simkl/Nuvio-only accounts have no Stremio auth key but their
             # external library still drives the dynamic catalogs.
-            if ctx.auth_key or ctx.user_settings.watch_history_source in ("trakt", "simkl"):
+            if ctx.auth_key or ctx.user_settings.watch_history_source in ("trakt", "simkl", "nuvio"):
                 tmdb_key = resolve_tmdb_api_key(ctx.user_settings)
                 catalog_def_service = DynamicCatalogService(language=ctx.user_settings.language, tmdb_api_key=tmdb_key)
                 fetched_catalogs = await catalog_def_service.get_dynamic_catalogs(

@@ -51,7 +51,7 @@ async def load_user_context(
     """Load credentials, settings, auth key, and library for a token.
 
     The library is sourced from `user_settings.watch_history_source`:
-    Trakt/Simkl history is converted to a LibraryCollection so the
+    Trakt/Simkl/Nuvio history is converted to a LibraryCollection so the
     "Because you watched/loved" catalogs and other library-driven recommenders
     see the user's external history. On any external-fetch failure we fall
     back to the Stremio library so the user still gets recommendations.
@@ -127,12 +127,12 @@ async def fetch_library_for_source(
 ) -> LibraryCollection | None:
     """Fetch the LibraryCollection for the configured watch_history_source.
 
-    Trakt/Simkl: convert WatchHistory to a LibraryCollection. On failure
+    Trakt/Simkl/Nuvio: convert WatchHistory to a LibraryCollection. On failure
     (missing token, revoked token, network), fall back to Stremio so the
     user still sees recommendations from whatever Stremio knows about them.
     Stremio: pull directly from the bundle's library service.
     """
-    if source in ("trakt", "simkl"):
+    if source in ("trakt", "simkl", "nuvio"):
         from app.services.profile.service import ProfileService
 
         profile_service = ProfileService()

@@ -9,6 +9,7 @@ from app.api.models.tokens import TokenRequest, TokenResponse, TraktTokens
 from app.core.config import settings
 from app.core.security import STORED_SECRET_SENTINEL, mask_stored_secrets, redact_token, secret_hints
 from app.core.settings import LLMConfig, PosterRatingConfig, UserSettings, get_default_settings
+from app.services.nuvio import nuvio_service
 from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
@@ -148,10 +149,16 @@ class AuthService:
             if account_id := await self._verify_simkl_identity(payload.simkl_access_token):
                 identities["simkl"] = account_id
 
+        if payload.nuvio_access_token and payload.nuvio_access_token != STORED_SECRET_SENTINEL:
+            if nuvio_identity := await self._verify_nuvio_identity(payload):
+                identities["nuvio"] = nuvio_identity
+
         if not identities:
             raise HTTPException(
                 status_code=400,
-                detail="Could not verify any connected account. Reconnect Stremio, Trakt, or Simkl and try again.",
+                detail=(
+                    "Could not verify any connected account. " "Reconnect Stremio, Trakt, Simkl or Nuvio and try again."
+                ),
             )
 
         return identities, stremio_auth_key, email
@@ -221,6 +228,19 @@ class AuthService:
 
         account_id = (info.get("account") or {}).get("id") if isinstance(info, dict) else None
         return str(account_id) if account_id else None
+
+    async def _verify_nuvio_identity(self, payload: TokenRequest) -> str | None:
+        """`<Nuvio account id>:<profile index>` for the payload's session.
+
+        Only a live session is verified — the configure page replays the masked
+        sentinel for a stored one, and a live Nuvio session is one the user just
+        created, so there is nothing to refresh here. The profile is part of the
+        identity because a Nuvio profile is what the history is read from.
+        """
+        user_id = await nuvio_service.get_user_id(payload.nuvio_access_token or "")
+        if not user_id:
+            return None
+        return f"{user_id}:{payload.nuvio_profile_id}" if payload.nuvio_profile_id else user_id
 
     async def _find_account_token(self, provider: str, provider_user_id: str) -> str | None:
         """Locate the account token for a verified provider identity."""
@@ -405,6 +425,12 @@ class AuthService:
             trakt_refresh_token=unmasked("trakt_refresh_token", payload.trakt_refresh_token),
             trakt_token_expires_at=payload.trakt_token_expires_at,
             simkl_access_token=unmasked("simkl_access_token", payload.simkl_access_token),
+            nuvio_access_token=unmasked("nuvio_access_token", payload.nuvio_access_token),
+            nuvio_refresh_token=unmasked("nuvio_refresh_token", payload.nuvio_refresh_token),
+            nuvio_expires_at=payload.nuvio_expires_at,
+            nuvio_user_id=payload.nuvio_user_id,
+            nuvio_profile_id=payload.nuvio_profile_id,
+            nuvio_profile_name=payload.nuvio_profile_name,
             watch_history_source=payload.watch_history_source,
         )
 

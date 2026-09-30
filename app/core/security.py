@@ -18,6 +18,8 @@ _SECRET_SETTINGS_FIELDS = (
     "trakt_access_token",
     "trakt_refresh_token",
     "simkl_access_token",
+    "nuvio_access_token",
+    "nuvio_refresh_token",
 )
 _SECRET_NESTED_FIELDS = ("llm", "poster_rating")
 

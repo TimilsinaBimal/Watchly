@@ -14,14 +14,14 @@ class WatchHistoryItem(BaseModel):
     watch_count: int = 1
     completion: float = 1.0  # 0.0-1.0 (fraction of content watched)
     last_watched: datetime | None = None
-    source: Literal["stremio", "trakt", "simkl"] = "stremio"
+    source: Literal["stremio", "trakt", "simkl", "nuvio"] = "stremio"
 
 
 class WatchHistory(BaseModel):
     """Collection of watch history items from a single source."""
 
     items: list[WatchHistoryItem] = Field(default_factory=list)
-    source: Literal["stremio", "trakt", "simkl"] = "stremio"
+    source: Literal["stremio", "trakt", "simkl", "nuvio"] = "stremio"
 
     def imdb_ids(self) -> set[str]:
         return {i.imdb_id for i in self.items}
