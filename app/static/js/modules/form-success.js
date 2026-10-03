@@ -292,7 +292,8 @@ export function showSuccessSection(result, legacyToken) {
 
     singleInstall?.classList.toggle('hidden', isBatch);
     profileInstances?.classList.toggle('hidden', !isBatch);
-    profileBatchInstall?.classList.toggle('hidden', !isBatch);
+    // The batch install button pushes into Stremio profiles; a Nuvio batch has none.
+    profileBatchInstall?.classList.toggle('hidden', !isBatch || !installations.every(installation => installation.authKey));
     preparedInstallations = isBatch ? installations : [];
 
     if (isBatch) {

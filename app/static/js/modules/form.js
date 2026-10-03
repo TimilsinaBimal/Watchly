@@ -12,8 +12,9 @@ import {
 import { initializeSuccessActions, showSuccessSection } from './form-success.js';
 import { initializeYearSliderControl } from './year-slider.js';
 import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
-import { setProviderConnected } from './accounts.js';
+import { setProviderConnected, showNuvioConnected } from './accounts.js';
 import { getPreparedStremioProfiles, recallProviderAccount } from './auth.js';
+import { nuvioLogin, nuvioProfiles } from './nuvio.js';
 
 const YEAR_RANGE_DEFAULTS = window.YEAR_RANGE_DEFAULTS || { min: 1970, max: new Date().getFullYear() };
 const LOADING_ICON = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
@@ -145,6 +146,9 @@ function buildTokenPayload(formData) {
         trakt_token_expires_at: window._watchlyOAuth?.trakt?.expires_at || undefined,
         simkl_access_token: window._watchlyOAuth?.simkl?.access_token || undefined,
         mdblist_api_key: formData.mdblist_api_key || undefined,
+        nuvio_access_token: window._watchlyOAuth?.nuvio?.access_token || undefined,
+        nuvio_refresh_token: window._watchlyOAuth?.nuvio?.refresh_token || undefined,
+        nuvio_expires_at: window._watchlyOAuth?.nuvio?.expires_at || undefined,
     };
 }
 
@@ -153,15 +157,16 @@ function validateFormData(formData) {
     const hasTrakt = !!window._watchlyOAuth?.trakt?.access_token;
     const hasSimkl = !!window._watchlyOAuth?.simkl?.access_token;
     const hasMdblist = !!formData.mdblist_api_key;
+    const hasNuvio = !!window._watchlyOAuth?.nuvio?.access_token;
 
-    if (!hasStremio && !hasTrakt && !hasSimkl && !hasMdblist) {
-        showError('generalError', 'Connect at least one account: Stremio, Trakt, Simkl or MDBList.');
+    if (!hasStremio && !hasTrakt && !hasSimkl && !hasMdblist && !hasNuvio) {
+        showError('generalError', 'Connect at least one account: Stremio, Trakt, Simkl, MDBList or Nuvio.');
         switchSection('login');
         return false;
     }
 
     if (formData.watch_history_source === 'stremio' && !hasStremio) {
-        showError('generalError', 'Login with Stremio, or pick Trakt, Simkl or MDBList as your watch history source.');
+        showError('generalError', 'Login with Stremio, or pick Trakt, Simkl, MDBList or Nuvio as your watch history source.');
         switchSection('login');
         return false;
     }
@@ -204,28 +209,47 @@ function initializeFormSubmission() {
         try {
             const payload = buildTokenPayload(formData);
             const preparedProfiles = getPreparedStremioProfiles();
-            const profileRequests = preparedProfiles.length ? preparedProfiles : [null];
+            const nuvioProfilesToSetUp = getSelectedNuvioProfiles();
+            if (preparedProfiles.length > 1 && nuvioProfilesToSetUp.length > 1) {
+                showError('generalError', 'Set up every profile for Stremio or for Nuvio, not both at once.');
+                return;
+            }
+            const batchProvider = preparedProfiles.length ? 'stremio' : nuvioProfilesToSetUp.length ? 'nuvio' : null;
+            const profileRequests = batchProvider === 'stremio'
+                ? preparedProfiles
+                : batchProvider === 'nuvio' ? nuvioProfilesToSetUp : [null];
             const installations = [];
 
-            if (preparedProfiles.length > 1 && payload.watch_history_source !== 'stremio') {
-                showToast('Multi-profile instances use each Stremio profile as their history source.', 'info', 5000);
+            if (profileRequests.length > 1 && payload.watch_history_source !== batchProvider) {
+                showToast(`Multi-profile instances use each ${batchProvider === 'nuvio' ? 'Nuvio' : 'Stremio'} profile as their history source.`, 'info', 5000);
             }
 
             for (const profile of profileRequests) {
-                const profilePayload = profile
+                const profilePayload = batchProvider === 'stremio'
                     ? { ...payload, authKey: profile.authKey, email: undefined, password: undefined }
-                    : payload;
+                    : batchProvider === 'nuvio'
+                        ? { ...payload, nuvio_profile_id: profile.id, nuvio_profile_name: profile.name }
+                        : payload;
 
-                // A shared Trakt, Simkl or MDBList identity would merge the separate Stremio
-                // profiles back into one Watchly account. Batch mode is deliberately
-                // driven only by each profile's own Stremio history.
-                if (preparedProfiles.length > 1) {
-                    profilePayload.watch_history_source = 'stremio';
+                // A shared identity from any other provider would merge the separate
+                // profile accounts back into one. Batch mode is deliberately driven only
+                // by each profile's own history.
+                if (profileRequests.length > 1) {
+                    profilePayload.watch_history_source = batchProvider;
                     profilePayload.trakt_access_token = undefined;
                     profilePayload.trakt_refresh_token = undefined;
                     profilePayload.trakt_token_expires_at = undefined;
                     profilePayload.simkl_access_token = undefined;
                     profilePayload.mdblist_api_key = undefined;
+                    if (batchProvider === 'nuvio') {
+                        profilePayload.authKey = undefined;
+                        profilePayload.email = undefined;
+                        profilePayload.password = undefined;
+                    } else {
+                        profilePayload.nuvio_access_token = undefined;
+                        profilePayload.nuvio_refresh_token = undefined;
+                        profilePayload.nuvio_expires_at = undefined;
+                    }
                 }
 
                 const response = await fetch('/tokens/', {
@@ -245,6 +269,7 @@ function initializeFormSubmission() {
                     profileName: profile?.name || 'Watchly',
                     profileId: profile?.id,
                     authKey: profile?.authKey,
+                    provider: batchProvider,
                     url: data.manifestUrl,
                     token: data.token,
                 });
@@ -711,6 +736,71 @@ function showSuccess(url, token) {
     showSuccessSection(url, token);
 }
 
+// Nuvio as a history source. The sign-in happens in the browser; the account
+// keeps the session tokens and the chosen profile(s), mirroring Stremio's
+// "set up every profile" flow.
+function getSelectedNuvioProfiles() {
+    const nuvio = window._watchlyOAuth?.nuvio;
+    if (!nuvio?.access_token || !Array.isArray(nuvio.profiles) || !nuvio.profiles.length) return [];
+    if (nuvio.profiles.length === 1) return [nuvio.profiles[0]];
+    if (document.getElementById('nuvioAllProfiles')?.checked) return nuvio.profiles;
+    const selected = Number(document.getElementById('nuvioProfileSelect')?.value);
+    return nuvio.profiles.filter(profile => profile.id === selected).slice(0, 1);
+}
+
+function initializeNuvioSource() {
+    const emailInput = document.getElementById('nuvioSourceEmail');
+    const passwordInput = document.getElementById('nuvioSourcePassword');
+    const connectBtn = document.getElementById('nuvioConnectBtn');
+    const message = document.getElementById('nuvioStatusMessage');
+    const logoutBtn = document.getElementById('nuvioLogoutBtn');
+
+    if (connectBtn) {
+        connectBtn.addEventListener('click', async () => {
+            const email = emailInput?.value.trim();
+            const password = passwordInput?.value;
+            if (!email || !password) {
+                setValidationMessage(message, 'Enter your Nuvio email and password.', 'error');
+                return;
+            }
+            connectBtn.disabled = true;
+            try {
+                const session = await nuvioLogin(email, password);
+                // Session in hand, so the password has no reason to stay in the DOM.
+                if (passwordInput) passwordInput.value = '';
+                const profiles = (await nuvioProfiles(session.token)).map(profile => ({
+                    id: Number(profile.profile_index) || 1,
+                    name: profile.name || `Profile ${profile.profile_index}`,
+                }));
+                window._watchlyOAuth = window._watchlyOAuth || {};
+                window._watchlyOAuth.nuvio = {
+                    access_token: session.token,
+                    refresh_token: session.refreshToken,
+                    expires_at: session.expiresAt,
+                    profiles,
+                };
+                clearValidationMessage(message);
+                showNuvioConnected(profiles, `Connected as ${email}`);
+                if (!appState?.auth?.loggedIn) {
+                    recallProviderAccount('nuvio', { access_token: session.token, profile_id: profiles[0].id });
+                }
+            } catch (err) {
+                setValidationMessage(message, err.message || 'Could not sign in to Nuvio.', 'error');
+            } finally {
+                connectBtn.disabled = false;
+            }
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            delete window._watchlyOAuth?.nuvio;
+            document.getElementById('nuvioProfileSection')?.classList.add('hidden');
+            setProviderConnected('nuvio', false);
+        });
+    }
+}
+
 // Watch History Source + OAuth
 function initializeWatchHistorySource() {
     const traktLoginBtn = document.getElementById('traktLoginBtn');
@@ -820,6 +910,8 @@ function initializeWatchHistorySource() {
             setProviderConnected('mdblist', false);
         });
     }
+
+    initializeNuvioSource();
 
     if (simklSyncLogoutBtn) {
         simklSyncLogoutBtn.addEventListener('click', () => {

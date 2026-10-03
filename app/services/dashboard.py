@@ -59,6 +59,7 @@ class DashboardService:
                 "trakt": bool(user_settings.trakt_access_token),
                 "simkl": bool(user_settings.simkl_access_token),
                 "mdblist": bool(user_settings.mdblist_api_key),
+                "nuvio": bool(user_settings.nuvio_access_token),
             },
             "stats": {
                 "library": library_stats,
