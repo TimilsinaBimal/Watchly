@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.16.0 - 2026-10-03
 
 ### Added
 
 - MDBList as a watch history source. Paste your MDBList API key on the Accounts step; Watchly reads your watched history and ratings from MDBList's sync API, so trackers you sync into MDBList feed your recommendations too. No server configuration is needed. Rewatches aren't counted from MDBList; ratings drive loved and liked (#163).
+
+### Fixed
+
+- Failed requests to TMDB, Simkl and MDBList were logged with the full request URL, which carries the user's API key. Only the status code is logged now.
 
 ## 1.15.0 - 2026-09-30
 
