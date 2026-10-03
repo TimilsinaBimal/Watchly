@@ -525,7 +525,7 @@ async function fetchIdentity(payload) {
 
             if (s.popularity && popularitySelect) popularitySelect.value = s.popularity;
             if (s.year_min && yearMinInput) yearMinInput.value = s.year_min;
-            if (s.year_max && yearMaxInput) yearMaxInput.value = s.year_max;
+            if (yearMaxInput) yearMaxInput.value = s.year_max ?? yearMaxInput.max;
             if (updateYearSlider) updateYearSlider();
 
             const sortingOrderSelect = document.getElementById('sortingOrderSelect');

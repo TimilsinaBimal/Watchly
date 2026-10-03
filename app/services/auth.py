@@ -8,7 +8,13 @@ from loguru import logger
 from app.api.models.tokens import TokenRequest, TokenResponse, TraktTokens
 from app.core.config import settings
 from app.core.security import STORED_SECRET_SENTINEL, mask_stored_secrets, redact_token, secret_hints
-from app.core.settings import LLMConfig, PosterRatingConfig, UserSettings, get_default_settings
+from app.core.settings import (
+    LLMConfig,
+    PosterRatingConfig,
+    UserSettings,
+    get_default_settings,
+    settings_from_credentials,
+)
 from app.services.mdblist import mdblist_service
 from app.services.nuvio import nuvio_service
 from app.services.simkl import simkl_service
@@ -505,7 +511,7 @@ class AuthService:
             # Reconstruct UserSettings to ensure defaults are included for old accounts
             raw_settings = existing_data.get("settings", {})
             try:
-                plain_settings = UserSettings(**raw_settings).model_dump()
+                plain_settings = settings_from_credentials(existing_data).model_dump()
             except Exception as e:
                 logger.warning(f"Failed to normalize settings for user {user_id}: {e}")
                 plain_settings = raw_settings

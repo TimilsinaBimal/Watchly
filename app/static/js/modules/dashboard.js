@@ -250,7 +250,7 @@ function renderSettings(s) {
     const fields = [
         ['Discovery', POPULARITY_LABELS[s.popularity] || s.popularity],
         ['Language', s.language],
-        ['Years', `${s.year_min}–${s.year_max}`],
+        ['Years', `${s.year_min}–${s.year_max ?? 'now'}`],
         ['Sorting', SORTING_LABELS[s.sorting_order] || s.sorting_order],
     ];
     fields.forEach(([label, value]) => {

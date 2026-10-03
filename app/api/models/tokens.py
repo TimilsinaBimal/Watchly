@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.core.settings import DEFAULT_YEAR_MIN, CatalogConfig, LLMConfig, PosterRatingConfig, get_default_year_max
+from app.core.settings import DEFAULT_YEAR_MIN, CatalogConfig, LLMConfig, PosterRatingConfig
 
 
 class TokenRequest(BaseModel):
@@ -20,7 +20,7 @@ class TokenRequest(BaseModel):
         default="balanced", description="Popularity for TMDB API"
     )
     year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year for TMDB API")
-    year_max: int = Field(default_factory=get_default_year_max, description="Maximum release year for TMDB API")
+    year_max: int | None = Field(default=None, description="Latest release year; omit for through today")
     sorting_order: Literal["default", "movies_first", "series_first"] = Field(
         default="default", description="Order of movies and series catalogs"
     )

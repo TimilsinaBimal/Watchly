@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -88,6 +88,7 @@ DEFAULT_YEAR_MIN = 1970
 
 
 def get_default_year_max() -> int:
+    """The slider's right end. Stored as None, which the filters read as "through today"."""
     return get_current_year()
 
 
@@ -107,7 +108,7 @@ class UserSettings(BaseModel):
     excluded_movie_genres: list[str] = Field(default_factory=list)
     excluded_series_genres: list[str] = Field(default_factory=list)
     year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year")
-    year_max: int = Field(default_factory=get_default_year_max, description="Maximum release year")
+    year_max: int | None = Field(default=None, description="Latest release year; None means through today")
     popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(
         default="balanced", description="Popularity preference"
     )
@@ -270,6 +271,24 @@ def resolve_llm_config(user_settings: UserSettings | None) -> LLMConfig | None:
     if user_settings.gemini_api_key:
         return LLMConfig(provider="gemini", api_key=user_settings.gemini_api_key)
     return None
+
+
+def settings_from_credentials(credentials: dict[str, Any]) -> UserSettings:
+    """Parse stored settings, falling back to defaults.
+
+    Accounts saved before year_max became nullable stored the slider's right end
+    as a literal year, which turned into a hard cap every 1 January. A stored
+    year_max at or past the year of the save can only have been that right end,
+    so it reads as "through today".
+    """
+    settings_dict = credentials.get("settings") or {}
+    if not settings_dict:
+        return get_default_settings()
+    year_max = settings_dict.get("year_max")
+    saved = str(credentials.get("last_updated") or "")[:4]
+    if year_max is not None and saved.isdigit() and int(year_max) >= int(saved):
+        settings_dict = {**settings_dict, "year_max": None}
+    return UserSettings(**settings_dict)
 
 
 def resolve_tmdb_api_key(user_settings: UserSettings | None) -> str | None:

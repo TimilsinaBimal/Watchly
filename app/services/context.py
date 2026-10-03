@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from loguru import logger
 
 from app.core.security import redact_token
-from app.core.settings import UserSettings, get_default_settings
+from app.core.settings import UserSettings, settings_from_credentials
 from app.models.library import LibraryCollection
 from app.services.auth import auth_service
 from app.services.stremio.service import StremioBundle
@@ -38,9 +38,7 @@ class UserContext:
 
 
 def extract_settings(credentials: dict[str, Any]) -> UserSettings:
-    """Parse UserSettings from credentials, falling back to defaults."""
-    settings_dict = credentials.get("settings", {})
-    return UserSettings(**settings_dict) if settings_dict else get_default_settings()
+    return settings_from_credentials(credentials)
 
 
 async def load_user_context(

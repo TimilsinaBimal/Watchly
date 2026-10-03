@@ -223,7 +223,7 @@ def build_discover_params(user_settings: Any) -> dict[str, Any]:
     current_year = get_current_year()
 
     year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
-    year_max = getattr(user_settings, "year_max", current_year)
+    year_max = getattr(user_settings, "year_max", None) or current_year
 
     for prefix in ["primary_release_date", "first_air_date"]:
         params[f"{prefix}.gte"] = f"{year_min}-01-01"
@@ -271,7 +271,7 @@ def filter_items_by_settings(
         return items
 
     year_min = getattr(user_settings, "year_min", DEFAULT_YEAR_MIN)
-    year_max = getattr(user_settings, "year_max", get_current_year())
+    year_max = getattr(user_settings, "year_max", None) or get_current_year()
 
     # If pop_pref has no mapping, fall back to no band filtering rather than
     # dropping every item. Hoisted out of the per-item loop.

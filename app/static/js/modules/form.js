@@ -85,7 +85,9 @@ function getRequestPayload() {
         })),
         language: languageSelect?.value || 'english',
         year_min: parseInt(document.getElementById('yearMin')?.value || String(YEAR_RANGE_DEFAULTS.min), 10),
-        year_max: parseInt(document.getElementById('yearMax')?.value || String(YEAR_RANGE_DEFAULTS.max), 10),
+        // The slider's right end means "through today", stored as null so it never
+        // turns into a hard cap when the year rolls over.
+        year_max: yearMaxOrNull(),
         popularity: document.getElementById('popularitySelect')?.value || 'balanced',
         sorting_order: document.getElementById('sortingOrderSelect')?.value || 'default',
         poster_rating_provider: document.getElementById('posterRatingProvider')?.value || '',
@@ -101,6 +103,12 @@ function getRequestPayload() {
         excluded_series_genres: Array.from(document.querySelectorAll('input[name="series-genre"]:checked')).map(cb => cb.value),
         watch_history_source: document.getElementById('watchHistorySource')?.value || 'stremio',
     };
+}
+
+function yearMaxOrNull() {
+    const input = document.getElementById('yearMax');
+    const value = parseInt(input?.value || String(YEAR_RANGE_DEFAULTS.max), 10);
+    return value >= YEAR_RANGE_DEFAULTS.max ? null : value;
 }
 
 function buildTokenPayload(formData) {

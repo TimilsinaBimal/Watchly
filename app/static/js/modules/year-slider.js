@@ -14,7 +14,7 @@ export function initializeYearSliderControl() {
         const maxVal = parseInt(yearMax.value);
 
         yearMinLabel.textContent = minVal;
-        yearMaxLabel.textContent = maxVal;
+        yearMaxLabel.textContent = maxVal >= parseInt(yearMax.max) ? 'now' : maxVal;
 
         const range = yearMin.max - yearMin.min;
         const left = ((minVal - yearMin.min) / range) * 100;

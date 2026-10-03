@@ -165,7 +165,7 @@
                     <div class="flex items-center justify-between">
                         <span class="field-label">Release years</span>
                         <span class="mb-1.5 font-mono text-sm text-white">
-                            <span id="yearMinLabel">{{ year_range_defaults.min }}</span> – <span id="yearMaxLabel">{{ current_year }}</span>
+                            <span id="yearMinLabel">{{ year_range_defaults.min }}</span> – <span id="yearMaxLabel">now</span>
                         </span>
                     </div>
                     <div class="group relative flex h-10 items-center">
@@ -176,7 +176,7 @@
                         <input type="range" id="yearMax" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.max }}" step="1" aria-label="Latest release year"
                             class="pointer-events-none absolute z-30 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-accent [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg">
                     </div>
-                    <p class="field-hint">A max of this year includes everything released up to today.</p>
+                    <p class="field-hint">Leave the right end at "now" to always include everything released up to today, including next year's titles.</p>
                 </div>
             </div>
         </div>

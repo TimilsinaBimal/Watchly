@@ -35,10 +35,10 @@ def test_migrate_poster_rating_preserves_migrated_api_key(monkeypatch):
 
 def test_token_request_defaults_match_user_settings_defaults():
     from app.api.models.tokens import TokenRequest
-    from app.core.settings import UserSettings, get_default_year_max
+    from app.core.settings import UserSettings
 
     token_request = TokenRequest()
     user_settings = UserSettings(catalogs=[])
 
     assert token_request.year_min == user_settings.year_min == 1970
-    assert token_request.year_max == user_settings.year_max == get_default_year_max()
+    assert token_request.year_max is None and user_settings.year_max is None
