@@ -8,11 +8,12 @@
 
 {# One row per provider: identity on the left, the single next action on the
    right. Rows whose action needs a form (Stremio, MDBList, Nuvio) unfold a body
-   under the row; Trakt and Simkl connect in one click, so they have no body.
-   Connecting unfolds a row so its profile options show up. #}
+   under the row when clicked anywhere; Trakt and Simkl connect in one click,
+   so they have no body. Connecting unfolds a row so its profile options show. #}
 {% macro row(id, name, blurb, logo, tint, filled=true) %}
 <div id="provider-{{ id }}" class="transition-colors data-[connected=true]:bg-green-500/[0.04]">
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 md:px-6">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 md:px-6{% if varargs %} cursor-pointer hover:bg-white/[0.02]{% endif %}"
+        {% if varargs %}data-provider-toggle="{{ id }}" aria-expanded="false"{% endif %}>
         <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] {{ tint }}">
             <svg class="h-5 w-5" {% if filled %}fill="currentColor"{% else %}fill="none" stroke="currentColor" stroke-width="2"{% endif %} viewBox="0 0 24 24">{{ logo }}</svg>
         </span>
@@ -31,8 +32,9 @@
 </div>
 {% endmacro %}
 
+{# Keyboard users reach the row through this button; mouse users can click anywhere on the row. #}
 {% macro unfold_button(id, label) %}
-<button type="button" data-provider-toggle="{{ id }}" aria-expanded="false" class="btn btn-secondary">
+<button type="button" data-provider-unfold class="btn btn-secondary">
     {{ label }}
     <svg class="h-4 w-4 text-neutral-400 transition-transform" data-provider-chevron="{{ id }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">{{ chevron_icon }}</svg>
 </button>
