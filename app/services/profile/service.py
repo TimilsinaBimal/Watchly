@@ -548,15 +548,10 @@ class ProfileService:
         rejected: a refresh that fails may have lost the race to another worker that
         already rotated the pair, and that is not a revocation.
         """
-        access_token = user_settings.nuvio_access_token or ""
         can_refresh = bool(token and user_settings.nuvio_refresh_token)
-        refreshed = False
-        if can_refresh and self._nuvio_token_expiring(user_settings.nuvio_expires_at):
-            access_token = await self._refresh_nuvio_token(token, user_settings.nuvio_refresh_token) or ""
-            if not access_token:
-                logger.warning(f"[{redact_token(token)}] Nuvio refresh unavailable; keeping stored session.")
-                return None, False
-            refreshed = True
+        access_token, refreshed = await self.nuvio_access_token(token, user_settings)
+        if not access_token:
+            return None, False
 
         tmdb_service = get_tmdb_service(api_key=resolve_tmdb_api_key(user_settings))
         while True:
@@ -581,9 +576,20 @@ class ProfileService:
                 logger.error(f"Nuvio history fetch failed ({type(e).__name__}). Falling back to Stremio library.")
                 return None, False
 
-    @staticmethod
-    def _nuvio_token_expiring(expires_at: int | None) -> bool:
-        return not expires_at or time.time() >= expires_at - 60
+    async def nuvio_access_token(self, token: str | None, user_settings: UserSettings) -> tuple[str, bool]:
+        """(usable access token or "", whether it was refreshed just now).
+
+        Empty means the stored session is at expiry and could not be renewed; the
+        caller keeps the stored pair, since the failure may be a lost refresh race.
+        """
+        access_token = user_settings.nuvio_access_token or ""
+        expiring = not user_settings.nuvio_expires_at or time.time() >= user_settings.nuvio_expires_at - 60
+        if not (expiring and token and user_settings.nuvio_refresh_token):
+            return access_token, False
+        refreshed = await self._refresh_nuvio_token(token, user_settings.nuvio_refresh_token) or ""
+        if not refreshed:
+            logger.warning(f"[{redact_token(token)}] Nuvio refresh unavailable; keeping stored session.")
+        return refreshed, bool(refreshed)
 
     async def _refresh_nuvio_token(self, token: str, refresh_token: str) -> str | None:
         """Rotate the Nuvio session once per account, however many rows ask at once.

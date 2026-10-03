@@ -59,6 +59,36 @@ class NuvioService:
             headers=self._headers(),
         )
 
+    async def install_addon(self, access_token: str, user_id: str, profile_id: int, manifest_url: str) -> str:
+        """Add the manifest to one Nuvio profile's addon list. "installed" or "already-installed".
+
+        The addons table is outside Nuvio's documented API; it is what Nuvio's own
+        clients sync, and the only install path there is, since Nuvio has no deep link.
+        """
+        headers = self._headers(access_token)
+        rows = await self.client.get(
+            "/rest/v1/addons",
+            params={"select": "url,sort_order", "user_id": f"eq.{user_id}", "profile_id": f"eq.{profile_id}"},
+            headers=headers,
+        )
+        rows = rows if isinstance(rows, list) else []
+        if any(row.get("url") == manifest_url for row in rows):
+            return "already-installed"
+        sort_order = max((int(row.get("sort_order") or 0) for row in rows), default=0) + 1
+        await self.client.post(
+            "/rest/v1/addons",
+            json={
+                "user_id": user_id,
+                "profile_id": profile_id,
+                "url": manifest_url,
+                "name": "Watchly",
+                "enabled": True,
+                "sort_order": sort_order,
+            },
+            headers={**headers, "Prefer": "return=minimal"},
+        )
+        return "installed"
+
     async def _rpc(self, function: str, params: dict[str, Any], access_token: str) -> list[dict[str, Any]]:
         rows = await self.client.post(f"/rest/v1/rpc/{function}", json=params, headers=self._headers(access_token))
         # BaseClient is annotated dict, but PostgREST RPCs return a JSON array.

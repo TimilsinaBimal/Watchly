@@ -225,3 +225,46 @@ def test_an_outage_yields_no_history_and_keeps_the_session(monkeypatch, account)
 
     assert history is None and not missing and not revoked
     assert cleared == []
+
+
+class FakeAddonsClient:
+    """Nuvio's addons table for one profile: a GET lists rows, a POST appends one."""
+
+    def __init__(self, rows):
+        self.rows = rows
+        self.posted = []
+
+    async def get(self, url, params=None, headers=None, **kwargs):
+        assert url == "/rest/v1/addons" and params["profile_id"] == "eq.2" and params["user_id"] == "eq.user-1"
+        return self.rows
+
+    async def post(self, url, json=None, headers=None, **kwargs):
+        assert url == "/rest/v1/addons" and headers["Prefer"] == "return=minimal"
+        self.posted.append(json)
+        return {}
+
+
+def test_install_appends_the_manifest_after_the_existing_addons():
+    client = FakeAddonsClient([{"url": "https://other/manifest.json", "sort_order": 3}])
+
+    status = asyncio.run(nuvio_with(client).install_addon(GOOD_TOKEN, "user-1", 2, "https://w/tok/manifest.json"))
+
+    assert status == "installed"
+    assert client.posted == [
+        {
+            "user_id": "user-1",
+            "profile_id": 2,
+            "url": "https://w/tok/manifest.json",
+            "name": "Watchly",
+            "enabled": True,
+            "sort_order": 4,
+        }
+    ]
+
+
+def test_install_is_a_no_op_when_the_manifest_is_already_there():
+    client = FakeAddonsClient([{"url": "https://w/tok/manifest.json", "sort_order": 1}])
+
+    status = asyncio.run(nuvio_with(client).install_addon(GOOD_TOKEN, "user-1", 2, "https://w/tok/manifest.json"))
+
+    assert status == "already-installed" and client.posted == []

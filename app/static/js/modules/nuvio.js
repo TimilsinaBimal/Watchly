@@ -11,6 +11,8 @@
 const NUVIO_BASE = 'https://api.nuvio.tv';
 const NUVIO_KEY = 'sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN';
 
+import { showToast } from './ui.js';
+
 const FALLBACK_HINT = 'You can always install manually: copy the manifest URL, then in Nuvio go to Settings → Addons and paste it.';
 
 async function nuvioRequest(path, { method = 'GET', token, body, headers = {} } = {}) {
@@ -87,6 +89,31 @@ async function installToProfile({ token, userId, profileId, manifestUrl }) {
 // --- Modal UI ---
 
 let modalEl = null;
+
+// Install through the session saved with the account. Falls back to the sign-in
+// modal when the account has no Nuvio connected (409) so the button always works.
+export async function installOnNuvio(manifestUrl) {
+    const token = new URL(manifestUrl).pathname.split('/').filter(Boolean).at(-2);
+    let response;
+    try {
+        response = await fetch(`/${token}/nuvio/install`, { method: 'POST' });
+    } catch (e) {
+        showToast(`Could not reach the server. ${FALLBACK_HINT}`, 'error', 7000);
+        return;
+    }
+    if (response.status === 409) {
+        openNuvioInstall(manifestUrl);
+        return;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        showToast(`Install failed: ${data.detail || response.status}. ${FALLBACK_HINT}`, 'error', 8000);
+        return;
+    }
+    showToast(data.status === 'already-installed'
+        ? `Watchly is already installed on your Nuvio profile ${data.profile}.`
+        : `Installed on Nuvio profile ${data.profile}. It appears after Nuvio's next sync.`, 'success', 6000);
+}
 
 function ensureModal() {
     if (modalEl) return modalEl;

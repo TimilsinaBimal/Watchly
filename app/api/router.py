@@ -6,6 +6,7 @@ from .endpoints.dashboard import router as dashboard_router
 from .endpoints.health import router as health_router
 from .endpoints.languages import router as language_router
 from .endpoints.manifest import router as manifest_router
+from .endpoints.nuvio import router as nuvio_router
 from .endpoints.oauth import router as oauth_router
 from .endpoints.stats import router as stats_router
 from .endpoints.status import router as status_router
@@ -33,3 +34,4 @@ api_router.include_router(validation_router)
 api_router.include_router(oauth_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(status_router)
+api_router.include_router(nuvio_router)

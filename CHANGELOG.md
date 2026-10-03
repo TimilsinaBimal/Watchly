@@ -9,7 +9,7 @@
 ### Changed
 
 - The Accounts step lists each provider as one row with its next action on the right, instead of a grid of cards. Stremio, MDBList and Nuvio unfold a form under their row; Trakt and Simkl connect in one click.
-- "Install on Nuvio" now talks to Nuvio's documented API host instead of the raw Supabase project URL.
+- "Install on Nuvio" is one click when the account has Nuvio connected: the install uses the saved session and goes to the profile the account reads from, on the Install step and the dashboard. Without a connected Nuvio account the sign-in dialog still appears. The dialog now talks to Nuvio's documented API host instead of the raw Supabase project URL.
 
 ## 1.16.0 - 2026-10-03
 

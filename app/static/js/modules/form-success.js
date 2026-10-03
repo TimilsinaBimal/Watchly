@@ -1,6 +1,6 @@
 import { showConfirm, showToast } from './ui.js';
 import { switchSection } from './navigation.js';
-import { openNuvioInstall } from './nuvio.js';
+import { installOnNuvio } from './nuvio.js';
 
 let preparedInstallations = [];
 
@@ -45,7 +45,7 @@ export function initializeSuccessActions({ emailInput, passwordInput, resetApp, 
         installNuvioBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            openNuvioInstall(document.getElementById('addonUrl').textContent);
+            installOnNuvio(document.getElementById('addonUrl').textContent);
         });
     }
 
@@ -349,6 +349,11 @@ function renderProfileInstallations(container, installations) {
         const appButton = createInstallButton('App', true);
         const webButton = createInstallButton('Web');
         const copyButton = createInstallButton('Copy');
+        const nuvioButton = installation.provider === 'nuvio' ? createInstallButton('Nuvio') : null;
+        if (nuvioButton) {
+            nuvioButton.className = 'btn btn-nuvio';
+            nuvioButton.addEventListener('click', () => installOnNuvio(installation.url));
+        }
 
         row.className = 'py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between';
         details.className = 'min-w-0';
@@ -374,7 +379,7 @@ function renderProfileInstallations(container, installations) {
         });
 
         details.append(name, metadata);
-        actions.append(appButton, webButton, copyButton);
+        actions.append(...[nuvioButton, appButton, webButton, copyButton].filter(Boolean));
         row.append(details, actions);
         container.append(row);
     });

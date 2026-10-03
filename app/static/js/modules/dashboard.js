@@ -2,7 +2,7 @@
 // manifest URL, install links, KPIs, catalog previews, and taste profile. Loaded on
 // nav click. Account deletion lives in the Save & Install flow, not here.
 
-import { openNuvioInstall } from './nuvio.js';
+import { installOnNuvio } from './nuvio.js';
 import { escapeHtml } from './ui.js';
 
 let appState = null;
@@ -556,7 +556,7 @@ function wireNuvioInstall() {
     const btn = $('dashInstallNuvioBtn');
     if (!btn) return;
     btn.addEventListener('click', () => {
-        if (dashboardData) openNuvioInstall(dashboardData.manifest_url);
+        if (dashboardData) installOnNuvio(dashboardData.manifest_url);
     });
 }
 
