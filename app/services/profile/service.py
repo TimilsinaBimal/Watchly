@@ -6,6 +6,7 @@ from app.core.settings import UserSettings
 from app.models.history import WatchHistory
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
+from app.services.mdblist import mdblist_service
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
@@ -226,7 +227,7 @@ class ProfileService:
             await user_cache.invalidate_profile(token, content_type)
             await user_cache.invalidate_watched_sets(token, content_type)
 
-        if source in ("trakt", "simkl"):
+        if source in ("trakt", "simkl", "mdblist"):
             profile, watched_tmdb, watched_imdb = await self._build_from_external_source(
                 source, user_settings, content_type, library_items, token=token
             )
@@ -345,6 +346,28 @@ class ProfileService:
                         f"Simkl history fetch failed ({type(e).__name__}: {e}). Falling back to Stremio library."
                     )
                     watch_history = None
+            else:
+                token_missing = True
+        elif source == "mdblist":
+            if user_settings and user_settings.mdblist_api_key:
+                # The key is a query parameter, so neither the exception text nor the
+                # request URL may reach the log: status code and exception type only.
+                try:
+                    watch_history = await mdblist_service.get_history(user_settings.mdblist_api_key)
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code in (401, 403):
+                        token_revoked = True
+                        logger.error(
+                            f"MDBList key rejected (HTTP {e.response.status_code}). "
+                            "Clearing stored key; user must reconnect MDBList."
+                        )
+                    else:
+                        logger.error(
+                            f"MDBList history fetch failed (HTTP {e.response.status_code}). "
+                            "Falling back to Stremio library."
+                        )
+                except Exception as e:
+                    logger.error(f"MDBList history fetch failed ({type(e).__name__}). Falling back to Stremio library.")
             else:
                 token_missing = True
 
@@ -528,6 +551,10 @@ class ProfileService:
             elif source == "simkl":
                 if settings_dict.get("simkl_access_token"):
                     settings_dict["simkl_access_token"] = None
+                    mutated = True
+            elif source == "mdblist":
+                if settings_dict.get("mdblist_api_key"):
+                    settings_dict["mdblist_api_key"] = None
                     mutated = True
             if mutated:
                 credentials["settings"] = settings_dict

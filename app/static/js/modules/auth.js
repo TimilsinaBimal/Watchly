@@ -451,13 +451,16 @@ function setStremioProfileStatus(message, kind = 'neutral') {
     status.classList.add(kind === 'success' ? 'text-green-400' : kind === 'error' ? 'text-red-300' : 'text-neutral-300');
 }
 
-// Look up an existing account by a freshly connected Trakt/Simkl token, so
-// provider-only users get their saved settings and dashboard back without a
-// Stremio login. Lookup failures are non-fatal — the user can still configure.
+// Look up an existing account by a freshly connected Trakt/Simkl/MDBList
+// credential, so provider-only users get their saved settings and dashboard
+// back without a Stremio login. Lookup failures are non-fatal — the user can
+// still configure.
 export async function recallProviderAccount(provider, tokens) {
-    const payload = provider === 'trakt'
-        ? { trakt_access_token: tokens.access_token }
-        : { simkl_access_token: tokens.access_token };
+    const payload = {
+        trakt: { trakt_access_token: tokens.access_token },
+        simkl: { simkl_access_token: tokens.access_token },
+        mdblist: { mdblist_api_key: tokens.api_key },
+    }[provider];
     try {
         await fetchIdentity(payload);
     } catch (e) {
@@ -807,6 +810,16 @@ function restoreWatchHistoryState(settings) {
         if (settings.simkl_access_token !== window.STORED_SECRET) {
             validateAndShowSimklUser(settings.simkl_access_token);
         }
+    }
+
+    const mdblistKeyInput = document.getElementById('mdblistApiKey');
+    if (settings.mdblist_api_key && mdblistKeyInput && !mdblistKeyInput.value) {
+        // The stored key arrives masked; the input round-trips the marker so the
+        // save keeps the saved key, and the card shows it as connected.
+        mdblistKeyInput.value = settings.mdblist_api_key;
+        const mdblistStatus = document.getElementById('mdblistStatus');
+        if (mdblistStatus) mdblistStatus.textContent = 'Connected';
+        setProviderConnected('mdblist', true);
     }
 
     if (settings.watch_history_source) {

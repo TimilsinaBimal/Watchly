@@ -18,13 +18,14 @@ _SECRET_SETTINGS_FIELDS = (
     "trakt_access_token",
     "trakt_refresh_token",
     "simkl_access_token",
+    "mdblist_api_key",
 )
 _SECRET_NESTED_FIELDS = ("llm", "poster_rating")
 
 # The secrets the configure page shows in an input, and so the ones a user may
 # need to identify. The OAuth tokens are excluded: they surface as "Connected",
 # never as an editable value.
-_HINTABLE_SECRET_FIELDS = ("tmdb_api_key", "simkl_api_key", "gemini_api_key")
+_HINTABLE_SECRET_FIELDS = ("tmdb_api_key", "simkl_api_key", "gemini_api_key", "mdblist_api_key")
 
 # Enough to recognise which key is on file, far too little to use it — the same
 # convention as Stripe, AWS and GitHub key listings.

@@ -92,6 +92,7 @@ function getRequestPayload() {
         poster_rating_url_template: document.getElementById('posterRatingUrlTemplate')?.value.trim() || '',
         tmdb_api_key: document.getElementById('tmdbApiKey')?.value.trim() || '',
         simkl_api_key: document.getElementById('simklApiKey')?.value.trim() || '',
+        mdblist_api_key: document.getElementById('mdblistApiKey')?.value.trim() || '',
         llm_provider: document.getElementById('llmProvider')?.value || '',
         llm_api_key: document.getElementById('llmApiKey')?.value.trim() || '',
         llm_model: document.getElementById('llmModel')?.value.trim() || '',
@@ -143,6 +144,7 @@ function buildTokenPayload(formData) {
         trakt_refresh_token: window._watchlyOAuth?.trakt?.refresh_token || undefined,
         trakt_token_expires_at: window._watchlyOAuth?.trakt?.expires_at || undefined,
         simkl_access_token: window._watchlyOAuth?.simkl?.access_token || undefined,
+        mdblist_api_key: formData.mdblist_api_key || undefined,
     };
 }
 
@@ -150,15 +152,16 @@ function validateFormData(formData) {
     const hasStremio = !!(formData.authKey || (formData.email && formData.password));
     const hasTrakt = !!window._watchlyOAuth?.trakt?.access_token;
     const hasSimkl = !!window._watchlyOAuth?.simkl?.access_token;
+    const hasMdblist = !!formData.mdblist_api_key;
 
-    if (!hasStremio && !hasTrakt && !hasSimkl) {
-        showError('generalError', 'Connect at least one account: Stremio, Trakt, or Simkl.');
+    if (!hasStremio && !hasTrakt && !hasSimkl && !hasMdblist) {
+        showError('generalError', 'Connect at least one account: Stremio, Trakt, Simkl or MDBList.');
         switchSection('login');
         return false;
     }
 
     if (formData.watch_history_source === 'stremio' && !hasStremio) {
-        showError('generalError', 'Login with Stremio, or pick Trakt/Simkl as your watch history source.');
+        showError('generalError', 'Login with Stremio, or pick Trakt, Simkl or MDBList as your watch history source.');
         switchSection('login');
         return false;
     }
@@ -213,7 +216,7 @@ function initializeFormSubmission() {
                     ? { ...payload, authKey: profile.authKey, email: undefined, password: undefined }
                     : payload;
 
-                // A shared Trakt or Simkl identity would merge the separate Stremio
+                // A shared Trakt, Simkl or MDBList identity would merge the separate Stremio
                 // profiles back into one Watchly account. Batch mode is deliberately
                 // driven only by each profile's own Stremio history.
                 if (preparedProfiles.length > 1) {
@@ -222,6 +225,7 @@ function initializeFormSubmission() {
                     profilePayload.trakt_refresh_token = undefined;
                     profilePayload.trakt_token_expires_at = undefined;
                     profilePayload.simkl_access_token = undefined;
+                    profilePayload.mdblist_api_key = undefined;
                 }
 
                 const response = await fetch('/tokens/', {
@@ -772,6 +776,48 @@ function initializeWatchHistorySource() {
             }
             traktLogoutBtn.classList.add('hidden');
             setProviderConnected('trakt', false);
+        });
+    }
+
+    const mdblistKeyInput = document.getElementById('mdblistApiKey');
+    const mdblistConnectBtn = document.getElementById('mdblistConnectBtn');
+    const mdblistStatusMessage = document.getElementById('mdblistStatusMessage');
+    const mdblistStatus = document.getElementById('mdblistStatus');
+    const mdblistLogoutBtn = document.getElementById('mdblistLogoutBtn');
+
+    if (mdblistConnectBtn) {
+        mdblistConnectBtn.addEventListener('click', async () => {
+            const apiKey = mdblistKeyInput?.value.trim();
+            if (!apiKey) {
+                setValidationMessage(mdblistStatusMessage, 'Paste your MDBList API key first', 'error');
+                return;
+            }
+            mdblistConnectBtn.disabled = true;
+            try {
+                const data = await postJson('/mdblist/validation', { api_key: apiKey });
+                if (!data.valid) {
+                    setValidationMessage(mdblistStatusMessage, data.message || 'Invalid MDBList API key', 'error');
+                    return;
+                }
+                clearValidationMessage(mdblistStatusMessage);
+                if (mdblistStatus) mdblistStatus.textContent = data.message;
+                setProviderConnected('mdblist', true);
+                if (!appState?.auth?.loggedIn) {
+                    recallProviderAccount('mdblist', { api_key: apiKey });
+                }
+            } catch (e) {
+                setValidationMessage(mdblistStatusMessage, 'Could not reach the server. Try again.', 'error');
+            } finally {
+                mdblistConnectBtn.disabled = false;
+            }
+        });
+    }
+
+    if (mdblistLogoutBtn) {
+        mdblistLogoutBtn.addEventListener('click', () => {
+            if (mdblistKeyInput) mdblistKeyInput.value = '';
+            if (mdblistStatus) mdblistStatus.textContent = 'MDBList';
+            setProviderConnected('mdblist', false);
         });
     }
 

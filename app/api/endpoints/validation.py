@@ -14,6 +14,7 @@ from app.api.models.validation import (
 from app.core.security import STORED_SECRET_SENTINEL
 from app.core.settings import LLMConfig, PosterRatingConfig
 from app.services.llm import llm_service
+from app.services.mdblist import mdblist_service
 from app.services.poster_ratings.factory import PosterProvider, poster_ratings_factory
 from app.services.simkl import simkl_service
 from app.services.tmdb.client import TMDBClient
@@ -138,6 +139,17 @@ async def validate_simkl_api_key(data: BaseValidationInput) -> BaseValidationRes
     except Exception as e:
         logger.error(f"Simkl validation failed: {str(e)}")
         return BaseValidationResponse(valid=False, message="Could not validate API key. Please try again.")
+
+
+@router.post("/mdblist/validation")
+async def validate_mdblist_api_key(data: BaseValidationInput) -> BaseValidationResponse:
+    try:
+        user = await mdblist_service.get_user(data.api_key)
+    except Exception as e:
+        # The key rides in the query string, so the exception text must stay out of the log.
+        logger.info(f"MDBList key validation failed: {type(e).__name__}")
+        return BaseValidationResponse(valid=False, message="Invalid MDBList API key")
+    return BaseValidationResponse(valid=True, message=f"Connected as {user.get('username') or user.get('user_id')}")
 
 
 class OAuthTokenValidationInput(BaseModel):

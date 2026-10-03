@@ -58,6 +58,13 @@ def setup_fakes(monkeypatch, stremio_identity=None):
 
     monkeypatch.setattr("app.services.auth.simkl_service.get_user_settings", fake_simkl_settings)
 
+    async def fake_mdblist_user(api_key):
+        if api_key != "mdb-key":
+            raise HTTPException(status_code=401, detail="bad key")
+        return {"user_id": 42, "username": "bob"}
+
+    monkeypatch.setattr("app.services.auth.mdblist_service.get_user", fake_mdblist_user)
+
     return fake
 
 
@@ -89,6 +96,23 @@ def test_trakt_only_account_minted_and_reused(monkeypatch):
     # Re-configuring with the same Trakt account resolves to the same token
     response2, _, _ = asyncio.run(service.create_user_token(payload))
     assert response2.token == token
+
+
+def test_mdblist_only_account_minted_and_key_stored(monkeypatch):
+    fake = setup_fakes(monkeypatch)
+    service = AuthService()
+    payload = TokenRequest(mdblist_api_key="mdb-key", watch_history_source="mdblist")
+
+    response, auth_key, user_settings = asyncio.run(service.create_user_token(payload))
+
+    assert auth_key is None
+    assert fake.data["watchly:identity:mdblist:42"] == response.token
+    assert user_settings.mdblist_api_key == "mdb-key"
+
+    # A key MDBList rejects can't open or create an account.
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.create_user_token(TokenRequest(mdblist_api_key="wrong", watch_history_source="mdblist")))
+    assert exc.value.status_code == 400
 
 
 def test_at_least_one_account_required(monkeypatch):

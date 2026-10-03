@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- MDBList as a watch history source. Paste your MDBList API key on the Accounts step; Watchly reads your watched history and ratings from MDBList's sync API, so trackers you sync into MDBList feed your recommendations too. No server configuration is needed. Rewatches aren't counted from MDBList; ratings drive loved and liked (#163).
+
 ## 1.15.0 - 2026-09-30
 
 ### Added

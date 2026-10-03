@@ -58,6 +58,7 @@ class DashboardService:
                 "active": user_settings.watch_history_source,
                 "trakt": bool(user_settings.trakt_access_token),
                 "simkl": bool(user_settings.simkl_access_token),
+                "mdblist": bool(user_settings.mdblist_api_key),
             },
             "stats": {
                 "library": library_stats,

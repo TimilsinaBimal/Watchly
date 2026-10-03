@@ -9,6 +9,7 @@ from app.api.models.tokens import TokenRequest, TokenResponse, TraktTokens
 from app.core.config import settings
 from app.core.security import STORED_SECRET_SENTINEL, mask_stored_secrets, redact_token, secret_hints
 from app.core.settings import LLMConfig, PosterRatingConfig, UserSettings, get_default_settings
+from app.services.mdblist import mdblist_service
 from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
@@ -148,10 +149,16 @@ class AuthService:
             if account_id := await self._verify_simkl_identity(payload.simkl_access_token):
                 identities["simkl"] = account_id
 
+        if payload.mdblist_api_key and payload.mdblist_api_key != STORED_SECRET_SENTINEL:
+            if user_id := await self._verify_mdblist_identity(payload.mdblist_api_key):
+                identities["mdblist"] = user_id
+
         if not identities:
             raise HTTPException(
                 status_code=400,
-                detail="Could not verify any connected account. Reconnect Stremio, Trakt, or Simkl and try again.",
+                detail=(
+                    "Could not verify any connected account. Reconnect Stremio, Trakt, Simkl or MDBList and try again."
+                ),
             )
 
         return identities, stremio_auth_key, email
@@ -221,6 +228,18 @@ class AuthService:
 
         account_id = (info.get("account") or {}).get("id") if isinstance(info, dict) else None
         return str(account_id) if account_id else None
+
+    async def _verify_mdblist_identity(self, api_key: str) -> str | None:
+        """MDBList user id for the key, or None if MDBList won't confirm it."""
+        try:
+            info = await mdblist_service.get_user(api_key)
+        except Exception as e:
+            # The key rides in the query string, so the exception text must stay out of the log.
+            logger.info(f"MDBList identity lookup failed: {type(e).__name__}")
+            return None
+
+        user_id = info.get("user_id")
+        return str(user_id) if user_id else None
 
     async def _find_account_token(self, provider: str, provider_user_id: str) -> str | None:
         """Locate the account token for a verified provider identity."""
@@ -301,7 +320,7 @@ class AuthService:
             # A secondary profile's first save comes from a configure page loaded
             # against the primary profile, so its API keys arrive masked and have to
             # be restored from that account; parent_id proved the profile belongs to
-            # it. Trakt/Simkl tokens are identities and would merge the profiles back.
+            # it. Trakt/Simkl/MDBList credentials are identities and would merge the profiles back.
             master_token = await self._find_account_token("stremio", identities["stremio"].split(":", 1)[0])
             master_settings = ((await token_store.get_user_data(master_token)) or {}).get("settings") or {}
             stored_settings = {
@@ -405,6 +424,7 @@ class AuthService:
             trakt_refresh_token=unmasked("trakt_refresh_token", payload.trakt_refresh_token),
             trakt_token_expires_at=payload.trakt_token_expires_at,
             simkl_access_token=unmasked("simkl_access_token", payload.simkl_access_token),
+            mdblist_api_key=unmasked("mdblist_api_key", payload.mdblist_api_key),
             watch_history_source=payload.watch_history_source,
         )
 
