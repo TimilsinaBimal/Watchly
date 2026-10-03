@@ -20,7 +20,7 @@ const hide = (el) => el && el.classList.add('hidden');
 
 const POPULARITY_LABELS = { mainstream: 'Mainstream', balanced: 'Balanced', gems: 'Hidden Gems', all: 'All' };
 const SORTING_LABELS = { default: 'Default', movies_first: 'Movies first', series_first: 'Series first' };
-const SOURCE_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl' };
+const SOURCE_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList' };
 const WARMING_LABELS = {
     pending: 'Saving your configuration',
     building_profile: 'Reading your watch history',
@@ -233,6 +233,7 @@ function renderSources(sources) {
         { label: `History from ${SOURCE_LABELS[sources.active] || sources.active}`, tone: BADGE_MUTED },
         { label: sources.trakt ? 'Trakt connected' : 'Trakt not connected', tone: sources.trakt ? BADGE_OK : BADGE_MUTED },
         { label: sources.simkl ? 'Simkl connected' : 'Simkl not connected', tone: sources.simkl ? BADGE_OK : BADGE_MUTED },
+        { label: sources.mdblist ? 'MDBList connected' : 'MDBList not connected', tone: sources.mdblist ? BADGE_OK : BADGE_MUTED },
     ];
     items.forEach(({ label, tone }) => {
         const span = document.createElement('span');

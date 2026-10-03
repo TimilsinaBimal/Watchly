@@ -14,10 +14,10 @@ const ACTIVE_BORDER_CLASS = 'border-accent/40';
 const INACTIVE_CLASSES = ['text-neutral-300', 'hover:text-white', 'hover:bg-white/5'];
 const INACTIVE_BORDER_CLASS = 'border-transparent';
 
-const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl' };
+const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList' };
 
 let switchSectionFn = null;
-const connectedState = { stremio: false, trakt: false, simkl: false };
+const connectedState = { stremio: false, trakt: false, simkl: false, mdblist: false };
 
 export function initializeAccountsUI({ switchSection } = {}) {
     switchSectionFn = switchSection || null;
@@ -44,6 +44,7 @@ export function setStremioConnected(connected) {
         // by callers (resetApp / OAuth handlers), not here.
         setProviderConnected('trakt', false);
         setProviderConnected('simkl', false);
+        setProviderConnected('mdblist', false);
         setWatchHistorySource('stremio');
     }
 
@@ -55,14 +56,14 @@ export function setProviderConnected(provider, connected) {
         setStremioConnected(connected);
         return;
     }
-    if (provider !== 'trakt' && provider !== 'simkl') return;
+    if (!(provider in connectedState)) return;
 
     connectedState[provider] = connected;
     setProviderDot(provider, connected);
     setProviderView(provider, connected);
 
     if (connected) {
-        // Trakt/Simkl alone is enough to configure the addon — no Stremio needed.
+        // Trakt/Simkl/MDBList alone is enough to configure the addon — no Stremio needed.
         unlockNavigation();
     }
 
@@ -82,6 +83,7 @@ function firstConnectedSource() {
     if (connectedState.stremio) return 'stremio';
     if (connectedState.trakt) return 'trakt';
     if (connectedState.simkl) return 'simkl';
+    if (connectedState.mdblist) return 'mdblist';
     return 'stremio';
 }
 
@@ -118,7 +120,7 @@ function goToAccounts(scrollTo) {
 function syncAccountsNextButton() {
     const btn = document.getElementById('accountsNextBtn');
     if (!btn) return;
-    btn.disabled = !(connectedState.stremio || connectedState.trakt || connectedState.simkl);
+    btn.disabled = !Object.values(connectedState).some(Boolean);
 }
 
 function setProviderView(provider, connected) {

@@ -12,7 +12,7 @@
 <section id="sect-login" class="space-y-6 hidden animate-fade-in">
     <div class="page-header">
         <h2 class="page-title">Accounts</h2>
-        <p class="page-lead">Connect Stremio, Trakt or Simkl so Watchly can read your watch history. One is enough; each extra account sharpens your recommendations.</p>
+        <p class="page-lead">Connect Stremio, Trakt, Simkl or MDBList so Watchly can read your watch history. One is enough; each extra account sharpens your recommendations.</p>
         <p class="mt-3 flex items-center gap-2 text-[13px] text-neutral-400">
             <svg class="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
@@ -233,6 +233,47 @@
                                 <div class="break-words" id="simklSyncStatus">Simkl</div>
                             </div>
                             <button type="button" id="simklSyncLogoutBtn" class="btn btn-ghost flex-shrink-0 px-3">Disconnect</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MDBLIST -->
+            <div id="provider-mdblist" class="{{ card_classes }}">
+                <button type="button" data-provider-toggle="mdblist" aria-expanded="true" class="{{ toggle_classes }}">
+                    <span class="{{ tile_classes }} text-amber-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/></svg>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                        <span class="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                            <h3 class="card-title">MDBList</h3>
+                            <span class="{{ badge_classes }}" data-account-dot="mdblist">Not connected</span>
+                        </span>
+                        <span class="mt-0.5 block text-sm text-neutral-300">Watched history and ratings, synced from your other trackers.</span>
+                    </span>
+                    <svg class="{{ chevron_classes }}" data-provider-chevron="mdblist" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+
+                <div data-provider-body="mdblist" class="{{ body_classes }}">
+                    <!-- Disconnected view -->
+                    <div data-provider-view="disconnected" data-provider-for="mdblist">
+                        <label for="mdblistApiKey" class="field-label">API key</label>
+                        <input type="password" id="mdblistApiKey" autocomplete="off" class="input font-mono placeholder:font-sans" placeholder="Paste your MDBList API key">
+                        <button type="button" id="mdblistConnectBtn" class="btn btn-secondary btn-lg mt-3 w-full">Connect MDBList</button>
+                        <div id="mdblistStatusMessage" class="mt-2 text-xs hidden"></div>
+                        <p class="field-hint mt-3">Find the key under <a href="https://mdblist.com/preferences/" target="_blank" rel="noopener">MDBList preferences</a>.</p>
+                    </div>
+
+                    <!-- Connected view -->
+                    <div data-provider-view="connected" data-provider-for="mdblist" class="hidden">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-500/15 text-green-400 ring-1 ring-green-500/30">{{ check_icon }}</div>
+                            <div class="min-w-0 flex-1 text-sm font-medium text-white">
+                                <div class="break-words" id="mdblistStatus">MDBList</div>
+                            </div>
+                            <button type="button" id="mdblistLogoutBtn" class="btn btn-ghost flex-shrink-0 px-3">Disconnect</button>
                         </div>
                     </div>
                 </div>

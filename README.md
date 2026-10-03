@@ -10,7 +10,7 @@
 </div>
 <br/>
 
-**Watchly** is a Stremio catalog addon that fills your Stremio home with personalized movie and series recommendations built from your own watch history. It reads what you've watched, rated, and loved — from **Stremio, Trakt, or Simkl** — builds a numerical taste profile from it, and serves a set of recommendation rows ("Top Picks for You", "Because you watched …", genre and keyword catalogs, and more) using metadata from [TMDB](https://www.themoviedb.org/).
+**Watchly** is a Stremio catalog addon that fills your Stremio home with personalized movie and series recommendations built from your own watch history. It reads what you've watched, rated, and loved — from **Stremio, Trakt, Simkl, or MDBList** — builds a numerical taste profile from it, and serves a set of recommendation rows ("Top Picks for You", "Because you watched …", genre and keyword catalogs, and more) using metadata from [TMDB](https://www.themoviedb.org/).
 
 Everything is configured through a web page; you paste the resulting manifest URL into Stremio once, and the catalogs keep refreshing in the background.
 
@@ -37,7 +37,7 @@ Everything is configured through a web page; you paste the resulting manifest UR
 ## Features
 
 - **Personalized recommendations** — a taste profile (top genres, keywords, directors, cast, eras, countries, runtime) is built from your history and drives every catalog row.
-- **Three history sources** — use your **Stremio** library, your **Trakt** account, or your **Simkl** account. Ratings, watches, loves, and rewatches are all understood.
+- **Four history sources** — use your **Stremio** library, or your **Trakt**, **Simkl** or **MDBList** account. Ratings, watches, loves, and rewatches are all understood.
 - **Multiple catalog types** — Top Picks, "Because you watched/loved", dynamic genre & keyword rows, recommendations from your recurring directors and actors, and "based on everything you loved/liked".
 - **Fine-grained personalization** — discovery style (mainstream → hidden gems), release-year window, excluded genres (separately for movies and series), display language, and per-catalog enable/rename/shuffle controls.
 - **Poster ratings overlay** — optionally overlay IMDb/TMDb-style ratings on posters via [RatingPosterDB](https://ratingposterdb.com/), Top Posters, or a custom template.
@@ -48,7 +48,7 @@ Everything is configured through a web page; you paste the resulting manifest UR
 
 ## How it works
 
-1. You open the `/configure` page and connect a history source (Stremio login, or Trakt/Simkl via OAuth). Your credentials are encrypted and stored in Redis under a short opaque **token**. That token is embedded in your personal manifest URL.
+1. You open the `/configure` page and connect a history source (Stremio login, Trakt/Simkl via OAuth, or an MDBList API key). Your credentials are encrypted and stored in Redis under a short opaque **token**. That token is embedded in your personal manifest URL.
 2. Watchly fetches your watch history from the configured source and converts it into a source-agnostic library — ratings ≥ 9 count as *loved*, 7–8.9 as *liked*, the rest as *watched*.
 3. From that library it builds a **taste profile**: a numerical fingerprint of your preferences across genres, keywords, people, eras, countries, and runtime.
 4. When Stremio requests a catalog, Watchly routes the request to the matching recommendation engine, pulls candidates from TMDB (and Simkl where available), scores them against your profile, caps them for diversity, enriches them with metadata and (optionally) poster ratings, translates titles to your language, and returns a standard Stremio catalog.
@@ -75,6 +75,7 @@ Watchly works for users who keep their library in different places. Pick one sou
 - **Stremio** — uses your Stremio library directly (requires a Stremio email/password or auth key).
 - **Trakt** — connect via OAuth on the configure page; Watchly reads your watched history and ratings.
 - **Simkl** — connect via OAuth on the configure page; Watchly reads your watched history and ratings.
+- **MDBList** — paste your API key from [mdblist.com/preferences](https://mdblist.com/preferences/) on the configure page; Watchly reads your watched history and ratings. Needs no server-side setup.
 
 A single install uses exactly one source at a time. Switching sources rebuilds your library and profile from the new account.
 
