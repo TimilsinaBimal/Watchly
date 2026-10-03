@@ -16,9 +16,10 @@ export function initializeYearSliderControl() {
         yearMinLabel.textContent = minVal;
         yearMaxLabel.textContent = maxVal >= parseInt(yearMax.max) ? 'now' : maxVal;
 
-        const range = yearMin.max - yearMin.min;
+        // The max thumb reaches one notch past the min thumb (the "now" position).
+        const range = yearMax.max - yearMin.min;
         const left = ((minVal - yearMin.min) / range) * 100;
-        const right = ((yearMin.max - maxVal) / range) * 100;
+        const right = ((yearMax.max - maxVal) / range) * 100;
 
         track.style.left = left + '%';
         track.style.right = right + '%';

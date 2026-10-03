@@ -28,3 +28,13 @@ def test_a_year_max_saved_at_the_slider_end_reads_as_open_ended():
 
     chosen_cap = {"settings": {"catalogs": [], "year_max": 2020}, "last_updated": "2026-10-03T10:00:00+00:00"}
     assert settings_from_credentials(chosen_cap).year_max == 2020
+
+    # Saved after the slider gained its "now" notch: a current-year pick is deliberate.
+    picked_this_year = {"settings": {"catalogs": [], "year_max": 2026}, "last_updated": "2026-10-04T00:00:01+00:00"}
+    assert settings_from_credentials(picked_this_year).year_max == 2026
+
+
+def test_the_slider_right_end_is_one_past_the_current_year():
+    from app.core.settings import get_current_year, get_default_year_range
+
+    assert get_default_year_range()["max"] == get_current_year() + 1
