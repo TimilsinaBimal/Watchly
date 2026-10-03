@@ -1,20 +1,15 @@
 # Changelog
 
-## Unreleased
-
-### Added
-
-- Nuvio as a watch history source. Sign in to Nuvio on the Accounts step (your password goes straight from the page to Nuvio); Watchly reads the watched list and finished plays of the profile you pick, through Nuvio's public API. An account with several profiles can set up every profile at once, one Watchly instance each, like Stremio profiles. Nuvio has no ratings, so titles count as watched only (#174).
-
-### Changed
-
-- "Install on Nuvio" now talks to Nuvio's documented API host instead of the raw Supabase project URL.
-
 ## 1.16.0 - 2026-10-03
 
 ### Added
 
+- Nuvio as a watch history source. Sign in to Nuvio on the Accounts step (your password goes straight from the page to Nuvio); Watchly reads the watched list and finished plays of the profile you pick, through Nuvio's public API. An account with several profiles can set up every profile at once, one Watchly instance each, like Stremio profiles. Nuvio has no ratings, so titles count as watched only (#174).
 - MDBList as a watch history source. Paste your MDBList API key on the Accounts step; Watchly reads your watched history and ratings from MDBList's sync API, so trackers you sync into MDBList feed your recommendations too. No server configuration is needed. Rewatches aren't counted from MDBList; ratings drive loved and liked (#163).
+
+### Changed
+
+- "Install on Nuvio" now talks to Nuvio's documented API host instead of the raw Supabase project URL.
 
 ### Fixed
 
