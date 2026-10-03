@@ -160,14 +160,16 @@ function syncAccountsNextButton() {
 }
 
 function setProviderView(provider, connected) {
-    const disconnected = document.querySelector(`[data-provider-view="disconnected"][data-provider-for="${provider}"]`);
-    const connectedEl = document.querySelector(`[data-provider-view="connected"][data-provider-for="${provider}"]`);
-    if (disconnected) disconnected.classList.toggle('hidden', connected);
-    if (connectedEl) connectedEl.classList.toggle('hidden', !connected);
+    // A provider's disconnected view can be split between the row action and the
+    // unfolded form, so every match flips.
+    document.querySelectorAll(`[data-provider-view="disconnected"][data-provider-for="${provider}"]`)
+        .forEach(el => el.classList.toggle('hidden', connected));
+    document.querySelectorAll(`[data-provider-view="connected"][data-provider-for="${provider}"]`)
+        .forEach(el => el.classList.toggle('hidden', !connected));
     if (connected) expandProviderCard(provider);
 }
 
-// Tracker cards start folded; a connected one shows its status and Disconnect.
+// Rows start folded; connecting unfolds one so its profile options show.
 function expandProviderCard(provider) {
     const body = document.querySelector(`[data-provider-body="${provider}"]`);
     const toggle = document.querySelector(`[data-provider-toggle="${provider}"]`);
