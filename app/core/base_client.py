@@ -49,6 +49,9 @@ class BaseClient:
                 response.raise_for_status()
                 return response
             except (httpx.HTTPStatusError, httpx.RequestError) as e:
+                # str(e) carries the full request URL, and TMDB, Simkl and MDBList
+                # put the user's key in the query string; `url` here is the path only.
+                reason = f"HTTP {e.response.status_code}" if isinstance(e, httpx.HTTPStatusError) else type(e).__name__
 
                 # Check if the error is retryable
                 is_retryable = True
@@ -69,16 +72,16 @@ class BaseClient:
                         if retry_after is not None:
                             wait_time = min(max(retry_after, wait_time), _RETRY_AFTER_CEILING_SECONDS)
                     logger.warning(
-                        f"Request failed ({method} {url}): {str(e)}. "
+                        f"Request failed ({method} {url}): {reason}. "
                         f"Retrying in {wait_time}s... (Attempt {attempt}/{tries})"
                     )
                     await asyncio.sleep(wait_time)
                 else:
                     # If not retryable or no more attempts left, log and raise
                     if not is_retryable:
-                        logger.error(f"Non-retryable request failure ({method} {url}): {str(e)}")
+                        logger.error(f"Non-retryable request failure ({method} {url}): {reason}")
                     else:
-                        logger.error(f"Request failed after {tries} attempts ({method} {url}): {str(e)}")
+                        logger.error(f"Request failed after {tries} attempts ({method} {url}): {reason}")
                     raise e
 
         raise httpx.RequestError(f"Request failed for {method} {url} with 0 attempts configured")
