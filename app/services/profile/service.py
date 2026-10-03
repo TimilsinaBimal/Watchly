@@ -1,19 +1,28 @@
+import asyncio
+import copy
+import time
 from typing import Any
 
+import httpx
 from loguru import logger
 
-from app.core.settings import UserSettings
+from app.core.constants import NUVIO_REFRESH_LOCK_KEY
+from app.core.security import redact_token
+from app.core.settings import UserSettings, resolve_tmdb_api_key
 from app.models.history import WatchHistory
 from app.models.library import LibraryCollection
 from app.models.profile import TasteProfile
 from app.services.mdblist import mdblist_service
+from app.services.nuvio import nuvio_service
 from app.services.profile.builder import ProfileBuilder
 from app.services.profile.sampling import sample_items
 from app.services.profile.scoring import ScoringService
 from app.services.profile.vectorizer import ItemVectorizer
 from app.services.recommendation.filtering import RecommendationFiltering
+from app.services.redis_service import redis_service
 from app.services.stremio.library import stremio_library_to_watch_history, watch_history_to_library_collection
 from app.services.tmdb.service import get_tmdb_service
+from app.services.token_store import token_store
 from app.services.user_cache import user_cache
 
 
@@ -227,7 +236,7 @@ class ProfileService:
             await user_cache.invalidate_profile(token, content_type)
             await user_cache.invalidate_watched_sets(token, content_type)
 
-        if source in ("trakt", "simkl", "mdblist"):
+        if source in ("trakt", "simkl", "mdblist", "nuvio"):
             profile, watched_tmdb, watched_imdb = await self._build_from_external_source(
                 source, user_settings, content_type, library_items, token=token
             )
@@ -256,8 +265,6 @@ class ProfileService:
         fall back. token_revoked=True implies the stored credential has been
         cleared from the user record by `_clear_revoked_token`.
         """
-        import httpx
-
         watch_history: WatchHistory | None = None
         token_missing = False
         token_revoked = False
@@ -368,6 +375,11 @@ class ProfileService:
                         )
                 except Exception as e:
                     logger.error(f"MDBList history fetch failed ({type(e).__name__}). Falling back to Stremio library.")
+            else:
+                token_missing = True
+        elif source == "nuvio":
+            if user_settings and user_settings.nuvio_access_token and user_settings.nuvio_profile_id:
+                watch_history, token_revoked = await self._fetch_nuvio_history(token, user_settings)
             else:
                 token_missing = True
 
@@ -494,7 +506,6 @@ class ProfileService:
         import time as _time
 
         from app.core.config import settings as app_settings
-        from app.services.token_store import token_store
         from app.services.trakt import trakt_service
 
         redirect_uri = f"{app_settings.HOST_NAME}/auth/trakt/callback"
@@ -528,6 +539,101 @@ class ProfileService:
 
         return new_access
 
+    async def _fetch_nuvio_history(
+        self, token: str | None, user_settings: UserSettings
+    ) -> tuple[WatchHistory | None, bool]:
+        """(history, revoked). Nuvio sessions last an hour, so most fetches start with a refresh.
+
+        Tokens are cleared only when a session refreshed in this request is still
+        rejected: a refresh that fails may have lost the race to another worker that
+        already rotated the pair, and that is not a revocation.
+        """
+        access_token = user_settings.nuvio_access_token or ""
+        can_refresh = bool(token and user_settings.nuvio_refresh_token)
+        refreshed = False
+        if can_refresh and self._nuvio_token_expiring(user_settings.nuvio_expires_at):
+            access_token = await self._refresh_nuvio_token(token, user_settings.nuvio_refresh_token) or ""
+            if not access_token:
+                logger.warning(f"[{redact_token(token)}] Nuvio refresh unavailable; keeping stored session.")
+                return None, False
+            refreshed = True
+
+        tmdb_service = get_tmdb_service(api_key=resolve_tmdb_api_key(user_settings))
+        while True:
+            try:
+                history = await nuvio_service.get_history(access_token, user_settings.nuvio_profile_id, tmdb_service)
+                return history, False
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                if status not in (401, 403):
+                    logger.error(f"Nuvio history fetch failed (HTTP {status}). Falling back to Stremio library.")
+                    return None, False
+                if refreshed or not can_refresh:
+                    logger.error(f"Nuvio session rejected (HTTP {status}). Clearing stored session.")
+                    return None, True
+                # A session that looked valid was rejected: refresh once and retry.
+                access_token = await self._refresh_nuvio_token(token, user_settings.nuvio_refresh_token) or ""
+                if not access_token:
+                    logger.warning(f"[{redact_token(token)}] Nuvio refresh after 401 failed; keeping stored session.")
+                    return None, False
+                refreshed = True
+            except Exception as e:
+                logger.error(f"Nuvio history fetch failed ({type(e).__name__}). Falling back to Stremio library.")
+                return None, False
+
+    @staticmethod
+    def _nuvio_token_expiring(expires_at: int | None) -> bool:
+        return not expires_at or time.time() >= expires_at - 60
+
+    async def _refresh_nuvio_token(self, token: str, refresh_token: str) -> str | None:
+        """Rotate the Nuvio session once per account, however many rows ask at once.
+
+        Supabase rotates refresh tokens, so concurrent refreshes with the same token
+        would each fail after the first. The lock holder refreshes and persists; the
+        others wait for it and read the pair it stored.
+        """
+        lock_key = NUVIO_REFRESH_LOCK_KEY.format(token=token)
+        if not await redis_service.set_nx(lock_key, "1", 30):
+            for _ in range(40):
+                await asyncio.sleep(0.25)
+                if not await redis_service.exists(lock_key):
+                    break
+            return await self._stored_nuvio_access_token(token, refresh_token)
+
+        try:
+            if stored := await self._stored_nuvio_access_token(token, refresh_token):
+                return stored
+            try:
+                data = await nuvio_service.refresh(refresh_token)
+            except httpx.HTTPStatusError as e:
+                logger.warning(f"[{redact_token(token)}] Nuvio refresh rejected (HTTP {e.response.status_code}).")
+                return None
+            except Exception as e:
+                logger.warning(f"[{redact_token(token)}] Nuvio refresh failed ({type(e).__name__}).")
+                return None
+
+            new_access = data.get("access_token")
+            credentials = copy.deepcopy(await token_store.get_user_data(token))
+            if not new_access or not credentials:
+                return None
+            settings_dict = credentials.setdefault("settings", {})
+            settings_dict["nuvio_access_token"] = new_access
+            settings_dict["nuvio_refresh_token"] = data.get("refresh_token") or refresh_token
+            settings_dict["nuvio_expires_at"] = int(time.time()) + int(data.get("expires_in") or 3600)
+            await token_store.update_user_data(token, credentials)
+            logger.info(f"[{redact_token(token)}] Nuvio session refreshed.")
+            return new_access
+        finally:
+            await redis_service.delete(lock_key)
+
+    @staticmethod
+    async def _stored_nuvio_access_token(token: str, refresh_token: str) -> str | None:
+        """The access token another request already stored, or None if nobody rotated yet."""
+        stored = ((await token_store.get_user_data(token)) or {}).get("settings") or {}
+        if stored.get("nuvio_refresh_token") and stored.get("nuvio_refresh_token") != refresh_token:
+            return stored.get("nuvio_access_token") or None
+        return None
+
     async def _clear_revoked_token(self, token: str, source: str) -> None:
         """Wipe a revoked external-source token from stored credentials.
 
@@ -535,8 +641,6 @@ class ProfileService:
         on a dead token forever. Their /configure page will show the source
         as disconnected on next visit so they can reconnect.
         """
-        from app.services.token_store import token_store
-
         try:
             credentials = await token_store.get_user_data(token)
             if not credentials:
@@ -556,6 +660,11 @@ class ProfileService:
                 if settings_dict.get("mdblist_api_key"):
                     settings_dict["mdblist_api_key"] = None
                     mutated = True
+            elif source == "nuvio":
+                for field in ("nuvio_access_token", "nuvio_refresh_token", "nuvio_expires_at"):
+                    if settings_dict.get(field):
+                        settings_dict[field] = None
+                        mutated = True
             if mutated:
                 credentials["settings"] = settings_dict
                 await token_store.update_user_data(token, credentials)

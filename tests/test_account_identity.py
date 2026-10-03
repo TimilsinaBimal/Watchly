@@ -65,6 +65,11 @@ def setup_fakes(monkeypatch, stremio_identity=None):
 
     monkeypatch.setattr("app.services.auth.mdblist_service.get_user", fake_mdblist_user)
 
+    async def fake_nuvio_user_id(access_token):
+        return "nuvio-uuid" if access_token == "nuvio-access" else None
+
+    monkeypatch.setattr("app.services.auth.nuvio_service.get_user_id", fake_nuvio_user_id)
+
     return fake
 
 
@@ -112,6 +117,37 @@ def test_mdblist_only_account_minted_and_key_stored(monkeypatch):
     # A key MDBList rejects can't open or create an account.
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.create_user_token(TokenRequest(mdblist_api_key="wrong", watch_history_source="mdblist")))
+    assert exc.value.status_code == 400
+
+
+def test_each_nuvio_profile_is_its_own_account(monkeypatch):
+    fake = setup_fakes(monkeypatch)
+    service = AuthService()
+
+    first, _, first_settings = asyncio.run(
+        service.create_user_token(
+            TokenRequest(
+                nuvio_access_token="nuvio-access",
+                nuvio_refresh_token="nuvio-refresh",
+                nuvio_profile_id=1,
+                nuvio_profile_name="Main",
+                watch_history_source="nuvio",
+            )
+        )
+    )
+    second, _, _ = asyncio.run(
+        service.create_user_token(
+            TokenRequest(nuvio_access_token="nuvio-access", nuvio_profile_id=2, watch_history_source="nuvio")
+        )
+    )
+
+    assert first.token != second.token
+    assert fake.data["watchly:identity:nuvio:nuvio-uuid:1"] == first.token
+    assert fake.data["watchly:identity:nuvio:nuvio-uuid:2"] == second.token
+    assert first_settings.nuvio_profile_name == "Main" and first_settings.nuvio_refresh_token == "nuvio-refresh"
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.create_user_token(TokenRequest(nuvio_access_token="stale", watch_history_source="nuvio")))
     assert exc.value.status_code == 400
 
 

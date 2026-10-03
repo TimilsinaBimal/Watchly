@@ -23,6 +23,7 @@ PROFILE_SCORING_VERSION: int = 4
 
 # cache keys
 LIBRARY_ITEMS_KEY: str = "watchly:library_items:{token}"
+NUVIO_REFRESH_LOCK_KEY: str = "watchly:nuvio_refresh:{token}"
 PROFILE_KEY: str = "watchly:profile:{token}:{content_type}"
 WATCHED_SETS_KEY: str = "watchly:watched_sets:{token}:{content_type}"
 CATALOG_KEY: str = "watchly:catalog:{token}:{type}:{id}"

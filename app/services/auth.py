@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.security import STORED_SECRET_SENTINEL, mask_stored_secrets, redact_token, secret_hints
 from app.core.settings import LLMConfig, PosterRatingConfig, UserSettings, get_default_settings
 from app.services.mdblist import mdblist_service
+from app.services.nuvio import nuvio_service
 from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
@@ -153,11 +154,19 @@ class AuthService:
             if user_id := await self._verify_mdblist_identity(payload.mdblist_api_key):
                 identities["mdblist"] = user_id
 
+        if payload.nuvio_access_token and payload.nuvio_access_token != STORED_SECRET_SENTINEL:
+            # The profile is part of the identity: each Nuvio profile has its own
+            # history, so each gets its own Watchly account, as Stremio profiles do.
+            nuvio_user_id = await nuvio_service.get_user_id(payload.nuvio_access_token)
+            if nuvio_user_id:
+                identities["nuvio"] = f"{nuvio_user_id}:{payload.nuvio_profile_id or 1}"
+
         if not identities:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Could not verify any connected account. Reconnect Stremio, Trakt, Simkl or MDBList and try again."
+                    "Could not verify any connected account. "
+                    "Reconnect Stremio, Trakt, Simkl, MDBList or Nuvio and try again."
                 ),
             )
 
@@ -320,7 +329,7 @@ class AuthService:
             # A secondary profile's first save comes from a configure page loaded
             # against the primary profile, so its API keys arrive masked and have to
             # be restored from that account; parent_id proved the profile belongs to
-            # it. Trakt/Simkl/MDBList credentials are identities and would merge the profiles back.
+            # it. Trakt/Simkl/MDBList/Nuvio credentials are identities and would merge the profiles back.
             master_token = await self._find_account_token("stremio", identities["stremio"].split(":", 1)[0])
             master_settings = ((await token_store.get_user_data(master_token)) or {}).get("settings") or {}
             stored_settings = {
@@ -425,6 +434,11 @@ class AuthService:
             trakt_token_expires_at=payload.trakt_token_expires_at,
             simkl_access_token=unmasked("simkl_access_token", payload.simkl_access_token),
             mdblist_api_key=unmasked("mdblist_api_key", payload.mdblist_api_key),
+            nuvio_access_token=unmasked("nuvio_access_token", payload.nuvio_access_token),
+            nuvio_refresh_token=unmasked("nuvio_refresh_token", payload.nuvio_refresh_token),
+            nuvio_expires_at=payload.nuvio_expires_at,
+            nuvio_profile_id=payload.nuvio_profile_id,
+            nuvio_profile_name=payload.nuvio_profile_name,
             watch_history_source=payload.watch_history_source,
         )
 
