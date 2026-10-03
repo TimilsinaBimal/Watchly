@@ -144,6 +144,7 @@ function goToAccounts(scrollTo) {
         switchSectionFn('login');
     }
     if (scrollTo) {
+        expandProviderCard(scrollTo);
         // Defer until the section is visible after switchSection completes.
         requestAnimationFrame(() => {
             const target = document.getElementById(`provider-${scrollTo}`);
@@ -163,6 +164,17 @@ function setProviderView(provider, connected) {
     const connectedEl = document.querySelector(`[data-provider-view="connected"][data-provider-for="${provider}"]`);
     if (disconnected) disconnected.classList.toggle('hidden', connected);
     if (connectedEl) connectedEl.classList.toggle('hidden', !connected);
+    if (connected) expandProviderCard(provider);
+}
+
+// Tracker cards start folded; a connected one shows its status and Disconnect.
+function expandProviderCard(provider) {
+    const body = document.querySelector(`[data-provider-body="${provider}"]`);
+    const toggle = document.querySelector(`[data-provider-toggle="${provider}"]`);
+    const chevron = document.querySelector(`[data-provider-chevron="${provider}"]`);
+    if (body) body.classList.remove('hidden');
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    if (chevron) chevron.classList.add('rotate-180');
 }
 
 function currentSource() {
