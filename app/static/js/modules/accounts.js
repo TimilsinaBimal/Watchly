@@ -14,10 +14,10 @@ const ACTIVE_BORDER_CLASS = 'border-accent/40';
 const INACTIVE_CLASSES = ['text-neutral-300', 'hover:text-white', 'hover:bg-white/5'];
 const INACTIVE_BORDER_CLASS = 'border-transparent';
 
-const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList' };
+const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList', nuvio: 'Nuvio' };
 
 let switchSectionFn = null;
-const connectedState = { stremio: false, trakt: false, simkl: false, mdblist: false };
+const connectedState = { stremio: false, trakt: false, simkl: false, mdblist: false, nuvio: false };
 
 export function initializeAccountsUI({ switchSection } = {}) {
     switchSectionFn = switchSection || null;
@@ -45,6 +45,7 @@ export function setStremioConnected(connected) {
         setProviderConnected('trakt', false);
         setProviderConnected('simkl', false);
         setProviderConnected('mdblist', false);
+        setProviderConnected('nuvio', false);
         setWatchHistorySource('stremio');
     }
 
@@ -63,7 +64,7 @@ export function setProviderConnected(provider, connected) {
     setProviderView(provider, connected);
 
     if (connected) {
-        // Trakt/Simkl/MDBList alone is enough to configure the addon — no Stremio needed.
+        // Trakt/Simkl/MDBList/Nuvio alone is enough to configure the addon — no Stremio needed.
         unlockNavigation();
     }
 
@@ -79,11 +80,45 @@ export function setProviderConnected(provider, connected) {
     syncAccountsNextButton();
 }
 
+// Nuvio connected view: status line plus the profile picker when the account has
+// several profiles. Shared by the connect handler and the settings reload.
+export function showNuvioConnected(profiles, statusText) {
+    const status = document.getElementById('nuvioStatus');
+    if (status) status.textContent = statusText;
+    const section = document.getElementById('nuvioProfileSection');
+    const select = document.getElementById('nuvioProfileSelect');
+    const multi = profiles.length > 1;
+    section?.classList.toggle('hidden', !multi);
+    if (multi && select) {
+        select.replaceChildren(...profiles.map(profile => new Option(profile.name, String(profile.id))));
+        const allToggle = document.getElementById('nuvioAllProfiles');
+        if (allToggle && !allToggle.dataset.bound) {
+            allToggle.dataset.bound = '1';
+            allToggle.addEventListener('change', updateNuvioProfileMode);
+        }
+        updateNuvioProfileMode();
+    }
+    setProviderConnected('nuvio', true);
+}
+
+function updateNuvioProfileMode() {
+    const all = document.getElementById('nuvioAllProfiles')?.checked;
+    const profiles = window._watchlyOAuth?.nuvio?.profiles || [];
+    document.getElementById('nuvioSingleProfileControls')?.classList.toggle('hidden', all);
+    const status = document.getElementById('nuvioProfileStatus');
+    if (status) {
+        status.textContent = all
+            ? `${profiles.length} profiles will receive separate Watchly instances.`
+            : 'Choose the profile that should power this Watchly instance.';
+    }
+}
+
 function firstConnectedSource() {
     if (connectedState.stremio) return 'stremio';
     if (connectedState.trakt) return 'trakt';
     if (connectedState.simkl) return 'simkl';
     if (connectedState.mdblist) return 'mdblist';
+    if (connectedState.nuvio) return 'nuvio';
     return 'stremio';
 }
 
@@ -109,6 +144,7 @@ function goToAccounts(scrollTo) {
         switchSectionFn('login');
     }
     if (scrollTo) {
+        expandProviderCard(scrollTo);
         // Defer until the section is visible after switchSection completes.
         requestAnimationFrame(() => {
             const target = document.getElementById(`provider-${scrollTo}`);
@@ -124,10 +160,23 @@ function syncAccountsNextButton() {
 }
 
 function setProviderView(provider, connected) {
-    const disconnected = document.querySelector(`[data-provider-view="disconnected"][data-provider-for="${provider}"]`);
-    const connectedEl = document.querySelector(`[data-provider-view="connected"][data-provider-for="${provider}"]`);
-    if (disconnected) disconnected.classList.toggle('hidden', connected);
-    if (connectedEl) connectedEl.classList.toggle('hidden', !connected);
+    // A provider's disconnected view can be split between the row action and the
+    // unfolded form, so every match flips.
+    document.querySelectorAll(`[data-provider-view="disconnected"][data-provider-for="${provider}"]`)
+        .forEach(el => el.classList.toggle('hidden', connected));
+    document.querySelectorAll(`[data-provider-view="connected"][data-provider-for="${provider}"]`)
+        .forEach(el => el.classList.toggle('hidden', !connected));
+    if (connected) expandProviderCard(provider);
+}
+
+// Rows start folded; connecting unfolds one so its profile options show.
+function expandProviderCard(provider) {
+    const body = document.querySelector(`[data-provider-body="${provider}"]`);
+    const toggle = document.querySelector(`[data-provider-toggle="${provider}"]`);
+    const chevron = document.querySelector(`[data-provider-chevron="${provider}"]`);
+    if (body) body.classList.remove('hidden');
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    if (chevron) chevron.classList.add('rotate-180');
 }
 
 function currentSource() {

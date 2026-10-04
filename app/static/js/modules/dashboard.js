@@ -2,7 +2,7 @@
 // manifest URL, install links, KPIs, catalog previews, and taste profile. Loaded on
 // nav click. Account deletion lives in the Save & Install flow, not here.
 
-import { openNuvioInstall } from './nuvio.js';
+import { installOnNuvio } from './nuvio.js';
 import { escapeHtml } from './ui.js';
 
 let appState = null;
@@ -20,7 +20,7 @@ const hide = (el) => el && el.classList.add('hidden');
 
 const POPULARITY_LABELS = { mainstream: 'Mainstream', balanced: 'Balanced', gems: 'Hidden Gems', all: 'All' };
 const SORTING_LABELS = { default: 'Default', movies_first: 'Movies first', series_first: 'Series first' };
-const SOURCE_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList' };
+const SOURCE_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList', nuvio: 'Nuvio' };
 const WARMING_LABELS = {
     pending: 'Saving your configuration',
     building_profile: 'Reading your watch history',
@@ -234,6 +234,7 @@ function renderSources(sources) {
         { label: sources.trakt ? 'Trakt connected' : 'Trakt not connected', tone: sources.trakt ? BADGE_OK : BADGE_MUTED },
         { label: sources.simkl ? 'Simkl connected' : 'Simkl not connected', tone: sources.simkl ? BADGE_OK : BADGE_MUTED },
         { label: sources.mdblist ? 'MDBList connected' : 'MDBList not connected', tone: sources.mdblist ? BADGE_OK : BADGE_MUTED },
+        { label: sources.nuvio ? 'Nuvio connected' : 'Nuvio not connected', tone: sources.nuvio ? BADGE_OK : BADGE_MUTED },
     ];
     items.forEach(({ label, tone }) => {
         const span = document.createElement('span');
@@ -249,7 +250,7 @@ function renderSettings(s) {
     const fields = [
         ['Discovery', POPULARITY_LABELS[s.popularity] || s.popularity],
         ['Language', s.language],
-        ['Years', `${s.year_min}–${s.year_max}`],
+        ['Years', `${s.year_min}–${s.year_max ?? 'now'}`],
         ['Sorting', SORTING_LABELS[s.sorting_order] || s.sorting_order],
     ];
     fields.forEach(([label, value]) => {
@@ -555,7 +556,7 @@ function wireNuvioInstall() {
     const btn = $('dashInstallNuvioBtn');
     if (!btn) return;
     btn.addEventListener('click', () => {
-        if (dashboardData) openNuvioInstall(dashboardData.manifest_url);
+        if (dashboardData) installOnNuvio(dashboardData.manifest_url);
     });
 }
 

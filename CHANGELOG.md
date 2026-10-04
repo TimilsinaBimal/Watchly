@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.17.0 - 2026-10-03
+
+### Added
+
+- Nuvio as a watch history source. Sign in to Nuvio on the Accounts step (your password goes straight from the page to Nuvio); Watchly reads the watched list and finished plays of the profile you pick, through Nuvio's public API. An account with several profiles can set up every profile at once, one Watchly instance each, like Stremio profiles. Nuvio has no ratings, so titles count as watched only (#174).
+
+### Fixed
+
+- The release-year slider's right end now means "through today" instead of the year it was saved in. Accounts that left it at the maximum stopped seeing new releases every 1 January until they reopened the configure page; they are read as "through today" from now on. Drag the right end one notch left to keep a fixed latest year.
+
+### Changed
+
+- The Accounts step lists each provider as one row with its next action on the right, instead of a grid of cards. Stremio, MDBList and Nuvio unfold a form under their row; Trakt and Simkl connect in one click.
+- "Install on Nuvio" is one click when the account has Nuvio connected: the install uses the saved session and goes to the profile the account reads from, on the Install step and the dashboard. Without a connected Nuvio account the sign-in dialog still appears. The dialog now talks to Nuvio's documented API host instead of the raw Supabase project URL.
+
 ## 1.16.0 - 2026-10-03
 
 ### Added

@@ -78,7 +78,7 @@
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h3 class="card-title">Watch history</h3>
-                    <p class="card-desc">Where Watchly reads what you've watched. Connect Trakt, Simkl or MDBList in
+                    <p class="card-desc">Where Watchly reads what you've watched. Connect Trakt, Simkl, MDBList or Nuvio in
                         <button type="button" class="account-link text-neutral-100 underline decoration-neutral-600 underline-offset-2 hover:text-white">Accounts</button>
                         to use them.</p>
                 </div>
@@ -104,6 +104,12 @@
                         data-source-btn="mdblist">
                         <span class="h-1.5 w-1.5 rounded-full bg-neutral-600" data-source-pip="mdblist"></span>
                         MDBList
+                    </button>
+                    <button type="button"
+                        class="source-btn flex min-h-[40px] items-center gap-1.5 rounded-lg border px-4 text-sm font-medium outline-none transition-all focus:outline-none text-neutral-300 hover:text-white hover:bg-white/5 border-transparent"
+                        data-source-btn="nuvio">
+                        <span class="h-1.5 w-1.5 rounded-full bg-neutral-600" data-source-pip="nuvio"></span>
+                        Nuvio
                     </button>
                 </div>
             </div>
@@ -159,18 +165,18 @@
                     <div class="flex items-center justify-between">
                         <span class="field-label">Release years</span>
                         <span class="mb-1.5 font-mono text-sm text-white">
-                            <span id="yearMinLabel">{{ year_range_defaults.min }}</span> – <span id="yearMaxLabel">{{ current_year }}</span>
+                            <span id="yearMinLabel">{{ year_range_defaults.min }}</span> – <span id="yearMaxLabel">now</span>
                         </span>
                     </div>
                     <div class="group relative flex h-10 items-center">
                         <div class="absolute h-1.5 w-full rounded-full bg-white/10"></div>
                         <div id="yearSliderTrack" class="absolute h-1.5 rounded-full bg-accent" style="left: 0%; right: 0%;"></div>
-                        <input type="range" id="yearMin" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.min }}" step="1" aria-label="Earliest release year"
+                        <input type="range" id="yearMin" min="{{ year_range_defaults.min }}" max="{{ current_year }}" value="{{ year_range_defaults.min }}" step="1" aria-label="Earliest release year"
                             class="pointer-events-none absolute z-30 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-accent [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg">
                         <input type="range" id="yearMax" min="{{ year_range_defaults.min }}" max="{{ year_range_defaults.max }}" value="{{ year_range_defaults.max }}" step="1" aria-label="Latest release year"
                             class="pointer-events-none absolute z-30 w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-accent [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-lg">
                     </div>
-                    <p class="field-hint">A max of this year includes everything released up to today.</p>
+                    <p class="field-hint">Leave the right end at "now" to always include everything released up to today, including next year's titles.</p>
                 </div>
             </div>
         </div>

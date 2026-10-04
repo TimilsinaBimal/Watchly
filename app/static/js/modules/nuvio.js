@@ -1,16 +1,17 @@
-// "Install on Nuvio" — writes the addon into the user's Nuvio Sync account.
+// Nuvio sign-in, shared by "Install on Nuvio" and the Nuvio history source.
 //
-// Nuvio has no install deep link, but its apps sync installed addons from a
-// Supabase table. We sign the user in with their Nuvio credentials directly
-// from the browser (same approach as the community Trakt-Nuvio bridge) and
-// insert the addon row. Credentials and tokens never touch Watchly's servers.
+// Nuvio's public API (https://nuvio.tv/docs) is a Supabase surface behind one
+// published key. The user signs in straight from this page, so their Nuvio
+// password never reaches Watchly; the install flow keeps the session in memory
+// and the history source hands the session tokens to the account.
 //
-// This rides on Nuvio's unofficial API: failures are expected eventually, so
-// every error path falls back to "copy the URL and paste it in Nuvio".
+// The addons table insert below is outside the documented API, so every error
+// path there falls back to "copy the URL and paste it in Nuvio".
 
-const NUVIO_BASE = 'https://dpyhjjcoabcglfmgecug.supabase.co';
-// Public (publishable) client key, same one Nuvio's own web app ships.
-const NUVIO_KEY = 'sb_publishable_zcNkgqGJjBtj8GoRlMvl9A_zkdmXhf5';
+const NUVIO_BASE = 'https://api.nuvio.tv';
+const NUVIO_KEY = 'sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN';
+
+import { showToast } from './ui.js';
 
 const FALLBACK_HINT = 'You can always install manually: copy the manifest URL, then in Nuvio go to Settings → Addons and paste it.';
 
@@ -38,7 +39,7 @@ async function nuvioRequest(path, { method = 'GET', token, body, headers = {} } 
     return data;
 }
 
-async function nuvioLogin(email, password) {
+export async function nuvioLogin(email, password) {
     const data = await nuvioRequest('/auth/v1/token?grant_type=password', {
         method: 'POST',
         body: { email, password },
@@ -46,10 +47,15 @@ async function nuvioLogin(email, password) {
     if (!data?.access_token || !data?.user?.id) {
         throw new Error('Nuvio did not return a session. Check your credentials.');
     }
-    return { token: data.access_token, userId: data.user.id };
+    return {
+        token: data.access_token,
+        refreshToken: data.refresh_token,
+        expiresAt: Math.floor(Date.now() / 1000) + (Number(data.expires_in) || 3600),
+        userId: data.user.id,
+    };
 }
 
-async function nuvioProfiles(token) {
+export async function nuvioProfiles(token) {
     const profiles = await nuvioRequest('/rest/v1/rpc/sync_pull_profiles', { method: 'POST', token, body: {} });
     return Array.isArray(profiles) && profiles.length ? profiles : [{ profile_index: 1, name: 'Default' }];
 }
@@ -83,6 +89,31 @@ async function installToProfile({ token, userId, profileId, manifestUrl }) {
 // --- Modal UI ---
 
 let modalEl = null;
+
+// Install through the session saved with the account. Falls back to the sign-in
+// modal when the account has no Nuvio connected (409) so the button always works.
+export async function installOnNuvio(manifestUrl) {
+    const token = new URL(manifestUrl).pathname.split('/').filter(Boolean).at(-2);
+    let response;
+    try {
+        response = await fetch(`/${token}/nuvio/install`, { method: 'POST' });
+    } catch (e) {
+        showToast(`Could not reach the server. ${FALLBACK_HINT}`, 'error', 7000);
+        return;
+    }
+    if (response.status === 409) {
+        openNuvioInstall(manifestUrl);
+        return;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        showToast(`Install failed: ${data.detail || response.status}. ${FALLBACK_HINT}`, 'error', 8000);
+        return;
+    }
+    showToast(data.status === 'already-installed'
+        ? `Watchly is already installed on your Nuvio profile ${data.profile}.`
+        : `Installed on Nuvio profile ${data.profile}. It appears after Nuvio's next sync.`, 'success', 6000);
+}
 
 function ensureModal() {
     if (modalEl) return modalEl;

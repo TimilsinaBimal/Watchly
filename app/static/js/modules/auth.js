@@ -13,6 +13,7 @@ import {
     setProviderConnected,
     setStremioConnected,
     setWatchHistorySource,
+    showNuvioConnected,
 } from './accounts.js';
 import { markFieldAsSaved } from './field-helpers.js';
 import { resumeSection } from './navigation.js';
@@ -460,6 +461,7 @@ export async function recallProviderAccount(provider, tokens) {
         trakt: { trakt_access_token: tokens.access_token },
         simkl: { simkl_access_token: tokens.access_token },
         mdblist: { mdblist_api_key: tokens.api_key },
+        nuvio: { nuvio_access_token: tokens.access_token, nuvio_profile_id: tokens.profile_id },
     }[provider];
     try {
         await fetchIdentity(payload);
@@ -523,7 +525,7 @@ async function fetchIdentity(payload) {
 
             if (s.popularity && popularitySelect) popularitySelect.value = s.popularity;
             if (s.year_min && yearMinInput) yearMinInput.value = s.year_min;
-            if (s.year_max && yearMaxInput) yearMaxInput.value = s.year_max;
+            if (yearMaxInput) yearMaxInput.value = s.year_max ?? yearMaxInput.max;
             if (updateYearSlider) updateYearSlider();
 
             const sortingOrderSelect = document.getElementById('sortingOrderSelect');
@@ -820,6 +822,19 @@ function restoreWatchHistoryState(settings) {
         const mdblistStatus = document.getElementById('mdblistStatus');
         if (mdblistStatus) mdblistStatus.textContent = 'Connected';
         setProviderConnected('mdblist', true);
+    }
+
+    if (settings.nuvio_access_token && !hasLiveToken('nuvio')) {
+        // Masked tokens round-trip as-is so the save keeps the stored session; the
+        // profile this account reads from is fixed at connect time.
+        const profile = { id: settings.nuvio_profile_id || 1, name: settings.nuvio_profile_name || 'Nuvio' };
+        window._watchlyOAuth.nuvio = {
+            access_token: settings.nuvio_access_token,
+            refresh_token: settings.nuvio_refresh_token,
+            expires_at: settings.nuvio_expires_at,
+            profiles: [profile],
+        };
+        showNuvioConnected([profile], settings.nuvio_profile_name ? `Connected · ${settings.nuvio_profile_name}` : 'Connected');
     }
 
     if (settings.watch_history_source) {

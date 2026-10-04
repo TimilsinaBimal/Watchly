@@ -206,16 +206,19 @@ export function initializeKofi() {
     });
 }
 
-// Collapsible provider cards on the accounts page
+// Collapsible provider rows on the accounts page. The whole row toggles, except
+// controls inside it that do their own thing (Log out, Disconnect, Connect).
 export function initializeProviderCards() {
-    document.querySelectorAll('[data-provider-toggle]').forEach((btn) => {
-        const provider = btn.dataset.providerToggle;
+    document.querySelectorAll('[data-provider-toggle]').forEach((row) => {
+        const provider = row.dataset.providerToggle;
         const body = document.querySelector(`[data-provider-body="${provider}"]`);
         const chevron = document.querySelector(`[data-provider-chevron="${provider}"]`);
         if (!body) return;
-        btn.addEventListener('click', () => {
+        row.addEventListener('click', (event) => {
+            const control = event.target.closest('button, a, input, select, label');
+            if (control && !control.hasAttribute('data-provider-unfold')) return;
             const open = !body.classList.toggle('hidden');
-            btn.setAttribute('aria-expanded', String(open));
+            row.setAttribute('aria-expanded', String(open));
             if (chevron) chevron.classList.toggle('rotate-180', open);
         });
     });

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -88,7 +88,14 @@ DEFAULT_YEAR_MIN = 1970
 
 
 def get_default_year_max() -> int:
-    return get_current_year()
+    """The slider's right end, one past the current year: that notch means "through
+    today" and is stored as None, so the current year itself stays selectable."""
+    return get_current_year() + 1
+
+
+# Accounts saved before this date stored the slider's right end as a literal year.
+# Removable once no account has a last_updated before it.
+LEGACY_YEAR_MAX_CUTOFF = "2026-10-04"
 
 
 def get_default_year_range() -> dict[str, int]:
@@ -107,7 +114,7 @@ class UserSettings(BaseModel):
     excluded_movie_genres: list[str] = Field(default_factory=list)
     excluded_series_genres: list[str] = Field(default_factory=list)
     year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year")
-    year_max: int = Field(default_factory=get_default_year_max, description="Maximum release year")
+    year_max: int | None = Field(default=None, description="Latest release year; None means through today")
     popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(
         default="balanced", description="Popularity preference"
     )
@@ -127,7 +134,12 @@ class UserSettings(BaseModel):
     )
     simkl_access_token: str | None = Field(default=None, description="Simkl OAuth access token")
     mdblist_api_key: str | None = Field(default=None, description="MDBList API key; also the account identity")
-    watch_history_source: Literal["stremio", "trakt", "simkl", "mdblist"] = Field(
+    nuvio_access_token: str | None = Field(default=None, description="Nuvio session access token")
+    nuvio_refresh_token: str | None = Field(default=None, description="Nuvio session refresh token")
+    nuvio_expires_at: int | None = Field(default=None, description="Epoch seconds when the Nuvio access token expires")
+    nuvio_profile_id: int | None = Field(default=None, description="Nuvio profile index the history is read from")
+    nuvio_profile_name: str | None = Field(default=None, description="Nuvio profile name, for the addon title")
+    watch_history_source: Literal["stremio", "trakt", "simkl", "mdblist", "nuvio"] = Field(
         default="stremio", description="Source for watch history used in profile building"
     )
 
@@ -265,6 +277,29 @@ def resolve_llm_config(user_settings: UserSettings | None) -> LLMConfig | None:
     if user_settings.gemini_api_key:
         return LLMConfig(provider="gemini", api_key=user_settings.gemini_api_key)
     return None
+
+
+def settings_from_credentials(credentials: dict[str, Any]) -> UserSettings:
+    """Parse stored settings, falling back to defaults.
+
+    Accounts saved before year_max became nullable stored the slider's right end
+    as a literal year, which turned into a hard cap every 1 January. In those
+    saves a year_max at or past the year of the save can only have been that
+    right end, so it reads as "through today".
+    """
+    settings_dict = credentials.get("settings") or {}
+    if not settings_dict:
+        return get_default_settings()
+    year_max = settings_dict.get("year_max")
+    saved = str(credentials.get("last_updated") or "")
+    if (
+        year_max is not None
+        and saved[:4].isdigit()
+        and saved[:10] < LEGACY_YEAR_MAX_CUTOFF
+        and int(year_max) >= int(saved[:4])
+    ):
+        settings_dict = {**settings_dict, "year_max": None}
+    return UserSettings(**settings_dict)
 
 
 def resolve_tmdb_api_key(user_settings: UserSettings | None) -> str | None:
