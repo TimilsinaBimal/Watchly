@@ -568,6 +568,16 @@ async function fetchIdentity(payload) {
                 hint: hints.simkl_api_key,
             });
 
+            const aiomanagerInstanceUrl = document.getElementById('aiomanagerInstanceUrl');
+            if (aiomanagerInstanceUrl) aiomanagerInstanceUrl.value = s.aiomanager_instance_url || '';
+            const aiomanagerAutoSync = document.getElementById('aiomanagerAutoSync');
+            if (aiomanagerAutoSync) aiomanagerAutoSync.checked = s.aiomanager_auto_sync !== false;
+            setSecretField(document.getElementById('aiomanagerApiKey'), s.aiomanager_api_key, {
+                toggleId: 'aiomanagerApiKeyToggle',
+                hintId: 'aiomanagerValidationMessage',
+                hint: hints.aiomanager_api_key,
+            });
+
             // LLM config; legacy gemini_api_key maps onto the gemini provider
             const llmProviderSelect = document.getElementById('llmProvider');
             const llmApiKeyInput = document.getElementById('llmApiKey');

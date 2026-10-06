@@ -340,7 +340,14 @@ class AuthService:
             master_settings = ((await token_store.get_user_data(master_token)) or {}).get("settings") or {}
             stored_settings = {
                 field: master_settings.get(field)
-                for field in ("tmdb_api_key", "llm", "gemini_api_key", "simkl_api_key", "poster_rating")
+                for field in (
+                    "tmdb_api_key",
+                    "llm",
+                    "gemini_api_key",
+                    "simkl_api_key",
+                    "poster_rating",
+                    "aiomanager_api_key",
+                )
             }
 
         user_settings = self._build_user_settings(payload, stored_settings)
@@ -445,6 +452,9 @@ class AuthService:
             nuvio_expires_at=payload.nuvio_expires_at,
             nuvio_profile_id=payload.nuvio_profile_id,
             nuvio_profile_name=payload.nuvio_profile_name,
+            aiomanager_instance_url=(payload.aiomanager_instance_url or "").strip() or None,
+            aiomanager_api_key=unmasked("aiomanager_api_key", payload.aiomanager_api_key),
+            aiomanager_auto_sync=payload.aiomanager_auto_sync,
             watch_history_source=payload.watch_history_source,
         )
 

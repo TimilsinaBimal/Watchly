@@ -303,6 +303,51 @@
                     <div id="llmValidationMessage" class="mt-2 text-xs hidden"></div>
                 </div>
             </div>
+
+            <!-- Addon managers -->
+            <div class="card">
+                <h3 class="card-title">AIOManager</h3>
+                <p class="card-desc">Install this addon into AIOManager, which keeps it in sync across every
+                    platform your account is connected to there.</p>
+                <div class="mt-5 space-y-5">
+                    <div>
+                        <label for="aiomanagerInstanceUrl" class="text-sm font-medium text-neutral-100">Instance
+                            URL</label>
+                        <input type="text" id="aiomanagerInstanceUrl" spellcheck="false"
+                            class="input mt-1.5 font-mono placeholder:font-sans"
+                            placeholder="https://aiomanager.example.com">
+                        <p class="field-hint">The address you open AIOManager at.</p>
+                    </div>
+
+                    <div>
+                        <label for="aiomanagerApiKey" class="text-sm font-medium text-neutral-100">API key</label>
+                        <div class="mt-1.5">
+                            {{ secret_input('aiomanagerApiKey', 'Paste your AIOManager API key', 'Validate key - Click to check the URL and key') }}
+                        </div>
+                        <div id="aiomanagerValidationMessage" class="mt-2 text-xs hidden"></div>
+                        <p class="field-hint">In AIOManager, open your account and copy the key from the API Key
+                            tab.</p>
+                    </div>
+
+                    <div
+                        class="flex items-center justify-between gap-4 rounded-xl border border-white/[0.07] bg-surface-sunken p-3.5">
+                        <div>
+                            <p class="text-sm font-medium text-neutral-100">Sync on every save</p>
+                            <p class="text-xs text-neutral-400">Push this addon to AIOManager whenever you save these
+                                settings.</p>
+                        </div>
+                        <input type="checkbox" id="aiomanagerAutoSync" checked
+                            class="h-5 w-5 shrink-0 cursor-pointer accent-accent">
+                    </div>
+
+                    <div>
+                        <button type="button" id="aiomanagerSyncBtn" class="btn btn-secondary w-full sm:w-auto">
+                            <span class="btn-text">Sync now</span>
+                        </button>
+                        <div id="aiomanagerSyncMessage" class="mt-2 text-xs hidden"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

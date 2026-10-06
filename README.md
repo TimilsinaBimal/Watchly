@@ -284,6 +284,7 @@ These are only needed if you want the corresponding feature; Watchly runs fine w
 - **Simkl** — create an app at [simkl.com/settings/developer](https://simkl.com/settings/developer). Set the redirect URI to `HOST_NAME/auth/simkl/callback` and put the credentials in `SIMKL_CLIENT_ID` / `SIMKL_CLIENT_SECRET`.
 - **AI-named rows** — users configure an LLM provider (Gemini, OpenAI, Anthropic, or OpenRouter) with their own API key on the configure page; no server config required. Without one, rows fall back to deterministic names.
 - **Poster ratings (RPDB)** — users enter their own [RatingPosterDB](https://ratingposterdb.com/) key on the configure page; no server config required.
+- **AIOManager** — users enter their AIOManager instance URL and account API key on the configure page. That installs this addon in their AIOManager account, or refreshes the copy already there, and AIOManager keeps it in sync across every platform the account is connected to. No server config required.
 
 ## Development
 
