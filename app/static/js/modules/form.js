@@ -15,7 +15,7 @@ import { MOVIE_GENRES, SERIES_GENRES } from '../constants.js';
 import { setProviderConnected, showNuvioConnected } from './accounts.js';
 import { getPreparedStremioProfiles, recallProviderAccount } from './auth.js';
 import { nuvioLogin, nuvioProfiles } from './nuvio.js';
-import { aiomanagerPayload, initializeAIOMManager, refreshAIOMManager } from './aiomanager.js';
+import { aiomanagerPayload, initializeAIOManager, refreshAIOManager } from './aiomanager.js';
 
 const YEAR_RANGE_DEFAULTS = window.YEAR_RANGE_DEFAULTS || { min: 1970, max: new Date().getFullYear() };
 const LOADING_ICON = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
@@ -50,7 +50,7 @@ export function initializeForm(domElements, state, actions) {
     validatePosterRatingApiKey = initializePosterRatingProvider();
     initializeTmdb();
     initializeSimkl();
-    initializeAIOMManager(state);
+    initializeAIOManager(state);
     initializeLlm();
     updateYearSlider = initializeYearSliderControl();
     initializeWatchHistorySource();
@@ -312,8 +312,10 @@ function initializeFormSubmission() {
 
             // A save is what changes the manifest, so a connected manager is
             // refreshed straight after it rather than on some later visit.
-            if (payload.aiomanager_auto_sync !== false && appState?.auth?.token) {
-                refreshAIOMManager(appState.auth.token);
+            // Only when a manager is actually connected: an account with no manager
+            // would otherwise fire a request on every save just to be told 409.
+            if (payload.aiomanager_auto_sync !== false && payload.aiomanager_instance_url && appState?.auth?.token) {
+                refreshAIOManager(appState.auth.token, { quiet: true });
             }
         } catch (error) {
             console.error('Error:', error);
