@@ -185,6 +185,23 @@ def test_a_reinstall_that_answers_html_is_not_reported_as_synced(monkeypatch):
     assert "does not serve" in str(error.value)
 
 
+def test_the_pushed_url_has_no_doubled_slash_when_host_name_ends_in_one(monkeypatch):
+    _accounts(monkeypatch, _credentials())
+    pushed = []
+
+    async def fake_reinstall(instance_url, api_key, addon_url):
+        pushed.append(addon_url)
+        return 1
+
+    monkeypatch.setattr("app.api.endpoints.aiomanager.aiomanager_service.reinstall", fake_reinstall)
+    monkeypatch.setattr("app.api.endpoints.aiomanager.settings.HOST_NAME", "https://watchly.example.com/")
+
+    response = client.post(f"/{TOKEN}/aiomanager/sync")
+
+    assert response.status_code == 200
+    assert pushed == [f"https://watchly.example.com/{TOKEN}/manifest.json"]
+
+
 def test_a_host_that_serves_no_manager_is_named_as_such(monkeypatch):
     def handler(method, url):
         raise _http_error(404, url=url, method="GET")

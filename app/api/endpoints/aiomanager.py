@@ -73,7 +73,9 @@ async def sync_to_aiomanager(token: str) -> AIOManagerSyncResponse:
     # Built from this instance's own host name, so what gets pushed is the URL this
     # deployment serves and nothing else. The token in it is the surviving one, so
     # an account that was merged pushes the URL its addon is actually served at.
-    manifest_url = f"{settings.HOST_NAME}/{resolved}/manifest.json"
+    # HOST_NAME is not guaranteed to be slash-free, and a doubled slash is a URL the
+    # manager would have to redirect before it could read the manifest.
+    manifest_url = f"{settings.HOST_NAME.rstrip('/')}/{resolved}/manifest.json"
 
     try:
         addon_count = await aiomanager_service.reinstall(instance_url, api_key, manifest_url)
