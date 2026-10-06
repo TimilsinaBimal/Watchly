@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Sync to AIOManager. Enter your AIOManager instance URL and account API key on the configure page and Watchly installs itself into that account, or refreshes the addon already installed there; AIOManager then keeps it in sync across every platform the account is connected to. The key is encrypted like your other keys, and the sync runs again whenever you save your settings.
+
 ## 1.17.0 - 2026-10-03
 
 ### Added

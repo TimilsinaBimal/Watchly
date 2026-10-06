@@ -139,6 +139,13 @@ class UserSettings(BaseModel):
     nuvio_expires_at: int | None = Field(default=None, description="Epoch seconds when the Nuvio access token expires")
     nuvio_profile_id: int | None = Field(default=None, description="Nuvio profile index the history is read from")
     nuvio_profile_name: str | None = Field(default=None, description="Nuvio profile name, for the addon title")
+    aiomanager_instance_url: str | None = Field(
+        default=None, description="AIOManager instance URL; empty means this account is not synced to a manager"
+    )
+    aiomanager_api_key: str | None = Field(default=None, description="AIOManager account API key")
+    aiomanager_auto_sync: bool = Field(
+        default=True, description="Push this addon to AIOManager whenever the settings are saved"
+    )
     watch_history_source: Literal["stremio", "trakt", "simkl", "mdblist", "nuvio"] = Field(
         default="stremio", description="Source for watch history used in profile building"
     )

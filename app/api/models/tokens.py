@@ -40,6 +40,13 @@ class TokenRequest(BaseModel):
     nuvio_expires_at: int | None = Field(default=None, description="Epoch seconds when the Nuvio access token expires")
     nuvio_profile_id: int | None = Field(default=None, ge=1, le=6, description="Nuvio profile index")
     nuvio_profile_name: str | None = Field(default=None, description="Nuvio profile name")
+    aiomanager_instance_url: str | None = Field(
+        default=None, description="AIOManager instance URL, as the user opens it"
+    )
+    aiomanager_api_key: str | None = Field(default=None, description="AIOManager account API key")
+    aiomanager_auto_sync: bool = Field(
+        default=True, description="Push this addon to AIOManager whenever the settings are saved"
+    )
     watch_history_source: Literal["stremio", "trakt", "simkl", "mdblist", "nuvio"] = Field(
         default="stremio", description="Source for watch history"
     )

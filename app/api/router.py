@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from .endpoints.aiomanager import router as aiomanager_router
 from .endpoints.announcement import router as announcement_router
 from .endpoints.catalogs import router as catalogs_router
 from .endpoints.dashboard import router as dashboard_router
@@ -35,3 +36,4 @@ api_router.include_router(oauth_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(status_router)
 api_router.include_router(nuvio_router)
+api_router.include_router(aiomanager_router)
