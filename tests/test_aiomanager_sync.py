@@ -29,14 +29,14 @@ class FakeHydraClient:
 
     def __init__(self, handler):
         self.handler = handler
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, str, dict]] = []
 
     async def get(self, url, **kwargs):
-        self.calls.append(("GET", url))
+        self.calls.append(("GET", url, kwargs.get("headers") or {}))
         return self.handler("GET", url)
 
     async def post(self, url, **kwargs):
-        self.calls.append(("POST", url))
+        self.calls.append(("POST", url, kwargs.get("headers") or {}))
         return self.handler("POST", url)
 
 
@@ -72,9 +72,6 @@ def _credentials(**overrides):
     settings = get_default_settings().model_dump()
     settings.update({"aiomanager_instance_url": INSTANCE, "aiomanager_api_key": "user-key", **overrides})
     return {"settings": settings}
-
-
-# --- the endpoint ------------------------------------------------------------
 
 
 def test_a_connected_manager_is_pushed_this_installs_manifest(monkeypatch):
@@ -138,7 +135,7 @@ def test_a_rejected_key_reaches_the_page_as_a_401(monkeypatch):
     _accounts(monkeypatch, _credentials())
 
     async def fake_reinstall(instance_url, api_key, addon_url):
-        raise AIOManagerError("AIOManager rejected that API key.", status=401)
+        raise AIOManagerError("AIOManager rejected that API key.", status_code=401)
 
     monkeypatch.setattr("app.api.endpoints.aiomanager.aiomanager_service.reinstall", fake_reinstall)
 
@@ -163,9 +160,6 @@ def test_validation_reports_an_unreachable_instance_without_saving(monkeypatch):
     assert "Could not reach" in response.json()["message"]
 
 
-# --- the service --------------------------------------------------------------
-
-
 def test_a_manager_without_hydra_is_named_as_such(monkeypatch):
     # An instance too old for Hydra answers its single-page app: 200, HTML, no JSON.
     service = _service(monkeypatch, lambda method, url: {})
@@ -173,7 +167,7 @@ def test_a_manager_without_hydra_is_named_as_such(monkeypatch):
     with pytest.raises(AIOManagerError) as error:
         asyncio.run(service.probe(INSTANCE))
 
-    assert "does not serve" in str(error.value)
+    assert "does not serve" in error.value.detail
 
 
 def test_a_reinstall_that_answers_html_is_not_reported_as_synced(monkeypatch):
@@ -182,7 +176,7 @@ def test_a_reinstall_that_answers_html_is_not_reported_as_synced(monkeypatch):
     with pytest.raises(AIOManagerError) as error:
         asyncio.run(service.reinstall(INSTANCE, "user-key", f"https://watchly.example.com/{TOKEN}/manifest.json"))
 
-    assert "does not serve" in str(error.value)
+    assert "does not serve" in error.value.detail
 
 
 def test_the_pushed_url_has_no_doubled_slash_when_host_name_ends_in_one(monkeypatch):
@@ -211,7 +205,7 @@ def test_a_host_that_serves_no_manager_is_named_as_such(monkeypatch):
     with pytest.raises(AIOManagerError) as error:
         asyncio.run(service.probe(INSTANCE))
 
-    assert "not an AIOManager instance" in str(error.value)
+    assert "not an AIOManager instance" in error.value.detail
 
 
 def test_a_rotated_key_is_explained_as_such(monkeypatch):
@@ -223,8 +217,8 @@ def test_a_rotated_key_is_explained_as_such(monkeypatch):
     with pytest.raises(AIOManagerError) as error:
         asyncio.run(service.reinstall(INSTANCE, "stale-key", f"https://watchly.example.com/{TOKEN}/manifest.json"))
 
-    assert error.value.status == 401
-    assert "API Key tab" in str(error.value)
+    assert error.value.status_code == 401
+    assert "API Key tab" in error.value.detail
 
 
 def test_a_rate_limited_account_is_told_to_wait(monkeypatch):
@@ -236,8 +230,8 @@ def test_a_rate_limited_account_is_told_to_wait(monkeypatch):
     with pytest.raises(AIOManagerError) as error:
         asyncio.run(service.reinstall(INSTANCE, "user-key", f"https://watchly.example.com/{TOKEN}/manifest.json"))
 
-    assert error.value.status == 429
-    assert "Wait a minute" in str(error.value)
+    assert error.value.status_code == 429
+    assert "Wait a minute" in error.value.detail
 
 
 def test_an_upstream_refusal_keeps_its_own_message(monkeypatch):
@@ -249,7 +243,7 @@ def test_an_upstream_refusal_keeps_its_own_message(monkeypatch):
     with pytest.raises(AIOManagerError) as error:
         asyncio.run(service.reinstall(INSTANCE, "user-key", "https://watchly.example.com/x/manifest.json"))
 
-    assert str(error.value) == "Invalid addon URL"
+    assert error.value.detail == "Invalid addon URL"
 
 
 def test_a_failed_registration_does_not_fail_the_push(monkeypatch):
@@ -284,10 +278,7 @@ def test_the_key_is_checked_against_the_collection_not_a_write(monkeypatch):
 
     asyncio.run(service.check_key(INSTANCE, "user-key"))
 
-    assert service.client.calls == [("GET", ADDONS_URL)]
-
-
-# --- settings round-trip ------------------------------------------------------
+    assert service.client.calls == [("GET", ADDONS_URL, {"X-API-Key": "user-key"})]
 
 
 def test_the_manager_key_is_stored_as_a_secret():
@@ -311,3 +302,54 @@ def test_clearing_the_key_turns_the_manager_off():
     )
 
     assert built.aiomanager_api_key == ""
+
+
+def test_every_hydra_call_carries_the_account_key(monkeypatch):
+    service = _service(monkeypatch, lambda method, url: {"capabilities": ["addons"], "addons": []})
+
+    asyncio.run(service.probe(INSTANCE))
+    asyncio.run(service.check_key(INSTANCE, "user-key"))
+    asyncio.run(service.reinstall(INSTANCE, "user-key", f"{INSTANCE}/tok/manifest.json"))
+    asyncio.run(service.register(INSTANCE, "user-key"))
+
+    for _, url, headers in service.client.calls:
+        # /hydra/status is the one Hydra endpoint that takes no key.
+        assert headers.get("X-API-Key") == (None if url == STATUS_URL else "user-key")
+
+
+def test_a_five_hundred_still_reports_hydras_own_sentence(monkeypatch):
+    def handler(method, url):
+        raise _http_error(500, url=url, body={"message": "collection is locked"})
+
+    service = _service(monkeypatch, handler)
+
+    with pytest.raises(AIOManagerError) as error:
+        asyncio.run(service.reinstall(INSTANCE, "user-key", f"{INSTANCE}/tok/manifest.json"))
+
+    assert error.value.detail == "collection is locked"
+
+
+def test_a_rate_limited_manager_reaches_the_page_as_a_429(monkeypatch):
+    _accounts(monkeypatch, _credentials())
+
+    def handler(method, url):
+        raise _http_error(429, url=url)
+
+    monkeypatch.setattr("app.api.endpoints.aiomanager.aiomanager_service", _service(monkeypatch, handler))
+
+    response = client.post(f"/{TOKEN}/aiomanager/sync")
+
+    assert response.status_code == 429
+    assert "rate limiting" in response.json()["detail"]
+
+
+def test_an_instance_that_serves_no_hydra_reaches_the_page_as_a_502(monkeypatch):
+    _accounts(monkeypatch, _credentials())
+    monkeypatch.setattr(
+        "app.api.endpoints.aiomanager.aiomanager_service", _service(monkeypatch, lambda method, url: {})
+    )
+
+    response = client.post(f"/{TOKEN}/aiomanager/sync")
+
+    assert response.status_code == 502
+    assert "Hydra" in response.json()["detail"]
