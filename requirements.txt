@@ -140,7 +140,7 @@ pydantic==2.13.4
     #   pydantic-ai-slim
     #   pydantic-graph
     #   pydantic-settings
-pydantic-ai-slim==2.33.0
+pydantic-ai-slim==2.53.0
     # via watchly (pyproject.toml)
 pydantic-core==2.46.4
     # via
