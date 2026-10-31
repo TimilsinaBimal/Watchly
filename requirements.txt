@@ -128,7 +128,7 @@ platformdirs==4.13.5
     # via virtualenv
 pre-commit==4.7.0
     # via watchly (pyproject.toml)
-pyasn1==0.6.4
+pyasn1==0.6.5
     # via pyasn1-modules
 pyasn1-modules==0.4.2
     # via google-auth
