@@ -143,6 +143,8 @@ async def configure_page(request: Request, _token: str | None = None):
         movie_genres=movie_genres_list,
         series_genres=series_genres_list,
         allow_signups=settings.ALLOW_SIGNUPS,
+        nuvio_base=settings.NUVIO_BASE_URL,
+        nuvio_publishable_key=settings.NUVIO_PUBLISHABLE_KEY,
     )
     return HTMLResponse(content=html_content, media_type="text/html")
 

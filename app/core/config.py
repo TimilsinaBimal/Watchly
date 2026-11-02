@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     SIMKL_CLIENT_ID: str | None = None
     SIMKL_CLIENT_SECRET: str | None = None
 
+    # Nuvio history source: Nuvio's cloud API by default. Point both at a
+    # self-hosted backend (https://github.com/NuvioMedia/self-host) to read
+    # history from it; the key is that backend's publishable key.
+    NUVIO_BASE_URL: str = "https://api.nuvio.tv"
+    NUVIO_PUBLISHABLE_KEY: str = "sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN"
+
 
 settings = Settings()
 

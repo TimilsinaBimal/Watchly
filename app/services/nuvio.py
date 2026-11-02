@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from app.core.base_client import BaseClient
+from app.core.config import settings
 from app.core.constants import DEFAULT_CONCURRENCY_LIMIT
 from app.models.history import WatchHistory, WatchHistoryItem
 
@@ -13,8 +14,9 @@ if TYPE_CHECKING:
 
 # Nuvio's public API (https://nuvio.tv/docs/nuvio-public-api.md): a Supabase
 # surface behind one published key. The key is a client identifier, not a secret.
-BASE_URL = "https://api.nuvio.tv"
-PUBLISHABLE_KEY = "sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN"
+# Settings carry the cloud defaults; a self-hosted backend arrives via env.
+BASE_URL = settings.NUVIO_BASE_URL
+PUBLISHABLE_KEY = settings.NUVIO_PUBLISHABLE_KEY
 
 # A progress row counts as watched once this much of the runtime was played.
 FINISHED_COMPLETION = 0.9
