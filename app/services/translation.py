@@ -11,6 +11,7 @@ from loguru import logger
 # Pre-defined translations for known static catalog names.
 # Ensures consistent informal (du-form) German regardless of Google Translate output.
 # French: short UI labels are ambiguous for MT (e.g. "More like" → wrong parsing of "like").
+# Italian: avoids literal MT phrasing for short UI labels.
 _STATIC_TRANSLATIONS: dict[tuple[str, str], str] = {
     ("de", "Top Picks for You"): "Top Picks für dich",
     ("de", "From your favourite Creators"): "Von deinen Lieblingsschöpfern",
@@ -27,8 +28,17 @@ _STATIC_TRANSLATIONS: dict[tuple[str, str], str] = {
     ("fr", "From your favourite Creators"): "De vos créateurs préférés",
     ("fr", "Based on what you loved"): "D'après vos coups de cœur",
     ("fr", "Based on what you liked"): "D'après ce que vous avez aimé",
+    ("it", "Top Picks for You"): "Scelti per te",
+    ("it", "Because you watched"): "Perché hai guardato",
+    ("it", "Because you loved"): "Perché hai adorato",
+    ("it", "More Like"): "Simili a",
+    ("it", "More like"): "Simili a",
+    ("it", "Genre & Keyword Catalogs"): "Generi e parole chiave",
+    ("it", "From your favourite Creators"): "Dai tuoi autori preferiti",
+    ("it", "Based on what you loved"): "In base a ciò che hai adorato",
+    ("it", "Based on what you liked"): "In base a ciò che ti è piaciuto",
+    ("it", "Watch it again"): "Da riguardare",    
 }
-
 
 # Google's translate codes predate ISO 639-1 in a few places, and TMDB hands us the
 # ISO form. Without these the language is simply rejected and every catalog name
