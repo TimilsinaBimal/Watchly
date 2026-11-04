@@ -44,6 +44,8 @@ def title_language_instruction(language: str | None) -> str:
     return (
         f"Write the title in the language with BCP-47 tag '{language}',"
         " the way a streaming service in that language would name the row."
+        " Follow that language's capitalization conventions and use only real,"
+        " correctly spelled words."
     )
 
 
