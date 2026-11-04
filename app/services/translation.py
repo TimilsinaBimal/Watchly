@@ -144,7 +144,13 @@ async def apply_catalog_translation(cat: dict[str, Any], target_lang: str | None
     Item-based rows (loved/watched) attach _catalog_name_prefix (UI label) and
     _catalog_name_suffix (work title). Only the prefix is machine-translated so
     titles stay as in the library.
+
+    Rows flagged _name_localized were written by the LLM in the user's language
+    already; translating them again would only mangle them.
     """
+    if cat.pop("_name_localized", False):
+        return
+
     if "_catalog_name_prefix" in cat and "_catalog_name_suffix" in cat:
         prefix = cat.pop("_catalog_name_prefix")
         suffix = cat.pop("_catalog_name_suffix")
