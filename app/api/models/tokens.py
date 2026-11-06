@@ -19,6 +19,9 @@ class TokenRequest(BaseModel):
     popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(
         default="balanced", description="Popularity for TMDB API"
     )
+    imdb_rating_min: float | None = Field(
+        default=None, ge=0, le=10, allow_inf_nan=False, description="Minimum IMDb rating; None disables filtering"
+    )
     year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year for TMDB API")
     year_max: int | None = Field(default=None, description="Latest release year; omit for through today")
     sorting_order: Literal["default", "movies_first", "series_first"] = Field(

@@ -136,6 +136,13 @@
                 </div>
 
                 <div>
+                    <label for="imdbRatingMin" class="field-label">Minimum IMDb rating</label>
+                    <input id="imdbRatingMin" type="number" min="0" max="10" step="0.1"
+                        class="input" placeholder="No minimum">
+                    <p class="field-hint">Leave blank to disable. Applies to all movie and series rows, including rewatch picks. Unrated titles are excluded when enabled. Strict filters may shorten rows.</p>
+                </div>
+
+                <div>
                     <label for="popularitySelect" class="field-label">Discovery style</label>
                     <div class="relative">
                         <select id="popularitySelect" class="input cursor-pointer appearance-none pr-10">

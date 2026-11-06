@@ -18,6 +18,7 @@ from app.services.profile.service import ProfileService
 from app.services.recommendation.all_based import AllBasedService
 from app.services.recommendation.catalog_utils import clean_meta, shuffle_data_if_needed
 from app.services.recommendation.creators import CreatorsService
+from app.services.recommendation.imdb_ratings import filter_by_imdb_rating
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.rewatch import RewatchService
 from app.services.recommendation.theme_based import ThemeBasedService
@@ -79,6 +80,10 @@ class CatalogService:
             data, created_at = cached_result
             age = int(time.time()) - created_at
             user_settings = extract_settings(credentials)
+            data = {
+                **data,
+                "metas": await filter_by_imdb_rating(data["metas"], content_type, user_settings.imdb_rating_min),
+            }
             data["metas"] = shuffle_data_if_needed(user_settings, catalog_id, data["metas"])
 
             if age < settings.CATALOG_REFRESH_INTERVAL_SECONDS:
@@ -222,6 +227,9 @@ class CatalogService:
 
             logger.debug(f"Returning {len(recommendations)} items for {content_type}")
 
+            recommendations = await filter_by_imdb_rating(
+                recommendations, content_type, ctx.user_settings.imdb_rating_min
+            )
             cleaned = [m for m in (clean_meta(m) for m in recommendations) if m is not None]
             cleaned = shuffle_data_if_needed(ctx.user_settings, catalog_id, cleaned)
 
