@@ -427,6 +427,7 @@ class AuthService:
             poster_rating=self._unmask_nested_key(payload.poster_rating, stored.get("poster_rating")),
             excluded_movie_genres=payload.excluded_movie_genres,
             excluded_series_genres=payload.excluded_series_genres,
+            imdb_rating_min=payload.imdb_rating_min,
             year_min=payload.year_min,
             year_max=payload.year_max,
             popularity=payload.popularity,
