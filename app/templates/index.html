@@ -42,6 +42,11 @@
         // Genre constants from backend
         window.MOVIE_GENRES = {{ movie_genres | tojson }};
         window.SERIES_GENRES = {{ series_genres | tojson }};
+
+        // Nuvio API the sign-in modal talks to: the cloud by default, or the
+        // operator's self-hosted backend (NUVIO_BASE_URL / NUVIO_PUBLISHABLE_KEY)
+        window.NUVIO_BASE = {{ nuvio_base | tojson }};
+        window.NUVIO_PUBLISHABLE_KEY = {{ nuvio_publishable_key | tojson }};
     </script>
     <script type="module" src="/app/static/js/main.js"></script>
 {% endblock %}

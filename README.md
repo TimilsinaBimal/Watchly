@@ -76,7 +76,7 @@ Watchly works for users who keep their library in different places. Pick one sou
 - **Trakt** — connect via OAuth on the configure page; Watchly reads your watched history and ratings.
 - **Simkl** — connect via OAuth on the configure page; Watchly reads your watched history and ratings.
 - **MDBList** — paste your API key from [mdblist.com/preferences](https://mdblist.com/preferences/) on the configure page; Watchly reads your watched history and ratings. Needs no server-side setup.
-- **Nuvio** — sign in to Nuvio on the configure page (the password goes from your browser to Nuvio, not to Watchly); Watchly reads the watched list of the profile you choose, one Watchly instance per profile if you want. Needs no server-side setup.
+- **Nuvio** — sign in to Nuvio on the configure page (the password goes from your browser to Nuvio, not to Watchly); Watchly reads the watched list of the profile you choose, one Watchly instance per profile if you want. Needs no server-side setup. Self-hosting Nuvio? Set `NUVIO_BASE_URL` / `NUVIO_PUBLISHABLE_KEY` to point Watchly at your backend (see [Configuration reference](#configuration-reference)).
 
 A single install uses exactly one source at a time. Switching sources rebuilds your library and profile from the new account.
 
@@ -257,6 +257,7 @@ All settings are environment variables. Only `TOKEN_SALT` and `HOST_NAME` are st
 | --- | --- | --- |
 | `TRAKT_CLIENT_ID` / `TRAKT_CLIENT_SECRET` | — | Trakt OAuth app credentials; enable Trakt as a history source. The secret is only needed for legacy apps — PKCE apps (the Trakt default now) have none. |
 | `SIMKL_CLIENT_ID` / `SIMKL_CLIENT_SECRET` | — | Simkl OAuth app credentials; enable Simkl as a history source. |
+| `NUVIO_BASE_URL` / `NUVIO_PUBLISHABLE_KEY` | Nuvio cloud API / its key | Point the Nuvio history source and its sign-in flow at a self-hosted [Nuvio backend](https://github.com/NuvioMedia/self-host). Set both together — the server reads history and installs the addon, the browser creates the session. |
 
 ### Tuning & behavior
 
