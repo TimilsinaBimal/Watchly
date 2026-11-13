@@ -8,8 +8,11 @@
 // The addons table insert below is outside the documented API, so every error
 // path there falls back to "copy the URL and paste it in Nuvio".
 
-const NUVIO_BASE = 'https://api.nuvio.tv';
-const NUVIO_KEY = 'sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN';
+// Injected by the configure page: the cloud API by default, or the operator's
+// self-hosted backend when NUVIO_BASE_URL / NUVIO_PUBLISHABLE_KEY are set —
+// the sign-in flow runs in the browser, so it cannot read the server's env.
+const NUVIO_BASE = window.NUVIO_BASE;
+const NUVIO_KEY = window.NUVIO_PUBLISHABLE_KEY;
 
 import { showToast } from './ui.js';
 

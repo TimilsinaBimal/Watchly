@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import re
 import time
 from typing import Any
@@ -44,6 +45,18 @@ class CatalogService:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Get catalog recommendations."""
         self._validate_inputs(token, content_type, catalog_id)
+
+        if content_type == "all":
+            # A combined row is the two typed rows interleaved by rank. Each half
+            # keeps its own cache and SWR path; the merge is never cached because
+            # it is a pure function of the halves. Scores are not comparable across
+            # types (one Bayesian prior per type), so rank order, not score order.
+            (movies, headers), (series, _) = await asyncio.gather(
+                self.get_catalog(token, "movie", catalog_id),
+                self.get_catalog(token, "series", catalog_id),
+            )
+            pairs = itertools.zip_longest(movies["metas"], series["metas"])
+            return {"metas": [m for m in itertools.chain.from_iterable(pairs) if m is not None]}, headers
 
         # Resolve merge aliases up front so credential reads and cache keys all
         # use the surviving account token.
@@ -244,9 +257,9 @@ class CatalogService:
                 detail="Missing credentials token. Please open Watchly from a configured manifest URL.",
             )
 
-        if content_type not in ["movie", "series"]:
+        if content_type not in ["movie", "series", "all"]:
             logger.warning(f"Invalid type: {content_type}")
-            raise HTTPException(status_code=400, detail="Invalid type. Use 'movie' or 'series'")
+            raise HTTPException(status_code=400, detail="Invalid type. Use 'movie', 'series' or 'all'")
 
         supported_base = [
             "watchly.rec",

@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from app.core.settings import LLMConfig
 from app.models.profile import TasteProfile
-from app.services.llm import llm_service
+from app.services.llm import llm_service, title_language_instruction
 from app.services.tmdb.countries import COUNTRY_ADJECTIVES
 from app.services.tmdb.genre import movie_genres, series_genres
 from app.services.tmdb.service import TMDBService, get_tmdb_service
@@ -41,6 +41,9 @@ class RowDefinition(BaseModel):
 
     title: str
     id: str
+    # True when the LLM already wrote the title in the user's language, so the
+    # manifest must not machine-translate it again.
+    localized: bool = False
 
 
 class LLMRowTheme(BaseModel):
@@ -239,6 +242,7 @@ class RowGeneratorService:
         profile: TasteProfile,
         content_type: str = "movie",
         llm_config: LLMConfig | None = None,
+        language: str | None = None,
     ) -> list[RowDefinition]:
         """Generate up to 3 personalized catalog rows.
 
@@ -255,7 +259,7 @@ class RowGeneratorService:
         if llm_config:
             try:
                 llm_rows = await self._generate_with_llm(
-                    profile, genres, keywords, keyword_names, content_type, llm_config
+                    profile, genres, keywords, keyword_names, content_type, llm_config, language
                 )
                 if llm_rows:
                     logger.info(f"Generated {len(llm_rows)} LLM-driven rows for {content_type}")
@@ -264,7 +268,7 @@ class RowGeneratorService:
                 logger.warning(f"LLM row generation failed, using fallback: {e}")
 
         rows = build_fallback_rows(genres, keywords, countries, runtimes, keyword_names, content_type)
-        titled = await self._generate_titles(rows, llm_config)
+        titled = await self._generate_titles(rows, llm_config, language)
         logger.info(f"Generated {len(titled)} rows (fallback) for {content_type}")
         return titled
 
@@ -274,6 +278,7 @@ class RowGeneratorService:
         self,
         rows: list[tuple[list[tuple[str, str, Any]], str]],
         llm_config: LLMConfig | None,
+        language: str | None = None,
     ) -> list[RowDefinition]:
         if not rows:
             return []
@@ -283,15 +288,20 @@ class RowGeneratorService:
 
         prompts = [fallback for _, fallback in rows]
         results = await asyncio.gather(
-            *[llm_service.generate_title(p, llm_config) for p in prompts],
+            *[llm_service.generate_title(p, llm_config, language) for p in prompts],
             return_exceptions=True,
         )
 
+        localized = bool(title_language_instruction(language))
         final = []
         for i, (axes, fallback) in enumerate(rows):
             result = results[i]
             title = result.strip() if isinstance(result, str) else ""
-            final.append(RowDefinition(title=title or fallback, id=build_row_id(axes)))
+            # Only an LLM title is in the user's language; the English template
+            # fallback still goes through the manifest's machine translation.
+            final.append(
+                RowDefinition(title=title or fallback, id=build_row_id(axes), localized=bool(title) and localized)
+            )
         return final
 
     # --- LLM-based generation ---
@@ -304,6 +314,7 @@ class RowGeneratorService:
         keyword_names: dict[int, str],
         content_type: str,
         llm_config: LLMConfig,
+        language: str | None = None,
     ) -> list[RowDefinition] | None:
         genre_map = movie_genres if content_type == "movie" else series_genres
         valid_genres = ", ".join(f"{name} (ID: {gid})" for gid, name in genre_map.items())
@@ -338,6 +349,14 @@ class RowGeneratorService:
             "keywords (list of strings), country (string or null).\n"
             "Output a JSON array of 3 objects."
         )
+        language_instruction = title_language_instruction(language)
+        if language_instruction:
+            # Keywords are resolved to TMDB keyword IDs by name, so a translated
+            # keyword silently matches nothing and the row loses its theme.
+            prompt += (
+                f"\n\n{language_instruction} This applies to the title only:"
+                " keywords must stay as English TMDB keyword names."
+            )
 
         data = await llm_service.generate_structured(
             prompt=prompt,
@@ -381,7 +400,7 @@ class RowGeneratorService:
                 axes.append((ROLE_FLAVOR, AXIS_COUNTRY, country))
 
             if axes:
-                final.append(RowDefinition(title=title, id=build_row_id(axes)))
+                final.append(RowDefinition(title=title, id=build_row_id(axes), localized=bool(language_instruction)))
 
         return final if final else None
 

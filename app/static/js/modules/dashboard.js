@@ -19,7 +19,7 @@ const show = (el) => el && el.classList.remove('hidden');
 const hide = (el) => el && el.classList.add('hidden');
 
 const POPULARITY_LABELS = { mainstream: 'Mainstream', balanced: 'Balanced', gems: 'Hidden Gems', all: 'All' };
-const SORTING_LABELS = { default: 'Default', movies_first: 'Movies first', series_first: 'Series first' };
+const SORTING_LABELS = { default: 'Default', movies_first: 'Movies first', series_first: 'Series first', combined: 'Combined rows' };
 const SOURCE_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList', nuvio: 'Nuvio' };
 const WARMING_LABELS = {
     pending: 'Saving your configuration',

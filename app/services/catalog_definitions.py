@@ -31,6 +31,9 @@ def get_catalogs_from_config(
         display_at_home = getattr(config, "display_at_home", True)
         extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
 
+        if enabled_movie and enabled_series and user_settings.sorting_order == "combined":
+            catalogs.append({"type": "all", "id": cat_id, "name": name, "extra": extra})
+            return catalogs
         if enabled_movie:
             catalogs.append({"type": "movie", "id": cat_id, "name": name, "extra": extra})
         if enabled_series:
@@ -246,14 +249,15 @@ class DynamicCatalogService:
                 # rebuild — which moved the cache key and lost the row's content.
                 catalog_id = f"watchly.theme.{slot}"
                 row_slots.setdefault(media_type, {})[f"theme.{slot}"] = row.id.replace("watchly.theme.", "", 1)
-                catalogs.append(
-                    {
-                        "type": media_type,
-                        "id": catalog_id,
-                        "name": row.title,
-                        "extra": extra,
-                    }
-                )
+                catalog: dict[str, Any] = {
+                    "type": media_type,
+                    "id": catalog_id,
+                    "name": row.title,
+                    "extra": extra,
+                }
+                if getattr(row, "localized", False):
+                    catalog["_name_localized"] = True
+                catalogs.append(catalog)
 
         return catalogs
 
@@ -286,7 +290,8 @@ class DynamicCatalogService:
             logger.warning(f"Failed to build profile for {media_type}")
             return media_type, []
 
-        rows = await self.row_generator.generate_rows(profile, media_type, llm_config=llm_config)
+        language = user_settings.language if user_settings else None
+        rows = await self.row_generator.generate_rows(profile, media_type, llm_config=llm_config, language=language)
         return media_type, rows
 
     # --- Item-based rows ---

@@ -33,6 +33,21 @@ Keep titles:
 """
 
 
+def title_language_instruction(language: str | None) -> str:
+    """Prompt line asking for titles in the user's language; empty for English.
+
+    Creative titles machine-translated after the fact come out literal, so the
+    model writes them in the user's language directly.
+    """
+    if not language or language.split("-")[0].lower() == "en":
+        return ""
+    return (
+        f"Write the title in the language with BCP-47 tag '{language}',"
+        " the way a streaming service in that language would name the row."
+        " Use only real, correctly spelt words."
+    )
+
+
 def build_model(config: LLMConfig) -> Model:
     model_name = config.resolved_model()
     if config.provider == "gemini":
@@ -52,9 +67,12 @@ class LLMService:
     failure: LLM output is decorative, never load-bearing.
     """
 
-    async def generate_title(self, prompt: str, config: LLMConfig | None) -> str:
+    async def generate_title(self, prompt: str, config: LLMConfig | None, language: str | None = None) -> str:
         if not config:
             return ""
+        instruction = title_language_instruction(language)
+        if instruction:
+            prompt = f"{prompt}\n{instruction}"
         try:
             agent = Agent(build_model(config), system_prompt=TITLE_SYSTEM_PROMPT)
             result = await agent.run(prompt)

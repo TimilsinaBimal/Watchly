@@ -11,6 +11,7 @@ from loguru import logger
 # Pre-defined translations for known static catalog names.
 # Ensures consistent informal (du-form) German regardless of Google Translate output.
 # French: short UI labels are ambiguous for MT (e.g. "More like" → wrong parsing of "like").
+# Italian: avoids literal MT phrasing for short UI labels.
 _STATIC_TRANSLATIONS: dict[tuple[str, str], str] = {
     ("de", "Top Picks for You"): "Top Picks für dich",
     ("de", "From your favourite Creators"): "Von deinen Lieblingsschöpfern",
@@ -27,8 +28,17 @@ _STATIC_TRANSLATIONS: dict[tuple[str, str], str] = {
     ("fr", "From your favourite Creators"): "De vos créateurs préférés",
     ("fr", "Based on what you loved"): "D'après vos coups de cœur",
     ("fr", "Based on what you liked"): "D'après ce que vous avez aimé",
+    ("it", "Top Picks for You"): "Scelti per te",
+    ("it", "Because you watched"): "Perché hai guardato",
+    ("it", "Because you loved"): "Perché hai adorato",
+    ("it", "More Like"): "Simili a",
+    ("it", "More like"): "Simili a",
+    ("it", "Genre & Keyword Catalogs"): "Generi e parole chiave",
+    ("it", "From your favourite Creators"): "Dai tuoi autori preferiti",
+    ("it", "Based on what you loved"): "In base a ciò che hai adorato",
+    ("it", "Based on what you liked"): "In base a ciò che ti è piaciuto",
+    ("it", "Watch it again"): "Da riguardare",
 }
-
 
 # Google's translate codes predate ISO 639-1 in a few places, and TMDB hands us the
 # ISO form. Without these the language is simply rejected and every catalog name
@@ -144,7 +154,13 @@ async def apply_catalog_translation(cat: dict[str, Any], target_lang: str | None
     Item-based rows (loved/watched) attach _catalog_name_prefix (UI label) and
     _catalog_name_suffix (work title). Only the prefix is machine-translated so
     titles stay as in the library.
+
+    Rows flagged _name_localized were written by the LLM in the user's language
+    already; translating them again would only mangle them.
     """
+    if cat.pop("_name_localized", False):
+        return
+
     if "_catalog_name_prefix" in cat and "_catalog_name_suffix" in cat:
         prefix = cat.pop("_catalog_name_prefix")
         suffix = cat.pop("_catalog_name_suffix")

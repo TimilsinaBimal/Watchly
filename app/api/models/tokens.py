@@ -21,7 +21,7 @@ class TokenRequest(BaseModel):
     )
     year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year for TMDB API")
     year_max: int | None = Field(default=None, description="Latest release year; omit for through today")
-    sorting_order: Literal["default", "movies_first", "series_first"] = Field(
+    sorting_order: Literal["default", "movies_first", "series_first", "combined"] = Field(
         default="default", description="Order of movies and series catalogs"
     )
     simkl_api_key: str | None = Field(default=None, description="Simkl API Key for the user")
