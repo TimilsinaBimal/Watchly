@@ -1,10 +1,13 @@
 # Changelog
 
-## Unreleased
+## 1.18.0 - 2026-11-13
 
 ### Added
 
 - A "Combined" option under "Movies and series order" that serves Top Picks, Based on what you loved, Based on what you liked, From your favourite Creators and Watch it again as one row holding both movies and series, interleaved by rank. "Because you watched" and theme rows stay per type (#194).
+- Self-hosted Nuvio backends. Set `NUVIO_BASE_URL` and `NUVIO_PUBLISHABLE_KEY` to point the Nuvio history source and the configure page's "Connect Nuvio" sign-in at your own backend instead of the Nuvio cloud. Unset, both keep the cloud values (#206).
+- Italian names for the built-in catalogs (Top Picks, Because you watched, Based on what you loved and the rest), written by hand instead of machine-translated (#207).
+- AI-written catalog titles now come out in your language. The model writes the title in that language directly instead of the English title being machine-translated afterwards, which read literally. Template titles used when the model returns nothing are still translated (#208).
 
 ## 1.17.2 - 2026-10-22
 
