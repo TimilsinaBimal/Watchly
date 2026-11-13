@@ -117,7 +117,7 @@ nodeenv==1.11.0
     # via pre-commit
 openai==3.36.1
     # via pydantic-ai-slim
-opentelemetry-api==1.45.1
+opentelemetry-api==1.45.2
     # via
     #   anthropic
     #   fastapi
