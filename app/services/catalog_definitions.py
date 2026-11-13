@@ -31,6 +31,9 @@ def get_catalogs_from_config(
         display_at_home = getattr(config, "display_at_home", True)
         extra = DISCOVER_ONLY_EXTRA if not display_at_home else []
 
+        if enabled_movie and enabled_series and user_settings.sorting_order == "combined":
+            catalogs.append({"type": "all", "id": cat_id, "name": name, "extra": extra})
+            return catalogs
         if enabled_movie:
             catalogs.append({"type": "movie", "id": cat_id, "name": name, "extra": extra})
         if enabled_series:

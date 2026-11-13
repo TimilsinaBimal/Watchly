@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A "Combined" option under "Movies and series order" that serves Top Picks, Based on what you loved, Based on what you liked, From your favourite Creators and Watch it again as one row holding both movies and series, interleaved by rank. "Because you watched" and theme rows stay per type (#194).
+
 ## 1.17.2 - 2026-10-22
 
 ### Fixed

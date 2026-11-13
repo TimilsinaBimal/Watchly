@@ -33,7 +33,7 @@ class ManifestService:
                 "https://raw.githubusercontent.com/TimilsinaBimal/Watchly" "/refs/heads/main/app/static/cover.png"
             ),
             "resources": ["catalog"],
-            "types": ["movie", "series"],
+            "types": ["movie", "series", "all"],
             "idPrefixes": ["tt"],
             "catalogs": [],
             "behaviorHints": {"configurable": True, "configurationRequired": False},

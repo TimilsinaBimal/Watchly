@@ -9,8 +9,8 @@ router = APIRouter()
 @router.get("/{token}/catalog/{type}/{id}.json")
 @router.get("/{token}/catalog/{type}/{id}/{extra}.json")
 async def get_catalog(response: Response, type: str, id: str, token: str, extra: str | None = None) -> dict:
-    if type not in ("movie", "series"):
-        raise HTTPException(status_code=400, detail="Invalid content type. Must be 'movie' or 'series'.")
+    if type not in ("movie", "series", "all"):
+        raise HTTPException(status_code=400, detail="Invalid content type. Must be 'movie', 'series' or 'all'.")
 
     if not TOKEN_PATTERN.match(token):
         raise HTTPException(status_code=400, detail="Invalid token.")
