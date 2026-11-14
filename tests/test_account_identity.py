@@ -193,6 +193,30 @@ def test_signups_disabled_still_updates_existing_account(monkeypatch):
     assert response.token == "tok_existing"
 
 
+@pytest.mark.parametrize(
+    ("old", "new", "cleared"),
+    [(None, 7.5, True), (8, 7, True), (7.5, None, True), (7.5, 7.5, False), (None, None, False)],
+)
+def test_changed_imdb_minimum_clears_cached_catalogs(monkeypatch, old, new, cleared):
+    fake = setup_fakes(monkeypatch)
+    seed_account(fake, "tok_existing", "2024-01-01T00:00:00+00:00", identities={"trakt": "trakt-bob"})
+    key = "watchly:token:tok_existing"
+    blob = json.loads(fake.data[key])
+    blob["settings"].update(watch_history_source="trakt", imdb_rating_min=old)
+    fake.data[key] = json.dumps(blob)
+    invalidated = []
+
+    async def record(token):
+        invalidated.append(token)
+
+    monkeypatch.setattr("app.services.auth.user_cache.invalidate_all_catalogs", record)
+    payload = TokenRequest(trakt_access_token="t-abc", watch_history_source="trakt", imdb_rating_min=new)
+
+    asyncio.run(AuthService().create_user_token(payload))
+
+    assert invalidated == (["tok_existing"] if cleared else [])
+
+
 def test_legacy_stremio_account_keeps_its_token(monkeypatch):
     fake = setup_fakes(monkeypatch, stremio_identity=("user123", "user@example.com", "authkey-1"))
     # Pre-identity-index account: token IS the Stremio user id, no index entry.

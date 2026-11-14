@@ -91,8 +91,8 @@ def test_missing_metadata_excluded_but_outages_raise_and_close(monkeypatch, stat
     assert closed == [True]
 
 
-def test_existing_cached_catalog_is_filtered_without_mutation(monkeypatch):
-    original = {"metas": [{"id": "tt1"}, {"id": "tt2"}]}
+def test_cached_catalog_is_served_without_rating_requests(monkeypatch):
+    cached_body = {"metas": [{"id": "tt1"}, {"id": "tt2"}]}
 
     async def alias(token):
         return token
@@ -101,12 +101,10 @@ def test_existing_cached_catalog_is_filtered_without_mutation(monkeypatch):
         return {"settings": UserSettings(catalogs=[], imdb_rating_min=7.5).model_dump()}
 
     async def cached(*args):
-        return original, int(time.time())
+        return cached_body, int(time.time())
 
-    async def filter_metas(metas, content_type, minimum):
-        assert minimum == 7.5
-        assert content_type == "series"
-        return metas[1:]
+    async def filter_metas(*args):
+        pytest.fail("Cached rows are already filtered; a hit must not call Cinemeta")
 
     monkeypatch.setattr(cs.settings, "AUTO_UPDATE_CATALOGS", False)
     monkeypatch.setattr(cs.token_store, "resolve_alias", alias)
@@ -114,8 +112,7 @@ def test_existing_cached_catalog_is_filtered_without_mutation(monkeypatch):
     monkeypatch.setattr(cs.user_cache, "get_catalog", cached)
     monkeypatch.setattr(cs, "filter_by_imdb_rating", filter_metas)
     data, _ = asyncio.run(cs.CatalogService().get_catalog("token", "series", "watchly.rewatch"))
-    assert data["metas"] == [{"id": "tt2"}]
-    assert len(original["metas"]) == 2
+    assert data["metas"] == [{"id": "tt1"}, {"id": "tt2"}]
 
 
 @pytest.mark.parametrize("outage", [False, True])

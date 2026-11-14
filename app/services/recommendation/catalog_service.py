@@ -80,10 +80,6 @@ class CatalogService:
             data, created_at = cached_result
             age = int(time.time()) - created_at
             user_settings = extract_settings(credentials)
-            data = {
-                **data,
-                "metas": await filter_by_imdb_rating(data["metas"], content_type, user_settings.imdb_rating_min),
-            }
             data["metas"] = shuffle_data_if_needed(user_settings, catalog_id, data["metas"])
 
             if age < settings.CATALOG_REFRESH_INTERVAL_SECONDS:
