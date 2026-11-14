@@ -113,6 +113,9 @@ class UserSettings(BaseModel):
     poster_rating: PosterRatingConfig | None = Field(default=None, description="Poster rating provider configuration")
     excluded_movie_genres: list[str] = Field(default_factory=list)
     excluded_series_genres: list[str] = Field(default_factory=list)
+    imdb_rating_min: float | None = Field(
+        default=None, ge=0, le=10, allow_inf_nan=False, description="Minimum IMDb rating; None disables filtering"
+    )
     year_min: int = Field(default=DEFAULT_YEAR_MIN, description="Minimum release year")
     year_max: int | None = Field(default=None, description="Latest release year; None means through today")
     popularity: Literal["mainstream", "balanced", "gems", "all"] = Field(

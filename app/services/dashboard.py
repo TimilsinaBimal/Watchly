@@ -50,6 +50,7 @@ class DashboardService:
             "settings": {
                 "language": user_settings.language,
                 "popularity": user_settings.popularity,
+                "imdb_rating_min": user_settings.imdb_rating_min,
                 "year_min": user_settings.year_min,
                 "year_max": user_settings.year_max,
                 "sorting_order": user_settings.sorting_order,

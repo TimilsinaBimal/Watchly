@@ -68,6 +68,7 @@ function getRequestPayload() {
     const catalogs = appState ? appState.catalogs : [];
     const authKey = (document.getElementById('authKey')?.value || '').trim() || undefined;
     const hasSelectedProfile = !!(document.getElementById('stremioProfileId')?.value && authKey);
+    const imdbRatingMin = document.getElementById('imdbRatingMin')?.value;
 
     return {
         authKey,
@@ -84,6 +85,7 @@ function getRequestPayload() {
             rows: catalog.rows
         })),
         language: languageSelect?.value || 'english',
+        imdb_rating_min: imdbRatingMin ? Number(imdbRatingMin) : null,
         year_min: parseInt(document.getElementById('yearMin')?.value || String(YEAR_RANGE_DEFAULTS.min), 10),
         // The slider's right end means "through today", stored as null so it never
         // turns into a hard cap when the year rolls over.
@@ -132,6 +134,7 @@ function buildTokenPayload(formData) {
         password: formData.password,
         catalogs: formData.catalogs,
         language: formData.language,
+        imdb_rating_min: formData.imdb_rating_min,
         year_min: formData.year_min,
         year_max: formData.year_max,
         popularity: formData.popularity,

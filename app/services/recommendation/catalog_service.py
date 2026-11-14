@@ -19,6 +19,7 @@ from app.services.profile.service import ProfileService
 from app.services.recommendation.all_based import AllBasedService
 from app.services.recommendation.catalog_utils import clean_meta, shuffle_data_if_needed
 from app.services.recommendation.creators import CreatorsService
+from app.services.recommendation.imdb_ratings import filter_by_imdb_rating
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.rewatch import RewatchService
 from app.services.recommendation.theme_based import ThemeBasedService
@@ -235,6 +236,9 @@ class CatalogService:
 
             logger.debug(f"Returning {len(recommendations)} items for {content_type}")
 
+            recommendations = await filter_by_imdb_rating(
+                recommendations, content_type, ctx.user_settings.imdb_rating_min
+            )
             cleaned = [m for m in (clean_meta(m) for m in recommendations) if m is not None]
             cleaned = shuffle_data_if_needed(ctx.user_settings, catalog_id, cleaned)
 

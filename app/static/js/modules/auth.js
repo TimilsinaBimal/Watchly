@@ -519,6 +519,8 @@ async function fetchIdentity(payload) {
             if (s.language && languageSelect) languageSelect.value = s.language;
 
             // Popularity & Year Range
+            const imdbRatingMin = document.getElementById('imdbRatingMin');
+            if (imdbRatingMin) imdbRatingMin.value = s.imdb_rating_min ?? '';
             const popularitySelect = document.getElementById('popularitySelect');
             const yearMinInput = document.getElementById('yearMin');
             const yearMaxInput = document.getElementById('yearMax');

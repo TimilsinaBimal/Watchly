@@ -383,6 +383,23 @@ Thank you to everyone who has contributed to the project!
   <img src="https://contrib.rocks/image?repo=TimilsinaBimal/watchly" />
 </a>
 
+### Minimum IMDb rating
+
+In configuration, set **Minimum IMDb rating** (0–10, in 0.1 increments), or leave
+it blank to disable the filter. The inclusive minimum applies to all movie and
+series rows, including trending fallbacks and rewatch picks. Titles without an
+IMDb ID or a valid IMDb rating are excluded while filtering is enabled.
+
+Ratings come from Stremio Cinemeta, rather than TMDB vote averages. Filtering
+happens after recommendation selection, so restrictive thresholds can shorten
+rows. Enabled filtering also checks cached rows and requires Cinemeta network
+requests; an upstream failure does not silently return unfiltered results or
+write a partially filtered catalog to cache. With filtering disabled, existing
+rating display and recommendation behavior are unchanged.
+
+The token API accepts `imdb_rating_min: null` (disabled) or a finite number from
+0 through 10. Existing configurations default to disabled.
+
 ## Acknowledgements
 
 Special thanks to **[The Movie Database (TMDB)](https://www.themoviedb.org/)** for the rich metadata that powers Watchly's recommendations, and to **Trakt** and **Simkl** for their history APIs.

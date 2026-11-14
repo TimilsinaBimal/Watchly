@@ -21,6 +21,7 @@ from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
 from app.services.trakt import trakt_service
+from app.services.user_cache import user_cache
 
 KeyedConfigT = TypeVar("KeyedConfigT", LLMConfig, PosterRatingConfig)
 
@@ -390,6 +391,11 @@ class AuthService:
             except Exception as e:
                 logger.warning(f"[{redact_token(token)}] Failed to invalidate caches on source change: {e}")
 
+            # Rows are cached already filtered, so a changed threshold can't be
+            # re-applied to them: lowering it would never bring titles back.
+            if (existing_data.get("settings") or {}).get("imdb_rating_min") != user_settings.imdb_rating_min:
+                await user_cache.invalidate_all_catalogs(token)
+
         # 5. Build response
         base_url = settings.HOST_NAME
         manifest_url = f"{base_url}/{token}/manifest.json"
@@ -427,6 +433,7 @@ class AuthService:
             poster_rating=self._unmask_nested_key(payload.poster_rating, stored.get("poster_rating")),
             excluded_movie_genres=payload.excluded_movie_genres,
             excluded_series_genres=payload.excluded_series_genres,
+            imdb_rating_min=payload.imdb_rating_min,
             year_min=payload.year_min,
             year_max=payload.year_max,
             popularity=payload.popularity,

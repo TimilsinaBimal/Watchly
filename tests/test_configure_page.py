@@ -25,6 +25,7 @@ def test_configure_page_bootstraps_current_year_and_year_defaults(monkeypatch):
     assert 'window.YEAR_RANGE_DEFAULTS = {"min": 1970, "max": ' in html
     assert "window.MAX_ITEM_ROWS = 3;" in html
     assert '"rows": 1' in html
+    assert 'id="imdbRatingMin" type="number" min="0" max="10" step="0.1"' in html
     assert 'id="yearMin" min="1970"' in html
     assert 'id="yearMax" min="1970"' in html
 
