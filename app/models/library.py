@@ -45,6 +45,7 @@ class StremioLibraryItem(BaseModel):
     # Enriched fields (not in raw Stremio JSON, added by our service)
     is_loved: bool = Field(default=False, alias="_is_loved")
     is_liked: bool = Field(default=False, alias="_is_liked")
+    rating: float | None = Field(default=None, alias="_rating")
     interest_score: float = Field(default=0.0, alias="_interest_score")
 
     class Config:
