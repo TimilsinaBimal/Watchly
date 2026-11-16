@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Trakt shows no longer count as loved after two watched episodes. A show's Trakt play count sums its episodes, so it passed the unrated rewatch check; shows now count as one watch like Simkl ones, and only a rating of 9 or 10 makes them loved (#216).
+
 ## 1.18.0 - 2026-11-13
 
 ### Added

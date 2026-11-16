@@ -151,7 +151,9 @@ class TraktService:
                     type="series",
                     name=show.get("title", ""),
                     rating=ratings.get(imdb_id),
-                    watch_count=entry.get("plays", 1),
+                    # A show's plays sum its episode plays, so two watched episodes
+                    # would pass the >=2 rewatch-as-loved proxy. Same as Simkl.
+                    watch_count=1,
                     completion=1.0,
                     last_watched=self._parse_date(entry.get("last_watched_at")),
                     source="trakt",
