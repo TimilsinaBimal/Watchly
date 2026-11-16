@@ -35,12 +35,14 @@ class TokenRequest(BaseModel):
     )
     simkl_access_token: str | None = Field(default=None, description="Simkl OAuth access token")
     mdblist_api_key: str | None = Field(default=None, description="MDBList API key")
+    scrob_base_url: str | None = Field(default=None, description="Scrob instance URL")
+    scrob_api_key: str | None = Field(default=None, description="Scrob per-user API key")
     nuvio_access_token: str | None = Field(default=None, description="Nuvio session access token")
     nuvio_refresh_token: str | None = Field(default=None, description="Nuvio session refresh token")
     nuvio_expires_at: int | None = Field(default=None, description="Epoch seconds when the Nuvio access token expires")
     nuvio_profile_id: int | None = Field(default=None, ge=1, le=6, description="Nuvio profile index")
     nuvio_profile_name: str | None = Field(default=None, description="Nuvio profile name")
-    watch_history_source: Literal["stremio", "trakt", "simkl", "mdblist", "nuvio"] = Field(
+    watch_history_source: Literal["stremio", "trakt", "simkl", "mdblist", "nuvio", "scrob"] = Field(
         default="stremio", description="Source for watch history"
     )
 

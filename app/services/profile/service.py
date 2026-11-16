@@ -236,7 +236,7 @@ class ProfileService:
             await user_cache.invalidate_profile(token, content_type)
             await user_cache.invalidate_watched_sets(token, content_type)
 
-        if source in ("trakt", "simkl", "mdblist", "nuvio"):
+        if source in ("trakt", "simkl", "mdblist", "nuvio", "scrob"):
             profile, watched_tmdb, watched_imdb = await self._build_from_external_source(
                 source, user_settings, content_type, library_items, token=token
             )
@@ -380,6 +380,33 @@ class ProfileService:
         elif source == "nuvio":
             if user_settings and user_settings.nuvio_access_token and user_settings.nuvio_profile_id:
                 watch_history, token_revoked = await self._fetch_nuvio_history(token, user_settings)
+            else:
+                token_missing = True
+        elif source == "scrob":
+            if user_settings and user_settings.scrob_base_url and user_settings.scrob_api_key:
+                from app.services.scrob import scrob_service
+
+                tmdb_service = get_tmdb_service(api_key=resolve_tmdb_api_key(user_settings))
+                try:
+                    watch_history = await scrob_service.get_history(
+                        user_settings.scrob_base_url, user_settings.scrob_api_key, tmdb_service
+                    )
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code in (401, 403):
+                        token_revoked = True
+                        logger.error(
+                            f"Scrob key rejected (HTTP {e.response.status_code}). "
+                            "Clearing stored key; user must reconnect Scrob."
+                        )
+                    else:
+                        logger.error(
+                            f"Scrob history fetch failed (HTTP {e.response.status_code}). "
+                            "Falling back to Stremio library."
+                        )
+                        watch_history = None
+                except Exception as e:
+                    logger.error(f"Scrob history fetch failed ({type(e).__name__}). Falling back to Stremio library.")
+                    watch_history = None
             else:
                 token_missing = True
 
@@ -665,6 +692,10 @@ class ProfileService:
             elif source == "mdblist":
                 if settings_dict.get("mdblist_api_key"):
                     settings_dict["mdblist_api_key"] = None
+                    mutated = True
+            elif source == "scrob":
+                if settings_dict.get("scrob_api_key"):
+                    settings_dict["scrob_api_key"] = None
                     mutated = True
             elif source == "nuvio":
                 for field in ("nuvio_access_token", "nuvio_refresh_token", "nuvio_expires_at"):
