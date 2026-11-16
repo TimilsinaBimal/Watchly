@@ -114,29 +114,17 @@ class EvidenceCalculator:
         otherwise falls back to the legacy interaction-type bucket system.
         Abandonment detection is applied for unrated items.
         """
-        # Check for an explicit rating (set by the WatchHistory → ScoredItem converter)
-        # The converter maps loved→is_loved (rating≥9) and liked→is_liked (rating≥7).
-        # For items with external ratings, we use the continuous scale.
-        has_explicit_rating = False
-        rating: float | None = None
-
-        # Detect external-history items by checking the synthetic state pattern:
-        # External items have flaggedWatched=1 and a specific duration sentinel (6000)
-        # OR they have is_loved/is_liked set from external ratings.
-        # We use a simpler heuristic: if is_loved with flaggedWatched=1, compute from rating=9.
-        # For more granularity, we'll check the state for our sentinel.
         state = item.item.state
 
-        if item.item.is_loved:
-            # Could be Stremio loved (legacy) or external rating ≥ 9
-            # Use rating-proportional weight for loved items
+        # Stremio loves/likes and unrated external rewatches carry no number,
+        # so they weigh as a 9 and a 7 on the rating scale.
+        rating = item.item.rating
+        if rating is None and item.item.is_loved:
             rating = 9.0
-            has_explicit_rating = True
-        elif item.item.is_liked:
+        elif rating is None and item.item.is_liked:
             rating = 7.0
-            has_explicit_rating = True
 
-        if has_explicit_rating and rating is not None:
+        if rating is not None:
             base_weight = EvidenceCalculator.weight_from_rating(rating)
         else:
             # Check for abandonment on unrated items

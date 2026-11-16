@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Trakt, Simkl and MDBList ratings below 7 no longer count like an unrated watch. Every explicit rating now weighs on the rating scale, so a title rated 1–4 pulls the profile away from its genres, keywords and cast instead of towards them, and an 8 or a 10 weighs more than a 7 or a 9 (#213).
+
 ## 1.18.0 - 2026-11-13
 
 ### Added

@@ -104,6 +104,7 @@ def watch_history_item_to_library_item(item: WatchHistoryItem, is_loved: bool, i
         removed=False,
         _is_loved=is_loved,
         _is_liked=is_liked,
+        _rating=item.rating,
     )
 
 
