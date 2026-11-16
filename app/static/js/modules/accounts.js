@@ -14,10 +14,10 @@ const ACTIVE_BORDER_CLASS = 'border-accent/40';
 const INACTIVE_CLASSES = ['text-neutral-300', 'hover:text-white', 'hover:bg-white/5'];
 const INACTIVE_BORDER_CLASS = 'border-transparent';
 
-const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList', nuvio: 'Nuvio' };
+const PROVIDER_LABELS = { stremio: 'Stremio', trakt: 'Trakt', simkl: 'Simkl', mdblist: 'MDBList', nuvio: 'Nuvio', scrob: 'Scrob' };
 
 let switchSectionFn = null;
-const connectedState = { stremio: false, trakt: false, simkl: false, mdblist: false, nuvio: false };
+const connectedState = { stremio: false, trakt: false, simkl: false, mdblist: false, nuvio: false, scrob: false };
 
 export function initializeAccountsUI({ switchSection } = {}) {
     switchSectionFn = switchSection || null;
@@ -46,6 +46,7 @@ export function setStremioConnected(connected) {
         setProviderConnected('simkl', false);
         setProviderConnected('mdblist', false);
         setProviderConnected('nuvio', false);
+        setProviderConnected('scrob', false);
         setWatchHistorySource('stremio');
     }
 
@@ -119,6 +120,7 @@ function firstConnectedSource() {
     if (connectedState.simkl) return 'simkl';
     if (connectedState.mdblist) return 'mdblist';
     if (connectedState.nuvio) return 'nuvio';
+    if (connectedState.scrob) return 'scrob';
     return 'stremio';
 }
 
