@@ -16,6 +16,12 @@ if TYPE_CHECKING:
 HISTORY_PAGE_SIZE = 100
 # Backstop against a pagination contract change turning the loop endless.
 MAX_HISTORY_PAGES = 100
+# Scrob's FastAPI backend serves /history and /ratings directly, but it is
+# internal-only (localhost). The web UI fronts it with a proxy: API clients
+# call /api/proxy/<backend path>, and the UI's session middleware lets exactly
+# those requests through when they carry the X-Api-Key header. Calls therefore
+# always go through the proxy path on the configured web URL.
+API_PROXY_PREFIX = "api/proxy"
 
 
 class ScrobService:
@@ -39,9 +45,18 @@ class ScrobService:
         or rejects the key."""
         client = self._client(base_url)
         try:
-            await client.get("/history", params={"page": 1, "page_size": 1}, headers=self._headers(api_key))
+            data = await client.get(
+                f"/{API_PROXY_PREFIX}/history",
+                params={"page": 1, "page_size": 1},
+                headers=self._headers(api_key),
+            )
         finally:
             await client.close()
+        # A URL that serves the login page instead of the API answers 200 with
+        # HTML; without this check the probe would pass and every later fetch
+        # would silently read zero history.
+        if not isinstance(data, dict):
+            raise ValueError("Scrob did not return JSON; check the base URL (the web UI root, not the backend)")
 
     async def get_history(self, base_url: str, api_key: str, tmdb_service: "TMDBService") -> WatchHistory:
         """Watched movies and shows of one Scrob account, keyed on IMDb ids.
@@ -55,7 +70,7 @@ class ScrobService:
         try:
             events, ratings = await asyncio.gather(
                 self._get_all_events(client, api_key),
-                client.get("/ratings", headers=self._headers(api_key)),
+                client.get(f"/{API_PROXY_PREFIX}/ratings", headers=self._headers(api_key)),
             )
         finally:
             await client.close()
@@ -108,7 +123,9 @@ class ScrobService:
         events: list[dict[str, Any]] = []
         for page in range(1, MAX_HISTORY_PAGES + 1):
             data = await client.get(
-                "/history", params={"page": page, "page_size": HISTORY_PAGE_SIZE}, headers=self._headers(api_key)
+                f"/{API_PROXY_PREFIX}/history",
+                params={"page": page, "page_size": HISTORY_PAGE_SIZE},
+                headers=self._headers(api_key),
             )
             events.extend(data.get("results") or [])
             if page >= int(data.get("total_pages") or 1):

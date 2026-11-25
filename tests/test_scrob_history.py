@@ -88,7 +88,7 @@ class FakeClient:
             self._raise(url, 401)
         if self.status_for_good_key:
             self._raise(url, self.status_for_good_key)
-        if url == "/ratings":
+        if url == "/api/proxy/ratings":
             return RATINGS
         return HISTORY
 
@@ -144,7 +144,7 @@ def test_history_paginates():
 
     class PagedClient(FakeClient):
         async def get(self, url, params=None, **kwargs):
-            if url == "/ratings":
+            if url == "/api/proxy/ratings":
                 return RATINGS
             assert kwargs.get("headers", {}).get("X-Api-Key") == GOOD_KEY
             return pages[params["page"] - 1]
@@ -161,8 +161,18 @@ def test_rejected_key_raises():
 def test_probe_reaches_history_endpoint():
     client = FakeClient()
     asyncio.run(service_with(client).probe(BASE_URL, GOOD_KEY))
-    assert client.calls[0][0] == "/history"
+    assert client.calls[0][0] == "/api/proxy/history"
     assert client.closed
+
+
+def test_probe_rejects_non_json_response():
+    class HtmlClient(FakeClient):
+        async def get(self, url, params=None, **kwargs):
+            self.calls.append((url, dict(params or {})))
+            return None  # the base client's non-JSON fallback (e.g. a login page)
+
+    with pytest.raises(ValueError):
+        asyncio.run(service_with(HtmlClient()).probe(BASE_URL, GOOD_KEY))
 
 
 def test_account_identity_is_stable_and_not_the_key():
