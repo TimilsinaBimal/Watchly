@@ -85,10 +85,17 @@ class TokenStore:
         return f"{self.IDENTITY_KEY_PREFIX}{provider}:{provider_user_id}"
 
     async def _set_with_token_ttl(self, key: str, value: str) -> None:
+        # Identity index and merge alias entries are the only link between a
+        # provider account and the token holding its settings. A silently lost
+        # write detaches the account: the next configure visit finds no matching
+        # identity and mints a duplicate. Fail the request instead.
+        stored: bool
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
-            await redis_service.set(key, value, settings.TOKEN_TTL_SECONDS)
+            stored = await redis_service.set(key, value, settings.TOKEN_TTL_SECONDS)
         else:
-            await redis_service.set(key, value)
+            stored = await redis_service.set(key, value)
+        if not stored:
+            raise RuntimeError("Failed to persist identity/alias record to Redis")
 
     async def get_token_for_identity(self, provider: str, provider_user_id: str) -> str | None:
         token = await redis_service.get(self._identity_key(provider, provider_user_id))
@@ -148,9 +155,15 @@ class TokenStore:
         json_str = json.dumps(storage_data)
 
         if settings.TOKEN_TTL_SECONDS and settings.TOKEN_TTL_SECONDS > 0:
-            await redis_service.set(key, json_str, settings.TOKEN_TTL_SECONDS)
+            stored = await redis_service.set(key, json_str, settings.TOKEN_TTL_SECONDS)
         else:
-            await redis_service.set(key, json_str)
+            stored = await redis_service.set(key, json_str)
+        if not stored:
+            # redis_service.set() swallows connection errors and returns False.
+            # Reporting success on a failed write hands out a token that no
+            # worker can ever load, which surfaces later as a 401 for a token
+            # the API just reported as stored. Fail at write time instead.
+            raise RuntimeError(f"[{redact_token(token)}] Failed to persist user data to Redis")
 
         # Settings changes alter the catalog list, so a cached manifest built from
         # the old settings must not survive the write.
@@ -195,9 +208,9 @@ class TokenStore:
         poster_rating = settings_dict.get("poster_rating")
         needs_save = False
 
-        # Case 1: Migrate rpdb_key to poster_rating if rpdb_key exists and poster_rating doesn't
+        # Case 1: Migrate rpdb_key to new poster_rating format if rpdb_key exists and poster_rating doesn't
         if rpdb_key and not poster_rating:
-            logger.info(f"[MIGRATION] Migrating rpdb_key to poster_rating format for {redact_token(token)}")
+            logger.info(f"[MIGRATION] Migrating rpdb_key to new poster_rating format for {redact_token(token)}")
             settings_dict["poster_rating"] = {
                 "provider": "rpdb",
                 "api_key": self.encrypt_token(rpdb_key),  # Encrypt the API key
