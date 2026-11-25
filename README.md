@@ -40,6 +40,7 @@ Everything is configured through a web page; you paste the resulting manifest UR
 - **Five history sources** — use your **Stremio** library, or your **Trakt**, **Simkl**, **MDBList** or **Nuvio** account. Ratings, watches, loves, and rewatches are all understood.
 - **Multiple catalog types** — Top Picks, "Because you watched/loved", dynamic genre & keyword rows, recommendations from your recurring directors and actors, and "based on everything you loved/liked".
 - **Fine-grained personalization** — discovery style (mainstream → hidden gems), release-year window, excluded genres (separately for movies and series), display language, and per-catalog enable/rename/shuffle controls.
+- **Digital-release filter** — optionally hide movies that are still only playing in cinemas (or not released at all), so every row is actually watchable now.
 - **Poster ratings overlay** — optionally overlay IMDb/TMDb-style ratings on posters via [RatingPosterDB](https://ratingposterdb.com/), Top Posters, or a custom template.
 - **Bring your own keys** — supply your own TMDB, Simkl, or Gemini API keys, or rely on the server's.
 - **Secure by design** — credentials are encrypted at rest in Redis and never appear in the manifest URL, which carries only a short opaque token.

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- An opt-in "Only movies with a digital release" toggle under Discovery. When on, movie rows skip titles that are still cinema-only or not released at all: TMDB home-release dates (digital, disc, TV) decide, older titles always count as released, and rows fetch extra candidates so they don't come back short. Series rows and "Watch it again" are unaffected (#80).
+
 ## 1.18.0 - 2026-11-13
 
 ### Added
