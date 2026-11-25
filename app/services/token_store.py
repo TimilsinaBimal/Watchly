@@ -208,9 +208,9 @@ class TokenStore:
         poster_rating = settings_dict.get("poster_rating")
         needs_save = False
 
-        # Case 1: Migrate rpdb_key to new poster_rating format if rpdb_key exists and poster_rating doesn't
+        # Case 1: Migrate rpdb_key to poster_rating if rpdb_key exists and poster_rating doesn't
         if rpdb_key and not poster_rating:
-            logger.info(f"[MIGRATION] Migrating rpdb_key to new poster_rating format for {redact_token(token)}")
+            logger.info(f"[MIGRATION] Migrating rpdb_key to poster_rating format for {redact_token(token)}")
             settings_dict["poster_rating"] = {
                 "provider": "rpdb",
                 "api_key": self.encrypt_token(rpdb_key),  # Encrypt the API key
