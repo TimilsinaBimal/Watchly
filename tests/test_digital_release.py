@@ -87,12 +87,11 @@ def test_filter_fails_open_on_missing_data_and_errors():
     empty = FakeTMDB()  # TMDB returns no release rows at all
     no_id = FakeTMDB()
     broken = FakeTMDB(fail_for={5})
+    no_tmdb_id = {"id": "tt9", "type": "movie", "name": "No id"}
 
     assert run([movie(4)], empty) == [movie(4)]
     # Without a TMDB id there is nothing to look up.
-    assert run([{"id": "tt9", "type": "movie", "name": "No id"}], no_id) == [
-        {"id": "tt9", "type": "movie", "name": "No id"}
-    ]
+    assert run([no_tmdb_id], no_id) == [no_tmdb_id]
     assert run([movie(5)], broken) == [movie(5)]
 
 
@@ -110,13 +109,15 @@ def test_old_movies_skip_the_lookup_entirely():
 
 def test_series_and_order_are_left_alone():
     series = {"id": "tt100", "type": "series", "name": "Show"}
-    movies = [movie(1), movie(3)]
+    tmdb = FakeTMDB(
+        release_dates={
+            1: release_payload([[(3, "2026-02-01"), (4, "2026-06-01")]]),
+            2: release_payload([[(3, "2026-02-01"), (4, "2026-06-01")]]),
+            3: release_payload([[(3, "2026-02-01"), (4, "2026-12-01")]]),
+        }
+    )
 
-    kept = run([series, *movies, movie(2)], FakeTMDB(release_dates={
-        1: release_payload([[(3, "2026-02-01"), (4, "2026-06-01")]]),
-        2: release_payload([[(3, "2026-02-01"), (4, "2026-06-01")]]),
-        3: release_payload([[(3, "2026-02-01"), (4, "2026-12-01")]]),
-    }))
+    kept = run([series, movie(3), movie(1), movie(2)], tmdb)
 
     assert [m["name"] for m in kept] == ["Show", "Movie 1", "Movie 2"]
 
