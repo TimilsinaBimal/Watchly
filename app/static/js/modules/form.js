@@ -96,6 +96,8 @@ function getRequestPayload() {
         tmdb_api_key: document.getElementById('tmdbApiKey')?.value.trim() || '',
         simkl_api_key: document.getElementById('simklApiKey')?.value.trim() || '',
         mdblist_api_key: document.getElementById('mdblistApiKey')?.value.trim() || '',
+        scrob_base_url: document.getElementById('scrobBaseUrl')?.value.trim() || '',
+        scrob_api_key: document.getElementById('scrobApiKey')?.value.trim() || '',
         llm_provider: document.getElementById('llmProvider')?.value || '',
         llm_api_key: document.getElementById('llmApiKey')?.value.trim() || '',
         llm_model: document.getElementById('llmModel')?.value.trim() || '',
@@ -154,6 +156,8 @@ function buildTokenPayload(formData) {
         trakt_token_expires_at: window._watchlyOAuth?.trakt?.expires_at || undefined,
         simkl_access_token: window._watchlyOAuth?.simkl?.access_token || undefined,
         mdblist_api_key: formData.mdblist_api_key || undefined,
+        scrob_base_url: formData.scrob_base_url || undefined,
+        scrob_api_key: formData.scrob_api_key || undefined,
         nuvio_access_token: window._watchlyOAuth?.nuvio?.access_token || undefined,
         nuvio_refresh_token: window._watchlyOAuth?.nuvio?.refresh_token || undefined,
         nuvio_expires_at: window._watchlyOAuth?.nuvio?.expires_at || undefined,
@@ -166,15 +170,16 @@ function validateFormData(formData) {
     const hasSimkl = !!window._watchlyOAuth?.simkl?.access_token;
     const hasMdblist = !!formData.mdblist_api_key;
     const hasNuvio = !!window._watchlyOAuth?.nuvio?.access_token;
+    const hasScrob = !!(formData.scrob_base_url && formData.scrob_api_key);
 
-    if (!hasStremio && !hasTrakt && !hasSimkl && !hasMdblist && !hasNuvio) {
-        showError('generalError', 'Connect at least one account: Stremio, Trakt, Simkl, MDBList or Nuvio.');
+    if (!hasStremio && !hasTrakt && !hasSimkl && !hasMdblist && !hasNuvio && !hasScrob) {
+        showError('generalError', 'Connect at least one account: Stremio, Trakt, Simkl, MDBList, Nuvio or Scrob.');
         switchSection('login');
         return false;
     }
 
     if (formData.watch_history_source === 'stremio' && !hasStremio) {
-        showError('generalError', 'Login with Stremio, or pick Trakt, Simkl, MDBList or Nuvio as your watch history source.');
+        showError('generalError', 'Login with Stremio, or pick Trakt, Simkl, MDBList, Nuvio or Scrob as your watch history source.');
         switchSection('login');
         return false;
     }
@@ -249,6 +254,8 @@ function initializeFormSubmission() {
                     profilePayload.trakt_token_expires_at = undefined;
                     profilePayload.simkl_access_token = undefined;
                     profilePayload.mdblist_api_key = undefined;
+                    profilePayload.scrob_base_url = undefined;
+                    profilePayload.scrob_api_key = undefined;
                     if (batchProvider === 'nuvio') {
                         profilePayload.authKey = undefined;
                         profilePayload.email = undefined;
@@ -916,6 +923,51 @@ function initializeWatchHistorySource() {
             if (mdblistKeyInput) mdblistKeyInput.value = '';
             if (mdblistStatus) mdblistStatus.textContent = 'MDBList';
             setProviderConnected('mdblist', false);
+        });
+    }
+
+    const scrobUrlInput = document.getElementById('scrobBaseUrl');
+    const scrobKeyInput = document.getElementById('scrobApiKey');
+    const scrobConnectBtn = document.getElementById('scrobConnectBtn');
+    const scrobStatusMessage = document.getElementById('scrobStatusMessage');
+    const scrobStatus = document.getElementById('scrobStatus');
+    const scrobLogoutBtn = document.getElementById('scrobLogoutBtn');
+
+    if (scrobConnectBtn) {
+        scrobConnectBtn.addEventListener('click', async () => {
+            const baseUrl = scrobUrlInput?.value.trim();
+            const apiKey = scrobKeyInput?.value.trim();
+            if (!baseUrl || !apiKey) {
+                setValidationMessage(scrobStatusMessage, 'Enter your Scrob instance URL and API key first', 'error');
+                return;
+            }
+            scrobConnectBtn.disabled = true;
+            try {
+                const data = await postJson('/scrob/validation', { base_url: baseUrl, api_key: apiKey });
+                if (!data.valid) {
+                    setValidationMessage(scrobStatusMessage, data.message || 'Invalid Scrob instance or API key', 'error');
+                    return;
+                }
+                clearValidationMessage(scrobStatusMessage);
+                if (scrobStatus) scrobStatus.textContent = data.message;
+                setProviderConnected('scrob', true);
+                if (!appState?.auth?.loggedIn) {
+                    recallProviderAccount('scrob', { base_url: baseUrl, api_key: apiKey });
+                }
+            } catch (e) {
+                setValidationMessage(scrobStatusMessage, 'Could not reach the server. Try again.', 'error');
+            } finally {
+                scrobConnectBtn.disabled = false;
+            }
+        });
+    }
+
+    if (scrobLogoutBtn) {
+        scrobLogoutBtn.addEventListener('click', () => {
+            if (scrobUrlInput) scrobUrlInput.value = '';
+            if (scrobKeyInput) scrobKeyInput.value = '';
+            if (scrobStatus) scrobStatus.textContent = 'Scrob';
+            setProviderConnected('scrob', false);
         });
     }
 

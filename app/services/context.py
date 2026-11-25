@@ -130,7 +130,7 @@ async def fetch_library_for_source(
     user still sees recommendations from whatever Stremio knows about them.
     Stremio: pull directly from the bundle's library service.
     """
-    if source in ("trakt", "simkl", "mdblist", "nuvio"):
+    if source in ("trakt", "simkl", "mdblist", "nuvio", "scrob"):
         from app.services.profile.service import ProfileService
 
         profile_service = ProfileService()

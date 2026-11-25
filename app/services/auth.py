@@ -17,6 +17,7 @@ from app.core.settings import (
 )
 from app.services.mdblist import mdblist_service
 from app.services.nuvio import nuvio_service
+from app.services.scrob import scrob_service
 from app.services.simkl import simkl_service
 from app.services.stremio.service import StremioBundle
 from app.services.token_store import token_store
@@ -160,6 +161,10 @@ class AuthService:
             if user_id := await self._verify_mdblist_identity(payload.mdblist_api_key):
                 identities["mdblist"] = user_id
 
+        if payload.scrob_base_url and payload.scrob_api_key and payload.scrob_api_key != STORED_SECRET_SENTINEL:
+            if identity := await self._verify_scrob_identity(payload.scrob_base_url, payload.scrob_api_key):
+                identities["scrob"] = identity
+
         if payload.nuvio_access_token and payload.nuvio_access_token != STORED_SECRET_SENTINEL:
             # The profile is part of the identity: each Nuvio profile has its own
             # history, so each gets its own Watchly account, as Stremio profiles do.
@@ -172,7 +177,7 @@ class AuthService:
                 status_code=400,
                 detail=(
                     "Could not verify any connected account. "
-                    "Reconnect Stremio, Trakt, Simkl, MDBList or Nuvio and try again."
+                    "Reconnect Stremio, Trakt, Simkl, MDBList, Nuvio or Scrob and try again."
                 ),
             )
 
@@ -255,6 +260,16 @@ class AuthService:
 
         user_id = info.get("user_id")
         return str(user_id) if user_id else None
+
+    async def _verify_scrob_identity(self, base_url: str, api_key: str) -> str | None:
+        """Stable identity for a Scrob account, or None if the instance won't
+        confirm the key."""
+        try:
+            await scrob_service.probe(base_url, api_key)
+        except Exception as e:
+            logger.info(f"Scrob identity lookup failed: {type(e).__name__}")
+            return None
+        return scrob_service.account_identity(base_url, api_key)
 
     async def _find_account_token(self, provider: str, provider_user_id: str) -> str | None:
         """Locate the account token for a verified provider identity."""
@@ -440,6 +455,8 @@ class AuthService:
             trakt_token_expires_at=payload.trakt_token_expires_at,
             simkl_access_token=unmasked("simkl_access_token", payload.simkl_access_token),
             mdblist_api_key=unmasked("mdblist_api_key", payload.mdblist_api_key),
+            scrob_base_url=payload.scrob_base_url,
+            scrob_api_key=unmasked("scrob_api_key", payload.scrob_api_key),
             nuvio_access_token=unmasked("nuvio_access_token", payload.nuvio_access_token),
             nuvio_refresh_token=unmasked("nuvio_refresh_token", payload.nuvio_refresh_token),
             nuvio_expires_at=payload.nuvio_expires_at,

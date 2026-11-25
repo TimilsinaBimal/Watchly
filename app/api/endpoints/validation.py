@@ -1,5 +1,6 @@
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel, Field, ValidationError
@@ -16,6 +17,7 @@ from app.core.settings import LLMConfig, PosterRatingConfig
 from app.services.llm import llm_service
 from app.services.mdblist import mdblist_service
 from app.services.poster_ratings.factory import PosterProvider, poster_ratings_factory
+from app.services.scrob import scrob_service
 from app.services.simkl import simkl_service
 from app.services.tmdb.client import TMDBClient
 from app.services.token_store import token_store
@@ -150,6 +152,26 @@ async def validate_mdblist_api_key(data: BaseValidationInput) -> BaseValidationR
         logger.info(f"MDBList key validation failed: {type(e).__name__}")
         return BaseValidationResponse(valid=False, message="Invalid MDBList API key")
     return BaseValidationResponse(valid=True, message=f"Connected as {user.get('username') or user.get('user_id')}")
+
+
+class ScrobValidationInput(BaseModel):
+    base_url: str = Field(description="Scrob instance URL")
+    api_key: str = Field(description="Scrob API key")
+
+
+@router.post("/scrob/validation")
+async def validate_scrob_instance(data: ScrobValidationInput) -> BaseValidationResponse:
+    try:
+        await scrob_service.probe(data.base_url.strip(), data.api_key.strip())
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code in (401, 403):
+            return BaseValidationResponse(valid=False, message="Scrob rejected this API key")
+        logger.info(f"Scrob validation failed (HTTP {e.response.status_code})")
+        return BaseValidationResponse(valid=False, message="Scrob returned an error. Check the instance URL.")
+    except Exception as e:
+        logger.info(f"Scrob validation failed: {type(e).__name__}")
+        return BaseValidationResponse(valid=False, message="Could not reach the Scrob instance. Check the URL.")
+    return BaseValidationResponse(valid=True, message="Scrob instance and API key are valid")
 
 
 class OAuthTokenValidationInput(BaseModel):

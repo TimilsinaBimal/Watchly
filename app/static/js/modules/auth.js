@@ -461,6 +461,7 @@ export async function recallProviderAccount(provider, tokens) {
         trakt: { trakt_access_token: tokens.access_token },
         simkl: { simkl_access_token: tokens.access_token },
         mdblist: { mdblist_api_key: tokens.api_key },
+        scrob: { scrob_base_url: tokens.base_url, scrob_api_key: tokens.api_key },
         nuvio: { nuvio_access_token: tokens.access_token, nuvio_profile_id: tokens.profile_id },
     }[provider];
     try {
@@ -822,6 +823,18 @@ function restoreWatchHistoryState(settings) {
         const mdblistStatus = document.getElementById('mdblistStatus');
         if (mdblistStatus) mdblistStatus.textContent = 'Connected';
         setProviderConnected('mdblist', true);
+    }
+
+    const scrobKeyInput = document.getElementById('scrobApiKey');
+    if (settings.scrob_api_key && scrobKeyInput && !scrobKeyInput.value) {
+        // Same masked-marker round-trip as MDBList; the instance URL is not a
+        // secret and loads as-is.
+        const scrobUrlInput = document.getElementById('scrobBaseUrl');
+        if (scrobUrlInput && settings.scrob_base_url) scrobUrlInput.value = settings.scrob_base_url;
+        scrobKeyInput.value = settings.scrob_api_key;
+        const scrobStatus = document.getElementById('scrobStatus');
+        if (scrobStatus) scrobStatus.textContent = 'Connected';
+        setProviderConnected('scrob', true);
     }
 
     if (settings.nuvio_access_token && !hasLiveToken('nuvio')) {
