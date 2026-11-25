@@ -531,6 +531,9 @@ async function fetchIdentity(payload) {
             const sortingOrderSelect = document.getElementById('sortingOrderSelect');
             if (s.sorting_order && sortingOrderSelect) sortingOrderSelect.value = s.sorting_order;
 
+            const digitalReleaseOnly = document.getElementById('digitalReleaseOnly');
+            if (digitalReleaseOnly) digitalReleaseOnly.checked = !!s.digital_release_only;
+
             // Handle poster rating: prefer new format, fallback to old rpdb_key
             const posterRatingProvider = document.getElementById('posterRatingProvider');
             const posterRatingApiKey = document.getElementById('posterRatingApiKey');

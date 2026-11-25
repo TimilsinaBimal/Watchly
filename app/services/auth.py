@@ -431,6 +431,7 @@ class AuthService:
             year_max=payload.year_max,
             popularity=payload.popularity,
             sorting_order=payload.sorting_order,
+            digital_release_only=payload.digital_release_only,
             simkl_api_key=unmasked("simkl_api_key", payload.simkl_api_key),
             llm=self._unmask_nested_key(payload.llm, self._stored_llm(stored)),
             gemini_api_key=unmasked("gemini_api_key", payload.gemini_api_key),

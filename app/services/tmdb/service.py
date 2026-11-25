@@ -75,6 +75,16 @@ class TMDBService:
         params = {"append_to_response": "credits,external_ids,keywords"}
         return await self.client.get(f"/movie/{movie_id}", params=params)
 
+    @alru_cache(maxsize=2000, ttl=86400)
+    async def get_release_dates(self, movie_id: int) -> dict[str, Any]:
+        """Per-country release dates for a movie, keyed by release type.
+
+        Cached for a day: the dates a title becomes available rarely change,
+        and the home-release filter asks for every movie candidate on each
+        row rebuild.
+        """
+        return await self.client.get(f"/movie/{movie_id}/release_dates")
+
     @alru_cache(maxsize=500, ttl=86400)
     async def get_tv_details(self, tv_id: int) -> dict[str, Any]:
         """Get details of a specific TV series with credits and keywords."""

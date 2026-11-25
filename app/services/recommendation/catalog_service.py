@@ -19,6 +19,11 @@ from app.services.profile.service import ProfileService
 from app.services.recommendation.all_based import AllBasedService
 from app.services.recommendation.catalog_utils import clean_meta, shuffle_data_if_needed
 from app.services.recommendation.creators import CreatorsService
+from app.services.recommendation.digital_release import (
+    HOME_RELEASE_FETCH_OVERFETCH,
+    digital_release_filter_active,
+    filter_movies_without_home_release,
+)
 from app.services.recommendation.item_based import ItemBasedService
 from app.services.recommendation.rewatch import RewatchService
 from app.services.recommendation.theme_based import ThemeBasedService
@@ -221,6 +226,12 @@ class CatalogService:
                     user_settings=ctx.user_settings,
                 )
 
+            # The home-release filter drops candidates after scoring, so fetch
+            # extra when it is on to keep rows from coming back short.
+            limit = DEFAULT_CATALOG_LIMIT
+            digital_filter = digital_release_filter_active(ctx.user_settings, content_type, resolved_id)
+            fetch_limit = limit * HOME_RELEASE_FETCH_OVERFETCH if digital_filter else limit
+
             recommendations = await self._get_recommendations(
                 catalog_id=resolved_id,
                 content_type=content_type,
@@ -229,9 +240,18 @@ class CatalogService:
                 watched_tmdb=watched_tmdb,
                 watched_imdb=watched_imdb,
                 library_items=ctx.library,
-                limit=DEFAULT_CATALOG_LIMIT,
+                limit=fetch_limit,
                 user_settings=ctx.user_settings,
             )
+
+            if digital_filter:
+                kept = await filter_movies_without_home_release(recommendations, services["tmdb"])
+                hidden = len(recommendations) - len(kept)
+                # Candidates were over-fetched above, so the trim back to the row
+                # size rarely removes anything.
+                recommendations = kept[:limit]
+                if hidden:
+                    logger.info(f"[{redact_token(ctx.token)}] Home-release filter hid {hidden} movie candidates")
 
             logger.debug(f"Returning {len(recommendations)} items for {content_type}")
 

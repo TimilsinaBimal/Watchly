@@ -121,6 +121,10 @@ class UserSettings(BaseModel):
     sorting_order: Literal["default", "movies_first", "series_first", "combined"] = Field(
         default="default", description="Order of movies and series catalogs"
     )
+    digital_release_only: bool = Field(
+        default=False,
+        description="Movies: only recommend titles already released on digital/home media",
+    )
     simkl_api_key: str | None = Field(default=None, description="Simkl API Key for the user")
     llm: LLMConfig | None = Field(default=None, description="LLM provider configuration for AI features")
     # Superseded by `llm`; kept so accounts configured before multi-provider
