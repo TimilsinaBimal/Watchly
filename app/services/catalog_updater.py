@@ -105,10 +105,16 @@ class CatalogUpdater:
             # The manifest build only reads the cached library, and that cache is
             # re-fetched only when it is missing — every read renews its TTL. For an
             # active user this is the one place new watches reach the library and
-            # the profiles, so refetch before rebuilding. Stremio only for now: Trakt
-            # and Simkl report an outage or a rejected token as an empty history,
-            # which a daily refetch would cache over the user's library.
-            if user_settings.watch_history_source == "stremio":
+            # the profiles, so refetch before rebuilding. Stremio, Nuvio and Scrob
+            # only: Trakt and Simkl report an outage or a rejected token as an empty
+            # history, which a daily refetch would cache over the user's library.
+            # Nuvio and Scrob fail the other way around, which is why both are safe
+            # to refetch: their history services raise on failure instead of
+            # returning an empty list, and a failed fetch is never cached
+            # (cache_library_and_profiles), so during an outage the scheduled
+            # refresh keeps serving the previous cache. The Nuvio half matches
+            # #222; whichever of the two lands first makes the other a no-op.
+            if user_settings.watch_history_source in ("stremio", "nuvio", "scrob"):
                 await manifest_service.cache_library_and_profiles(bundle, auth_key, user_settings, token)
 
             # Force a rebuild: this job exists to push a *fresh* catalog list to
